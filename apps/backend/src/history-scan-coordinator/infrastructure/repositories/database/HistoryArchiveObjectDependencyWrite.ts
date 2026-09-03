@@ -52,12 +52,14 @@ function normalizeLimit(limit: number): number {
 }
 
 const materializeDependenciesSql = `
-	with checkpoint as (
+	with checkpoint as materialized (
 		select *
 		from "history_archive_object_queue"
                 where "remoteId" = any($1::uuid[])
 			and "objectType" = 'checkpoint-state'
 			and status = 'verified'
+		order by "remoteId"
+		for update skip locked
 	), hashes as (
                 select distinct checkpoint."remoteId",
                         checkpoint."archiveUrlIdentity",
@@ -99,7 +101,8 @@ const materializeDependenciesSql = `
 	), marked as (
 		update "history_archive_object_queue" object
 		set "dependenciesMaterializedAt" = now()
-                where object."remoteId" = any($1::uuid[])
+		from checkpoint
+		where object."remoteId" = checkpoint."remoteId"
 			and object.status = 'verified'
 			and (
 				object."dependenciesMaterializedAt" is null

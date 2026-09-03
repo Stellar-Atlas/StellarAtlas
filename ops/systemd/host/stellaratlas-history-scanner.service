@@ -27,7 +27,7 @@ RestartSec=5
 CPUWeight=100
 IOWeight=100
 Nice=0
-TimeoutStopSec=15
+TimeoutStopSec=45
 KillSignal=SIGTERM
 NoNewPrivileges=true
 

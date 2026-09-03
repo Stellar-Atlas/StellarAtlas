@@ -53,6 +53,7 @@ import {
 import { logArchiveObjectFailure } from './ArchiveObjectFailureLogger.js';
 
 const maximumPendingWorkerReports = 24;
+const routineCheckInIntervalMs = 30_000;
 
 @injectable()
 export class VerifyArchiveObjects {
@@ -60,6 +61,7 @@ export class VerifyArchiveObjects {
 	private readonly historyStateVerifier: ArchiveObjectHistoryStateVerifier;
 	private readonly downloadPermit: HistoryArchiveDownloadPermit;
 	private readonly workerTelemetry: ArchiveObjectWorkerTelemetry;
+	private nextRoutineCheckInAt = 0;
 
 	constructor(
 		@inject(TYPES.ScanCoordinatorService)
@@ -441,6 +443,12 @@ export class VerifyArchiveObjects {
 	}
 
 	private async checkIn(status: 'in_progress' | 'error' | 'ok') {
+		if (status !== 'error') {
+			const now = Date.now();
+			if (now < this.nextRoutineCheckInAt) return;
+			this.nextRoutineCheckInAt = now + routineCheckInIntervalMs;
+		}
+
 		const result = await this.jobMonitor.checkIn({
 			context: 'verify-archive-objects',
 			status

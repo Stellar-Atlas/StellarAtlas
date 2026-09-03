@@ -359,6 +359,11 @@ const activateObjectsSql = `
 		where existing.status = 'pending'
 			and existing."dependencyReady" is true
 			and existing."executionDisposition" = 'executable'
+			and not exists (
+				select 1
+				from "history_archive_object_ready" ready_row
+				where ready_row."objectRemoteId" = existing."remoteId"
+			)
 	), ready as (
 		insert into "history_archive_object_ready" (
 			"objectRemoteId", "archiveUrlIdentity", priority,

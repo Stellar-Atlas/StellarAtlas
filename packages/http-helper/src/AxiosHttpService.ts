@@ -1,6 +1,19 @@
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import { err, ok, Result } from 'neverthrow';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { isObject, isString } from 'shared';
+
+const sharedHttpAgent = new HttpAgent({
+	keepAlive: true,
+	maxFreeSockets: 32,
+	maxSockets: 64
+});
+const sharedHttpsAgent = new HttpsAgent({
+	keepAlive: true,
+	maxFreeSockets: 32,
+	maxSockets: 64
+});
 import {
 	HttpError,
 	type HttpOptions,
@@ -69,8 +82,8 @@ export class AxiosHttpService implements HttpService {
 			maxContentLength: maxContentLength,
 			maxRedirects: httpOptions.maxRedirects,
 			proxy: httpOptions.proxy,
-			httpsAgent: httpOptions.httpsAgent,
-			httpAgent: httpOptions.httpAgent,
+			httpsAgent: httpOptions.httpsAgent ?? sharedHttpsAgent,
+			httpAgent: httpOptions.httpAgent ?? sharedHttpAgent,
 			signal: httpOptions.abortSignal
 		};
 	}

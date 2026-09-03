@@ -22,6 +22,7 @@ export function startHistoryArchiveMaintenanceLoop(
 	let stopped = false;
 	const intervals = resolveMaintenanceIntervals(configuredIntervals);
 	let forceRequested = false;
+	let proofRefreshRequested = false;
 	let rerunRequested = false;
 	let running = false;
 
@@ -50,23 +51,25 @@ export function startHistoryArchiveMaintenanceLoop(
 			do {
 				rerunRequested = false;
 				const force = forceRequested;
+				const forceProofRefresh = force || proofRefreshRequested;
 				forceRequested = false;
+				proofRefreshRequested = false;
 				const now = Date.now();
-				await runWork('transitions', () =>
-					reconciler.executeTransitionReconciliationIfDue(now, {}, force)
-				);
 				let completedProofs = 0;
 				try {
 					completedProofs =
 						(await reconciler.executeTargetedProofRefreshIfDue(
-							Date.now(),
-							force
+							now,
+							forceProofRefresh
 						)) ?? 0;
 				} catch (error: unknown) {
 					await runWork('proof refresh', async () => {
 						throw error;
 					});
 				}
+				await runWork('transitions', () =>
+					reconciler.executeTransitionReconciliationIfDue(now, {}, force)
+				);
 				await runWork('execution disposition', () =>
 					reconciler.executeExecutionDispositionReconciliationIfDue(
 						Date.now(),
@@ -74,6 +77,7 @@ export function startHistoryArchiveMaintenanceLoop(
 					)
 				);
 				if (completedProofs > 0) {
+					proofRefreshRequested = true;
 					rerunRequested = true;
 				}
 			} while (rerunRequested && !stopped);
@@ -83,15 +87,19 @@ export function startHistoryArchiveMaintenanceLoop(
 		}
 	};
 
-	const requestMaintenance = (force = false): void => {
+	const requestMaintenance = (
+		force = false,
+		forceProofRefresh = false
+	): void => {
 		forceRequested ||= force;
+		proofRefreshRequested ||= forceProofRefresh;
 		rerunRequested = true;
 		void runMaintenance();
 	};
 
 	const onProofRefreshWake = (message: unknown): void => {
 		if (!isHistoryArchiveProofRefreshWakeMessage(message)) return;
-		requestMaintenance(true);
+		requestMaintenance(false, true);
 	};
 	process.on('message', onProofRefreshWake);
 

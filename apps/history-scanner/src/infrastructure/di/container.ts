@@ -175,9 +175,12 @@ export function load(container: Container, config: Config) {
 			return new SentryJobMonitor(config.sentryDSN);
 		return new LoggerJobMonitor(container.get<Logger>('Logger'));
 	});
-	container.bind<HttpService>(TYPES.HttpService).toDynamicValue(() => {
-		return new AxiosHttpService(config.userAgent);
-	});
+	container
+		.bind<HttpService>(TYPES.HttpService)
+		.toDynamicValue(() => {
+			return new AxiosHttpService(config.userAgent);
+		})
+		.inSingletonScope();
 
 	container.bind<HttpQueue>(TYPES.HttpQueue).toDynamicValue(() => {
 		return new HttpQueue(

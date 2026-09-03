@@ -223,7 +223,11 @@ export class CompleteHistoryArchiveObject {
 				}
 			}
 			if (checkpointFanouts.length > 0) {
-				notifyHistoryArchiveProofRefreshReady();
+				await Promise.all(
+					checkpointFanouts.map((object) =>
+						this.requestCheckpointFanoutEvent(object, true)
+					)
+				);
 			}
 		} catch (error) {
 			const failure = err<boolean, Error>(mapUnknownToError(error));
