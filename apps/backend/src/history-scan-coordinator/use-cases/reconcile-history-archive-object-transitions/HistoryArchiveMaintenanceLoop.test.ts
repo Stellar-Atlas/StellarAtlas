@@ -21,7 +21,7 @@ describe('history archive maintenance proof wake', () => {
 		expect(isHistoryArchiveProofRefreshWakeMessage(null)).toBe(false);
 	});
 
-	it('forces only proof refresh when another API worker enqueues proof work', async () => {
+	it('forces proof refresh, transitions, and admission when archive work completes', async () => {
 		const reconciler = mock<ReconcileHistoryArchiveObjectTransitions>();
 		reconciler.executeTargetedProofRefreshIfDue.mockResolvedValue(0);
 		reconciler.executeTransitionReconciliationIfDue.mockResolvedValue(
@@ -51,7 +51,7 @@ describe('history archive maintenance proof wake', () => {
 
 			expect(
 				reconciler.executeTransitionReconciliationIfDue
-			).toHaveBeenCalledWith(expect.any(Number), {}, false);
+			).toHaveBeenCalledWith(expect.any(Number), {}, true);
 			expect(reconciler.executeTargetedProofRefreshIfDue).toHaveBeenCalledTimes(
 				1
 			);
@@ -61,7 +61,7 @@ describe('history archive maintenance proof wake', () => {
 			);
 			expect(
 				reconciler.executeExecutionDispositionReconciliationIfDue
-			).toHaveBeenCalledWith(expect.any(Number), false);
+			).toHaveBeenCalledWith(expect.any(Number), true);
 			expect(
 				reconciler.executeTargetedProofRefreshIfDue.mock.invocationCallOrder[0]
 			).toBeLessThan(

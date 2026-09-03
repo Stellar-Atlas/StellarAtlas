@@ -13,6 +13,7 @@ import {
 } from '../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import { notifyHistoryArchiveProofRefreshReady } from '../../infrastructure/ipc/HistoryArchiveProofRefreshWake.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
 @injectable()
@@ -80,6 +81,7 @@ export class FailHistoryArchiveObject {
 				return ok(false);
 			}
 
+			notifyHistoryArchiveProofRefreshReady();
 			return ok(true);
 		} catch (e) {
 			return err(mapUnknownToError(e));

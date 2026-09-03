@@ -99,7 +99,7 @@ export function startHistoryArchiveMaintenanceLoop(
 
 	const onProofRefreshWake = (message: unknown): void => {
 		if (!isHistoryArchiveProofRefreshWakeMessage(message)) return;
-		requestMaintenance(false, true);
+		requestMaintenance(true, true);
 	};
 	process.on('message', onProofRefreshWake);
 
