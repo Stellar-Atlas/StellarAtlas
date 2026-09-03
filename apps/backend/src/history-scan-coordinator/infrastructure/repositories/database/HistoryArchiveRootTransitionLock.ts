@@ -1,8 +1,10 @@
 import type { EntityManager } from 'typeorm';
 
+export const historyArchiveRootTransitionLockNamespace = 1_784_950_002;
+
 export const historyArchiveRootTransitionLockSql = `
     select pg_advisory_xact_lock(
-        1784950002,
+        ${historyArchiveRootTransitionLockNamespace},
         hashtext($1::text)
     )
 `;
@@ -18,7 +20,7 @@ export async function lockHistoryArchiveRootTransition(
 
 export const historyArchiveRootTransitionLocksSql = `
 	select pg_advisory_xact_lock(
-                1784950002,
+                ${historyArchiveRootTransitionLockNamespace},
 		hashtext(roots."archiveUrlIdentity")
 	)
 	from (
@@ -39,7 +41,7 @@ export async function lockHistoryArchiveRootTransitions(
 
 export const historyArchiveObjectRootTransitionLockSql = `
     select pg_advisory_xact_lock(
-        1784950002,
+        ${historyArchiveRootTransitionLockNamespace},
         hashtext(object."archiveUrlIdentity")
     )
     from "history_archive_object_queue" object
@@ -55,7 +57,7 @@ export async function lockHistoryArchiveObjectRootTransition(
 
 export const historyArchiveObjectRootTransitionLocksSql = `
         select pg_advisory_xact_lock(
-                1784950002,
+                ${historyArchiveRootTransitionLockNamespace},
                 hashtext(roots."archiveUrlIdentity")
         )
         from (

@@ -26,6 +26,7 @@ import {
 } from './HistoryArchiveCheckpointProofReadinessSql.js';
 import {
 	lockHistoryArchiveRootTransition,
+	historyArchiveRootTransitionLockNamespace,
 	lockHistoryArchiveRootTransitions
 } from './HistoryArchiveRootTransitionLock.js';
 
@@ -210,6 +211,10 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                                 cursor."archiveUrlIdentity"
                         and queued."checkpointLedger" =
                                 cursor."nextHistoricalCheckpointLedger" - 64
+                )
+                and pg_try_advisory_xact_lock(
+                        ${historyArchiveRootTransitionLockNamespace},
+                        hashtext(cursor."archiveUrlIdentity")
                 )
                 order by cursor."archiveUrlIdentity"
                 limit $2::integer
@@ -718,9 +723,22 @@ export const enqueueProofRefreshesSql = `
                         max(affected.evidence_updated_at) as evidence_updated_at
                 from affected
                 group by affected."archiveUrlIdentity", affected."checkpointLedger"
+        ), lockable_roots as materialized (
+                select root."archiveUrlIdentity"
+                from (
+                        select distinct candidate."archiveUrlIdentity"
+                        from candidate_targets candidate
+                ) root
+                where pg_try_advisory_xact_lock(
+                        ${historyArchiveRootTransitionLockNamespace},
+                        hashtext(root."archiveUrlIdentity")
+                )
         ), targets as materialized (
                 select candidate.*
                 from candidate_targets candidate
+                join lockable_roots lockable
+                        on lockable."archiveUrlIdentity" =
+                                candidate."archiveUrlIdentity"
                 join "history_archive_checkpoint_scan_cursor" chain_cursor
                         on chain_cursor."archiveUrlIdentity" =
                                 candidate."archiveUrlIdentity"

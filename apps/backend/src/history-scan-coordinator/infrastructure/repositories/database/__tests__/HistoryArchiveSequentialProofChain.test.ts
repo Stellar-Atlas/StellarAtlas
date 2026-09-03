@@ -74,6 +74,12 @@ describe('sequential history archive proof chain', () => {
 		expect(enqueueProofRefreshesSql).toMatch(
 			/generation\s*=\s*history_archive_checkpoint_proof_refresh_queue\.generation \+ 1/
 		);
+		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toContain(
+			'pg_try_advisory_xact_lock'
+		);
+		expect(enqueueProofRefreshesSql).toContain(
+			'lockable_roots as materialized'
+		);
 		expect(enqueueProofRefreshesSql).toContain('"leaseToken" = null');
 		expect(enqueueProofRefreshesSql).toContain('"leaseUntil" = null');
 		expect(enqueueProofRefreshesSql).not.toMatch(
