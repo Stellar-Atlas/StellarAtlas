@@ -238,6 +238,9 @@ describe('sequential history archive proof chain', () => {
 		expect(targetedCompactCheckpointPlanSql).toContain(
 			'completed."checkpointLedger" + 64 as checkpoint_ledger'
 		);
+		expect(targetedCompactCheckpointPlanSql).toContain(
+			'order by source."archiveUrlIdentity", source.checkpoint_ledger'
+		);
 		expect(historyArchiveCheckpointProofBatchTargetCtesSql).toContain(
 			'queue."leaseToken" = target."leaseToken"'
 		);

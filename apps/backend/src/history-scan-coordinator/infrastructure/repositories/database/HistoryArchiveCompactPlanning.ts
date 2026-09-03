@@ -366,6 +366,7 @@ export const targetedCompactCheckpointPlanSql = `
 			'pending', source.checkpoint_ledger, true,
 			'executable', 'planned-frontier', now()
 		from source
+		order by source."archiveUrlIdentity", source.checkpoint_ledger
 		on conflict ("archiveUrlIdentity", "objectType", "objectKey")
 			do update
 			set "dependencyReady" = true,
@@ -619,6 +620,7 @@ const compactCheckpointPlanSql = `
 			'pending', source.checkpoint_ledger, true,
 			'executable', 'planned-frontier', now()
 		from source
+		order by source."archiveUrlIdentity", source.checkpoint_ledger
 		on conflict ("archiveUrlIdentity", "objectType", "objectKey")
 			do update
 			set "dependencyReady" = true,
