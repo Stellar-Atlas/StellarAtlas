@@ -1,3 +1,12 @@
+import { queryHubbleAccountTransactions } from './HubbleAccountTransactionQuery.js';
+import { queryHubbleAssetHolders } from './HubbleAssetHolderQuery.js';
+import type {
+	HubbleAccountTransactionQuery,
+	HubbleAssetHolderPage,
+	HubbleAssetHolderQuery,
+	HubbleSemanticPage
+} from './HubbleSemanticWarehouse.js';
+
 export type HubbleFilterOperator =
 	| 'contains'
 	| 'eq'
@@ -70,6 +79,10 @@ export interface HubbleQueryResult {
 }
 
 export interface HubbleWarehouse {
+	accountTransactions(
+		query: HubbleAccountTransactionQuery
+	): Promise<HubbleSemanticPage>;
+	assetHolders(query: HubbleAssetHolderQuery): Promise<HubbleAssetHolderPage>;
 	catalog(force?: boolean): Promise<HubbleCatalog>;
 	query(query: HubbleQuery): Promise<HubbleQueryResult>;
 }
@@ -199,6 +212,32 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 		} finally {
 			if (this.catalogRequest === request) this.catalogRequest = undefined;
 		}
+	}
+
+	async accountTransactions(
+		input: HubbleAccountTransactionQuery
+	): Promise<HubbleSemanticPage> {
+		return queryHubbleAccountTransactions(
+			{
+				database: this.database,
+				execute: (sql, parameters) => this.execute(sql, parameters),
+				maximumRows: this.maximumRows
+			},
+			input
+		);
+	}
+
+	async assetHolders(
+		input: HubbleAssetHolderQuery
+	): Promise<HubbleAssetHolderPage> {
+		return queryHubbleAssetHolders(
+			{
+				database: this.database,
+				execute: (sql, parameters) => this.execute(sql, parameters),
+				maximumRows: this.maximumRows
+			},
+			input
+		);
 	}
 
 	async query(input: HubbleQuery): Promise<HubbleQueryResult> {
@@ -407,6 +446,14 @@ FORMAT JSON`,
 
 class UnavailableHubbleWarehouse implements HubbleWarehouse {
 	constructor(private readonly reason: string) {}
+
+	async accountTransactions(): Promise<HubbleSemanticPage> {
+		throw new HubbleWarehouseUnavailableError(this.reason);
+	}
+
+	async assetHolders(): Promise<HubbleAssetHolderPage> {
+		throw new HubbleWarehouseUnavailableError(this.reason);
+	}
 
 	async catalog(): Promise<HubbleCatalog> {
 		throw new HubbleWarehouseUnavailableError(this.reason);

@@ -87,6 +87,53 @@ describe('HubbleWarehouseRouter.integration', () => {
 				expect(response.body.ingestion.completedBatches).toBe('2');
 			});
 	});
+
+	it('serves account-linked transaction activity with explicit pagination', async () => {
+		const warehouse = mockWarehouse();
+		const account = 'G' + 'A'.repeat(55);
+		await request(buildRestApp(warehouse))
+			.get('/v1/analytics/accounts/' + account + '/transactions?limit=25')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.rows[0].relationship).toBe('effect');
+				expect(response.body.nextOffset).toBeNull();
+			});
+		expect(warehouse.accountTransactions).toHaveBeenCalledWith({
+			account,
+			limit: 25,
+			offset: 0
+		});
+	});
+
+	it('serves current asset holders without colliding with generic routes', async () => {
+		const warehouse = mockWarehouse();
+		await request(buildRestApp(warehouse))
+			.get('/v1/analytics/assets/native/holders?limit=10')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.asset).toBe('native');
+				expect(response.body.holders[0].balance).toBe(42);
+			});
+		expect(warehouse.assetHolders).toHaveBeenCalledWith({
+			after: undefined,
+			asset: { type: 'native' },
+			limit: 10
+		});
+	});
+
+	it('locates a transaction and returns its related decoded records', async () => {
+		const warehouse = mockWarehouse();
+		const transactionHash = '0'.repeat(64);
+		await request(buildRestApp(warehouse))
+			.get('/v1/analytics/transactions/' + transactionHash)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.transaction.id).toBe('transaction-1');
+				expect(response.body.ledger).not.toBeNull();
+				expect(response.body.operations).toHaveLength(1);
+			});
+		expect(warehouse.query).toHaveBeenCalledTimes(5);
+	});
 });
 
 describe('HubbleWarehouseGraphql.integration', () => {
@@ -159,10 +206,26 @@ describe('HubbleWarehouseGraphql.integration', () => {
 });
 
 function mockWarehouse(): HubbleWarehouse & {
+	accountTransactions: jest.Mock;
+	assetHolders: jest.Mock;
 	catalog: jest.Mock;
 	query: jest.Mock;
 } {
 	return {
+		accountTransactions: jest.fn().mockResolvedValue({
+			elapsedMilliseconds: 1,
+			limit: 25,
+			nextOffset: null,
+			offset: 0,
+			rows: [{ id: 'transaction-1', relationship: 'effect' }]
+		}),
+		assetHolders: jest.fn().mockResolvedValue({
+			asset: 'native',
+			elapsedMilliseconds: 1,
+			holders: [{ account_id: 'G' + 'A'.repeat(55), balance: 42 }],
+			limit: 10,
+			nextCursor: null
+		}),
 		catalog: jest.fn().mockResolvedValue(catalog),
 		query: jest.fn().mockResolvedValue(result)
 	};

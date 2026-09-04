@@ -2,6 +2,7 @@ import {
 	readOpenApiRecord,
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
+import { hubbleSemanticPaths } from './HubbleSemanticOpenApiPaths.js';
 
 const analyticsTag = ['Analytics'];
 const publicAccess: readonly OpenApiRecord[] = [];
@@ -141,6 +142,7 @@ const queryBodySchema: OpenApiRecord = {
 };
 
 const hubblePaths: Readonly<Record<string, OpenApiRecord>> = {
+	...hubbleSemanticPaths,
 	'/v1/analytics/datasets': {
 		get: {
 			description:
