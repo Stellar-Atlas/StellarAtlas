@@ -219,6 +219,7 @@ export async function materializeNextCompactCheckpointPlans(
 			checkpoint.checkpointLedger >= 63
 	);
 	if (validCheckpoints.length === 0) return 0;
+	await materializeCanonicalCheckpointSubstitutions(manager, validCheckpoints);
 	const [result] = (await manager.query(targetedCompactCheckpointPlanSql, [
 		JSON.stringify(validCheckpoints),
 		historyArchiveSequentialPrefetchDepth
@@ -251,7 +252,20 @@ export async function materializeNextCompactCheckpointPlan(
 	]);
 }
 
-export const targetedCompactCheckpointPlanSql = `
+async function materializeCanonicalCheckpointSubstitutions(
+	manager: EntityManager,
+	completedCheckpoints: readonly CompletedHistoryArchiveCheckpoint[]
+): Promise<number> {
+	const canonicalRoot = getHistoryArchiveCanonicalFirstRoot();
+	if (canonicalRoot === null) return 0;
+	const [result] = (await manager.query(targetedCheckpointSubstitutionSql, [
+		JSON.stringify(completedCheckpoints),
+		canonicalRoot
+	])) as readonly { readonly inserted: number | string }[];
+	return Number(result?.inserted ?? 0);
+}
+
+export const targetedCheckpointSubstitutionSql = `
 	with completed as materialized (
 		select distinct input."archiveUrlIdentity", input."checkpointLedger"
 		from jsonb_to_recordset($1::jsonb) as input(
@@ -259,6 +273,94 @@ export const targetedCompactCheckpointPlanSql = `
 			"checkpointLedger" integer
 		)
 		where input."archiveUrlIdentity" <> ''
+			and input."archiveUrlIdentity" <> $2::text
+			and input."checkpointLedger" >= 63
+	), substitution_candidates as materialized (
+		select failed."archiveUrlIdentity", failed."checkpointLedger",
+			failed.id as failed_proof_id,
+			source."archiveUrlIdentity" as source_archive_identity,
+			source.id as source_proof_id
+		from completed
+		join "history_archive_checkpoint_proof" failed
+			on failed."archiveUrlIdentity" = completed."archiveUrlIdentity"
+			and failed."checkpointLedger" = completed."checkpointLedger"
+		join "history_archive_state_snapshot" target_state
+			on target_state."archiveUrlIdentity" = failed."archiveUrlIdentity"
+			and target_state."networkPassphrase" is not null
+		join "history_archive_checkpoint_proof" source
+			on source."archiveUrlIdentity" = $2::text
+			and source."checkpointLedger" = failed."checkpointLedger"
+			and source.status = 'verified'
+			and source."requiredObjectsComplete" = true
+			and source."proofFactsComplete" = true
+			and source."failureKind" is null
+		join "history_archive_state_snapshot" source_state
+			on source_state."archiveUrlIdentity" = source."archiveUrlIdentity"
+			and source_state.status = 'available'
+			and source_state."networkPassphrase" =
+				target_state."networkPassphrase"
+		where failed.status = 'not-evaluable'
+			and failed."failureKind" = 'object-failed'
+			and (
+				failed.details->>'failureHttpStatus' in ('403', '404', '410')
+				or exists (
+					select 1
+					from "history_archive_object_queue" failed_object
+					where failed_object."archiveUrlIdentity" =
+						failed."archiveUrlIdentity"
+						and failed_object."checkpointLedger" =
+							failed."checkpointLedger"
+						and failed_object."objectType" in (
+							'checkpoint-state', 'ledger', 'transactions', 'results'
+						)
+						and failed_object.status = 'failed'
+						and failed_object."httpStatus" in (403, 404, 410)
+						and coalesce(
+							failed_object."failureChannel", 'archive_evidence'
+						) in ('archive_evidence', 'archive_availability')
+				)
+				or exists (
+					select 1
+					from "history_archive_checkpoint_bucket_dependency" dependency
+					join "history_archive_object_queue" failed_bucket
+						on failed_bucket."archiveUrlIdentity" =
+							dependency."archiveUrlIdentity"
+						and failed_bucket."objectType" = 'bucket'
+						and failed_bucket."bucketHash" = dependency."bucketHash"
+						and failed_bucket.status = 'failed'
+						and failed_bucket."httpStatus" in (403, 404, 410)
+						and coalesce(
+							failed_bucket."failureChannel", 'archive_evidence'
+						) in ('archive_evidence', 'archive_availability')
+					where dependency."archiveUrlIdentity" =
+						failed."archiveUrlIdentity"
+						and dependency."checkpointLedger" =
+							failed."checkpointLedger"
+				)
+			)
+	), inserted as (
+		insert into "history_archive_checkpoint_substitution" (
+			"archiveUrlIdentity", "checkpointLedger",
+			"failedCheckpointProofId", "sourceArchiveUrlIdentity",
+			"sourceCheckpointProofId", reason
+		)
+		select candidate."archiveUrlIdentity", candidate."checkpointLedger",
+			candidate.failed_proof_id, candidate.source_archive_identity,
+			candidate.source_proof_id, 'remote-http-missing'
+		from substitution_candidates candidate
+		on conflict ("archiveUrlIdentity", "checkpointLedger") do nothing
+		returning 1
+	)
+	select count(*)::integer as inserted from inserted
+`;
+
+export const targetedCompactCheckpointPlanSql = `
+	with completed as materialized (
+		select distinct input."archiveUrlIdentity", input."checkpointLedger"
+		from jsonb_to_recordset($1::jsonb) as input(
+			"archiveUrlIdentity" text,
+			"checkpointLedger" integer
+		)		where input."archiveUrlIdentity" <> ''
 			and input."checkpointLedger" >= 63
 	), verified_completed as materialized (
 		select completed.*,

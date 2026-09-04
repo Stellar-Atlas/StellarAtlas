@@ -10,6 +10,7 @@ import {
 	historyArchiveCanonicalFirstScopeCteSql
 } from './HistoryArchiveCanonicalFirst.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+import { materializeNextCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchiveCanonicalRuntimeProofMembershipSql.js';
 import {
@@ -598,10 +599,12 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 		await manager.query(`set local statement_timeout = '60s'`);
 		await lockHistoryArchiveRootTransitions(manager, archiveUrlIdentities);
 
+		const completedTargets: ClaimedHistoryArchiveCheckpointProofRefresh[] = [];
 		const transactionSize = consecutiveProofRefreshTransactionSize();
 		if (targets.length !== 1) {
 			const initialCompleted =
 				await refreshClaimedHistoryArchiveCheckpointProofWave(manager, targets);
+			completedTargets.push(...targets);
 			for (let index = 1; index < transactionSize; index += 1) {
 				const savepoint = 'history_archive_proof_chain_' + index;
 				await manager.query('savepoint ' + savepoint);
@@ -618,6 +621,7 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 						manager,
 						nextTargets
 					);
+					completedTargets.push(...nextTargets);
 					await manager.query('release savepoint ' + savepoint);
 				} catch {
 					await manager.query('rollback to savepoint ' + savepoint);
@@ -625,9 +629,9 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 					break;
 				}
 			}
+			await materializeNextCompactCheckpointPlans(manager, completedTargets);
 			return initialCompleted;
 		}
-
 		const firstContiguousTargets = await claimLockedContiguousProofRefreshes(
 			manager,
 			targets,
@@ -635,6 +639,7 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 		);
 		const firstWave = [...targets, ...firstContiguousTargets];
 		await refreshClaimedHistoryArchiveCheckpointProofWave(manager, firstWave);
+		completedTargets.push(...firstWave);
 		let processed = firstWave.length;
 		let wave = 1;
 		while (processed < transactionSize) {
@@ -660,6 +665,7 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 				);
 				const vector = [...nextTargets, ...contiguousTargets];
 				await refreshClaimedHistoryArchiveCheckpointProofWave(manager, vector);
+				completedTargets.push(...vector);
 				processed += vector.length;
 				await manager.query('release savepoint ' + savepoint);
 			} catch {
@@ -669,10 +675,10 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 			}
 			wave++;
 		}
+		await materializeNextCompactCheckpointPlans(manager, completedTargets);
 		return targets.length;
 	});
 }
-
 async function recordProofRefreshFailure(
 	dataSource: DataSource,
 	target: ClaimedHistoryArchiveCheckpointProofRefresh,

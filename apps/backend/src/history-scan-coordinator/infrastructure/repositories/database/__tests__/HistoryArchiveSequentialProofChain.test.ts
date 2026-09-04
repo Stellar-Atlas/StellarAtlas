@@ -29,7 +29,10 @@ import {
 	historyArchiveCanonicalFirstAdmissionSql,
 	historyArchiveCanonicalFirstScopeCteSql
 } from '../HistoryArchiveCanonicalFirst.js';
-import { targetedCompactCheckpointPlanSql } from '../HistoryArchiveCompactPlanning.js';
+import {
+	targetedCheckpointSubstitutionSql,
+	targetedCompactCheckpointPlanSql
+} from '../HistoryArchiveCompactPlanning.js';
 import {
 	activateCurrentCheckpointDependenciesSql,
 	orderedCheckpointPrefetchSql
@@ -241,6 +244,22 @@ describe('sequential history archive proof chain', () => {
 		expect(targetedCompactCheckpointPlanSql).toContain(
 			'order by source."archiveUrlIdentity", source.checkpoint_ledger'
 		);
+		expect(targetedCheckpointSubstitutionSql).toContain(
+			'source."archiveUrlIdentity" = $2::text'
+		);
+		expect(targetedCheckpointSubstitutionSql).toContain(
+			'failed."failureKind" = \'object-failed\''
+		);
+		expect(targetedCheckpointSubstitutionSql).toContain(
+			'failed_object."httpStatus" in (403, 404, 410)'
+		);
+		expect(targetedCheckpointSubstitutionSql).toContain(
+			'failed_bucket."httpStatus" in (403, 404, 410)'
+		);
+		expect(targetedCheckpointSubstitutionSql).toContain(
+			'insert into "history_archive_checkpoint_substitution"'
+		);
+		expect(targetedCheckpointSubstitutionSql).not.toContain('order by case');
 		expect(historyArchiveCheckpointProofBatchTargetCtesSql).toContain(
 			'queue."leaseToken" = target."leaseToken"'
 		);
