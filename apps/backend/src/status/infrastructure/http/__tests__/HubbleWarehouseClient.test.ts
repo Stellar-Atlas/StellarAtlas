@@ -17,7 +17,7 @@ describe('ClickHouseHubbleWarehouse', () => {
 		const result = await warehouse.query({
 			dataset: 'history_transactions',
 			filters: [
-				{ field: 'id', operator: 'eq', value: 'transaction-1' },
+				{ field: 'id', operator: 'eq', value: '123' },
 				{ field: 'ledger_sequence', operator: 'gte', value: 3 }
 			],
 			limit: 25,
@@ -33,19 +33,15 @@ describe('ClickHouseHubbleWarehouse', () => {
 		);
 		expect(queryRequest).toBeDefined();
 		expect(queryRequest?.searchParams.get('query')).toContain(
-			'toString(`id`) = {filter_0:String}'
+			'SELECT toString(`id`) AS `id`, `ledger_sequence`'
 		);
+		expect(queryRequest?.searchParams.get('query')).toContain('filter_0:Int64');
 		expect(queryRequest?.searchParams.get('query')).toContain(
 			'`ledger_sequence` >= {filter_1:UInt32}'
 		);
-		expect(queryRequest?.searchParams.get('param_filter_0')).toBe(
-			'transaction-1'
-		);
+		expect(queryRequest?.searchParams.get('param_filter_0')).toBe('123');
 		expect(queryRequest?.searchParams.get('param_filter_1')).toBe('3');
 		expect(queryRequest?.searchParams.get('param_limit')).toBe('25');
-		expect(
-			queryRequest?.searchParams.get('output_format_json_quote_64bit_integers')
-		).toBe('1');
 	});
 
 	it('rejects a column injection before issuing a data query', async () => {
@@ -97,7 +93,7 @@ function mockFetch(requests: URL[]): typeof fetch {
 						name: 'id',
 						position: 1,
 						table: 'history_transactions',
-						type: 'String'
+						type: 'Int64'
 					},
 					{
 						name: 'ledger_sequence',

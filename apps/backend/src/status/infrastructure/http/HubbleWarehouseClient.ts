@@ -290,7 +290,10 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 			{ name: 'offset', type: 'UInt64', value: String(offset) }
 		);
 		const sql = [
-			'SELECT ' + selected.map(quote).join(', '),
+			'SELECT ' +
+				selected
+					.map((field) => selectExpression(requireColumn(columns, field)))
+					.join(', '),
 			'FROM ' + quote(this.database) + '.' + quote(dataset.name),
 			where.length === 0 ? '' : 'WHERE ' + where.join(' AND '),
 			order.length === 0 ? '' : 'ORDER BY ' + order.join(', '),
@@ -403,7 +406,6 @@ FORMAT JSON`,
 	): Promise<ClickHouseResponse<T>> {
 		const url = new URL(this.endpoint);
 		url.searchParams.set('query', sql);
-		url.searchParams.set('output_format_json_quote_64bit_integers', '1');
 		for (const parameter of parameters) {
 			url.searchParams.set('param_' + parameter.name, parameter.value);
 		}
@@ -632,6 +634,14 @@ function requireColumn(
 		throw new HubbleWarehouseInputError('Unknown Hubble column: ' + field);
 	}
 	return column;
+}
+
+function selectExpression(column: HubbleColumn): string {
+	const identifier = quote(column.name);
+	if (/^(?:U?Int64|Nullable\(U?Int64\))$/.test(column.type)) {
+		return 'toString(' + identifier + ') AS ' + identifier;
+	}
+	return identifier;
 }
 
 function quote(identifier: string): string {
