@@ -362,6 +362,59 @@ describe('sequential history archive proof chain', () => {
 		]);
 		expect(claimed.map((target) => target.generation)).toEqual([2, 3]);
 	});
+	it('falls back to all current roots when canonical proof work is empty', async () => {
+		const target = {
+			archiveUrlIdentity: 'https://other.example',
+			checkpointLedger: 127,
+			evidenceUpdatedAt: '2026-08-22T00:00:01.000Z',
+			generation: '3',
+			leaseToken: '10000000-0000-0000-0000-000000000002'
+		};
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([target]);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest.fn(
+			async (callback: (manager: EntityManager) => Promise<unknown>) =>
+				await callback(manager)
+		);
+		const dataSource = { transaction } as unknown as DataSource;
+		const previousCanonicalRoot =
+			process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
+		process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT =
+			'https://canonical.example/';
+
+		const claimed = await (async () => {
+			try {
+				return await claimHistoryArchiveCheckpointProofRefreshes(
+					dataSource,
+					192,
+					1
+				);
+			} finally {
+				if (previousCanonicalRoot === undefined)
+					delete process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
+				else
+					process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT =
+						previousCanonicalRoot;
+			}
+		})();
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(query).toHaveBeenCalledTimes(4);
+		expect(query).toHaveBeenNthCalledWith(3, claimSequentialProofRefreshSql, [
+			'https://canonical.example',
+			normalizeTargetedProofRefreshBatchSize(192)
+		]);
+		expect(query).toHaveBeenNthCalledWith(4, claimSequentialProofRefreshSql, [
+			null,
+			normalizeTargetedProofRefreshBatchSize(192)
+		]);
+		expect(claimed).toEqual([{ ...target, generation: 3 }]);
+	});
 
 	it('admits only the bounded ordered checkpoint cohort', () => {
 		const gate = historyArchiveObjectOpenSequentialCohortSql('candidate');

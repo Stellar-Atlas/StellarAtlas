@@ -327,10 +327,20 @@ export async function claimHistoryArchiveCheckpointProofRefreshes(
 			maximumPriority === 1
 				? [canonicalFirstRoot, safeLimit]
 				: [maximumPriority, safeLimit];
-		const rows = (await manager.query(claimSql, parameters)) as readonly (Omit<
+		let rows = (await manager.query(claimSql, parameters)) as readonly (Omit<
 			ClaimedHistoryArchiveCheckpointProofRefresh,
 			'generation'
 		> & { readonly generation: number | string })[];
+		if (
+			maximumPriority === 1 &&
+			canonicalFirstRoot !== null &&
+			rows.length === 0
+		) {
+			rows = (await manager.query(claimSequentialProofRefreshSql, [
+				null,
+				safeLimit
+			])) as typeof rows;
+		}
 		return rows.map((row) => ({
 			...row,
 			generation: Number(row.generation)
