@@ -1,3 +1,5 @@
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+
 function executableCanonicalReserveSql(objectAlias: string): string {
 	return `${objectAlias}."executionDisposition" = 'executable'
 		and ${objectAlias}."executionReason" = 'canonical-frontier-reserve'`;
@@ -25,7 +27,12 @@ function exactCheckpointObjectExistsSql(
 function exactBucketDependencyExistsSql(runtimeRootAlias: string): string {
 	return `exists (
 		select 1
-		from "history_archive_checkpoint_bucket_dependency" dependency
+		from lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				runtimeRootAlias + '."archiveUrlIdentity"',
+				runtimeRootAlias + '.checkpoint_ledger'
+			)}
+		) dependency
 		join "history_archive_object_queue" selected
 			on selected."archiveUrlIdentity" =
 				dependency."archiveUrlIdentity"

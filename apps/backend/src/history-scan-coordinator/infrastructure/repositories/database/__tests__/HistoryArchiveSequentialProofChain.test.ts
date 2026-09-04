@@ -164,7 +164,7 @@ describe('sequential history archive proof chain', () => {
 			'object."checkpointLedger" = current."checkpointLedger"'
 		);
 		expect(activateCurrentCheckpointDependenciesSql).toContain(
-			'join "history_archive_checkpoint_bucket_dependency" dependency'
+			'join "history_archive_checkpoint_bucket_set_member" member'
 		);
 		expect(activateCurrentCheckpointDependenciesSql).toContain(
 			'candidate_ids as materialized'
@@ -444,7 +444,7 @@ describe('sequential history archive proof chain', () => {
 		);
 		expect(gate).toContain('64 + 4032');
 		expect(gate).toContain('candidate."objectType" = \'bucket\'');
-		expect(gate).toContain('dependency."checkpointLedger" between');
+		expect(gate).toContain('observation."checkpointLedger" between');
 	});
 
 	it('resets cursors to genesis without deleting sparse evidence', async () => {

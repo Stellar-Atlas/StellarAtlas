@@ -7,6 +7,7 @@ import {
 	type HistoryArchiveRepairSourceUrlPolicy
 } from './HistoryArchiveRepairSourceUrlPolicy.js';
 import { mapRepairSourcesWithBoundedConcurrency } from './BoundedRepairSourceMapper.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 const maximumTargets = 500;
 const maximumSourcesPerTarget = 3;
@@ -203,6 +204,26 @@ export const historyArchiveVerifiedBucketSourceSql = `
 		where target."remoteId" = any($1::uuid[])
 			and target."objectType" = 'bucket'
 			and target."bucketHash" ~ '^[0-9a-fA-F]{64}$'
+	), requested_bucket_hashes as materialized (
+		select distinct target."bucketHash"
+		from requested_failures target
+	), shared_bucket_dependencies as materialized (
+		select observation."archiveUrlIdentity",
+			observation."checkpointLedger", member."bucketHash",
+			coalesce(
+				checkpoint."dependenciesMaterializedAt",
+				checkpoint."verifiedAt",
+				observation."createdAt"
+			) as "createdAt"
+		from requested_bucket_hashes target
+		join history_archive_checkpoint_bucket_set_member member
+			on member."bucketHash" = target."bucketHash"
+		join history_archive_checkpoint_content content
+			on content."bucketSetDigest" = member."bucketSetDigest"
+		join history_archive_checkpoint_content_observation observation
+			on observation."contentDigest" = content."contentDigest"
+		left join history_archive_object_queue checkpoint
+			on checkpoint."remoteId" = observation."checkpointStateObjectRemoteId"
 	), candidate_proofs as materialized (
 		select
 			target."targetRemoteId",
@@ -241,7 +262,7 @@ export const historyArchiveVerifiedBucketSourceSql = `
 				candidate."archiveUrlIdentity"
 			and candidate_state.status = 'available'
 			and candidate_state."networkPassphrase" = target."networkPassphrase"
-		join history_archive_checkpoint_bucket_dependency dependency
+		join shared_bucket_dependencies dependency
 			on dependency."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 			and dependency."bucketHash" = target."bucketHash"
 		join history_archive_checkpoint_proof proof
@@ -276,7 +297,12 @@ export const historyArchiveVerifiedBucketSourceSql = `
 				proof_freshness."effectiveEvaluatedAt"
 			and proof."expectedBucketCount" = (
 				select count(*)
-				from history_archive_checkpoint_bucket_dependency expected_dependency
+				from lateral (
+					${historyArchiveCheckpointBucketDependenciesSql(
+						'proof."archiveUrlIdentity"',
+						'proof."checkpointLedger"'
+					)}
+				) expected_dependency
 				where expected_dependency."archiveUrlIdentity" =
 					proof."archiveUrlIdentity"
 					and expected_dependency."checkpointLedger" =
@@ -327,7 +353,12 @@ export const historyArchiveVerifiedBucketSourceSql = `
 			)
 			and not exists (
 				select 1
-				from history_archive_checkpoint_bucket_dependency proof_dependency
+				from lateral (
+				${historyArchiveCheckpointBucketDependenciesSql(
+					'proof."archiveUrlIdentity"',
+					'proof."checkpointLedger"'
+				)}
+			) proof_dependency
 				left join history_archive_object_queue proof_bucket
 					on proof_bucket."archiveUrlIdentity" =
 						proof_dependency."archiveUrlIdentity"

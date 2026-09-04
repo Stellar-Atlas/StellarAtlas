@@ -157,7 +157,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 			'cursor."nextHistoricalCheckpointLedger" - 64'
 		);
 		expect(activationSql).toContain(
-			'join "history_archive_checkpoint_bucket_dependency" dependency'
+			'join "history_archive_checkpoint_bucket_set_member" member'
 		);
 		expect(activationSql).toContain("checkpoint_state.status = 'verified'");
 		expect(activationSql).toContain('"dependencyReady" = true');

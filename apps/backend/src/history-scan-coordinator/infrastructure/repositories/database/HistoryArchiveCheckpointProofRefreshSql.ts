@@ -27,6 +27,7 @@ import {
 	historyArchiveScpExpectationKnownSql,
 	historyArchiveScpExpectationSql
 } from '../../../domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 const scpExpectationInput = {
 	checkpointLedgerSql: 'checkpoint_rollup."checkpointLedger"',
@@ -134,10 +135,13 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			and object.status = 'verified'
 	), expected_bucket_hashes as (
 		select dependency.*
-		from "history_archive_checkpoint_bucket_dependency" dependency
-		join target_checkpoints target
-			on target."archiveUrlIdentity" = dependency."archiveUrlIdentity"
-			and target."checkpointLedger" = dependency."checkpointLedger"
+		from target_checkpoints target
+		cross join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'target."archiveUrlIdentity"',
+				'target."checkpointLedger"'
+			)}
+		) dependency
 	), target_category_sources as (
 		select
 			range."archiveUrlIdentity",

@@ -1,6 +1,7 @@
 import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import { historyArchiveCheckpointBucketDependencyRangeSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
-const sequentialPrefetchLedgerSpan =
+export const historyArchiveSequentialPrefetchLedgerSpan =
 	(historyArchiveSequentialPrefetchDepth - 1) * 64;
 
 export function historyArchiveObjectOpenSequentialCohortSql(
@@ -19,21 +20,22 @@ export function historyArchiveObjectOpenSequentialCohortSql(
                         and ${objectAlias}."checkpointLedger" between
                             chain_cursor."nextHistoricalCheckpointLedger" - 64
                             and chain_cursor."nextHistoricalCheckpointLedger" -
-                                64 + ${sequentialPrefetchLedgerSpan}
+                                64 + ${historyArchiveSequentialPrefetchLedgerSpan}
                     )
                     or (
                         ${objectAlias}."objectType" = 'bucket'
                         and exists (
                             select 1
-                            from "history_archive_checkpoint_bucket_dependency" dependency
-                            where dependency."archiveUrlIdentity" =
-                                    ${objectAlias}."archiveUrlIdentity"
-                                and dependency."bucketHash" =
-                                    ${objectAlias}."bucketHash"
-                                and dependency."checkpointLedger" between
-                                    chain_cursor."nextHistoricalCheckpointLedger" - 64
-                                    and chain_cursor."nextHistoricalCheckpointLedger" -
-                                        64 + ${sequentialPrefetchLedgerSpan}
+                            from lateral (
+                                ${historyArchiveCheckpointBucketDependencyRangeSql(
+																	`${objectAlias}."archiveUrlIdentity"`,
+																	'chain_cursor."nextHistoricalCheckpointLedger" - 64',
+																	`chain_cursor."nextHistoricalCheckpointLedger" -
+                                        64 + ${historyArchiveSequentialPrefetchLedgerSpan}`
+																)}
+                            ) dependency
+                            where dependency."bucketHash" =
+                                ${objectAlias}."bucketHash"
                         )
                     )
                 )

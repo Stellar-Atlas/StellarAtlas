@@ -24,6 +24,7 @@ import {
 import { hasPostgresSqlState } from './PostgresError.js';
 import { materializeCompactCheckpointPlanResult } from './HistoryArchiveCompactPlanning.js';
 import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpointPrefetch.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 export { historyArchiveExecutionReconciliationLockName };
 
@@ -350,7 +351,12 @@ export const admitProofCompletionReserveSql = `
 			candidate."objectKey", max(proof."checkpointLedger") as checkpoint_ledger,
 			1 as priority
 		from proof_candidates proof
-		join "history_archive_checkpoint_bucket_dependency" dependency
+		join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'proof."archiveUrlIdentity"',
+				'proof."checkpointLedger"'
+			)}
+		) dependency
 			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 			and proof."checkpointLedger" = dependency."checkpointLedger"
 		join "history_archive_object_queue" candidate

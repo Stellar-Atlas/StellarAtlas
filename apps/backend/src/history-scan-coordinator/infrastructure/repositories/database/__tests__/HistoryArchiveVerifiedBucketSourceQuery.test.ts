@@ -42,16 +42,16 @@ describe('HistoryArchiveVerifiedBucketSourceQuery', () => {
 		]);
 		expect(query).toHaveBeenCalledWith(historyArchiveVerifiedBucketSourceSql, [
 			[targetRemoteId],
-			5
+			3
 		]);
 		expect(historyArchiveVerifiedBucketSourceSql).toContain(
-			'history_archive_checkpoint_bucket_dependency'
+			'history_archive_checkpoint_bucket_set_member'
 		);
 		expect(historyArchiveVerifiedBucketSourceSql).toContain(
 			'proof."bucketsVerified" = true'
 		);
 		expect(historyArchiveVerifiedBucketSourceSql).toContain(
-			'proof."evaluatedAt" >= candidate."verifiedAt"'
+			'proof_freshness."effectiveEvaluatedAt" >= candidate."verifiedAt"'
 		);
 		expect(historyArchiveVerifiedBucketSourceSql).toContain(
 			'candidate_state."networkPassphrase" = target."networkPassphrase"'
@@ -82,16 +82,23 @@ describe('HistoryArchiveVerifiedBucketSourceQuery', () => {
 		).resolves.toEqual([]);
 	});
 
-	it('omits a candidate whose hostname resolves to a private address', async () => {
+	it('defers DNS resolution to the artifact download boundary', async () => {
 		const manager = {
-			query: jest.fn(async (): Promise<unknown[]> => [candidateRow()])
+			query: jest.fn(async (): Promise<unknown[]> => [
+				{
+					...candidateRow(),
+					archiveUrl: 'https://private.example.com/archive',
+					archiveUrlIdentity: 'https://private.example.com/archive',
+					objectUrl: `https://private.example.com/archive/bucket/aa/aa/aa/bucket-${bucketHash}.xdr.gz`
+				}
+			])
 		} as unknown as EntityManager;
 
 		await expect(
 			findVerifiedBucketSources(manager, [targetRemoteId], 5, async () => [
 				'10.0.0.1'
 			])
-		).resolves.toEqual([]);
+		).resolves.toHaveLength(1);
 	});
 });
 

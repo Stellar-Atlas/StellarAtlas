@@ -1,28 +1,42 @@
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 export const historyArchiveImmediateBucketProofRefreshLimit = 2;
 
 export const historyArchiveCheckpointProofTargetCtesSql = `
-	${canonicalRuntimeTargetCtes}, bucket_requested_checkpoints as materialized (
-		select dependency."archiveUrlIdentity", dependency."checkpointLedger"
-		from "history_archive_checkpoint_bucket_dependency" dependency
-		left join "history_archive_state_snapshot" state
-			on state."archiveUrlIdentity" = dependency."archiveUrlIdentity"
-		left join runtime_target runtime
-			on runtime.checkpoint_ledger = dependency."checkpointLedger"
-			and state."networkPassphrase" is not null
+	${canonicalRuntimeTargetCtes}, bucket_candidate_checkpoints as materialized (
+		select state."archiveUrlIdentity", runtime.checkpoint_ledger
+			as "checkpointLedger", runtime.target_lane
+		from "history_archive_state_snapshot" state
+		join runtime_target runtime
+			on state."networkPassphrase" is not null
 			and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
 				runtime."network_passphrase_hash"
-		where dependency."archiveUrlIdentity" = $1::text
-			and $3::text is not null
+		where state."archiveUrlIdentity" = $1::text
+		union
+		select chain_cursor."archiveUrlIdentity",
+			chain_cursor."nextHistoricalCheckpointLedger" - 64,
+			'sequential'::text
+		from "history_archive_checkpoint_scan_cursor" chain_cursor
+		where chain_cursor."archiveUrlIdentity" = $1::text
+	), bucket_requested_checkpoints as materialized (
+		select candidate."archiveUrlIdentity", candidate."checkpointLedger"
+		from bucket_candidate_checkpoints candidate
+		cross join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'candidate."archiveUrlIdentity"',
+				'candidate."checkpointLedger"'
+			)}
+		) dependency
+		where $3::text is not null
 			and dependency."bucketHash" = lower($3::text)
 		order by
-			case runtime.target_lane
+			case candidate.target_lane
 				when 'forward' then 0
 				when 'historical' then 1
 				else 2
 			end,
-			dependency."checkpointLedger" desc
+			candidate."checkpointLedger" desc
 		limit ${historyArchiveImmediateBucketProofRefreshLimit}
 	), requested_checkpoints as (
 		select $1::text as "archiveUrlIdentity", ledger as "checkpointLedger"

@@ -6,6 +6,7 @@ import {
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { normalizeLimit } from './HistoryArchiveObjectRowMapper.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 interface RuntimeTargetRow {
 	readonly remoteId: string;
@@ -53,7 +54,12 @@ const reconciliationPredicateSql = `(
 			)
 			and not exists (
 				select 1
-				from history_archive_checkpoint_bucket_dependency dependency
+				from lateral (
+					${historyArchiveCheckpointBucketDependenciesSql(
+						'proof."archiveUrlIdentity"',
+						'proof."checkpointLedger"'
+					)}
+				) dependency
 				left join history_archive_object_queue bucket
 					on bucket."archiveUrlIdentity" =
 						dependency."archiveUrlIdentity"
@@ -136,7 +142,12 @@ const runtimeReconciliationPredicateSql = `(
 	or exists (
 		select 1
 		from history_archive_checkpoint_proof runtime_proof
-		join history_archive_checkpoint_bucket_dependency dependency
+		join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'runtime_proof."archiveUrlIdentity"',
+				'runtime_proof."checkpointLedger"'
+			)}
+		) dependency
 			on dependency."archiveUrlIdentity" =
 				runtime_proof."archiveUrlIdentity"
 			and dependency."checkpointLedger" =
@@ -467,13 +478,23 @@ const satisfiedBucketProofsSql = `
 		from proof_candidates candidate
 		where exists (
 			select 1
-			from "history_archive_checkpoint_bucket_dependency" expected
+			from lateral (
+				${historyArchiveCheckpointBucketDependenciesSql(
+					'candidate."archiveUrlIdentity"',
+					'candidate."checkpointLedger"'
+				)}
+			) expected
 			where expected."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 				and expected."checkpointLedger" = candidate."checkpointLedger"
 		)
 		and not exists (
 			select 1
-			from "history_archive_checkpoint_bucket_dependency" expected
+			from lateral (
+				${historyArchiveCheckpointBucketDependenciesSql(
+					'candidate."archiveUrlIdentity"',
+					'candidate."checkpointLedger"'
+				)}
+			) expected
 			where expected."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 				and expected."checkpointLedger" = candidate."checkpointLedger"
 				and not exists (

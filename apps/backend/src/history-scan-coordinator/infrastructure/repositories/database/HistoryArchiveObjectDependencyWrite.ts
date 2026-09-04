@@ -1,7 +1,12 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { lockHistoryArchiveObjectRootTransitions } from './HistoryArchiveRootTransitionLock.js';
-import { enqueueHistoryArchiveSharedCheckpointContentShadow } from './HistoryArchiveSharedCheckpointContentShadow.js';
+import { writeHistoryArchiveSharedCheckpointContentShadowWithManager } from './HistoryArchiveSharedCheckpointContentShadow.js';
+import {
+	historyArchiveCheckpointBucketDependenciesSql,
+	historyArchiveCheckpointBucketDependencyRangeSql
+} from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveSequentialPrefetchLedgerSpan } from './HistoryArchiveSequentialChainSql.js';
 
 export async function materializeHistoryArchiveCheckpointDependencies(
 	repository: Repository<HistoryArchiveObject>,
@@ -20,28 +25,26 @@ export async function materializeHistoryArchiveCheckpointDependencyBatch(
 		(remoteId) => remoteId.length > 0
 	);
 	if (uniqueRemoteIds.length === 0) return 0;
-	const insertedCount = await repository.manager.transaction(
-		async (manager) => {
-			await lockHistoryArchiveObjectRootTransitions(manager, uniqueRemoteIds);
-			await manager.query(`set local lock_timeout = '2s'`);
-			await manager.query(`set local statement_timeout = '30s'`);
-			const inserted = (await manager.query(materializeDependenciesSql, [
+	return await repository.manager.transaction(async (manager) => {
+		await lockHistoryArchiveObjectRootTransitions(manager, uniqueRemoteIds);
+		await manager.query(`set local lock_timeout = '2s'`);
+		await manager.query(`set local statement_timeout = '30s'`);
+		const materializedCount =
+			await writeHistoryArchiveSharedCheckpointContentShadowWithManager(
+				manager,
 				uniqueRemoteIds
-			])) as readonly unknown[];
-			await manager.query(activateCheckpointCategoryDependenciesSql, [
-				uniqueRemoteIds
-			]);
-			await manager.query(activateCheckpointBucketDependenciesSql, [
-				uniqueRemoteIds
-			]);
-			return inserted.length;
-		}
-	);
-	enqueueHistoryArchiveSharedCheckpointContentShadow(
-		repository,
-		uniqueRemoteIds
-	);
-	return insertedCount;
+			);
+		await manager.query(markCheckpointDependenciesMaterializedSql, [
+			uniqueRemoteIds
+		]);
+		await manager.query(activateCheckpointCategoryDependenciesSql, [
+			uniqueRemoteIds
+		]);
+		await manager.query(activateCheckpointBucketDependenciesSql, [
+			uniqueRemoteIds
+		]);
+		return materializedCount;
+	});
 }
 
 export async function reconcileHistoryArchiveDependencyReadiness(
@@ -59,68 +62,19 @@ function normalizeLimit(limit: number): number {
 	return Math.min(limit, 2000);
 }
 
-const materializeDependenciesSql = `
-	with checkpoint as materialized (
-		select *
-		from "history_archive_object_queue"
-                where "remoteId" = any($1::uuid[])
-			and "objectType" = 'checkpoint-state'
-			and status = 'verified'
-		order by "remoteId"
-		for update skip locked
-	), hashes as (
-                select distinct checkpoint."remoteId",
-                        checkpoint."archiveUrlIdentity",
-                        checkpoint."checkpointLedger",
-                        lower(hash.value) as "bucketHash"
-		from checkpoint
-		cross join lateral jsonb_array_elements(
-			coalesce(
-				checkpoint."verificationFacts"
-					->'checkpointHistoryArchiveState'
-					->'stellarHistory'
-					->'currentBuckets',
-				'[]'::jsonb
-			)
-			|| coalesce(
-				checkpoint."verificationFacts"
-					->'checkpointHistoryArchiveState'
-					->'stellarHistory'
-					->'hotArchiveBuckets',
-				'[]'::jsonb
-			)
-		) bucket
-		cross join lateral (
-			values (bucket->>'curr'), (bucket->>'snap'),
-				(bucket->'next'->>'output')
-		) hash(value)
-		where hash.value is not null
-			and lower(hash.value) ~ '^[0-9a-f]{64}$'
-			and lower(hash.value) !~ '^0+$'
-	), inserted as (
-		insert into "history_archive_checkpoint_bucket_dependency" (
-			"archiveUrlIdentity", "checkpointLedger", "bucketHash"
+const markCheckpointDependenciesMaterializedSql = `
+	update "history_archive_object_queue" checkpoint
+	set "dependenciesMaterializedAt" = now()
+	where checkpoint."remoteId" = any($1::uuid[])
+		and checkpoint."objectType" = 'checkpoint-state'
+		and checkpoint.status = 'verified'
+		and checkpoint."dependenciesMaterializedAt" is null
+		and exists (
+			select 1
+			from "history_archive_checkpoint_content_observation" observation
+			where observation."checkpointStateObjectRemoteId" =
+				checkpoint."remoteId"
 		)
-                select hashes."archiveUrlIdentity", hashes."checkpointLedger",
-			hashes."bucketHash"
-                from hashes
-		order by hashes."archiveUrlIdentity", hashes."bucketHash",
-			hashes."checkpointLedger"
-		on conflict do nothing
-		returning "bucketHash"
-	), marked as (
-		update "history_archive_object_queue" object
-		set "dependenciesMaterializedAt" = now()
-		from checkpoint
-		where object."remoteId" = checkpoint."remoteId"
-			and object.status = 'verified'
-			and (
-				object."dependenciesMaterializedAt" is null
-				or exists (select 1 from inserted)
-			)
-		returning object.id
-	)
-	select "bucketHash" from inserted
 `;
 
 const checkpointIdentitySql = `
@@ -148,11 +102,14 @@ const activateCheckpointBucketDependenciesSql = `
 	with checkpoint as (
 		${checkpointIdentitySql}
 	), dependencies as materialized (
-		select dependency."archiveUrlIdentity", dependency."bucketHash"
+		select checkpoint."archiveUrlIdentity", dependency."bucketHash"
 		from checkpoint
-		join "history_archive_checkpoint_bucket_dependency" dependency
-			on dependency."archiveUrlIdentity" = checkpoint."archiveUrlIdentity"
-			and dependency."checkpointLedger" = checkpoint."checkpointLedger"
+		cross join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'checkpoint."archiveUrlIdentity"',
+				'checkpoint."checkpointLedger"'
+			)}
+		) dependency
 	)
 	update "history_archive_object_queue" candidate
 	set "dependencyReady" = true
@@ -194,13 +151,22 @@ const reconcileReadinessSql = `
 				)
 			else exists (
 				select 1
-				from "history_archive_checkpoint_bucket_dependency" dependency
+				from "history_archive_checkpoint_scan_cursor" chain_cursor
+				cross join lateral (
+					${historyArchiveCheckpointBucketDependencyRangeSql(
+						'candidate."archiveUrlIdentity"',
+						'chain_cursor."nextHistoricalCheckpointLedger" - 64',
+						`chain_cursor."nextHistoricalCheckpointLedger" -
+							64 + ${historyArchiveSequentialPrefetchLedgerSpan}`
+					)}
+				) dependency
 				join "history_archive_object_queue" checkpoint
 					on checkpoint."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 					and checkpoint."checkpointLedger" = dependency."checkpointLedger"
 					and checkpoint."objectType" = 'checkpoint-state'
 					and checkpoint.status = 'verified'
-				where dependency."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+				where chain_cursor."archiveUrlIdentity" =
+						candidate."archiveUrlIdentity"
 					and dependency."bucketHash" = candidate."bucketHash"
 			)
 		end

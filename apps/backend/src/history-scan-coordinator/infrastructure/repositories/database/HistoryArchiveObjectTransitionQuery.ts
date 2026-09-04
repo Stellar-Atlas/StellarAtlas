@@ -6,6 +6,7 @@ import {
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { normalizeLimit } from './HistoryArchiveObjectRowMapper.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 interface TransitionTargetRow {
 	readonly remoteId: string;
@@ -86,7 +87,12 @@ const runtimeTransitionsSql = `
 		select root."archiveUrlIdentity", root.target_lane,
 			'bucket'::text, 'bucket:' || dependency."bucketHash"
 		from runtime_roots root
-		join "history_archive_checkpoint_bucket_dependency" dependency
+		join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'root."archiveUrlIdentity"',
+				'root.checkpoint_ledger'
+			)}
+		) dependency
 			on dependency."archiveUrlIdentity" = root."archiveUrlIdentity"
 			and dependency."checkpointLedger" = root.checkpoint_ledger
 	), runtime_candidates as materialized (

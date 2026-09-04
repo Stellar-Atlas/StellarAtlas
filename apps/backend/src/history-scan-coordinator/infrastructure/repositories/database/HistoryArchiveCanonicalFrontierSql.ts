@@ -16,6 +16,7 @@ import {
 	type HistoryArchiveBrokerPriority
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import { historyArchiveMinimumWatermark } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 export { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 
 export const materializeCanonicalFrontierDependenciesSql = `
@@ -306,10 +307,13 @@ export function buildAdmitCanonicalFrontierSql(
 			'bucket:' || dependency."bucketHash" as object_key,
 			5 as object_priority
 		from network_roots network_root
-		join "history_archive_checkpoint_bucket_dependency" dependency
-			on dependency."archiveUrlIdentity" =
-				network_root."archiveUrlIdentity"
-			and dependency."checkpointLedger" = network_root.checkpoint_ledger
+		join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'network_root."archiveUrlIdentity"',
+				'network_root.checkpoint_ledger'
+			)}
+		) dependency
+			on true
 	), desired_objects as materialized (
 		select * from pending_target_checkpoint_objects
 		union all

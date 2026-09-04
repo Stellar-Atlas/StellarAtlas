@@ -1,3 +1,5 @@
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+
 export function historyArchiveCheckpointProofTerminalReadySql(
 	targetAlias: string,
 	requirePredecessorProof = true
@@ -37,7 +39,12 @@ export function historyArchiveCheckpointProofTerminalReadySql(
             )
             or exists (
                 select 1
-                from "history_archive_checkpoint_bucket_dependency" dependency
+                from lateral (
+                    ${historyArchiveCheckpointBucketDependenciesSql(
+											archiveUrlIdentity,
+											checkpointLedger
+										)}
+                ) dependency
                 join "history_archive_object_queue" failed_bucket
                     on failed_bucket."archiveUrlIdentity" = dependency."archiveUrlIdentity"
                     and failed_bucket."objectType" = 'bucket'
@@ -70,13 +77,23 @@ export function historyArchiveCheckpointProofTerminalReadySql(
                 )
                 and exists (
                     select 1
-                    from "history_archive_checkpoint_bucket_dependency" dependency
+                    from lateral (
+                    ${historyArchiveCheckpointBucketDependenciesSql(
+											archiveUrlIdentity,
+											checkpointLedger
+										)}
+                ) dependency
                     where dependency."archiveUrlIdentity" = ${archiveUrlIdentity}
                         and dependency."checkpointLedger" = ${checkpointLedger}
                 )
                 and not exists (
                     select 1
-                    from "history_archive_checkpoint_bucket_dependency" dependency
+                    from lateral (
+                    ${historyArchiveCheckpointBucketDependenciesSql(
+											archiveUrlIdentity,
+											checkpointLedger
+										)}
+                ) dependency
                     where dependency."archiveUrlIdentity" = ${archiveUrlIdentity}
                         and dependency."checkpointLedger" = ${checkpointLedger}
                         and not exists (

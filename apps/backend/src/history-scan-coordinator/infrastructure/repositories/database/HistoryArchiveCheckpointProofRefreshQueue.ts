@@ -30,6 +30,7 @@ import {
 	historyArchiveRootTransitionLockNamespace,
 	lockHistoryArchiveRootTransitions
 } from './HistoryArchiveRootTransitionLock.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 	readonly archiveUrlIdentity: string;
@@ -734,10 +735,16 @@ export const enqueueProofRefreshesSql = `
 		select dependency."archiveUrlIdentity", dependency."checkpointLedger",
 			source.evidence_updated_at
 		from source_objects source
-		join "history_archive_checkpoint_bucket_dependency" dependency
+		join "history_archive_checkpoint_scan_cursor" chain_cursor
 			on source."objectType" = 'bucket'
-			and dependency."archiveUrlIdentity" = source."archiveUrlIdentity"
-			and dependency."bucketHash" = source."bucketHash"
+			and chain_cursor."archiveUrlIdentity" = source."archiveUrlIdentity"
+		cross join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'source."archiveUrlIdentity"',
+				'chain_cursor."nextHistoricalCheckpointLedger" - 64'
+			)}
+		) dependency
+		where dependency."bucketHash" = source."bucketHash"
         ), candidate_targets as materialized (
                 select affected."archiveUrlIdentity", affected."checkpointLedger",
                         max(affected.evidence_updated_at) as evidence_updated_at

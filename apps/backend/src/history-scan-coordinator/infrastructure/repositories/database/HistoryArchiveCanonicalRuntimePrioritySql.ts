@@ -1,4 +1,5 @@
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 function buildCanonicalRuntimeArchiveRootsCteSql(
 	cteName: string,
@@ -116,8 +117,12 @@ export function canonicalRuntimeObjectMembershipForRootSql(
 								'bucket:' || ${objectAlias}."bucketHash"
 							and exists (
 								select 1
-								from "history_archive_checkpoint_bucket_dependency"
-									dependency
+								from lateral (
+									${historyArchiveCheckpointBucketDependenciesSql(
+										objectAlias + '."archiveUrlIdentity"',
+										runtimeRootAlias + '.checkpoint_ledger'
+									)}
+								) dependency
 								where dependency."archiveUrlIdentity" =
 										${objectAlias}."archiveUrlIdentity"
 									and dependency."checkpointLedger" =

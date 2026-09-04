@@ -8,6 +8,7 @@ import {
 	historyArchiveCanonicalFirstScopeCteSql
 } from './HistoryArchiveCanonicalFirst.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 export async function materializeOrderedCheckpointPrefetch(
 	manager: EntityManager,
@@ -209,11 +210,14 @@ export const activateCurrentCheckpointDependenciesSql = `
 		union all
 		select object.id, current."checkpointLedger", false
 		from current_checkpoints current
-		join "history_archive_checkpoint_bucket_dependency" dependency
-			on dependency."archiveUrlIdentity" = current."archiveUrlIdentity"
-			and dependency."checkpointLedger" = current."checkpointLedger"
+		cross join lateral (
+			${historyArchiveCheckpointBucketDependenciesSql(
+				'current."archiveUrlIdentity"',
+				'current."checkpointLedger"'
+			)}
+		) dependency
 		join "history_archive_object_queue" object
-			on object."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+			on object."archiveUrlIdentity" = current."archiveUrlIdentity"
 			and object."bucketHash" = dependency."bucketHash"
 			and object."objectType" = 'bucket'
 		where object.status = 'pending'

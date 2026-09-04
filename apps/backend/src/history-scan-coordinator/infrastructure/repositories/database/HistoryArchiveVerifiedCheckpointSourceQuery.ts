@@ -3,6 +3,7 @@ import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domai
 import type { HistoryArchiveVerifiedCheckpointObjectSource } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { mapVerifiedCheckpointSourceRows } from './HistoryArchiveVerifiedCheckpointSourceMapper.js';
 import type { HistoryArchiveRepairHostResolver } from './HistoryArchiveRepairSourceUrlPolicy.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 const maxSourceObjects = 500;
 const maxSourcesPerObject = 3;
@@ -229,7 +230,12 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 				proof_freshness."effectiveEvaluatedAt"
 			and proof."expectedBucketCount" = (
 				select count(*)
-				from history_archive_checkpoint_bucket_dependency expected_dependency
+				from lateral (
+					${historyArchiveCheckpointBucketDependenciesSql(
+						'proof."archiveUrlIdentity"',
+						'proof."checkpointLedger"'
+					)}
+				) expected_dependency
 				where expected_dependency."archiveUrlIdentity" =
 					proof."archiveUrlIdentity"
 					and expected_dependency."checkpointLedger" =
@@ -280,7 +286,12 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 			)
 			and not exists (
 				select 1
-				from history_archive_checkpoint_bucket_dependency dependency
+				from lateral (
+				${historyArchiveCheckpointBucketDependenciesSql(
+					'proof."archiveUrlIdentity"',
+					'proof."checkpointLedger"'
+				)}
+			) dependency
 			left join history_archive_object_queue bucket
 				on bucket."archiveUrlIdentity" =
 					dependency."archiveUrlIdentity"

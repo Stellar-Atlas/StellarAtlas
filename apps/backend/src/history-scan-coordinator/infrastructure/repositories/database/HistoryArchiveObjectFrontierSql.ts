@@ -1,4 +1,8 @@
-import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
+import {
+	historyArchiveObjectOpenSequentialCohortSql,
+	historyArchiveSequentialPrefetchLedgerSpan
+} from './HistoryArchiveSequentialChainSql.js';
+import { historyArchiveCheckpointBucketDependencyRangeSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 export const seedHistoryArchiveFrontierCursorsSql = `
 	insert into "history_archive_object_frontier_cursor" (
@@ -293,13 +297,22 @@ function dependencyEligibilitySql(alias: string): string {
 			)
 		else exists (
 			select 1
-			from "history_archive_checkpoint_bucket_dependency" dependency
+			from "history_archive_checkpoint_scan_cursor" chain_cursor
+			cross join lateral (
+				${historyArchiveCheckpointBucketDependencyRangeSql(
+					`${alias}."archiveUrlIdentity"`,
+					'chain_cursor."nextHistoricalCheckpointLedger" - 64',
+					`chain_cursor."nextHistoricalCheckpointLedger" -
+						64 + ${historyArchiveSequentialPrefetchLedgerSpan}`
+				)}
+			) dependency
 			join "history_archive_object_queue" checkpoint
 				on checkpoint."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 				and checkpoint."checkpointLedger" = dependency."checkpointLedger"
 				and checkpoint."objectType" = 'checkpoint-state'
 				and checkpoint.status = 'verified'
-			where dependency."archiveUrlIdentity" = ${alias}."archiveUrlIdentity"
+			where chain_cursor."archiveUrlIdentity" =
+					${alias}."archiveUrlIdentity"
 				and dependency."bucketHash" = ${alias}."bucketHash"
 		)
 	end`;

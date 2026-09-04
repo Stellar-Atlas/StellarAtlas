@@ -9,7 +9,7 @@ describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 			toHistoryArchiveCheckpointProofRefreshParams({
 				archiveUrlIdentity: 'https://history.example.com'
 			})
-		).toEqual(['https://history.example.com', null, null]);
+		).toEqual(['https://history.example.com', null, null, false]);
 	});
 
 	it('preserves checkpoint ledger and bucket hash refresh targets', () => {
@@ -23,7 +23,8 @@ describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 		).toEqual([
 			'https://history.example.com',
 			127,
-			'abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd'
+			'abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+			false
 		]);
 	});
 
