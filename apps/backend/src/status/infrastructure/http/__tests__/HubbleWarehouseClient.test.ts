@@ -25,16 +25,14 @@ describe('ClickHouseHubbleWarehouse', () => {
 			select: ['id', 'ledger_sequence']
 		});
 
-		expect(result.rows).toEqual([{ id: 'transaction-1', ledger_sequence: 3 }]);
+		expect(result.rows).toEqual([{ id: '123', ledger_sequence: 3 }]);
 		const queryRequest = requests.find((request) =>
 			request.searchParams
 				.get('query')
 				?.includes('FROM `stellar_hubble`.`history_transactions`')
 		);
 		expect(queryRequest).toBeDefined();
-		expect(queryRequest?.searchParams.get('query')).toContain(
-			'SELECT toString(`id`) AS `id`, `ledger_sequence`'
-		);
+		expect(queryRequest?.searchParams.get('query')).toContain('__hubble_64_id');
 		expect(queryRequest?.searchParams.get('query')).toContain('filter_0:Int64');
 		expect(queryRequest?.searchParams.get('query')).toContain(
 			'`ledger_sequence` >= {filter_1:UInt32}'
@@ -131,7 +129,7 @@ function mockFetch(requests: URL[]): typeof fetch {
 		}
 		if (query.includes('history_transactions')) {
 			return jsonResponse({
-				data: [{ id: 'transaction-1', ledger_sequence: 3 }]
+				data: [{ __hubble_64_id: '123', ledger_sequence: 3 }]
 			});
 		}
 		return new Response('unexpected query', { status: 500 });

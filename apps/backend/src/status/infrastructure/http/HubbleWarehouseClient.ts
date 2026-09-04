@@ -314,7 +314,9 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 				Math.round((performance.now() - startedAt) * 100) / 100,
 			limit,
 			offset,
-			rows: response.data ?? []
+			rows: (response.data ?? []).map((row) =>
+				normalizeSelectedRow(row, selected, columns)
+			)
 		};
 	}
 
@@ -638,10 +640,31 @@ function requireColumn(
 
 function selectExpression(column: HubbleColumn): string {
 	const identifier = quote(column.name);
-	if (/^(?:U?Int64|Nullable\(U?Int64\))$/.test(column.type)) {
-		return 'toString(' + identifier + ') AS ' + identifier;
+	if (is64BitColumn(column)) {
+		return 'toString(' + identifier + ') AS ' + quote(outputField(column));
 	}
 	return identifier;
+}
+
+function normalizeSelectedRow(
+	row: Readonly<Record<string, unknown>>,
+	selected: readonly string[],
+	columns: ReadonlyMap<string, HubbleColumn>
+): Record<string, unknown> {
+	return Object.fromEntries(
+		selected.map((field) => {
+			const column = requireColumn(columns, field);
+			return [field, row[outputField(column)]];
+		})
+	);
+}
+
+function outputField(column: HubbleColumn): string {
+	return is64BitColumn(column) ? '__hubble_64_' + column.name : column.name;
+}
+
+function is64BitColumn(column: HubbleColumn): boolean {
+	return /^(?:U?Int64|Nullable\(U?Int64\))$/.test(column.type);
 }
 
 function quote(identifier: string): string {

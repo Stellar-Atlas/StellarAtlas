@@ -34,7 +34,7 @@ SELECT
 	memo_type,
 	memo,
 	closed_at,
-	id,
+	toString(id) AS transaction_id,
 	if(account = {account:String}, 'source', 'effect') AS relationship
 FROM ${database}.history_transactions
 WHERE account = {account:String}
