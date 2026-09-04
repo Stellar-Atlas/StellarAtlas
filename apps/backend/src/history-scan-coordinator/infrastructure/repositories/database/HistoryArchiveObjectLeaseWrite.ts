@@ -293,6 +293,18 @@ export const historyArchiveObjectVerifiedBatchSql = `
                         and object.status = 'scanning'
                         and object.attempts = input."claimAttempt"
                 )
+        ), broker_ready_lockable as materialized (
+                -- Dispatcher admission locks broker-ready rows before reading
+                -- their durable objects. Completion must use the same order.
+                select ready."objectRemoteId"
+                from eligible
+                join "history_archive_object_ready" ready
+                        on ready."objectRemoteId" = eligible."remoteId"
+                where eligible.scheduler = 'broker'
+                        and ready."dispatchToken" = eligible."executionId"
+                        and ready."claimAttempt" = eligible."claimAttempt"
+                order by ready."objectRemoteId"
+                for update of ready
         ), lockable as materialized (
                 -- Checkpoint fan-out upserts existing queue rows in this unique-key
                 -- order. Pre-lock completion rows in the same order to prevent a
@@ -301,6 +313,10 @@ export const historyArchiveObjectVerifiedBatchSql = `
                 from eligible
                 join "history_archive_object_queue" object
                         on object."remoteId" = eligible."remoteId"
+                left join broker_ready_lockable broker_ready
+                        on broker_ready."objectRemoteId" = eligible."remoteId"
+                where eligible.scheduler <> 'broker'
+                        or broker_ready."objectRemoteId" is not null
                 order by object."archiveUrlIdentity", object."objectType",
                         object."objectKey"
                 for update of object
@@ -399,19 +415,6 @@ export const historyArchiveObjectVerifiedBatchSql = `
                         and slot."objectRemoteId" = updated."remoteId"
                         and slot."claimAttempt" = updated."claimAttempt"
                 returning slot.slot
-        ), broker_ready_lockable as materialized (
-                -- Ready-queue refill also locks by objectRemoteId. Lock every
-                -- completion row in that same order before deleting any row so
-                -- overlapping batches cannot form a lock-order cycle.
-                select ready."objectRemoteId"
-                from updated
-                join "history_archive_object_ready" ready
-                        on ready."objectRemoteId" = updated."remoteId"
-                where updated.scheduler = 'broker'
-                        and ready."dispatchToken" = updated."executionId"
-                        and ready."claimAttempt" = updated."claimAttempt"
-                order by ready."objectRemoteId"
-                for update of ready
         ), broker_ready_removed as (
                 delete from "history_archive_object_ready" ready
                 using broker_ready_lockable lockable

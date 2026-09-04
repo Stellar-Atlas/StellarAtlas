@@ -23,15 +23,22 @@ describe('HistoryArchiveObjectLeaseWrite', () => {
 		const readyLock = historyArchiveObjectVerifiedBatchSql.indexOf(
 			'broker_ready_lockable as materialized'
 		);
-		const readyDelete =
-			historyArchiveObjectVerifiedBatchSql.indexOf(
-				'broker_ready_removed as'
-			);
+		const objectLock = historyArchiveObjectVerifiedBatchSql.indexOf(
+			'), lockable as materialized ('
+		);
+		const readyDelete = historyArchiveObjectVerifiedBatchSql.indexOf(
+			'broker_ready_removed as'
+		);
 
 		expect(readyLock).toBeGreaterThan(-1);
+		expect(objectLock).toBeGreaterThan(readyLock);
 		expect(readyDelete).toBeGreaterThan(readyLock);
+		expect(readyDelete).toBeGreaterThan(objectLock);
 		expect(historyArchiveObjectVerifiedBatchSql).toContain(
 			'order by ready."objectRemoteId"\n                for update of ready'
+		);
+		expect(historyArchiveObjectVerifiedBatchSql).toContain(
+			'left join broker_ready_lockable broker_ready'
 		);
 	});
 

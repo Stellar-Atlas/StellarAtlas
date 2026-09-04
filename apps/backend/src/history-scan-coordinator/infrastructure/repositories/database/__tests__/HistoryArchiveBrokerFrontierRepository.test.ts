@@ -25,6 +25,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 	it('skips ready rows already locked by a terminal completion', () => {
 		expect(reserveBrokerJobsSql).toContain('lockable as materialized');
 		expect(reserveBrokerJobsSql).toContain('for update of ready skip locked');
+		expect(reserveBrokerJobsSql).toContain('order by ready."objectRemoteId"');
 		expect(reserveBrokerJobsSql).toContain(
 			'and ready."objectRemoteId" = lockable."objectRemoteId"'
 		);

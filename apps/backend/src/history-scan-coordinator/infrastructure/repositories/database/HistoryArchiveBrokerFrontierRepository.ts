@@ -131,10 +131,9 @@ export const reserveBrokerJobsSql = `
 		from "history_archive_object_ready" ready
 		join selected
 			on selected."objectRemoteId" = ready."objectRemoteId"
-		order by selected.priority,
-			selected."checkpointLedger" asc nulls first,
-			selected."objectOrder", selected."selectedOrdinal",
-			ready."objectRemoteId"
+		-- Completion acknowledgements lock the same table first. A single
+		-- objectRemoteId order prevents overlapping batches from reversing it.
+		order by ready."objectRemoteId"
 		for update of ready skip locked
 	), reserved as (
 		update "history_archive_object_ready" ready
