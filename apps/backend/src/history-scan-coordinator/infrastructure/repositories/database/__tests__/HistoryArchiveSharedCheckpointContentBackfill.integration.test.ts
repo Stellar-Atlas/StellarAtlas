@@ -1,10 +1,15 @@
 import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import {
+	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+	HistoryArchiveCheckpointProof
+} from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import { HistoryArchiveSharedCheckpointBackfillMigration1788495000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788495000000-HistoryArchiveSharedCheckpointBackfillMigration.js';
 import {
 	backfillSharedCheckpointContentPage,
-	inspectSharedCheckpointBackfill
+	inspectSharedCheckpointBackfill,
+	sharedCheckpointBackfillName
 } from '@history-scan-coordinator/infrastructure/repositories/database/HistoryArchiveSharedCheckpointContentBackfill.js';
 import {
 	startDisposablePostgres,
@@ -20,7 +25,7 @@ describe('shared checkpoint content backfill', () => {
 	beforeAll(async () => {
 		postgres = await startDisposablePostgres();
 		dataSource = new DataSource({
-			entities: [HistoryArchiveObject],
+			entities: [HistoryArchiveObject, HistoryArchiveCheckpointProof],
 			synchronize: true,
 			type: 'postgres',
 			url: postgres.url
@@ -49,6 +54,9 @@ describe('shared checkpoint content backfill', () => {
 			'truncate table history_archive_checkpoint_bucket_set cascade'
 		);
 		await dataSource.query(
+			'truncate table history_archive_checkpoint_proof restart identity'
+		);
+		await dataSource.query(
 			'truncate table history_archive_object_queue restart identity cascade'
 		);
 		await dataSource.query(
@@ -65,6 +73,9 @@ describe('shared checkpoint content backfill', () => {
 			checkpointObject(`https://archive-${index}.example`)
 		);
 		await dataSource.getRepository(HistoryArchiveObject).save(checkpoints);
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save(checkpoints.map(checkpointProof));
 
 		const firstPage = await backfillSharedCheckpointContentPage(
 			dataSource,
@@ -93,7 +104,7 @@ describe('shared checkpoint content backfill', () => {
 		});
 	});
 
-	it('scans once by queue cursor and stores shared content idempotently', async () => {
+	it('scans proofs once, skips existing observations, and resumes by proof cursor', async () => {
 		const first = checkpointObject('https://first.example/archive');
 		const second = checkpointObject('https://second.example/archive');
 		const ledger = new HistoryArchiveObject({
@@ -109,6 +120,9 @@ describe('shared checkpoint content backfill', () => {
 		await dataSource
 			.getRepository(HistoryArchiveObject)
 			.save([first, second, ledger]);
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save([checkpointProof(first), checkpointProof(second)]);
 
 		const firstPage = await backfillSharedCheckpointContentPage(
 			dataSource,
@@ -119,7 +133,7 @@ describe('shared checkpoint content backfill', () => {
 			complete: false,
 			eligibleRows: 2,
 			materializedRows: 2,
-			scannedRows: 3
+			scannedRows: 2
 		});
 
 		const finalPage = await backfillSharedCheckpointContentPage(
@@ -141,6 +155,15 @@ describe('shared checkpoint content backfill', () => {
 		await expect(
 			countRows('history_archive_checkpoint_bucket_dependency_shared')
 		).resolves.toBe(2);
+
+		await dataSource.query(
+			`update history_archive_shared_checkpoint_backfill_progress
+			 set "lastQueueId" = 0, "completedAt" = null
+			 where "name" = $1`,
+			[sharedCheckpointBackfillName]
+		);
+		const replay = await backfillSharedCheckpointContentPage(dataSource);
+		expect(replay).toMatchObject({ eligibleRows: 0, materializedRows: 0 });
 	});
 
 	async function countRows(table: string): Promise<number> {
@@ -150,6 +173,42 @@ describe('shared checkpoint content backfill', () => {
 		return row?.count ?? 0;
 	}
 });
+
+function checkpointProof(
+	checkpoint: HistoryArchiveObject
+): HistoryArchiveCheckpointProof {
+	const proof = new HistoryArchiveCheckpointProof();
+	proof.archiveUrl = checkpoint.archiveUrl;
+	proof.archiveUrlIdentity = checkpoint.archiveUrlIdentity;
+	proof.checkpointLedger = checkpoint.checkpointLedger ?? 0;
+	proof.status = 'verified';
+	proof.proofVersion = CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION;
+	proof.requiredObjectsComplete = true;
+	proof.proofFactsComplete = true;
+	proof.checkpointBucketListMatches = true;
+	proof.transactionsMatch = true;
+	proof.resultsMatch = true;
+	proof.previousLedgersMatch = true;
+	proof.bucketsVerified = true;
+	proof.ledgerFactCount = 64;
+	proof.transactionFactCount = 1;
+	proof.resultFactCount = 1;
+	proof.expectedBucketCount = 1;
+	proof.verifiedBucketCount = 1;
+	proof.failedBucketCount = 0;
+	proof.missingBucketCount = 0;
+	proof.checkpointBucketListHash = Buffer.alloc(32, 7).toString('base64');
+	proof.ledgerBucketListHash = proof.checkpointBucketListHash;
+	proof.checkpointStateObjectRemoteId = checkpoint.remoteId;
+	proof.ledgerObjectRemoteId = null;
+	proof.transactionsObjectRemoteId = null;
+	proof.resultsObjectRemoteId = null;
+	proof.scpObjectRemoteId = null;
+	proof.failureKind = null;
+	proof.details = null;
+	proof.evaluatedAt = new Date();
+	return proof;
+}
 
 function checkpointObject(archiveUrl: string): HistoryArchiveObject {
 	const checkpoint = new HistoryArchiveObject({

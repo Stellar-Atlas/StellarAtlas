@@ -1,7 +1,8 @@
 import type { DataSource, EntityManager } from 'typeorm';
 import { writeHistoryArchiveSharedCheckpointContentShadowWithManager } from './HistoryArchiveSharedCheckpointContentShadow.js';
 
-export const sharedCheckpointBackfillName = 'shared-checkpoint-content-v1';
+export const sharedCheckpointBackfillName =
+	'shared-checkpoint-content-v2-proof';
 export const defaultSharedCheckpointScanBatchSize = 100_000;
 export const defaultSharedCheckpointEligibleBatchSize = 500;
 export const defaultSharedCheckpointWriteBatchSize = 500;
@@ -199,19 +200,30 @@ function chunks<T>(values: readonly T[], size: number): readonly T[][] {
 }
 
 const backfillPageSql = `
-	with scanned as materialized (
-		select object.id, object."remoteId", object."objectType",
-			object.status, object."checkpointLedger"
-		from "history_archive_object_queue" object
-		where object.id > $1::bigint
-		order by object.id
+	with scanned_proof as materialized (
+		select proof.id, proof."archiveUrlIdentity",
+			proof."checkpointLedger",
+			proof."checkpointStateObjectRemoteId"
+		from "history_archive_checkpoint_proof" proof
+		where proof.id > $1::bigint
+		order by proof.id
 		limit $2
 	), classified as materialized (
-		select scanned.*,
-			scanned."objectType" = 'checkpoint-state'
-			and scanned.status = 'verified'
-			and scanned."checkpointLedger" is not null as eligible
-		from scanned
+		select scanned_proof.id, object."remoteId",
+			object."remoteId" is not null
+			and object."objectType" = 'checkpoint-state'
+			and object.status = 'verified'
+			and object."checkpointLedger" is not null
+			and observation."archiveUrlIdentity" is null as eligible
+		from scanned_proof
+		left join "history_archive_object_queue" object
+			on object."remoteId" =
+				scanned_proof."checkpointStateObjectRemoteId"
+		left join "history_archive_checkpoint_content_observation" observation
+			on observation."archiveUrlIdentity" =
+				scanned_proof."archiveUrlIdentity"
+			and observation."checkpointLedger" =
+				scanned_proof."checkpointLedger"
 	), ranked as materialized (
 		select classified.*,
 			count(*) filter (where eligible) over (order by id)
