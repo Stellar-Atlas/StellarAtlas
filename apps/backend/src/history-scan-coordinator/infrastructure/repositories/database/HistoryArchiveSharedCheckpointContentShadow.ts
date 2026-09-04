@@ -1,5 +1,5 @@
 import { setImmediate } from 'node:timers';
-import type { Repository } from 'typeorm';
+import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 
 interface SharedCheckpointContentRow {
@@ -44,28 +44,44 @@ export async function writeHistoryArchiveSharedCheckpointContentShadow(
 	);
 	if (uniqueRemoteIds.length === 0) return;
 
-	await repository.manager.transaction(async (manager) => {
-		await manager.query(`set local lock_timeout = '2s'`);
-		await manager.query(`set local statement_timeout = '30s'`);
-		const derived = (await manager.query(deriveSharedCheckpointContentSql, [
+	await repository.manager.transaction(async (manager) =>
+		writeHistoryArchiveSharedCheckpointContentShadowWithManager(
+			manager,
 			uniqueRemoteIds
-		])) as readonly SharedCheckpointContentRow[];
-		if (derived.length === 0) return;
+		)
+	);
+}
 
-		const payload = JSON.stringify(derived);
-		const insertedSets = (await manager.query(insertSharedBucketSetsSql, [
-			payload
-		])) as readonly { readonly bucketSetDigest: string }[];
-		if (insertedSets.length > 0) {
-			await manager.query(insertSharedBucketSetMembersSql, [
-				payload,
-				insertedSets.map((row) => row.bucketSetDigest)
-			]);
-		}
-		await manager.query(insertSharedCheckpointContentSql, [payload]);
-		await manager.query(insertSharedCheckpointObservationsSql, [payload]);
-		await manager.query(recordSharedCheckpointConflictsSql, [payload]);
-	});
+export async function writeHistoryArchiveSharedCheckpointContentShadowWithManager(
+	manager: EntityManager,
+	remoteIds: readonly string[]
+): Promise<number> {
+	const uniqueRemoteIds = [...new Set(remoteIds)].filter(
+		(remoteId) => remoteId.length > 0
+	);
+	if (uniqueRemoteIds.length === 0) return 0;
+
+	await manager.query(`set local lock_timeout = '2s'`);
+	await manager.query(`set local statement_timeout = '30s'`);
+	const derived = (await manager.query(deriveSharedCheckpointContentSql, [
+		uniqueRemoteIds
+	])) as readonly SharedCheckpointContentRow[];
+	if (derived.length === 0) return 0;
+
+	const payload = JSON.stringify(derived);
+	const insertedSets = (await manager.query(insertSharedBucketSetsSql, [
+		payload
+	])) as readonly { readonly bucketSetDigest: string }[];
+	if (insertedSets.length > 0) {
+		await manager.query(insertSharedBucketSetMembersSql, [
+			payload,
+			insertedSets.map((row) => row.bucketSetDigest)
+		]);
+	}
+	await manager.query(insertSharedCheckpointContentSql, [payload]);
+	await manager.query(insertSharedCheckpointObservationsSql, [payload]);
+	await manager.query(recordSharedCheckpointConflictsSql, [payload]);
+	return derived.length;
 }
 
 function getShadowQueue(
