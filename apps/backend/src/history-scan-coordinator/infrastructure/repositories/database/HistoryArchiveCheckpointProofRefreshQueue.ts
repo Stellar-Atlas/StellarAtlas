@@ -816,8 +816,11 @@ order by "archiveUrlIdentity", "checkpointLedger"
                         "leaseToken" = null,
                         "leaseUntil" = null,
                         "updatedAt" = now()
-                -- The generation fence prevents an older leased refresh from
-                -- acknowledging or deleting this newly requested work.
+                where excluded."evidenceUpdatedAt" >
+                        history_archive_checkpoint_proof_refresh_queue."evidenceUpdatedAt"
+                -- Only genuinely newer evidence supersedes a leased refresh.
+                -- Replaying the same completion batch must not reset its lease,
+                -- increment its generation, or create a redundant write.
 		returning 1
 	)
 	select count(*)::integer as count from enqueued

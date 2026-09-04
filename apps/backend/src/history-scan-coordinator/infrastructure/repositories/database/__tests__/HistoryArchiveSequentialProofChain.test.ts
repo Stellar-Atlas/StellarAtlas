@@ -101,8 +101,11 @@ describe('sequential history archive proof chain', () => {
 		);
 		expect(enqueueProofRefreshesSql).toContain('"leaseToken" = null');
 		expect(enqueueProofRefreshesSql).toContain('"leaseUntil" = null');
-		expect(enqueueProofRefreshesSql).not.toMatch(
-			/where history_archive_checkpoint_proof_refresh_queue\."leaseUntil"/
+		expect(enqueueProofRefreshesSql).toContain(
+			'where excluded."evidenceUpdatedAt" >'
+		);
+		expect(enqueueProofRefreshesSql).toContain(
+			'history_archive_checkpoint_proof_refresh_queue."evidenceUpdatedAt"'
 		);
 		expect(claimProofRefreshSql).toContain(queueReadiness);
 		expect(claimSequentialProofRefreshSql).toContain(
