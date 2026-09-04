@@ -45,7 +45,7 @@ describe('HistoryArchiveVerifiedBucketSourceQuery', () => {
 			5
 		]);
 		expect(historyArchiveVerifiedBucketSourceSql).toContain(
-			'history_archive_checkpoint_bucket_dependency_current'
+			'history_archive_checkpoint_bucket_dependency'
 		);
 		expect(historyArchiveVerifiedBucketSourceSql).toContain(
 			'proof."bucketsVerified" = true'

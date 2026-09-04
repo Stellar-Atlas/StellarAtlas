@@ -209,7 +209,7 @@ export const activateCurrentCheckpointDependenciesSql = `
 		union all
 		select object.id, current."checkpointLedger", false
 		from current_checkpoints current
-		join "history_archive_checkpoint_bucket_dependency_current" dependency
+		join "history_archive_checkpoint_bucket_dependency" dependency
 			on dependency."archiveUrlIdentity" = current."archiveUrlIdentity"
 			and dependency."checkpointLedger" = current."checkpointLedger"
 		join "history_archive_object_queue" object

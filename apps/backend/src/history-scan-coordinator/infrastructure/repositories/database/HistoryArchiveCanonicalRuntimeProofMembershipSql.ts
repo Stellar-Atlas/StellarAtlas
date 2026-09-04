@@ -25,7 +25,7 @@ function exactCheckpointObjectExistsSql(
 function exactBucketDependencyExistsSql(runtimeRootAlias: string): string {
 	return `exists (
 		select 1
-		from "history_archive_checkpoint_bucket_dependency_current" dependency
+		from "history_archive_checkpoint_bucket_dependency" dependency
 		join "history_archive_object_queue" selected
 			on selected."archiveUrlIdentity" =
 				dependency."archiveUrlIdentity"

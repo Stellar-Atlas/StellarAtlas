@@ -89,7 +89,7 @@ export async function findVerifiedCheckpointsNeedingFanout(
 				)
 				or not exists (
 					select 1
-					from "history_archive_checkpoint_bucket_dependency_current" dependency
+					from "history_archive_checkpoint_bucket_dependency" dependency
 					where dependency."archiveUrlIdentity" =
 						object."archiveUrlIdentity"
 						and dependency."checkpointLedger" =
@@ -97,7 +97,7 @@ export async function findVerifiedCheckpointsNeedingFanout(
 				)
 				or exists (
 					select 1
-					from "history_archive_checkpoint_bucket_dependency_current" dependency
+					from "history_archive_checkpoint_bucket_dependency" dependency
 					where dependency."archiveUrlIdentity" =
 						object."archiveUrlIdentity"
 						and dependency."checkpointLedger" =
@@ -485,7 +485,7 @@ const compactCheckpointPlanSql = `
 				)
 				or exists (
 					select 1
-					from "history_archive_checkpoint_bucket_dependency_current" dependency
+					from "history_archive_checkpoint_bucket_dependency" dependency
 					join "history_archive_object_queue" failed_bucket
 						on failed_bucket."archiveUrlIdentity" =
 							dependency."archiveUrlIdentity"

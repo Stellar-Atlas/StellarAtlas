@@ -37,7 +37,7 @@ export function historyArchiveCheckpointProofTerminalReadySql(
             )
             or exists (
                 select 1
-                from "history_archive_checkpoint_bucket_dependency_current" dependency
+                from "history_archive_checkpoint_bucket_dependency" dependency
                 join "history_archive_object_queue" failed_bucket
                     on failed_bucket."archiveUrlIdentity" = dependency."archiveUrlIdentity"
                     and failed_bucket."objectType" = 'bucket'
@@ -70,13 +70,13 @@ export function historyArchiveCheckpointProofTerminalReadySql(
                 )
                 and exists (
                     select 1
-                    from "history_archive_checkpoint_bucket_dependency_current" dependency
+                    from "history_archive_checkpoint_bucket_dependency" dependency
                     where dependency."archiveUrlIdentity" = ${archiveUrlIdentity}
                         and dependency."checkpointLedger" = ${checkpointLedger}
                 )
                 and not exists (
                     select 1
-                    from "history_archive_checkpoint_bucket_dependency_current" dependency
+                    from "history_archive_checkpoint_bucket_dependency" dependency
                     where dependency."archiveUrlIdentity" = ${archiveUrlIdentity}
                         and dependency."checkpointLedger" = ${checkpointLedger}
                         and not exists (

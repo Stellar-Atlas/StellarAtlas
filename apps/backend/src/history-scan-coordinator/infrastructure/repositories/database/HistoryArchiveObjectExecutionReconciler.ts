@@ -350,7 +350,7 @@ export const admitProofCompletionReserveSql = `
 			candidate."objectKey", max(proof."checkpointLedger") as checkpoint_ledger,
 			1 as priority
 		from proof_candidates proof
-		join "history_archive_checkpoint_bucket_dependency_current" dependency
+		join "history_archive_checkpoint_bucket_dependency" dependency
 			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 			and proof."checkpointLedger" = dependency."checkpointLedger"
 		join "history_archive_object_queue" candidate

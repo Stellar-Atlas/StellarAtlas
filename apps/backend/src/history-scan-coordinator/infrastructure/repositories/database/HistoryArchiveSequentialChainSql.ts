@@ -25,7 +25,7 @@ export function historyArchiveObjectOpenSequentialCohortSql(
                         ${objectAlias}."objectType" = 'bucket'
                         and exists (
                             select 1
-                            from "history_archive_checkpoint_bucket_dependency_current" dependency
+                            from "history_archive_checkpoint_bucket_dependency" dependency
                             where dependency."archiveUrlIdentity" =
                                     ${objectAlias}."archiveUrlIdentity"
                                 and dependency."bucketHash" =

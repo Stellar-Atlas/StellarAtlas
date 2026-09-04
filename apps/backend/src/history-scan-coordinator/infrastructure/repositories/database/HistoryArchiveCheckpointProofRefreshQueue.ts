@@ -718,7 +718,7 @@ export const enqueueProofRefreshesSql = `
 		select dependency."archiveUrlIdentity", dependency."checkpointLedger",
 			source.evidence_updated_at
 		from source_objects source
-		join "history_archive_checkpoint_bucket_dependency_current" dependency
+		join "history_archive_checkpoint_bucket_dependency" dependency
 			on source."objectType" = 'bucket'
 			and dependency."archiveUrlIdentity" = source."archiveUrlIdentity"
 			and dependency."bucketHash" = source."bucketHash"

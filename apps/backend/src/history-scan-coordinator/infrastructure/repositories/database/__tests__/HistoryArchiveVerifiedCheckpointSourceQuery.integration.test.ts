@@ -54,11 +54,7 @@ describe('verified checkpoint replacement source query', () => {
 				"bucketHash" text not null,
 				"createdAt" timestamptz not null default now(),
 				primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash")
-			);
-			create view history_archive_checkpoint_bucket_dependency_current as
-			select "archiveUrlIdentity", "checkpointLedger", "bucketHash",
-				"createdAt"
-			from history_archive_checkpoint_bucket_dependency
+			)
 		`);
 		const queryRunner = dataSource.createQueryRunner();
 		await queryRunner.startTransaction();
