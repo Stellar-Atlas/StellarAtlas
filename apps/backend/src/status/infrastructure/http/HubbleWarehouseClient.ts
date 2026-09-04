@@ -403,6 +403,7 @@ FORMAT JSON`,
 	): Promise<ClickHouseResponse<T>> {
 		const url = new URL(this.endpoint);
 		url.searchParams.set('query', sql);
+		url.searchParams.set('output_format_json_quote_64bit_integers', '1');
 		for (const parameter of parameters) {
 			url.searchParams.set('param_' + parameter.name, parameter.value);
 		}

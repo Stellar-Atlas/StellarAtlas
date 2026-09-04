@@ -43,6 +43,9 @@ describe('ClickHouseHubbleWarehouse', () => {
 		);
 		expect(queryRequest?.searchParams.get('param_filter_1')).toBe('3');
 		expect(queryRequest?.searchParams.get('param_limit')).toBe('25');
+		expect(
+			queryRequest?.searchParams.get('output_format_json_quote_64bit_integers')
+		).toBe('1');
 	});
 
 	it('rejects a column injection before issuing a data query', async () => {
