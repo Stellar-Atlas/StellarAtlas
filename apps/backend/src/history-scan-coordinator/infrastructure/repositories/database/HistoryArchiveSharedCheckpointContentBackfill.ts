@@ -3,9 +3,9 @@ import { writeHistoryArchiveSharedCheckpointContentShadowWithManager } from './H
 
 export const sharedCheckpointBackfillName =
 	'shared-checkpoint-content-v2-proof';
-export const defaultSharedCheckpointScanBatchSize = 100_000;
-export const defaultSharedCheckpointEligibleBatchSize = 500;
-export const defaultSharedCheckpointWriteBatchSize = 500;
+export const defaultSharedCheckpointScanBatchSize = 5_000;
+export const defaultSharedCheckpointEligibleBatchSize = 1_000;
+export const defaultSharedCheckpointWriteBatchSize = 1_000;
 
 interface BackfillPageRow {
 	readonly eligibleRows: string;
