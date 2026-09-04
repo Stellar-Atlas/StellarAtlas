@@ -4252,7 +4252,7 @@
 		"/v1/archive-scans/objects/{remoteId}/recheck": {
 			"post": {
 				"summary": "Queue one failed archive object for recheck",
-				"description": "Operator-only, idempotent admission of the exact repair-candidate failure from a ready manifest into the bounded archive queue. Eligible candidates are recognized integrity failures or proof-gated missing 404/410 evidence; the evidence timestamp prevents a stale manifest from rechecking a different observation. Auth, rate-limit, timeout, transport, scanner, active, deferred, dependency-blocked, and transition-pending failures are never reset or queued.",
+				"description": "Authenticated, rate-limited, idempotent admission of the exact repair-candidate failure from a ready manifest into the bounded archive queue. Eligible candidates are recognized integrity failures or proof-gated missing 404/410 evidence; the evidence timestamp prevents a stale manifest from rechecking a different observation. Auth, rate-limit, timeout, transport, scanner, active, deferred, dependency-blocked, and transition-pending failures are never reset or queued.",
 				"tags": ["Archive scanner operators"],
 				"security": [{ "basicAuth": [] }],
 				"operationId": "requestHistoryArchiveObjectRecheck",
@@ -4321,6 +4321,7 @@
 							}
 						}
 					},
+					"429": { "description": "Recheck request limit exceeded" },
 					"500": { "description": "Server error" }
 				}
 			}
@@ -12093,13 +12094,25 @@
 					{
 						"type": "object",
 						"additionalProperties": false,
-						"required": ["input", "kind", "order", "required", "stagingLocation"],
+						"required": [
+							"input",
+							"kind",
+							"order",
+							"required",
+							"stagingLocation"
+						],
 						"properties": {
-							"input": { "type": "string", "enum": ["replacement-download-url"] },
+							"input": {
+								"type": "string",
+								"enum": ["replacement-download-url"]
+							},
 							"kind": { "type": "string", "enum": ["stage-replacement"] },
 							"order": { "type": "integer", "enum": [2] },
 							"required": { "type": "boolean", "enum": [true] },
-							"stagingLocation": { "type": "string", "enum": ["same-filesystem-temporary-file"] }
+							"stagingLocation": {
+								"type": "string",
+								"enum": ["same-filesystem-temporary-file"]
+							}
 						}
 					},
 					{
@@ -12114,7 +12127,10 @@
 								"properties": {
 									"algorithm": { "type": "string", "enum": ["sha256"] },
 									"digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-									"representation": { "type": "string", "enum": ["canonical-json", "uncompressed-xdr"] }
+									"representation": {
+										"type": "string",
+										"enum": ["canonical-json", "uncompressed-xdr"]
+									}
 								}
 							},
 							"kind": { "type": "string", "enum": ["verify-staged-content"] },
@@ -12157,7 +12173,10 @@
 							"kind": { "type": "string", "enum": ["request-recheck"] },
 							"order": { "type": "integer", "enum": [6] },
 							"required": { "type": "boolean", "enum": [true] },
-							"resolutionCondition": { "type": "string", "enum": ["same-object-verified-after-original-evidence"] }
+							"resolutionCondition": {
+								"type": "string",
+								"enum": ["same-object-verified-after-original-evidence"]
+							}
 						}
 					}
 				]
@@ -12166,7 +12185,17 @@
 				"type": "object",
 				"additionalProperties": false,
 				"description": "Deterministic operator repair manifest emitted for recognized integrity evidence or an exact proof-gated missing 404/410 with a strict verified replacement. Ordinary HTTP, auth, rate-limit, timeout, transport, scanner, and coordinator failures never produce a ready manifest.",
-				"required": ["actionId", "evidence", "generatedAt", "recheck", "replacement", "schemaVersion", "status", "steps", "target"],
+				"required": [
+					"actionId",
+					"evidence",
+					"generatedAt",
+					"recheck",
+					"replacement",
+					"schemaVersion",
+					"status",
+					"steps",
+					"target"
+				],
 				"properties": {
 					"actionId": { "type": "string" },
 					"evidence": { "type": "object", "additionalProperties": true },
@@ -12174,11 +12203,22 @@
 					"recheck": {
 						"type": "object",
 						"additionalProperties": false,
-						"required": ["endpoint", "minimumEvidenceUpdatedAt", "resolutionCondition", "targetRemoteId"],
+						"required": [
+							"endpoint",
+							"minimumEvidenceUpdatedAt",
+							"resolutionCondition",
+							"targetRemoteId"
+						],
 						"properties": {
 							"endpoint": { "type": "string" },
-							"minimumEvidenceUpdatedAt": { "type": "string", "format": "date-time" },
-							"resolutionCondition": { "type": "string", "enum": ["same-object-verified-after-original-evidence"] },
+							"minimumEvidenceUpdatedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"resolutionCondition": {
+								"type": "string",
+								"enum": ["same-object-verified-after-original-evidence"]
+							},
 							"targetRemoteId": { "type": "string", "format": "uuid" }
 						}
 					},
@@ -12190,33 +12230,75 @@
 						"properties": {
 							"artifact": {
 								"oneOf": [
-									{ "$ref": "#/components/schemas/HistoryArchiveRepairArtifactAvailableV1" },
-									{ "$ref": "#/components/schemas/HistoryArchiveRepairArtifactVerifyOnDownloadV1" }
+									{
+										"$ref": "#/components/schemas/HistoryArchiveRepairArtifactAvailableV1"
+									},
+									{
+										"$ref": "#/components/schemas/HistoryArchiveRepairArtifactVerifyOnDownloadV1"
+									}
 								]
 							},
-							"source": { "$ref": "#/components/schemas/HistoryArchiveRepairSourceCandidateV1" }
+							"source": {
+								"$ref": "#/components/schemas/HistoryArchiveRepairSourceCandidateV1"
+							}
 						}
 					},
 					"schemaVersion": { "type": "integer", "enum": [1] },
-					"status": { "type": "string", "enum": ["ready", "awaiting-verified-replacement"] },
+					"status": {
+						"type": "string",
+						"enum": ["ready", "awaiting-verified-replacement"]
+					},
 					"steps": {
 						"type": "array",
 						"maxItems": 6,
-						"items": { "$ref": "#/components/schemas/HistoryArchiveRepairManifestStepV1" }
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveRepairManifestStepV1"
+						}
 					},
 					"target": {
 						"type": "object",
 						"additionalProperties": false,
-						"required": ["archiveUrl", "archiveUrlIdentity", "bucketHash", "checkpointLedger", "objectKey", "objectType", "objectUrl", "operatorTargetPathRequired"],
+						"required": [
+							"archiveUrl",
+							"archiveUrlIdentity",
+							"bucketHash",
+							"checkpointLedger",
+							"objectKey",
+							"objectType",
+							"objectUrl",
+							"operatorTargetPathRequired"
+						],
 						"properties": {
 							"archiveUrl": { "type": "string", "format": "uri" },
 							"archiveUrlIdentity": { "type": "string" },
-							"bucketHash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "nullable": true },
-							"checkpointLedger": { "type": "integer", "minimum": 0, "nullable": true },
+							"bucketHash": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$",
+								"nullable": true
+							},
+							"checkpointLedger": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
 							"objectKey": { "type": "string" },
-							"objectType": { "type": "string", "enum": ["history-archive-state", "checkpoint-state", "ledger", "transactions", "results", "scp", "bucket"] },
+							"objectType": {
+								"type": "string",
+								"enum": [
+									"history-archive-state",
+									"checkpoint-state",
+									"ledger",
+									"transactions",
+									"results",
+									"scp",
+									"bucket"
+								]
+							},
 							"objectUrl": { "type": "string", "format": "uri" },
-							"operatorTargetPathRequired": { "type": "boolean", "enum": [true] }
+							"operatorTargetPathRequired": {
+								"type": "boolean",
+								"enum": [true]
+							}
 						}
 					}
 				}
@@ -13096,12 +13178,28 @@
 				"type": "object",
 				"additionalProperties": false,
 				"description": "Durable terminal-effect reconciliation state. Transient byte and stage progress remains in memory and is not written as heartbeat telemetry.",
-				"required": ["oldestPendingAgeMs", "oldestPendingAt", "pendingTerminalEffects", "status"],
+				"required": [
+					"oldestPendingAgeMs",
+					"oldestPendingAt",
+					"pendingTerminalEffects",
+					"status"
+				],
 				"properties": {
-					"oldestPendingAgeMs": { "type": "integer", "minimum": 0, "nullable": true },
-					"oldestPendingAt": { "type": "string", "format": "date-time", "nullable": true },
+					"oldestPendingAgeMs": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"oldestPendingAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
 					"pendingTerminalEffects": { "type": "integer", "minimum": 0 },
-					"status": { "type": "string", "enum": ["caught-up", "reconciling", "stalled"] }
+					"status": {
+						"type": "string",
+						"enum": ["caught-up", "reconciling", "stalled"]
+					}
 				}
 			},
 			"HistoryArchiveStatusSummaryV1": {
@@ -14495,13 +14593,7 @@
 				"properties": {
 					"archiveStatus": {
 						"type": "string",
-						"enum": [
-							"error",
-							"ok",
-							"scanner-issue",
-							"unknown",
-							"unreachable"
-						]
+						"enum": ["error", "ok", "scanner-issue", "unknown", "unreachable"]
 					},
 					"detail": { "type": "string" },
 					"entityId": { "type": "string" },

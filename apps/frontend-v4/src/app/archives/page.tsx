@@ -1,6 +1,6 @@
 import { connection } from 'next/server';
 import { fetchHistoryArchiveObjectStatusSummary } from '@api/archive-scans-client';
-import { fetchPublicNodes } from '@api/client';
+import { fetchPublicNodes, fetchPublicOrganizations } from '@api/client';
 import { ArchiveRootInventory } from '@components/archive-scans/archive-root-inventory';
 import { PageHeading } from '@components/layout/page-heading';
 
@@ -14,9 +14,10 @@ const liveFetchOptions = {
 
 export default async function ArchiveInventoryPage(): Promise<React.JSX.Element> {
 	await connection();
-	const [summary, nodes] = await Promise.all([
+	const [summary, nodes, organizations] = await Promise.all([
 		fetchHistoryArchiveObjectStatusSummary(liveFetchOptions),
-		fetchPublicNodes(liveFetchOptions)
+		fetchPublicNodes(liveFetchOptions),
+		fetchPublicOrganizations(liveFetchOptions)
 	]);
 	const canonical = summary.canonicalProofProgress;
 
@@ -50,7 +51,11 @@ export default async function ArchiveInventoryPage(): Promise<React.JSX.Element>
 					separately and never reported as validator failures.
 				</p>
 			</section>
-			<ArchiveRootInventory nodes={nodes} summary={summary} />
+			<ArchiveRootInventory
+				nodes={nodes}
+				organizations={organizations}
+				summary={summary}
+			/>
 		</main>
 	);
 }

@@ -1,6 +1,7 @@
 import type express from 'express';
 import type { RequestHandler, Router } from 'express';
 import basicAuth from 'express-basic-auth';
+import { Throttler } from '@core/infrastructure/http/Throttler.js';
 import { body, param, query, validationResult } from 'express-validator';
 import { pipeline } from 'node:stream/promises';
 import { GetHistoryArchiveRepairArtifact } from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
@@ -22,6 +23,8 @@ import type {
 
 const planCacheMaxAgeSeconds = 10;
 const artifactStreamTimeoutMs = 5 * 60_000;
+const recheckRateLimitWindowMs = 60_000;
+const recheckThrottler = new Throttler(10, recheckRateLimitWindowMs);
 
 export interface HistoryArchiveRepairHttpConfig {
 	getHistoryArchiveRepairArtifact: GetHistoryArchiveRepairArtifact;
@@ -183,6 +186,19 @@ export function mountHistoryArchiveRepairRoutes(
 			res: express.Response
 		) {
 			res.setHeader('Cache-Control', 'no-store');
+			if (req.ip) {
+				recheckThrottler.processRequest(req.ip, new Date());
+				if (recheckThrottler.throttled(req.ip)) {
+					res.setHeader(
+						'Retry-After',
+						String(Math.ceil(recheckRateLimitWindowMs / 1_000))
+					);
+					return res.status(429).json({
+						error: 'recheck-rate-limited',
+						remoteId: req.params.remoteId
+					});
+				}
+			}
 			const errors = validationResult(req);
 			if (!errors.isEmpty()) {
 				return res.status(400).json({

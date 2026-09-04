@@ -1,23 +1,51 @@
+'use client';
+
 import Link from 'next/link';
-import type { PublicHistoryArchiveStatusSummary, PublicNode } from '@api/types';
+import { useState } from 'react';
+import type {
+	PublicHistoryArchiveStatusSummary,
+	PublicNode,
+	PublicOrganization
+} from '@api/types';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import { formatDateTime, formatInteger } from '@format/formatters';
 
 interface ArchiveRootInventoryProps {
 	readonly nodes: readonly PublicNode[];
+	readonly organizations: readonly PublicOrganization[];
 	readonly summary: PublicHistoryArchiveStatusSummary;
 }
 
 type ArchiveSource = PublicHistoryArchiveStatusSummary['sources'][number];
+type ArchiveInventorySort =
+	| 'failures'
+	| 'organization'
+	| 'validator'
+	| 'coverage-desc'
+	| 'coverage-asc'
+	| 'url';
 
 export function ArchiveRootInventory({
 	nodes,
+	organizations,
 	summary
 }: ArchiveRootInventoryProps): React.JSX.Element {
+	const [sortMode, setSortMode] = useState<ArchiveInventorySort>('failures');
 	const advertisers = groupAdvertisers(nodes);
+	const organizationNames = new Map(
+		organizations.map((organization) => [
+			organization.id,
+			organization.name ?? organization.dba ?? organization.homeDomain
+		])
+	);
 	const canonical = summary.canonicalProofProgress;
 	const sources = summary.sources.toSorted((left, right) =>
-		compareSources(left, right, canonical.archiveUrlIdentity)
+		compareSources(left, right, {
+			advertisers,
+			canonicalArchiveUrlIdentity: canonical.archiveUrlIdentity,
+			organizationNames,
+			sortMode
+		})
 	);
 	const canonicalPercent = calculateCoveragePercent(
 		canonical.verifiedCheckpoints,
@@ -93,7 +121,23 @@ export function ArchiveRootInventory({
 							preserved when matching advertisers
 						</span>
 					</div>
-					<strong>{formatInteger(sources.length)} rows</strong>
+					<div className="table-controls archive-inventory-controls">
+						<select
+							aria-label="Sort archive roots"
+							onChange={(event) =>
+								setSortMode(event.currentTarget.value as ArchiveInventorySort)
+							}
+							value={sortMode}
+						>
+							<option value="failures">Remote failures</option>
+							<option value="organization">Organization A–Z</option>
+							<option value="validator">Validator / listener A–Z</option>
+							<option value="coverage-desc">Coverage high to low</option>
+							<option value="coverage-asc">Coverage low to high</option>
+							<option value="url">Archive root URL A–Z</option>
+						</select>
+						<strong>{formatInteger(sources.length)} roots</strong>
+					</div>
 				</div>
 				<div className="responsive-table archive-root-inventory-table-wrap">
 					<table className="archive-root-inventory-table">
@@ -114,6 +158,7 @@ export function ArchiveRootInventory({
 										advertisers.get(normalizeRoot(source.archiveUrl)) ?? []
 									}
 									canonicalArchiveUrlIdentity={canonical.archiveUrlIdentity}
+									organizationNames={organizationNames}
 									key={source.archiveUrlIdentity}
 									source={source}
 								/>
@@ -144,10 +189,12 @@ function Metric({
 function ArchiveRootRow({
 	advertisers,
 	canonicalArchiveUrlIdentity,
+	organizationNames,
 	source
 }: {
 	readonly advertisers: readonly PublicNode[];
 	readonly canonicalArchiveUrlIdentity: string | null;
+	readonly organizationNames: ReadonlyMap<string, string>;
 	readonly source: ArchiveSource;
 }): React.JSX.Element {
 	const validators = advertisers.filter((node) => node.isValidator);
@@ -200,6 +247,7 @@ function ArchiveRootRow({
 								</Link>
 								<small>
 									{node.isValidator ? 'validator' : 'listener'} ·{' '}
+									{formatOrganizationName(node, organizationNames)} ·{' '}
 									{node.publicKey}
 								</small>
 							</li>
@@ -345,18 +393,58 @@ export function formatCoveragePercent(value: number): string {
 	return value.toFixed(2) + '%';
 }
 
+interface ArchiveSortContext {
+	readonly advertisers: ReadonlyMap<string, readonly PublicNode[]>;
+	readonly canonicalArchiveUrlIdentity: string | null;
+	readonly organizationNames: ReadonlyMap<string, string>;
+	readonly sortMode: ArchiveInventorySort;
+}
+
 function compareSources(
 	left: ArchiveSource,
 	right: ArchiveSource,
-	canonicalArchiveUrlIdentity: string | null
+	context: ArchiveSortContext
 ): number {
 	const leftIsCanonical =
-		canonicalArchiveUrlIdentity !== null &&
-		left.archiveUrlIdentity === canonicalArchiveUrlIdentity;
+		context.canonicalArchiveUrlIdentity !== null &&
+		left.archiveUrlIdentity === context.canonicalArchiveUrlIdentity;
 	const rightIsCanonical =
-		canonicalArchiveUrlIdentity !== null &&
-		right.archiveUrlIdentity === canonicalArchiveUrlIdentity;
+		context.canonicalArchiveUrlIdentity !== null &&
+		right.archiveUrlIdentity === context.canonicalArchiveUrlIdentity;
 	if (leftIsCanonical !== rightIsCanonical) return leftIsCanonical ? -1 : 1;
+
+	if (context.sortMode === 'organization') {
+		return compareTextKeys(
+			organizationSortKey(left, context),
+			organizationSortKey(right, context),
+			left.archiveUrl,
+			right.archiveUrl
+		);
+	}
+	if (context.sortMode === 'validator') {
+		return compareTextKeys(
+			advertiserSortKey(left, context),
+			advertiserSortKey(right, context),
+			left.archiveUrl,
+			right.archiveUrl
+		);
+	}
+	if (
+		context.sortMode === 'coverage-desc' ||
+		context.sortMode === 'coverage-asc'
+	) {
+		const coverageOrder = coverageRatio(left) - coverageRatio(right);
+		if (coverageOrder !== 0) {
+			return context.sortMode === 'coverage-desc'
+				? -coverageOrder
+				: coverageOrder;
+		}
+		return left.archiveUrl.localeCompare(right.archiveUrl);
+	}
+	if (context.sortMode === 'url') {
+		return left.archiveUrl.localeCompare(right.archiveUrl);
+	}
+
 	const remoteOrder =
 		right.archiveEvidenceFailures - left.archiveEvidenceFailures;
 	if (remoteOrder !== 0) return remoteOrder;
@@ -369,4 +457,63 @@ function compareSources(
 	return proofOrder !== 0
 		? proofOrder
 		: left.archiveUrl.localeCompare(right.archiveUrl);
+}
+
+function sourceAdvertisers(
+	source: ArchiveSource,
+	context: ArchiveSortContext
+): readonly PublicNode[] {
+	return context.advertisers.get(normalizeRoot(source.archiveUrl)) ?? [];
+}
+
+function organizationSortKey(
+	source: ArchiveSource,
+	context: ArchiveSortContext
+): string {
+	const names = sourceAdvertisers(source, context)
+		.map((node) => formatOrganizationName(node, context.organizationNames))
+		.filter((name) => name !== 'unaffiliated')
+		.toSorted((left, right) => left.localeCompare(right));
+	return names[0] ?? '\uffff';
+}
+
+function advertiserSortKey(
+	source: ArchiveSource,
+	context: ArchiveSortContext
+): string {
+	const advertisers = sourceAdvertisers(source, context);
+	const validators = advertisers.filter((node) => node.isValidator);
+	const candidates = validators.length > 0 ? validators : advertisers;
+	return (
+		candidates
+			.map(formatNodeName)
+			.toSorted((left, right) => left.localeCompare(right))[0] ?? '\uffff'
+	);
+}
+
+function formatOrganizationName(
+	node: PublicNode,
+	organizationNames: ReadonlyMap<string, string>
+): string {
+	if (node.organizationId === null) return 'unaffiliated';
+	return (
+		organizationNames.get(node.organizationId) ??
+		node.homeDomain ??
+		node.organizationId
+	);
+}
+
+function coverageRatio(source: ArchiveSource): number {
+	const expected = getExpectedArchiveCheckpointCount(source);
+	return expected === 0 ? 0 : source.durableVerifiedCheckpointProofs / expected;
+}
+
+function compareTextKeys(
+	leftKey: string,
+	rightKey: string,
+	leftFallback: string,
+	rightFallback: string
+): number {
+	const order = leftKey.localeCompare(rightKey);
+	return order === 0 ? leftFallback.localeCompare(rightFallback) : order;
 }

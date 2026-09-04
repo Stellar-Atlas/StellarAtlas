@@ -16,7 +16,15 @@ describe('ArchiveScanRouter state and repair endpoints', () => {
 
 	beforeEach(() => {
 		config = mockDeep<ArchiveScanRouterConfig>();
+		config.operatorPassword = 'secret';
+		config.operatorUserName = 'operator';
 		app = express();
+		app.use(express.json());
+		app.use((req, _res, next) => {
+			req.headers.authorization =
+				'Basic ' + Buffer.from('operator:secret').toString('base64');
+			next();
+		});
 		app.use('/archive-scans', ArchiveScanRouterWrapper(config));
 	});
 
