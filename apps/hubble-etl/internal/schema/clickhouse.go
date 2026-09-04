@@ -23,6 +23,42 @@ var metadataColumns = []Column{
 	{Name: "_ingested_at", Type: "DateTime64(6, 'UTC')"},
 }
 
+type SkippingIndex struct {
+	Name        string
+	Column      string
+	Type        string
+	Granularity uint32
+}
+
+var skippingIndexes = map[string][]SkippingIndex{
+	"history_transactions": {
+		{Name: "idx_transaction_hash", Column: "transaction_hash", Type: "bloom_filter(0.01)", Granularity: 1},
+		{Name: "idx_transaction_account", Column: "account", Type: "bloom_filter(0.01)", Granularity: 1},
+	},
+	"history_operations": {
+		{Name: "idx_operation_id", Column: "id", Type: "minmax", Granularity: 1},
+		{Name: "idx_operation_transaction_id", Column: "transaction_id", Type: "minmax", Granularity: 1},
+		{Name: "idx_operation_source_account", Column: "source_account", Type: "bloom_filter(0.01)", Granularity: 1},
+	},
+	"history_effects": {
+		{Name: "idx_effect_operation_id", Column: "operation_id", Type: "minmax", Granularity: 1},
+		{Name: "idx_effect_address", Column: "address", Type: "bloom_filter(0.01)", Granularity: 1},
+	},
+	"history_contract_events": {
+		{Name: "idx_contract_event_contract", Column: "contract_id", Type: "bloom_filter(0.01)", Granularity: 1},
+		{Name: "idx_contract_event_transaction", Column: "transaction_hash", Type: "bloom_filter(0.01)", Granularity: 1},
+	},
+	"token_transfers": {
+		{Name: "idx_transfer_transaction", Column: "transaction_hash", Type: "bloom_filter(0.01)", Granularity: 1},
+		{Name: "idx_transfer_asset", Column: "asset", Type: "bloom_filter(0.01)", Granularity: 1},
+		{Name: "idx_transfer_contract", Column: "contract_id", Type: "bloom_filter(0.01)", Granularity: 1},
+	},
+	"history_trades": {
+		{Name: "idx_trade_seller", Column: "selling_account_address", Type: "bloom_filter(0.01)", Granularity: 1},
+		{Name: "idx_trade_buyer", Column: "buying_account_address", Type: "bloom_filter(0.01)", Granularity: 1},
+	},
+}
+
 func DatabaseSQL(database string) (string, error) {
 	if !identifierPattern.MatchString(database) {
 		return "", fmt.Errorf("invalid ClickHouse database %q", database)
@@ -79,6 +115,47 @@ ORDER BY (%s)
 SETTINGS index_granularity = 8192, non_replicated_deduplication_window = 65536`,
 		quote(database), quote(dataset.Name), strings.Join(definitions, ",\n"),
 		strings.Join(orderFields, ", ")), nil
+}
+
+func SkippingIndexSQL(database string, dataset Dataset) ([]string, error) {
+	if !identifierPattern.MatchString(database) ||
+		!identifierPattern.MatchString(dataset.Name) {
+		return nil, fmt.Errorf("invalid ClickHouse identifier")
+	}
+	columns, err := Columns(dataset)
+	if err != nil {
+		return nil, err
+	}
+	available := make(map[string]struct{}, len(columns))
+	for _, column := range columns {
+		available[column.Name] = struct{}{}
+	}
+	indexes := skippingIndexes[dataset.Name]
+	statements := make([]string, 0, len(indexes))
+	for _, index := range indexes {
+		if !identifierPattern.MatchString(index.Name) {
+			return nil, fmt.Errorf("%s has invalid index name %q", dataset.Name, index.Name)
+		}
+		if _, ok := available[index.Column]; !ok {
+			return nil, fmt.Errorf("%s index column %q is not a column", dataset.Name, index.Column)
+		}
+		if index.Type != "minmax" && index.Type != "bloom_filter(0.01)" {
+			return nil, fmt.Errorf("%s has unsupported index type %q", dataset.Name, index.Type)
+		}
+		if index.Granularity < 1 {
+			return nil, fmt.Errorf("%s index %q has invalid granularity", dataset.Name, index.Name)
+		}
+		statements = append(statements, fmt.Sprintf(
+			"ALTER TABLE %s.%s ADD INDEX IF NOT EXISTS %s %s TYPE %s GRANULARITY %d",
+			quote(database),
+			quote(dataset.Name),
+			quote(index.Name),
+			quote(index.Column),
+			index.Type,
+			index.Granularity,
+		))
+	}
+	return statements, nil
 }
 
 func Columns(dataset Dataset) ([]Column, error) {

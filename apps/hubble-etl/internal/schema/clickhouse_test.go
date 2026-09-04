@@ -35,6 +35,35 @@ func TestAllOfficialDatasetsProduceTypedClickHouseDDL(t *testing.T) {
 	}
 }
 
+func TestPointLookupIndexesAreValidatedAndIdempotent(t *testing.T) {
+	t.Parallel()
+	for _, dataset := range Datasets() {
+		statements, err := SkippingIndexSQL("stellar_hubble", dataset)
+		if err != nil {
+			t.Fatalf("%s indexes: %v", dataset.Name, err)
+		}
+		for _, statement := range statements {
+			if !strings.Contains(statement, "ADD INDEX IF NOT EXISTS") {
+				t.Fatalf("%s index is not idempotent: %s", dataset.Name, statement)
+			}
+		}
+	}
+
+	transactions, ok := Lookup("history_transactions")
+	if !ok {
+		t.Fatal("history_transactions dataset is missing")
+	}
+	statements, err := SkippingIndexSQL("stellar_hubble", transactions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(statements, "\n")
+	if !strings.Contains(joined, "`idx_transaction_hash` `transaction_hash` TYPE bloom_filter(0.01)") ||
+		!strings.Contains(joined, "`idx_transaction_account` `account` TYPE bloom_filter(0.01)") {
+		t.Fatalf("transaction point-lookup indexes are incomplete: %s", joined)
+	}
+}
+
 func TestDatabaseNameIsValidated(t *testing.T) {
 	t.Parallel()
 	if _, err := DatabaseSQL("stellar_hubble"); err != nil {

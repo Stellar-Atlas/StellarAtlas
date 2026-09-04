@@ -79,25 +79,44 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Read-only access to the owned Horizon API, Stellar RPC, the raw SEP-54 Galexie object store, immutable decoded-history batches, and the self-hosted Hubble-compatible query surface. GraphQL reports current warehouse coverage instead of implying the backfill is complete. The decoded LedgerCloseMeta stream begins at ledger 2: ledger 1 is the synthetic genesis header with no close transition, and ledger 2 is an empty-transaction close linked to that genesis hash. The decoded batch format is not SEP-54 object geometry.',
+			'Read-only access to the owned Horizon API, Stellar RPC, raw SEP-54 Galexie objects, and immutable decoded-history batches. These are service/raw-data surfaces, not the parsed Hubble analytics warehouse.',
 		endpoints: [
 			'/horizon/',
 			'POST /rpc',
 			'/galexie/.config.json',
 			'/galexie/:sep54ObjectPath',
-			'/v1/analytics/datasets',
-			'/v1/analytics/datasets/:dataset',
-			'/v1/analytics/:dataset?select=:columns&order=:columns&limit=:limit&offset=:offset',
-			'/v1/analytics/:dataset?ledger_sequence__gte=:ledger',
-			'POST /v1/analytics/query',
-			'/v1/analytics/assets/holders',
-			'/v1/analytics/assets/:assetId/holders/:address',
-			'POST /graphql',
 			'/v1/history-data/catalog',
 			'/v1/history-data/batches?dataset=:dataset&limit=:limit&beforeLedger=:ledger',
 			'/v1/history-data/batches/:batchId/:dataset'
 		],
-		title: 'Access historical data'
+		title: 'Access network services and raw history'
+	},
+	{
+		description:
+			'Query the self-hosted Stellar ETL/Hubble schema in ClickHouse. Every list route returns limit, offset, and nextOffset; holder lists return nextCursor. Supply min_ledger and max_ledger whenever possible for partition-pruned queries. The catalog reports the exact backfill watermark, so partial historical coverage is never presented as complete.',
+		endpoints: [
+			'/v1/analytics/datasets',
+			'/v1/analytics/datasets/:dataset',
+			'/v1/analytics/transactions/:transactionHash',
+			'/v1/analytics/ledgers/:sequence',
+			'/v1/analytics/ledgers/:sequence/transactions?limit=:limit&offset=:offset',
+			'/v1/analytics/operations/:operationId',
+			'/v1/analytics/operations/:operationId/effects?limit=:limit&offset=:offset',
+			'/v1/analytics/accounts/:account/transactions?limit=:limit&offset=:offset',
+			'/v1/analytics/accounts/:account/effects?min_ledger=:ledger&max_ledger=:ledger',
+			'/v1/analytics/transfers?from=:account&to=:account&min_ledger=:ledger',
+			'/v1/analytics/assets/:asset/transfers?limit=:limit&offset=:offset',
+			'/v1/analytics/trades?seller=:account&buyer=:account&min_ledger=:ledger',
+			'/v1/analytics/contracts/:contractId/events?min_ledger=:ledger',
+			'/v1/analytics/contracts/:contractId/state?deleted=false',
+			'/v1/analytics/assets/:asset/holders?after=:cursor&limit=:limit',
+			'/v1/analytics/assets/:asset/holders/:account',
+			'/v1/analytics/:dataset?select=:columns&order=:columns&limit=:limit&offset=:offset',
+			'/v1/analytics/:dataset?ledger_sequence__gte=:ledger',
+			'POST /v1/analytics/query',
+			'POST /graphql'
+		],
+		title: 'Query decoded Hubble analytics'
 	},
 	{
 		description:

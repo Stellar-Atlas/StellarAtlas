@@ -93,6 +93,15 @@ func (c *Client) Initialize(ctx context.Context) error {
 		if _, err := c.execute(ctx, tableSQL, nil, nil); err != nil {
 			return fmt.Errorf("create %s: %w", dataset.Name, err)
 		}
+		indexStatements, err := schema.SkippingIndexSQL(c.database, dataset)
+		if err != nil {
+			return err
+		}
+		for _, statement := range indexStatements {
+			if _, err := c.execute(ctx, statement, nil, nil); err != nil {
+				return fmt.Errorf("add %s query index: %w", dataset.Name, err)
+			}
+		}
 	}
 	return nil
 }

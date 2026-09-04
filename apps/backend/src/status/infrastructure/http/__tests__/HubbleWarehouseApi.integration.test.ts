@@ -134,6 +134,119 @@ describe('HubbleWarehouseRouter.integration', () => {
 			});
 		expect(warehouse.query).toHaveBeenCalledTimes(5);
 	});
+	it('serves ledger and ledger-transaction lookups with bounded pagination', async () => {
+		const warehouse = mockWarehouse();
+		warehouse.query
+			.mockResolvedValueOnce({
+				...result,
+				dataset: 'history_ledgers',
+				rows: [{ sequence: 63 }]
+			})
+			.mockResolvedValueOnce({
+				...result,
+				limit: 3,
+				rows: [
+					{ id: '1', ledger_sequence: 63 },
+					{ id: '2', ledger_sequence: 63 },
+					{ id: '3', ledger_sequence: 63 }
+				]
+			});
+		const app = buildRestApp(warehouse);
+		await request(app)
+			.get('/v1/analytics/ledgers/63')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.ledger.sequence).toBe(63);
+			});
+		await request(app)
+			.get('/v1/analytics/ledgers/63/transactions?limit=2')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.rows).toHaveLength(2);
+				expect(response.body.nextOffset).toBe(2);
+			});
+		expect(warehouse.query).toHaveBeenLastCalledWith({
+			dataset: 'history_transactions',
+			filters: [{ field: 'ledger_sequence', operator: 'eq', value: 63 }],
+			limit: 3,
+			offset: 0,
+			orderBy: [{ direction: 'asc', field: 'id' }]
+		});
+	});
+
+	it('locates an operation with its transaction and effects', async () => {
+		const warehouse = mockWarehouse();
+		warehouse.query
+			.mockResolvedValueOnce({
+				...result,
+				dataset: 'history_operations',
+				rows: [{ id: '123', ledger_sequence: 63, transaction_id: '456' }]
+			})
+			.mockResolvedValueOnce({
+				...result,
+				dataset: 'history_effects',
+				rows: [{ operation_id: '123' }]
+			})
+			.mockResolvedValueOnce({
+				...result,
+				rows: [{ id: '456', ledger_sequence: 63 }]
+			});
+		await request(buildRestApp(warehouse))
+			.get('/v1/analytics/operations/123')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.operation.id).toBe('123');
+				expect(response.body.effects).toHaveLength(1);
+				expect(response.body.transaction.id).toBe('456');
+			});
+		expect(warehouse.query).toHaveBeenCalledTimes(3);
+	});
+
+	it('maps asset-transfer and contract-state filters to paginated datasets', async () => {
+		const warehouse = mockWarehouse();
+		const issuer = 'G' + 'B'.repeat(55);
+		const contract = 'C' + 'D'.repeat(55);
+		const app = buildRestApp(warehouse);
+		await request(app)
+			.get(
+				'/v1/analytics/assets/USD:' +
+					issuer +
+					'/transfers?min_ledger=10&limit=5'
+			)
+			.expect(200);
+		expect(warehouse.query).toHaveBeenLastCalledWith({
+			dataset: 'token_transfers',
+			filters: [
+				{ field: 'asset_code', operator: 'eq', value: 'USD' },
+				{ field: 'asset_issuer', operator: 'eq', value: issuer },
+				{ field: 'ledger_sequence', operator: 'gte', value: 10 }
+			],
+			limit: 6,
+			offset: 0,
+			orderBy: [
+				{ direction: 'desc', field: 'ledger_sequence' },
+				{ direction: 'desc', field: '_row_number' }
+			]
+		});
+		await request(app)
+			.get(
+				'/v1/analytics/contracts/' + contract + '/state?deleted=false&limit=5'
+			)
+			.expect(200);
+		expect(warehouse.query).toHaveBeenLastCalledWith({
+			dataset: 'contract_data',
+			filters: [
+				{ field: 'contract_id', operator: 'eq', value: contract },
+				{ field: 'deleted', operator: 'eq', value: false }
+			],
+			limit: 6,
+			offset: 0,
+			orderBy: [
+				{ direction: 'desc', field: 'ledger_sequence' },
+				{ direction: 'desc', field: '_row_number' }
+			]
+		});
+	});
 });
 
 describe('HubbleWarehouseGraphql.integration', () => {
