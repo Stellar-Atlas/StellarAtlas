@@ -87,6 +87,7 @@ import { HistoryArchiveStatementSummaryAvailabilityCorrectionMigration1788150000
 import { HistoryArchiveQueueVacuumPolicyMigration1788160000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788160000000-HistoryArchiveQueueVacuumPolicyMigration.js';
 
 import { HistoryArchiveStatementSummaryNoopGuardMigration1788170000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788170000000-HistoryArchiveStatementSummaryNoopGuardMigration.js';
+import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
 export const managedMigrations = [
@@ -177,5 +178,6 @@ export const managedMigrations = [
 	HistoryArchiveAvailabilityEvidenceMigration1788140000000,
 	HistoryArchiveStatementSummaryAvailabilityCorrectionMigration1788150000000,
 	HistoryArchiveQueueVacuumPolicyMigration1788160000000,
-	HistoryArchiveStatementSummaryNoopGuardMigration1788170000000
+	HistoryArchiveStatementSummaryNoopGuardMigration1788170000000,
+	HistoryArchiveSharedBucketSetShadowMigration1788494000000
 ] as const;

@@ -8,6 +8,7 @@ import { HistoryArchiveClaimLeaseMigration1785340000000 } from '../../../databas
 import { HistoryArchiveBrokerFrontierMigration1785440000000 } from '../../../database/migrations/1785440000000-HistoryArchiveBrokerFrontierMigration.js';
 import { HistoryArchiveReadyPriorityLaneMigration1785460000000 } from '../../../database/migrations/1785460000000-HistoryArchiveReadyPriorityLaneMigration.js';
 import { HistoryArchiveReadyParallelismMigration1785560000000 } from '../../../database/migrations/1785560000000-HistoryArchiveReadyParallelismMigration.js';
+import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '../../../database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import { synchronizeHistoryArchiveReadyQueue } from '../HistoryArchiveObjectReadyQueue.js';
 
@@ -48,6 +49,9 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 		queryRunner
 	);
 	await new HistoryArchiveReadyParallelismMigration1785560000000().up(
+		queryRunner
+	);
+	await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
 		queryRunner
 	);
 	await queryRunner.release();
@@ -166,6 +170,12 @@ export function bucketObject(
 export async function resetHistoryArchiveObjectQueue(
 	dataSource: DataSource
 ): Promise<void> {
+	await dataSource.query(
+		'truncate table history_archive_checkpoint_content_conflict'
+	);
+	await dataSource.query(
+		'truncate table history_archive_checkpoint_bucket_set cascade'
+	);
 	await dataSource.query(
 		'truncate table history_archive_object_queue restart identity cascade'
 	);

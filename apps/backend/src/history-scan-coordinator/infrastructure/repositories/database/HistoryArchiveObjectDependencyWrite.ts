@@ -1,6 +1,7 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { lockHistoryArchiveObjectRootTransitions } from './HistoryArchiveRootTransitionLock.js';
+import { enqueueHistoryArchiveSharedCheckpointContentShadow } from './HistoryArchiveSharedCheckpointContentShadow.js';
 
 export async function materializeHistoryArchiveCheckpointDependencies(
 	repository: Repository<HistoryArchiveObject>,
@@ -19,21 +20,28 @@ export async function materializeHistoryArchiveCheckpointDependencyBatch(
 		(remoteId) => remoteId.length > 0
 	);
 	if (uniqueRemoteIds.length === 0) return 0;
-	return await repository.manager.transaction(async (manager) => {
-		await lockHistoryArchiveObjectRootTransitions(manager, uniqueRemoteIds);
-		await manager.query(`set local lock_timeout = '2s'`);
-		await manager.query(`set local statement_timeout = '30s'`);
-		const inserted = (await manager.query(materializeDependenciesSql, [
-			uniqueRemoteIds
-		])) as readonly unknown[];
-		await manager.query(activateCheckpointCategoryDependenciesSql, [
-			uniqueRemoteIds
-		]);
-		await manager.query(activateCheckpointBucketDependenciesSql, [
-			uniqueRemoteIds
-		]);
-		return inserted.length;
-	});
+	const insertedCount = await repository.manager.transaction(
+		async (manager) => {
+			await lockHistoryArchiveObjectRootTransitions(manager, uniqueRemoteIds);
+			await manager.query(`set local lock_timeout = '2s'`);
+			await manager.query(`set local statement_timeout = '30s'`);
+			const inserted = (await manager.query(materializeDependenciesSql, [
+				uniqueRemoteIds
+			])) as readonly unknown[];
+			await manager.query(activateCheckpointCategoryDependenciesSql, [
+				uniqueRemoteIds
+			]);
+			await manager.query(activateCheckpointBucketDependenciesSql, [
+				uniqueRemoteIds
+			]);
+			return inserted.length;
+		}
+	);
+	enqueueHistoryArchiveSharedCheckpointContentShadow(
+		repository,
+		uniqueRemoteIds
+	);
+	return insertedCount;
 }
 
 export async function reconcileHistoryArchiveDependencyReadiness(
