@@ -214,12 +214,22 @@ export class HistoryArchiveBrokerDispatcher {
 					);
 				}
 				if (jobs.length === 0 && this.config.canonicalFirstRoot !== null) {
+					await this.repository.ensurePrefetch(null);
 					jobs = await this.repository.reserveJobs(
 						limit,
 						this.config.maximumPerHost,
 						this.config.maximumPriority,
 						null
 					);
+					if (jobs.length === 0) {
+						await this.repository.ensureFrontier(null);
+						jobs = await this.repository.reserveJobs(
+							limit,
+							this.config.maximumPerHost,
+							this.config.maximumPriority,
+							null
+						);
+					}
 				}
 				if (jobs.length === 0) {
 					await this.waitForWork(observedWakeVersion);
