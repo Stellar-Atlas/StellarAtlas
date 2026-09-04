@@ -70,6 +70,11 @@ export function registerHubbleSemanticRoutes(
 								field: 'transaction_id',
 								operator: 'eq',
 								value: transactionId
+							},
+							{
+								field: 'ledger_sequence',
+								operator: 'eq',
+								value: ledgerSequence
 							}
 						],
 						limit: semanticMaximumRows,
@@ -82,6 +87,11 @@ export function registerHubbleSemanticRoutes(
 								field: 'transaction_hash',
 								operator: 'eq',
 								value: transactionHash
+							},
+							{
+								field: 'ledger_sequence',
+								operator: 'eq',
+								value: ledgerSequence
 							}
 						],
 						limit: semanticMaximumRows,
@@ -94,6 +104,11 @@ export function registerHubbleSemanticRoutes(
 								field: 'transaction_hash',
 								operator: 'eq',
 								value: transactionHash
+							},
+							{
+								field: 'ledger_sequence',
+								operator: 'eq',
+								value: ledgerSequence
 							}
 						],
 						limit: semanticMaximumRows,
