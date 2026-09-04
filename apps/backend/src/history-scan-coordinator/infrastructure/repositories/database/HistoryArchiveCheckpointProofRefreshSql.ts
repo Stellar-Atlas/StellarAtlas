@@ -134,7 +134,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			and object.status = 'verified'
 	), expected_bucket_hashes as (
 		select dependency.*
-		from "history_archive_checkpoint_bucket_dependency" dependency
+		from "history_archive_checkpoint_bucket_dependency_current" dependency
 		join target_checkpoints target
 			on target."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 			and target."checkpointLedger" = dependency."checkpointLedger"

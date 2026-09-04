@@ -29,7 +29,7 @@ describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 
 	it('keeps refresh checkpoint-local and dependency-local', () => {
 		expect(historyArchiveCheckpointProofRefreshSql).toContain(
-			'"history_archive_checkpoint_bucket_dependency"'
+			'"history_archive_checkpoint_bucket_dependency_current"'
 		);
 		expect(historyArchiveImmediateBucketProofRefreshLimit).toBe(2);
 		expect(historyArchiveCheckpointProofRefreshSql).toContain(

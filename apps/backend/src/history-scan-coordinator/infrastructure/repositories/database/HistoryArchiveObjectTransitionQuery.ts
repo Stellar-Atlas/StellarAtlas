@@ -86,7 +86,7 @@ const runtimeTransitionsSql = `
 		select root."archiveUrlIdentity", root.target_lane,
 			'bucket'::text, 'bucket:' || dependency."bucketHash"
 		from runtime_roots root
-		join "history_archive_checkpoint_bucket_dependency" dependency
+		join "history_archive_checkpoint_bucket_dependency_current" dependency
 			on dependency."archiveUrlIdentity" = root."archiveUrlIdentity"
 			and dependency."checkpointLedger" = root.checkpoint_ledger
 	), runtime_candidates as materialized (

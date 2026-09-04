@@ -1,7 +1,7 @@
 export const markBucketProofDependentsDirtySql = `
 	with dependents as materialized (
 		select dependency."archiveUrlIdentity", dependency."checkpointLedger"
-		from "history_archive_checkpoint_bucket_dependency" dependency
+		from "history_archive_checkpoint_bucket_dependency_current" dependency
 		where dependency."archiveUrlIdentity" = $1::text
 			and dependency."bucketHash" = lower($2::text)
 	), updated as (

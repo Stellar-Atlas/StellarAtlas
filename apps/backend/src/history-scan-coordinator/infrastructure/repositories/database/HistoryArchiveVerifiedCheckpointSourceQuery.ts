@@ -229,7 +229,7 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 				proof_freshness."effectiveEvaluatedAt"
 			and proof."expectedBucketCount" = (
 				select count(*)
-				from history_archive_checkpoint_bucket_dependency expected_dependency
+				from history_archive_checkpoint_bucket_dependency_current expected_dependency
 				where expected_dependency."archiveUrlIdentity" =
 					proof."archiveUrlIdentity"
 					and expected_dependency."checkpointLedger" =
@@ -280,7 +280,7 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 			)
 			and not exists (
 				select 1
-				from history_archive_checkpoint_bucket_dependency dependency
+				from history_archive_checkpoint_bucket_dependency_current dependency
 			left join history_archive_object_queue bucket
 				on bucket."archiveUrlIdentity" =
 					dependency."archiveUrlIdentity"

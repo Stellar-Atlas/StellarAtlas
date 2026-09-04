@@ -161,7 +161,7 @@ describe('sequential history archive proof chain', () => {
 			'object."checkpointLedger" = current."checkpointLedger"'
 		);
 		expect(activateCurrentCheckpointDependenciesSql).toContain(
-			'join "history_archive_checkpoint_bucket_dependency" dependency'
+			'join "history_archive_checkpoint_bucket_dependency_current" dependency'
 		);
 		expect(activateCurrentCheckpointDependenciesSql).toContain(
 			'candidate_ids as materialized'

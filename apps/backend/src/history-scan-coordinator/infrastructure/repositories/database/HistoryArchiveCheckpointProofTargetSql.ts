@@ -5,7 +5,7 @@ export const historyArchiveImmediateBucketProofRefreshLimit = 2;
 export const historyArchiveCheckpointProofTargetCtesSql = `
 	${canonicalRuntimeTargetCtes}, bucket_requested_checkpoints as materialized (
 		select dependency."archiveUrlIdentity", dependency."checkpointLedger"
-		from "history_archive_checkpoint_bucket_dependency" dependency
+		from "history_archive_checkpoint_bucket_dependency_current" dependency
 		left join "history_archive_state_snapshot" state
 			on state."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 		left join runtime_target runtime

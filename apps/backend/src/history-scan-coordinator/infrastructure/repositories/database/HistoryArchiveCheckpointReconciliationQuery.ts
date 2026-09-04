@@ -53,7 +53,7 @@ const reconciliationPredicateSql = `(
 			)
 			and not exists (
 				select 1
-				from history_archive_checkpoint_bucket_dependency dependency
+				from history_archive_checkpoint_bucket_dependency_current dependency
 				left join history_archive_object_queue bucket
 					on bucket."archiveUrlIdentity" =
 						dependency."archiveUrlIdentity"
@@ -136,7 +136,7 @@ const runtimeReconciliationPredicateSql = `(
 	or exists (
 		select 1
 		from history_archive_checkpoint_proof runtime_proof
-		join history_archive_checkpoint_bucket_dependency dependency
+		join history_archive_checkpoint_bucket_dependency_current dependency
 			on dependency."archiveUrlIdentity" =
 				runtime_proof."archiveUrlIdentity"
 			and dependency."checkpointLedger" =
@@ -467,13 +467,13 @@ const satisfiedBucketProofsSql = `
 		from proof_candidates candidate
 		where exists (
 			select 1
-			from "history_archive_checkpoint_bucket_dependency" expected
+			from "history_archive_checkpoint_bucket_dependency_current" expected
 			where expected."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 				and expected."checkpointLedger" = candidate."checkpointLedger"
 		)
 		and not exists (
 			select 1
-			from "history_archive_checkpoint_bucket_dependency" expected
+			from "history_archive_checkpoint_bucket_dependency_current" expected
 			where expected."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 				and expected."checkpointLedger" = candidate."checkpointLedger"
 				and not exists (

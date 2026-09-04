@@ -150,7 +150,7 @@ const activateCheckpointBucketDependenciesSql = `
 	), dependencies as materialized (
 		select dependency."archiveUrlIdentity", dependency."bucketHash"
 		from checkpoint
-		join "history_archive_checkpoint_bucket_dependency" dependency
+		join "history_archive_checkpoint_bucket_dependency_current" dependency
 			on dependency."archiveUrlIdentity" = checkpoint."archiveUrlIdentity"
 			and dependency."checkpointLedger" = checkpoint."checkpointLedger"
 	)
@@ -194,7 +194,7 @@ const reconcileReadinessSql = `
 				)
 			else exists (
 				select 1
-				from "history_archive_checkpoint_bucket_dependency" dependency
+				from "history_archive_checkpoint_bucket_dependency_current" dependency
 				join "history_archive_object_queue" checkpoint
 					on checkpoint."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 					and checkpoint."checkpointLedger" = dependency."checkpointLedger"

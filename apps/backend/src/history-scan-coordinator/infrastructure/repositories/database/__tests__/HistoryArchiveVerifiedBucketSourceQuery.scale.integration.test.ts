@@ -99,9 +99,7 @@ async function explain(
 	return plan;
 }
 
-function readSequentialScans(
-	plan: QueryPlan
-): readonly {
+function readSequentialScans(plan: QueryPlan): readonly {
 	alias: string | null;
 	filter: string | null;
 	relation: string;
@@ -180,6 +178,10 @@ async function createFixture(source: DataSource): Promise<void> {
 			"createdAt" timestamptz not null default now(),
 			primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash")
 		);
+		create view history_archive_checkpoint_bucket_dependency_current as
+		select "archiveUrlIdentity", "checkpointLedger", "bucketHash",
+			"createdAt"
+		from history_archive_checkpoint_bucket_dependency;
 		create table history_archive_checkpoint_proof (
 			id serial primary key,
 			"archiveUrlIdentity" text not null,

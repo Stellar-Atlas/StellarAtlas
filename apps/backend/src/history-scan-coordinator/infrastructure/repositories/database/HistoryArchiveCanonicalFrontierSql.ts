@@ -306,7 +306,7 @@ export function buildAdmitCanonicalFrontierSql(
 			'bucket:' || dependency."bucketHash" as object_key,
 			5 as object_priority
 		from network_roots network_root
-		join "history_archive_checkpoint_bucket_dependency" dependency
+		join "history_archive_checkpoint_bucket_dependency_current" dependency
 			on dependency."archiveUrlIdentity" =
 				network_root."archiveUrlIdentity"
 			and dependency."checkpointLedger" = network_root.checkpoint_ledger

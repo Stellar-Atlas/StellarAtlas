@@ -293,7 +293,7 @@ function dependencyEligibilitySql(alias: string): string {
 			)
 		else exists (
 			select 1
-			from "history_archive_checkpoint_bucket_dependency" dependency
+			from "history_archive_checkpoint_bucket_dependency_current" dependency
 			join "history_archive_object_queue" checkpoint
 				on checkpoint."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 				and checkpoint."checkpointLedger" = dependency."checkpointLedger"

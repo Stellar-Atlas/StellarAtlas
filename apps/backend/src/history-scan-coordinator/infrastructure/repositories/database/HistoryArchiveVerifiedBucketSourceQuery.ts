@@ -241,7 +241,7 @@ export const historyArchiveVerifiedBucketSourceSql = `
 				candidate."archiveUrlIdentity"
 			and candidate_state.status = 'available'
 			and candidate_state."networkPassphrase" = target."networkPassphrase"
-		join history_archive_checkpoint_bucket_dependency dependency
+		join history_archive_checkpoint_bucket_dependency_current dependency
 			on dependency."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 			and dependency."bucketHash" = target."bucketHash"
 		join history_archive_checkpoint_proof proof
@@ -276,7 +276,7 @@ export const historyArchiveVerifiedBucketSourceSql = `
 				proof_freshness."effectiveEvaluatedAt"
 			and proof."expectedBucketCount" = (
 				select count(*)
-				from history_archive_checkpoint_bucket_dependency expected_dependency
+				from history_archive_checkpoint_bucket_dependency_current expected_dependency
 				where expected_dependency."archiveUrlIdentity" =
 					proof."archiveUrlIdentity"
 					and expected_dependency."checkpointLedger" =
@@ -327,7 +327,7 @@ export const historyArchiveVerifiedBucketSourceSql = `
 			)
 			and not exists (
 				select 1
-				from history_archive_checkpoint_bucket_dependency proof_dependency
+				from history_archive_checkpoint_bucket_dependency_current proof_dependency
 				left join history_archive_object_queue proof_bucket
 					on proof_bucket."archiveUrlIdentity" =
 						proof_dependency."archiveUrlIdentity"

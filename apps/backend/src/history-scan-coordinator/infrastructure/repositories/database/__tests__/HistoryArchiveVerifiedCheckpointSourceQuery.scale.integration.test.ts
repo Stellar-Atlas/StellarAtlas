@@ -267,6 +267,10 @@ const schemaSql = `
 		"createdAt" timestamptz not null default now(),
 		primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash")
 	);
+	create view history_archive_checkpoint_bucket_dependency_current as
+	select "archiveUrlIdentity", "checkpointLedger", "bucketHash",
+		"createdAt"
+	from history_archive_checkpoint_bucket_dependency;
 	create table history_archive_checkpoint_proof (
 		id serial primary key,
 		"archiveUrl" text not null default 'https://fixture.invalid',

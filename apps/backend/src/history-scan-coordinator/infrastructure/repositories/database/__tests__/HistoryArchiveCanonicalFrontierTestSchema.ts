@@ -56,9 +56,11 @@ export async function createCanonicalFrontierTestSchema(
 			"archiveUrlIdentity" text not null,
 			"checkpointLedger" integer not null,
 			"bucketHash" text not null,
+			"createdAt" timestamptz not null default now(),
 			primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash")
 		)
 	`);
+	await createHistoryArchiveCheckpointDependencyCurrentTestView(dataSource);
 	await dataSource.query(`
 		create table if not exists "full_history_promotion_runtime" (
 			"network_passphrase_hash" bytea primary key,
@@ -83,5 +85,20 @@ export async function createCanonicalFrontierTestSchema(
 			state text not null,
 			"created_at" timestamptz not null default now()
 		)
+	`);
+}
+
+export async function createHistoryArchiveCheckpointDependencyCurrentTestView(
+	dataSource: DataSource
+): Promise<void> {
+	await dataSource.query(`
+		create or replace view
+			"history_archive_checkpoint_bucket_dependency_current"
+		as
+		select legacy."archiveUrlIdentity",
+			legacy."checkpointLedger",
+			legacy."bucketHash",
+			legacy."createdAt"
+		from "history_archive_checkpoint_bucket_dependency" legacy
 	`);
 }
