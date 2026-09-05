@@ -1,5 +1,6 @@
 import { PageHeading } from '../../components/layout/page-heading';
 import { PublicOpenApiReference } from '../../components/docs/public-openapi-reference';
+import { GraphqlPlayground } from '../../components/docs/graphql-playground';
 
 interface EndpointGroup {
 	description: string;
@@ -93,7 +94,7 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Query the self-hosted Stellar ETL/Hubble schema in ClickHouse. Every list route returns limit, offset, and nextOffset; holder lists return nextCursor. Supply min_ledger and max_ledger whenever possible for partition-pruned queries. The catalog reports the exact backfill watermark, so partial historical coverage is never presented as complete.',
+			'Query the self-hosted Stellar ETL/Hubble schema in ClickHouse. List responses expose limit and offset; semantic list routes may also return nextOffset, and holder lists return nextCursor. Supply supported ledger-range filters for partition-pruned queries. The catalog reports ingestion bounds and dataset row counts, not guaranteed gap-free historical coverage.',
 		endpoints: [
 			'/v1/analytics/datasets',
 			'/v1/analytics/datasets/:dataset',
@@ -183,10 +184,36 @@ export default function DocsPage(): React.JSX.Element {
 				title="Developer reference"
 			/>
 			<section className="panel docs-panel">
-				<a className="primary-button" href="/api-docs?view=swagger">
-					Open Swagger documentation
-				</a>
-				<code>/v1</code>
+				<h2>Send a real API request</h2>
+				<p>
+					REST: open an operation, choose Try it out, enter path parameters and
+					filters, then Execute. Swagger shows the exact URL, HTTP status,
+					headers, and response body.
+				</p>
+				<div className="endpoint-paths">
+					<a
+						className="primary-button"
+						href="/api-docs?view=swagger#/Analytics/getAnalyticsLedger"
+					>
+						Try a ledger REST request
+					</a>
+					<a href="/api-docs?view=swagger#/Analytics/listHubbleDatasets">
+						Inspect datasets and current coverage
+					</a>
+					<a href="/api-docs?view=swagger">
+						All REST operations and parameters
+					</a>
+					<a href="#graphql">Run a read-only GraphQL query</a>
+				</div>
+				<p>
+					Dynamic routes accept the identifier in the path:{' '}
+					<code>/v1/analytics/ledgers/3</code>,{' '}
+					<code>/v1/analytics/transactions/:transactionHash</code>, or{' '}
+					<code>/v1/analytics/assets/:asset/holders/:account</code>. Replace
+					placeholders with real identifiers; use the operation’s documented
+					filters and pagination parameters.
+				</p>
+				<GraphqlPlayground />
 				<p className="muted-inline">
 					This page and Swagger list public read surfaces. Authenticated
 					coordinator, worker, and backfill routes are intentionally excluded.

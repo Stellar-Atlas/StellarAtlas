@@ -1,0 +1,66 @@
+.playground {
+	display: grid;
+	gap: 1rem;
+	min-width: 0;
+	padding: 1.25rem;
+	border: 1px solid #334247;
+	border-radius: 0.75rem;
+	scroll-margin-top: 6rem;
+}
+.playground p {
+	margin: 0.5rem 0;
+	line-height: 1.5;
+}
+.playground label {
+	display: grid;
+	gap: 0.5rem;
+	min-width: 0;
+}
+.playground textarea,
+.playground select {
+	width: 100%;
+	box-sizing: border-box;
+	border: 1px solid #496060;
+	border-radius: 0.35rem;
+	background: #101719;
+	color: #e8f0ef;
+	padding: 0.75rem;
+	font: inherit;
+}
+.playground textarea {
+	resize: vertical;
+	font-family: monospace;
+}
+.editors {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+.actions {
+	display: flex;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.actions button {
+	cursor: pointer;
+	padding: 0.65rem 1rem;
+}
+.actions button:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+.response {
+	max-height: 32rem;
+	min-width: 0;
+	overflow: auto;
+	padding: 1rem;
+	border: 1px solid #334247;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	background: #101719;
+}
+@media (max-width: 720px) {
+	.editors {
+		grid-template-columns: 1fr;
+	}
+}

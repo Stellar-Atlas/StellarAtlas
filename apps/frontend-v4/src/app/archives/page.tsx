@@ -9,20 +9,24 @@ export default function ArchiveInventoryPage(): React.JSX.Element {
 	return (
 		<main className="shell archive-inventory-route">
 			<PageHeading
-				description="Every captured history archive root, its advertising nodes, source-specific failures, checkpoint coverage, and repair evidence."
+				description="Check archive coverage, find missing files, and inspect repairs by source or validator."
 				eyebrow="Archive verification"
-				title="Archive root inventory"
+				title="Archives"
 			/>
-			<section className="archive-inventory-explainer">
-				<strong>How to read this table</strong>
+			<details className="archive-inventory-explainer">
+				<summary>What is being verified?</summary>
 				<p>
 					Canonical checkpoint proofs verify shared content once. Source
 					coverage records whether each archive served that content. A canonical
 					replacement does not erase a missing-file finding against the original
 					archive. File counts, checkpoint coverage, and analytics ingestion
-					measure different work.
+					measure different work. These checks validate file hashes and
+					cross-file commitments; they are not BLS proofs, consensus-signature
+					verification, or transaction execution replay. Missing SCP files
+					remain archive findings even though SCP is optional in the current
+					checkpoint check.
 				</p>
-			</section>
+			</details>
 			<Suspense
 				fallback={
 					<section className="panel detail-panel" role="status">

@@ -100,9 +100,10 @@
 	}
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1120px) {
 	.site-header-inner {
 		grid-template-columns: minmax(0, 1fr) auto;
+		padding-block: 10px;
 	}
 
 	.nav-toggle {

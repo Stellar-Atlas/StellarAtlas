@@ -37,7 +37,7 @@
 .status-muted {
 	color: var(--muted);
 	font-size: 0.82rem;
-	font-weight: 800;
+	font-weight: 500;
 }
 
 .status-list {
@@ -49,7 +49,7 @@
 	border-block-end: 1px solid var(--border);
 	display: grid;
 	gap: 16px;
-	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) minmax(160px, 35%);
 	min-block-size: 72px;
 	padding: 14px 18px;
 }
@@ -83,8 +83,8 @@
 }
 
 .status-row-value span {
-	font-weight: 800;
-	max-inline-size: 280px;
+	font-weight: 500;
+	max-inline-size: 100%;
 	overflow: visible;
 	overflow-wrap: anywhere;
 	text-overflow: clip;
@@ -95,7 +95,7 @@
 	border: 1px solid var(--border);
 	border-radius: 999px;
 	font-size: 0.72rem;
-	font-weight: 900;
+	font-weight: 650;
 	padding: 4px 8px;
 	text-transform: uppercase;
 }
@@ -166,7 +166,7 @@
 }
 
 .status-current-job-meta {
-	font-weight: 800;
+	font-weight: 500;
 	text-align: right;
 }
 
@@ -302,7 +302,7 @@
 	align-items: center;
 	display: inline-flex;
 	font-size: 0.72rem;
-	font-weight: 900;
+	font-weight: 650;
 	gap: 6px;
 	text-transform: uppercase;
 }
@@ -325,4 +325,35 @@
 
 .status-worker-state.stale {
 	color: #9e3037;
+}
+
+@media (max-width: 720px) {
+	.status-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 10px;
+		padding: 14px;
+	}
+	.status-row-value {
+		align-items: flex-start;
+		text-align: left;
+		gap: 6px;
+	}
+	.status-row-value span {
+		font-size: 0.875rem;
+	}
+	.status-row strong {
+		white-space: normal;
+		font-weight: 600;
+	}
+	.status-dashboard .panel-heading {
+		flex-wrap: wrap;
+		gap: 10px;
+		padding: 14px;
+	}
+	.status-dashboard .stats-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.status-dashboard .status-current-job {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }

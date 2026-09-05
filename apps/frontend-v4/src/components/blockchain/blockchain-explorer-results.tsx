@@ -136,6 +136,11 @@ export function RecentTransactionsView({
 
 	return (
 		<div className="explorer-transaction-feed">
+			<p className="explorer-state neutral">
+				{result.transactions.source === 'local_history'
+					? 'Source: StellarAtlas historical records.'
+					: 'Source: Stellar public API.'}
+			</p>
 			<ExplorerTransactionFeedStatus transactions={result.transactions} />
 			{result.transactions.truncated ? (
 				<ExplorerState
@@ -155,7 +160,8 @@ export function toDateInputValue(value: string | undefined): string {
 	if (!value) return '';
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return '';
-	return date.toISOString().slice(0, 16);
+	const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+	return local.toISOString().slice(0, 16);
 }
 
 function TransactionFeedRows({

@@ -1,4 +1,7 @@
-import { fetchPublicOpenApiCatalog } from '@api/public-openapi-catalog';
+import {
+	fetchPublicOpenApiCatalog,
+	publicOperationTryItUrl
+} from '@api/public-openapi-catalog';
 import { formatInteger } from '@format/formatters';
 
 const openApiFetchOptions = {
@@ -15,8 +18,8 @@ export async function PublicOpenApiReference(): Promise<React.JSX.Element> {
 				<div>
 					<h2>Complete generated route index</h2>
 					<p>
-						Built directly from the live backend OpenAPI document, so this list
-						cannot drift from the routes the API exposes.
+						Generated from the backend OpenAPI document. Select a route to open
+						its parameters, examples, and Try it out controls in Swagger.
 					</p>
 				</div>
 				<strong>
@@ -46,7 +49,9 @@ export async function PublicOpenApiReference(): Promise<React.JSX.Element> {
 										{operation.method}
 									</span>
 									<div>
-										<code>{operation.path}</code>
+										<a href={publicOperationTryItUrl(operation, group.tag)}>
+											<code>{operation.path}</code> — Try it
+										</a>
 										<small>{operation.summary}</small>
 									</div>
 								</div>

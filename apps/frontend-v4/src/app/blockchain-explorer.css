@@ -11,6 +11,7 @@
 }
 
 .explorer-panel {
+	min-inline-size: 0;
 	background: var(--panel);
 	border: 1px solid var(--border);
 	border-radius: 8px;
@@ -76,16 +77,6 @@
 
 .explorer-linked-operations {
 	margin-top: 1rem;
-}
-
-.explorer-grid {
-	display: grid;
-	gap: 16px;
-	grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-}
-
-.explorer-grid .explorer-panel:first-child {
-	grid-row: span 2;
 }
 
 .explorer-search-form,
@@ -440,13 +431,8 @@
 
 @media (max-width: 1120px) {
 	.blockchain-stats,
-	.blockchain-graph-shell,
-	.explorer-grid {
+	.blockchain-graph-shell {
 		grid-template-columns: 1fr;
-	}
-
-	.explorer-grid .explorer-panel:first-child {
-		grid-row: auto;
 	}
 }
 
@@ -475,4 +461,33 @@
 	.blockchain-graph-svg {
 		min-block-size: 430px;
 	}
+}
+
+.explorer-browse-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.explorer-browse-nav button {
+	background: var(--button-secondary);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--ink);
+	min-block-size: 42px;
+	padding: 8px 18px;
+}
+.explorer-browse-nav button[aria-pressed='true'] {
+	background: var(--blue);
+	border-color: var(--blue);
+	color: var(--accent-ink);
+}
+.explorer-request-notice {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	justify-content: space-between;
+}
+.explorer-request-notice p {
+	margin: 6px 0 0;
 }

@@ -6,7 +6,8 @@ const documentationLinks = [
 	{ href: '/organizations', label: 'Organizations' },
 	{ href: '/status', label: 'Status' },
 	{ href: '/archives', label: 'Archives' },
-	{ href: '/docs', label: 'API' }
+	{ href: '/docs', label: 'API' },
+	{ href: '/docs#graphql', label: 'GraphQL' }
 ] as const;
 
 const navigationLinks = documentationLinks

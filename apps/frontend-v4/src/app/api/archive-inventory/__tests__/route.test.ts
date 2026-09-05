@@ -1,23 +1,71 @@
-import { fetchArchiveInventorySnapshot } from '@api/archive-inventory-server';
-import { GET } from '../route';
+import { jest } from '@jest/globals';
+import type { HistoryArchiveStatusSummaryV1 } from 'shared';
 
-jest.mock('@api/archive-inventory-server', () => ({
-	fetchArchiveInventorySnapshot: jest.fn()
+const fetchArchiveInventorySnapshot =
+	jest.fn<
+		typeof import('@api/archive-inventory-server').fetchArchiveInventorySnapshot
+	>();
+jest.unstable_mockModule('@api/archive-inventory-server', () => ({
+	fetchArchiveInventorySnapshot
 }));
+const { GET } = await import('../route');
 
 describe('stable archive inventory GET', () => {
 	afterEach(() => jest.restoreAllMocks());
 	it('returns a cacheable successful snapshot without a Server Action', async () => {
-		const snapshot = {
-			summary: { archiveEvidenceFailures: 149209 },
-			nodes: [],
-			organizations: []
+		const summary: HistoryArchiveStatusSummaryV1 = {
+			activeObjectChecks: 0,
+			archiveEvidenceFailures: 149209,
+			canonicalProofProgress: {
+				archiveUrl: null,
+				archiveUrlIdentity: null,
+				latestVerifiedCheckpointLedger: null,
+				nextCheckpointLedger: null,
+				remainingCheckpoints: 0,
+				targetCheckpointLedger: null,
+				totalCheckpoints: 0,
+				verifiedCheckpoints: 0
+			},
+			checkpointCoverage: {
+				activeArchiveCheckpoints: 0,
+				archiveRootsWithState: 0,
+				categoryConsistencyFailedCheckpoints: 0,
+				categoryConsistencyNotEvaluatedCheckpoints: 0,
+				categoryConsistencyPendingCheckpoints: 0,
+				categoryConsistentArchiveCheckpoints: 0,
+				completeArchiveCheckpoints: 0,
+				durableVerifiedArchiveCheckpoints: 0,
+				discoveryCompleteArchiveRoots: 0,
+				expectedArchiveCheckpoints: 0,
+				failedArchiveCheckpoints: 0,
+				latestCheckpointLedger: null,
+				missingArchiveCheckpoints: 0,
+				objectCompleteArchiveCheckpoints: 0,
+				oldestCheckpointLedger: null,
+				partialArchiveCheckpoints: 0,
+				totalArchiveCheckpoints: 0
+			},
+			generatedAt: '2026-09-05T20:00:00.000Z',
+			sourceCount: 0,
+			sourceLimit: 256,
+			scannerIssueFailures: 0,
+			sources: [],
+			sourcesTruncated: false,
+			transitionReconciliation: {
+				oldestPendingAgeMs: null,
+				oldestPendingAt: null,
+				pendingTerminalEffects: 0,
+				status: 'caught-up'
+			},
+			unclassifiedFailures: 0
 		};
-		jest
-			.mocked(fetchArchiveInventorySnapshot)
-			.mockResolvedValue(
-				snapshot as Awaited<ReturnType<typeof fetchArchiveInventorySnapshot>>
-			);
+		const snapshot: Awaited<ReturnType<typeof fetchArchiveInventorySnapshot>> =
+			{
+				summary,
+				nodes: [],
+				organizations: []
+			};
+		jest.mocked(fetchArchiveInventorySnapshot).mockResolvedValue(snapshot);
 		const response = await GET();
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toContain(

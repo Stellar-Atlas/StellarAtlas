@@ -14,6 +14,7 @@ export interface PublicOpenApiOperation {
 	readonly method: string;
 	readonly path: string;
 	readonly summary: string;
+	readonly operationId?: string;
 }
 
 export interface PublicOpenApiGroup {
@@ -54,7 +55,11 @@ export function parsePublicOpenApiCatalog(
 			const operation: PublicOpenApiOperation = {
 				method: method.toUpperCase(),
 				path,
-				summary: readSummary(operationValue, method, path)
+				summary: readSummary(operationValue, method, path),
+				operationId:
+					typeof operationValue.operationId === 'string'
+						? operationValue.operationId
+						: undefined
 			};
 			const tags = readTags(operationValue);
 			for (const tag of tags) {
@@ -76,6 +81,19 @@ export function parsePublicOpenApiCatalog(
 		operationCount,
 		pathCount: Object.keys(document.paths).length
 	};
+}
+
+export function publicOperationTryItUrl(
+	operation: PublicOpenApiOperation,
+	tag: string
+): string {
+	return (
+		'/api-docs?view=swagger#/' +
+		encodeURIComponent(tag) +
+		(operation.operationId
+			? '/' + encodeURIComponent(operation.operationId)
+			: '')
+	);
 }
 
 function readTags(operation: Record<string, unknown>): readonly string[] {

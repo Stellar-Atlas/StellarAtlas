@@ -53,6 +53,28 @@ describe('ExplorerTransactionFeedStatus', () => {
 		expect(html).not.toMatch(implementationCopy);
 	});
 
+	it.each([
+		['local_history', 'StellarAtlas historical records'],
+		['live_network', 'Stellar public API']
+	] as const)(
+		'labels %s records without promising live data',
+		(source, label) => {
+			const html = renderToStaticMarkup(
+				<RecentTransactionsView
+					onInspect={() => undefined}
+					result={{
+						message: null,
+						status: 'loaded',
+						transactions: feed({ source })
+					}}
+				/>
+			);
+
+			expect(html).toContain(`Source: ${label}.`);
+			expect(html).not.toContain('Live transactions');
+		}
+	);
+
 	it('describes live rows without claiming they came from an index', () => {
 		const html = renderToStaticMarkup(
 			<RecentTransactionsView
