@@ -66,6 +66,9 @@ export function startHistoryArchiveMaintenanceLoop(
 						// expensive global recovery lanes after every proof wave.
 						proofRefreshForceRequested = true;
 						proofRefreshRerunRequested = true;
+					} else if (!stopped) {
+						requestTransitions(force);
+						requestExecutionDisposition(force);
 					}
 				} catch (error: unknown) {
 					logFailure('proof refresh', error);
@@ -159,8 +162,6 @@ export function startHistoryArchiveMaintenanceLoop(
 
 	const requestMaintenance = (force = false): void => {
 		requestProofRefresh(force);
-		requestTransitions(force);
-		requestExecutionDisposition(force);
 	};
 
 	const onProofRefreshWake = (message: unknown): void => {
