@@ -1,3 +1,4 @@
+import { completedHubbleBatchPredicate } from '../HubbleBatchVisibility.js';
 import { queryHubbleAccountTransactions } from '../HubbleAccountTransactionQuery.js';
 import type {
 	HubblePreparedParameter,
@@ -28,5 +29,11 @@ describe('queryHubbleAccountTransactions', () => {
 		expect(capturedSql).toContain('WHERE account = {account:String}');
 		expect(capturedSql).toContain('WHERE account != {account:String}');
 		expect(capturedSql).not.toContain('OR id IN');
+		expect(
+			capturedSql.split(completedHubbleBatchPredicate('stellar_hubble'))
+		).toHaveLength(5);
+		expect(capturedSql).toContain(
+			'LIMIT {row_limit:UInt32} OFFSET {offset:UInt64}'
+		);
 	});
 });

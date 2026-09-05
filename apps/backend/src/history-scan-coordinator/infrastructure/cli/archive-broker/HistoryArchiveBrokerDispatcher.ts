@@ -260,6 +260,9 @@ export class HistoryArchiveBrokerDispatcher {
 		}
 		this.nextOrphanedPublishedReplayAt =
 			now + orphanedPublishedReplayIntervalMs;
+		// Recovery is independent of queue emptiness; another root's work must not
+		// starve a current checkpoint whose executable ready row was lost.
+		await this.repository.recoverMissingFrontierReady(this.config.batchSize);
 		if (availableCapacity === this.config.highWatermark) {
 			const requeued = await this.repository.requeueOrphanedPublishedJobs(
 				new Date(now - orphanedPublishedReplayAgeMs),

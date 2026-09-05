@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import {
 	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
 	HistoryArchiveCheckpointProof
@@ -36,6 +37,17 @@ describe('compact history archive checkpoint planning', () => {
 		});
 		await dataSource.initialize();
 		await createCanonicalFrontierTestSchema(dataSource);
+		await dataSource.query(
+			'alter table "history_archive_checkpoint_bucket_dependency" add column "createdAt" timestamptz not null default now()'
+		);
+		const runner = dataSource.createQueryRunner();
+		try {
+			await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
+				runner
+			);
+		} finally {
+			await runner.release();
+		}
 	});
 
 	afterAll(async () => {
@@ -197,6 +209,14 @@ describe('compact history archive checkpoint planning', () => {
 			executionDisposition: 'executable',
 			status: 'pending'
 		});
+		const [ready] = (await dataSource.query(
+			`select ready.priority from "history_archive_object_ready" ready
+			 join "history_archive_object_queue" object
+			 on object."remoteId" = ready."objectRemoteId"
+			 where object."archiveUrlIdentity" = $1 and object."checkpointLedger" = 255`,
+			[root.archiveUrlIdentity]
+		)) as readonly { readonly priority: number }[];
+		expect(ready).toEqual({ priority: 2 });
 		expect(cursor?.nextHistoricalCheckpointLedger).toBe(319);
 	});
 

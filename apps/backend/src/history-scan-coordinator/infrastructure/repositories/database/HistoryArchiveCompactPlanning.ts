@@ -836,7 +836,21 @@ const compactCheckpointPlanSql = `
 				"executionDispositionAt" = now(),
 				"updatedAt" = now()
 			where "history_archive_object_queue".status = 'pending'
-		returning id
+		returning "remoteId", "archiveUrlIdentity", "nextAttemptAt",
+			"transitionEffectsRequiredAt", "transitionEffectsCompletedAt"
+	), ready as (
+		insert into "history_archive_object_ready" (
+			"objectRemoteId", "archiveUrlIdentity", priority,
+			"availableAt", "createdAt", "updatedAt"
+		)
+		select "remoteId", "archiveUrlIdentity", 2,
+			coalesce("nextAttemptAt", now()), now(), now()
+		from inserted
+		where "transitionEffectsRequiredAt" is null
+			or "transitionEffectsCompletedAt" is not null
+		order by "remoteId"
+		on conflict ("objectRemoteId") do nothing
+		returning "objectRemoteId"
 	), advanced as (
 		update "history_archive_checkpoint_scan_cursor" cursor
                 set "latestCheckpointLedger" = candidate."latestCheckpointLedger",
@@ -858,5 +872,6 @@ const compactCheckpointPlanSql = `
 		returning cursor."archiveUrlIdentity"
 	)
 	select (select count(*) from inserted)::integer as planned,
-		(select count(*) from advanced)::integer as advanced
+		(select count(*) from advanced)::integer as advanced,
+		(select count(*) from ready)::integer as ready
 `;

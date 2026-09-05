@@ -1,4 +1,5 @@
 import type { DataSource, EntityManager } from 'typeorm';
+import { recoverMissingFrontierReady } from './HistoryArchiveMissingFrontierReady.js';
 import {
 	defaultHistoryArchiveBrokerMaximumPriority,
 	type HistoryArchiveBrokerPriority
@@ -327,6 +328,15 @@ function mapAndOrderBrokerJobs(
 
 export class HistoryArchiveBrokerFrontierRepository {
 	constructor(private readonly dataSource: DataSource) {}
+
+	async recoverMissingFrontierReady(limit: number): Promise<number> {
+		return await this.dataSource.transaction(async (manager) => {
+			await manager.query(
+				"set local lock_timeout = '250ms'; set local statement_timeout = '2s'"
+			);
+			return await recoverMissingFrontierReady(manager, limit);
+		});
+	}
 
 	async ensurePrefetch(
 		archiveUrlIdentity: string | null = null

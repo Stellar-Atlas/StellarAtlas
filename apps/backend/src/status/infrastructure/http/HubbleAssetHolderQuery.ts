@@ -1,3 +1,4 @@
+import { completedHubbleBatchPredicate } from './HubbleBatchVisibility.js';
 import {
 	boundedSemanticLimit,
 	quoteHubbleIdentifier,
@@ -17,10 +18,17 @@ export async function queryHubbleAssetHolders(
 	];
 	const accountPredicate = buildAccountPredicate(input, parameters);
 	const database = quoteHubbleIdentifier(executor.database);
+	const published = completedHubbleBatchPredicate(executor.database);
 	const sql =
 		input.asset.type === 'native'
-			? nativeHolderSql(database, accountPredicate)
-			: issuedHolderSql(database, accountPredicate, input, parameters);
+			? nativeHolderSql(database, accountPredicate, published)
+			: issuedHolderSql(
+					database,
+					accountPredicate,
+					input,
+					parameters,
+					published
+				);
 	const startedAt = performance.now();
 	const response = await executor.execute<Record<string, unknown>>(
 		sql,
@@ -68,7 +76,11 @@ function buildAccountPredicate(
 	return '';
 }
 
-function nativeHolderSql(database: string, accountPredicate: string): string {
+function nativeHolderSql(
+	database: string,
+	accountPredicate: string,
+	published: string
+): string {
 	return `
 SELECT account_id, balance, buying_liabilities, selling_liabilities,
 	last_modified_ledger, ledger_sequence
@@ -91,7 +103,7 @@ FROM (
 		argMax(deleted, tuple(ledger_sequence, _row_number, _ingested_at))
 			AS deleted
 	FROM ${database}.accounts
-	WHERE 1 = 1
+	WHERE ${published}
 		${accountPredicate}
 	GROUP BY account_id
 )
@@ -105,7 +117,8 @@ function issuedHolderSql(
 	database: string,
 	accountPredicate: string,
 	input: HubbleAssetHolderQuery,
-	parameters: HubblePreparedParameter[]
+	parameters: HubblePreparedParameter[],
+	published: string
 ): string {
 	if (input.asset.type !== 'issued') {
 		throw new Error('Issued asset query requires code and issuer');
@@ -150,6 +163,7 @@ FROM (
 	FROM ${database}.trustlines
 	WHERE asset_code = {asset_code:String}
 		AND asset_issuer = {asset_issuer:String}
+		AND ${published}
 		${accountPredicate}
 	GROUP BY account_id
 )

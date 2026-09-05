@@ -1,3 +1,4 @@
+import { completedHubbleBatchPredicate } from './HubbleBatchVisibility.js';
 import {
 	boundedSemanticLimit,
 	boundedSemanticOffset,
@@ -16,6 +17,7 @@ export async function queryHubbleAccountTransactions(
 	const offset = boundedSemanticOffset(input.offset);
 	const rowLimit = limit + 1;
 	const database = quoteHubbleIdentifier(executor.database);
+	const published = completedHubbleBatchPredicate(executor.database);
 	const parameters: readonly HubblePreparedParameter[] = [
 		{ name: 'account', type: 'String', value: input.account },
 		{ name: 'row_limit', type: 'UInt32', value: String(rowLimit) },
@@ -39,18 +41,18 @@ SELECT
 FROM (
         SELECT transaction_hash, ledger_sequence, account, account_muxed, account_sequence, operation_count, successful, transaction_result_code, memo_type, memo, closed_at, id
         FROM ${database}.history_transactions
-        WHERE account = {account:String}
+        WHERE account = {account:String} AND ${published}
         UNION ALL
         SELECT transaction_hash, ledger_sequence, account, account_muxed, account_sequence, operation_count, successful, transaction_result_code, memo_type, memo, closed_at, id
         FROM ${database}.history_transactions
-        WHERE account != {account:String}
+        WHERE account != {account:String} AND ${published}
                 AND id IN (
                         SELECT transaction_id
                         FROM ${database}.history_operations
-                        WHERE id IN (
+                        WHERE ${published} AND id IN (
                                 SELECT operation_id
                                 FROM ${database}.history_effects
-                                WHERE address = {account:String}
+                                WHERE address = {account:String} AND ${published}
                         )
                 )
 )

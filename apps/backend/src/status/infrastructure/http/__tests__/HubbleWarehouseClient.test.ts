@@ -1,3 +1,4 @@
+import { completedHubbleBatchPredicate } from '../HubbleBatchVisibility.js';
 import {
 	ClickHouseHubbleWarehouse,
 	HubbleWarehouseInputError
@@ -40,6 +41,9 @@ describe('ClickHouseHubbleWarehouse', () => {
 		expect(queryRequest?.searchParams.get('param_filter_0')).toBe('123');
 		expect(queryRequest?.searchParams.get('param_filter_1')).toBe('3');
 		expect(queryRequest?.searchParams.get('param_limit')).toBe('25');
+		expect(queryRequest?.searchParams.get('query')).toContain(
+			completedHubbleBatchPredicate('stellar_hubble')
+		);
 	});
 
 	it('rejects a column injection before issuing a data query', async () => {
@@ -71,6 +75,9 @@ describe('ClickHouseHubbleWarehouse', () => {
 			})
 		).resolves.toMatchObject({ dataset: 'history_transactions' });
 		expect(requests.at(-1)?.searchParams.get('query')).toContain('`_batch_id`');
+		expect(requests.at(-1)?.searchParams.get('query')).toContain(
+			completedHubbleBatchPredicate('stellar_hubble')
+		);
 	});
 });
 
