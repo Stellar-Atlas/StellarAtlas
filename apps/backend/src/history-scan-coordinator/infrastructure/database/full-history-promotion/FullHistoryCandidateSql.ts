@@ -67,17 +67,13 @@ export const fullHistoryObservedEnvelopesSql = `
 		envelope."transactionIndex",
 		envelope."transactionSetHash",
 		envelope."envelopeXdr"
-	from "history_archive_object_queue" source_object
+	from "parsed_transaction_envelope_observation" observation
 	join "parsed_transaction_envelope" envelope
-		on envelope."ledgerSequence" between
-			greatest(0, source_object."checkpointLedger" - 63)
-			and source_object."checkpointLedger"
-	where source_object."remoteId" = $1::uuid
-		and source_object."objectType" = 'transactions'
-		and envelope."lastScanJobRemoteId" =
-			${resolvedContentSourceSql(1, 'transactions')}
+		on envelope.id = observation."parsedTransactionEnvelopeId"
+	where observation."sourceObjectRemoteId" =
+		${resolvedContentSourceSql(1, 'transactions')}
 	order by envelope."ledgerSequence", envelope."transactionIndex"
-limit $2
+	limit $2
 `;
 
 export const fullHistoryObservedResultsSql = `
@@ -87,17 +83,13 @@ export const fullHistoryObservedResultsSql = `
 		result."transactionResultHash",
 		result."transactionHash",
 		result."resultXdr"
-	from "history_archive_object_queue" source_object
+	from "parsed_transaction_result_observation" observation
 	join "parsed_transaction_result" result
-		on result."ledgerSequence" between
-			greatest(0, source_object."checkpointLedger" - 63)
-			and source_object."checkpointLedger"
-	where source_object."remoteId" = $1::uuid
-		and source_object."objectType" = 'results'
-		and result."lastScanJobRemoteId" =
-			${resolvedContentSourceSql(1, 'results')}
+		on result.id = observation."parsedTransactionResultId"
+	where observation."sourceObjectRemoteId" =
+		${resolvedContentSourceSql(1, 'results')}
 	order by result."ledgerSequence", result."transactionIndex"
-limit $2
+	limit $2
 `;
 
 export const fullHistoryObservedTransactionBoundsSql = `
@@ -111,29 +103,21 @@ export const fullHistoryObservedTransactionBoundsSql = `
 			count(*)::bigint as "envelopeCount",
 			coalesce(sum(octet_length(envelope."envelopeXdr")), 0)::bigint
 				as "envelopeBytes"
-		from "history_archive_object_queue" source_object
+		from "parsed_transaction_envelope_observation" observation
 		join "parsed_transaction_envelope" envelope
-			on envelope."ledgerSequence" between
-				greatest(0, source_object."checkpointLedger" - 63)
-				and source_object."checkpointLedger"
-		where source_object."remoteId" = $1::uuid
-			and source_object."objectType" = 'transactions'
-			and envelope."lastScanJobRemoteId" =
-				${resolvedContentSourceSql(1, 'transactions')}
+			on envelope.id = observation."parsedTransactionEnvelopeId"
+		where observation."sourceObjectRemoteId" =
+			${resolvedContentSourceSql(1, 'transactions')}
 	) envelope
 	cross join (
 		select
 			count(*)::bigint as "resultCount",
 			coalesce(sum(octet_length(result."resultXdr")), 0)::bigint
 				as "resultBytes"
-		from "history_archive_object_queue" source_object
+		from "parsed_transaction_result_observation" observation
 		join "parsed_transaction_result" result
-			on result."ledgerSequence" between
-				greatest(0, source_object."checkpointLedger" - 63)
-				and source_object."checkpointLedger"
-		where source_object."remoteId" = $2::uuid
-			and source_object."objectType" = 'results'
-			and result."lastScanJobRemoteId" =
-				${resolvedContentSourceSql(2, 'results')}
+			on result.id = observation."parsedTransactionResultId"
+		where observation."sourceObjectRemoteId" =
+			${resolvedContentSourceSql(2, 'results')}
 	) result
 `;
