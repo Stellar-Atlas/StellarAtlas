@@ -20,23 +20,23 @@ describe('LedgerCloseMeta systemd service', () => {
 			'FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER='
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=24'
+			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=256'
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=4'
+			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=24'
 		);
 		expect(service).toContain(
 			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_ENABLED=true'
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS=8192'
+			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS=24576'
 		);
 		expect(service).toContain(
 			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BYTES_PER_SECOND=187500000'
 		);
 		expect(service).toContain('Restart=always');
-		expect(service).toContain('CPUQuota=800%');
-		expect(service).toContain('MemoryMax=64G');
+		expect(service).toContain('CPUQuota=3200%');
+		expect(service).toContain('MemoryMax=128G');
 		expect(service).toContain('WantedBy=stellaratlas.target');
 		expect(hostService).toContain(
 			'RequiresMountsFor=/mnt/bulk/stellarbeat-data /mnt/stellaratlas-archive-spool'
