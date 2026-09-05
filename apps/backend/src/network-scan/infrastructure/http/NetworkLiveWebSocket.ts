@@ -61,6 +61,8 @@ interface LiveClient {
 
 const defaultPath = '/v1/live/ws';
 const latestLedgerIntervalMs = 2_000;
+const latestLedgerFailureInitialRetryMs = 5_000;
+const latestLedgerFailureMaximumRetryMs = 60_000;
 const networkIntervalMs = 5_000;
 
 const isWebSocketPath = (request: IncomingMessage, path: string): boolean => {
@@ -146,6 +148,8 @@ export function attachNetworkLiveWebSocket(
 	);
 	let latestLedgerTimer: ReturnType<typeof setInterval> | undefined;
 	let networkTimer: ReturnType<typeof setInterval> | undefined;
+	let latestLedgerFailureCount = 0;
+	let latestLedgerRetryAtMs = 0;
 	let latestLedgerWriting = false;
 	let networkWriting = false;
 
@@ -155,11 +159,22 @@ export function attachNetworkLiveWebSocket(
 	};
 
 	const writeLatestLedger = (): void => {
-		if (latestLedgerWriting) return;
+		if (latestLedgerWriting || Date.now() < latestLedgerRetryAtMs) return;
 		latestLedgerWriting = true;
 		void getLatestLedger(config)
-			.then((payload) => broadcast({ payload, type: 'latestLedger' }))
+			.then((payload) => {
+				latestLedgerFailureCount = 0;
+				latestLedgerRetryAtMs = 0;
+				broadcast({ payload, type: 'latestLedger' });
+			})
 			.catch((error) => {
+				latestLedgerFailureCount++;
+				const retryDelayMs = Math.min(
+					latestLedgerFailureInitialRetryMs *
+						2 ** Math.min(latestLedgerFailureCount - 1, 10),
+					latestLedgerFailureMaximumRetryMs
+				);
+				latestLedgerRetryAtMs = Date.now() + retryDelayMs;
 				config.logger?.error('Live WebSocket latest ledger unavailable', {
 					error: errorMessage(error)
 				});

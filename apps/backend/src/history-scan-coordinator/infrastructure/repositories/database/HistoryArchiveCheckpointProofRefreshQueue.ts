@@ -63,8 +63,6 @@ const maximumConsecutiveProofRefreshTransactionSize = 64;
 
 const maximumSetBasedConsecutiveProofRefreshWaveSize =
 	maximumConsecutiveProofRefreshTransactionSize;
-const defaultProofRefreshRootConcurrency = 8;
-const maximumProofRefreshRootConcurrency = historyArchiveConsumerCount;
 
 export function proofRefreshBatchHandledEveryValidTarget(
 	claimCount: number,
@@ -94,42 +92,6 @@ function consecutiveProofRefreshTransactionSize(): number {
 			process.env.HISTORY_ARCHIVE_CONSECUTIVE_PROOF_BATCH_SIZE ?? '',
 			10
 		)
-	);
-}
-
-export function normalizeProofRefreshRootConcurrency(value: number): number {
-	if (!Number.isSafeInteger(value) || value < 1) {
-		return defaultProofRefreshRootConcurrency;
-	}
-	return Math.min(value, maximumProofRefreshRootConcurrency);
-}
-
-function proofRefreshRootConcurrency(): number {
-	return normalizeProofRefreshRootConcurrency(
-		Number.parseInt(
-			process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_CONCURRENCY ?? '',
-			10
-		)
-	);
-}
-
-export function partitionProofRefreshTargetsByRoot(
-	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
-): readonly (readonly ClaimedHistoryArchiveCheckpointProofRefresh[])[] {
-	const byRoot = new Map<
-		string,
-		ClaimedHistoryArchiveCheckpointProofRefresh[]
-	>();
-	for (const target of targets) {
-		const existing = byRoot.get(target.archiveUrlIdentity);
-		if (existing === undefined) {
-			byRoot.set(target.archiveUrlIdentity, [target]);
-		} else {
-			existing.push(target);
-		}
-	}
-	return [...byRoot.values()].map((group) =>
-		group.sort((left, right) => left.checkpointLedger - right.checkpointLedger)
 	);
 }
 
@@ -197,16 +159,61 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                                 as "checkpointLedger"
                 from "history_archive_checkpoint_scan_cursor" cursor
                 where ($1::text[] is null or cursor."archiveUrlIdentity" = any($1::text[]))
-                -- Existing proofs are reconciled from the durable
+                -- Existing verified proofs are reconciled from the durable
                 -- proofReconciledAt watermark when their evidence changes.
-                -- Recovery seeding only repairs a missing proof row.
+                -- Recovery seeding only repairs a missing proof row, an
+                -- interrupted pending proof, or terminal missing-object evidence
+                -- that can advance through a canonical substitution.
                 and not exists (
                         select 1
-                        from "history_archive_checkpoint_proof" proof
-                        where proof."archiveUrlIdentity" =
+                        from "history_archive_checkpoint_substitution" substitution
+                        where substitution."archiveUrlIdentity" =
                                 cursor."archiveUrlIdentity"
-                        and proof."checkpointLedger" =
+                        and substitution."checkpointLedger" =
                                 cursor."nextHistoricalCheckpointLedger" - 64
+                )
+                and (
+                        not exists (
+                                select 1
+                                from "history_archive_checkpoint_proof" proof
+                                where proof."archiveUrlIdentity" =
+                                        cursor."archiveUrlIdentity"
+                                and proof."checkpointLedger" =
+                                        cursor."nextHistoricalCheckpointLedger" - 64
+                        )
+                        or exists (
+                                select 1
+                                from "history_archive_checkpoint_proof" proof
+                                where proof."archiveUrlIdentity" =
+                                        cursor."archiveUrlIdentity"
+                                and proof."checkpointLedger" =
+                                        cursor."nextHistoricalCheckpointLedger" - 64
+                                and (
+                                        proof.status = 'pending'
+                                        or (
+                                                proof.status = 'not-evaluable'
+                                                and proof."failureKind" in (
+                                                        'object-failed',
+                                                        'bucket-missing'
+                                                )
+                                                and (
+                                                        proof.details->>'failureHttpStatus' in (
+                                                                '403', '404', '410'
+                                                        )
+                                                        or exists (
+                                                                select 1
+                                                                from "history_archive_object_queue" failed
+                                                                where failed."archiveUrlIdentity" =
+                                                                        cursor."archiveUrlIdentity"
+                                                                and failed."checkpointLedger" =
+                                                                        cursor."nextHistoricalCheckpointLedger" - 64
+                                                                and failed.status = 'failed'
+                                                                and failed."httpStatus" in (403, 404, 410)
+                                                        )
+                                                )
+                                        )
+                                )
+                        )
                 )
                 and not exists (
                         select 1
@@ -263,9 +270,12 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 		safeLimit,
 		maximumPriority
 	);
-	const outcome = await refreshProofRefreshRootsWithConcurrency(
+	// The claim is already a bounded set. Keep it set-based: splitting it by
+	// root recreated one long PostgreSQL writer per archive and made those
+	// writers contend on the same proof and refresh-queue index pages.
+	const outcome = await refreshProofRefreshBatchWithIsolation(
 		dataSource,
-		partitionProofRefreshTargetsByRoot(targets)
+		targets
 	);
 	return {
 		claimed: targets.length,
@@ -429,39 +439,6 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 interface ProofRefreshBatchOutcome {
 	readonly completed: number;
 	readonly failed: number;
-}
-
-async function refreshProofRefreshRootsWithConcurrency(
-	dataSource: DataSource,
-	rootTargets: readonly (readonly ClaimedHistoryArchiveCheckpointProofRefresh[])[]
-): Promise<ProofRefreshBatchOutcome> {
-	if (rootTargets.length === 0) return { completed: 0, failed: 0 };
-	const outcomes: ProofRefreshBatchOutcome[] = [];
-	let nextRoot = 0;
-	const concurrency = Math.min(
-		proofRefreshRootConcurrency(),
-		rootTargets.length
-	);
-	await Promise.all(
-		Array.from({ length: concurrency }, async () => {
-			while (true) {
-				const index = nextRoot++;
-				const targets = rootTargets[index];
-				if (targets === undefined) return;
-				outcomes[index] = await refreshProofRefreshBatchWithIsolation(
-					dataSource,
-					targets
-				);
-			}
-		})
-	);
-	return outcomes.reduce(
-		(total, outcome) => ({
-			completed: total.completed + outcome.completed,
-			failed: total.failed + outcome.failed
-		}),
-		{ completed: 0, failed: 0 }
-	);
 }
 
 async function refreshProofRefreshBatchWithIsolation(

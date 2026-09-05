@@ -173,6 +173,13 @@ describe('HistoryArchiveObjectClaimSql', () => {
 		expect(historyArchiveReadyPressureSql).toContain(
 			'from "history_archive_object_ready"'
 		);
+		expect(historyArchiveReadyPressureSql).toContain(
+			'from "history_archive_object_queue"'
+		);
+		expect(historyArchiveReadyPressureSql).toContain('"verifiedAt" >=');
+		expect(historyArchiveReadyPressureSql).not.toContain(
+			'from "history_archive_object_event"'
+		);
 		expect(historyArchiveReadyPressureSql).not.toContain(
 			'candidate."executionDisposition"'
 		);

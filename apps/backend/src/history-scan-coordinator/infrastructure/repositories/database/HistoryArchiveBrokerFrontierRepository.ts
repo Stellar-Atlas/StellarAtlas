@@ -14,7 +14,8 @@ import {
 	historyArchiveCanonicalFirstAdmissionSql,
 	historyArchiveCanonicalFirstScopeCteSql
 } from './HistoryArchiveCanonicalFirst.js';
-import { materializeOrderedCheckpointPrefetch } from './HistoryArchiveCheckpointPrefetch.js';
+import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpointPrefetch.js';
+import { materializeCompactCheckpointPlanResult } from './HistoryArchiveCompactPlanning.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 
 const maximumArchiveSourceFrontierRows = 4_096;
@@ -312,10 +313,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 	): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {
 			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
-			return await materializeOrderedCheckpointPrefetch(
-				manager,
-				archiveUrlIdentity
-			);
+			return await this.materializeFrontier(manager, archiveUrlIdentity);
 		});
 	}
 
@@ -325,7 +323,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 		const materialized = await this.dataSource.transaction(async (manager) => {
 			if (!(await this.tryTakeExecutionReconciliationLock(manager)))
 				return false;
-			await materializeOrderedCheckpointPrefetch(manager, archiveUrlIdentity);
+			await this.materializeFrontier(manager, archiveUrlIdentity);
 			return true;
 		});
 		if (!materialized) return 0;
@@ -414,6 +412,22 @@ export class HistoryArchiveBrokerFrontierRepository {
 				[executionIds]
 			);
 		});
+	}
+
+	private async materializeFrontier(
+		manager: EntityManager,
+		archiveUrlIdentity: string | null
+	): Promise<number> {
+		const compactPlan = await materializeCompactCheckpointPlanResult(
+			manager,
+			archiveUrlIdentity === null ? null : [archiveUrlIdentity]
+		);
+		const activation = await activateCurrentCheckpointDependencies(
+			manager,
+			archiveUrlIdentity
+		);
+		if (activation.ready > 0) await notifyHistoryArchiveReadyWork(manager);
+		return compactPlan.planned + activation.activated;
 	}
 
 	private async tryTakeExecutionReconciliationLock(

@@ -373,37 +373,6 @@ export const historyArchiveObjectVerifiedBatchSql = `
                         eligible."claimAttempt",
                         eligible."executionId",
                         eligible.scheduler
-        ), verified_events as (
-                insert into "history_archive_object_event" (
-                        "objectRemoteId",
-                        "archiveUrl", "archiveUrlIdentity",
-                        "objectType", "objectKey", "objectUrl",
-                        "eventType", "workerStage",
-                        "checkpointLedger", "bucketHash", "bytesDownloaded",
-                        "claimAttempt", "verificationFacts"
-                )
-                select object."remoteId",
-                        object."archiveUrl", object."archiveUrlIdentity",
-                        object."objectType", object."objectKey", object."objectUrl",
-                        'verified', object."workerStage",
-                        object."checkpointLedger", object."bucketHash",
-                        object."bytesDownloaded", updated."claimAttempt",
-                        object."verificationFacts"
-                from updated
-                join "history_archive_object_queue" object
-                        on object."remoteId" = updated."remoteId"
-                where object."objectType" in (
-                        'ledger', 'transactions', 'results', 'scp', 'bucket'
-                )
-                        and not exists (
-                                select 1
-                                from "history_archive_object_event" event
-                                where event."objectRemoteId" = object."remoteId"
-                                        and event."eventType" = 'verified'
-                                        and event."claimAttempt" =
-                                                updated."claimAttempt"
-                        )
-                returning "objectRemoteId"
         ), claim_slots_cleared as (
                 update "history_archive_object_claim_slot" slot
                 set "objectRemoteId" = null,

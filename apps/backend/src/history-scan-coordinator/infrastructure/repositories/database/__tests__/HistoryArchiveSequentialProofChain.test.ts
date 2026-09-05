@@ -3,7 +3,6 @@ import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../
 import {
 	calculateHistoryArchiveCheckpointFanoutBatchSize,
 	calculateHistoryArchiveSequentialPrefetchDepth,
-	historyArchiveConsumerCount,
 	resolveHistoryArchiveSequentialPrefetchDepth
 } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
@@ -16,14 +15,13 @@ import {
 	proofRefreshBatchHandledEveryValidTarget,
 	enqueueProofRefreshesSql,
 	normalizeConsecutiveProofRefreshTransactionSize,
-	normalizeProofRefreshRootConcurrency,
-	partitionProofRefreshTargetsByRoot,
 	normalizeTargetedProofRefreshBatchSize
 } from '../HistoryArchiveCheckpointProofRefreshQueue.js';
 import {
 	historyArchiveCheckpointProofEvidenceTerminalSql,
 	historyArchiveCheckpointProofTerminalReadySql
 } from '../HistoryArchiveCheckpointProofReadinessSql.js';
+import { frontierTransitionsSql } from '../HistoryArchiveObjectTransitionQuery.js';
 import {
 	getHistoryArchiveCanonicalFirstRoot,
 	historyArchiveCanonicalFirstAdmissionSql,
@@ -237,6 +235,10 @@ describe('sequential history archive proof chain', () => {
 		expect(claimLockedContiguousProofRefreshSql).toContain(
 			historyArchiveCheckpointProofEvidenceTerminalSql('candidate')
 		);
+		expect(frontierTransitionsSql).toContain(
+			'chain_cursor."nextHistoricalCheckpointLedger" - 64'
+		);
+		expect(frontierTransitionsSql).toContain("when 'checkpoint-state' then 0");
 		expect(targetedCompactCheckpointPlanSql).toContain('row_number() over');
 		expect(targetedCompactCheckpointPlanSql).toContain(
 			'completed."firstCheckpointLedger" + 64'
@@ -274,49 +276,6 @@ describe('sequential history archive proof chain', () => {
 		);
 		expect(historyArchiveCheckpointProofBatchQueuedUpsertSql).not.toContain(
 			'from locked_targets target'
-		);
-	});
-
-	it('keeps each root ordered while allowing independent root transactions', () => {
-		const target = (archiveUrlIdentity: string, checkpointLedger: number) => ({
-			archiveUrlIdentity,
-			checkpointLedger,
-			evidenceUpdatedAt: '2026-09-03T00:00:00.000Z',
-			generation: 1,
-			leaseToken: '10000000-0000-0000-0000-000000000001'
-		});
-		const groups = partitionProofRefreshTargetsByRoot([
-			target('https://one.example', 127),
-			target('https://two.example', 63),
-			target('https://one.example', 63)
-		]);
-
-		expect(groups).toEqual([
-			[
-				expect.objectContaining({
-					archiveUrlIdentity: 'https://one.example',
-					checkpointLedger: 63
-				}),
-				expect.objectContaining({
-					archiveUrlIdentity: 'https://one.example',
-					checkpointLedger: 127
-				})
-			],
-			[
-				expect.objectContaining({
-					archiveUrlIdentity: 'https://two.example',
-					checkpointLedger: 63
-				})
-			]
-		]);
-		expect(normalizeProofRefreshRootConcurrency(Number.NaN)).toBe(8);
-		expect(normalizeProofRefreshRootConcurrency(0)).toBe(8);
-		expect(normalizeProofRefreshRootConcurrency(12)).toBe(12);
-		expect(normalizeProofRefreshRootConcurrency(100)).toBe(
-			Math.min(100, historyArchiveConsumerCount)
-		);
-		expect(normalizeProofRefreshRootConcurrency(500)).toBe(
-			historyArchiveConsumerCount
 		);
 	});
 

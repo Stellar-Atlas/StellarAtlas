@@ -80,13 +80,22 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		this.nextTargetedProofRefreshRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 
-		await this.objectRepository.recoverCheckpointProofRefreshes?.(
-			this.targetedProofRefreshBatchSize
-		);
-		const result = await this.objectRepository.drainCheckpointProofRefreshQueue(
+		let result = await this.objectRepository.drainCheckpointProofRefreshQueue(
 			this.targetedProofRefreshBatchSize,
 			this.maintenanceLanes.targetedProofRefreshMaximumPriority
 		);
+		if (result.claimed === 0) {
+			const recovered =
+				(await this.objectRepository.recoverCheckpointProofRefreshes?.(
+					this.targetedProofRefreshBatchSize
+				)) ?? 0;
+			if (recovered > 0) {
+				result = await this.objectRepository.drainCheckpointProofRefreshQueue(
+					this.targetedProofRefreshBatchSize,
+					this.maintenanceLanes.targetedProofRefreshMaximumPriority
+				);
+			}
+		}
 		if (result.failed > 0) {
 			this.logger.error('Failed targeted checkpoint proof refresh', {
 				app: 'history-scan-coordinator',

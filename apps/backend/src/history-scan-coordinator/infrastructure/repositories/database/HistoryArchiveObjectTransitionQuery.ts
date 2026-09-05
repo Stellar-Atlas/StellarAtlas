@@ -7,6 +7,7 @@ import {
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { normalizeLimit } from './HistoryArchiveObjectRowMapper.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveSequentialPrefetchLedgerSpan } from './HistoryArchiveSequentialChainSql.js';
 
 interface TransitionTargetRow {
 	readonly remoteId: string;
@@ -18,9 +19,14 @@ export async function findPrioritizedHistoryArchiveObjectTransitions(
 	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority()
 ): Promise<readonly HistoryArchiveObject[]> {
 	const safeLimit = normalizeLimit(limit);
-	const runtimeRows = (await repository.manager.query(runtimeTransitionsSql, [
-		safeLimit
-	])) as readonly TransitionTargetRow[];
+	const runtimeRows =
+		maximumPriority === 2
+			? ((await repository.manager.query(frontierTransitionsSql, [
+					safeLimit
+				])) as readonly TransitionTargetRow[])
+			: ((await repository.manager.query(runtimeTransitionsSql, [
+					safeLimit
+				])) as readonly TransitionTargetRow[]);
 	const remaining = safeLimit - runtimeRows.length;
 	const genericRows =
 		remaining <= 0 || maximumPriority === 0
@@ -53,6 +59,33 @@ const terminalTransitionPredicateSql = `
 	and object."transitionEffectsCompletedAt" is null
 `;
 
+// Frontier work must not wait behind historical terminal rows. Those rows remain
+// durable and are drained by the generic remainder after the current bottom-up
+// cohort has been reconciled.
+export const frontierTransitionsSql = `
+	select object."remoteId"
+	from "history_archive_checkpoint_scan_cursor" chain_cursor
+	join "history_archive_object_queue" object
+		on object."archiveUrlIdentity" = chain_cursor."archiveUrlIdentity"
+		and object."checkpointLedger" between
+			chain_cursor."nextHistoricalCheckpointLedger" - 64
+			and chain_cursor."nextHistoricalCheckpointLedger" - 64 +
+				${historyArchiveSequentialPrefetchLedgerSpan}
+	where ${terminalTransitionPredicateSql}
+	order by object."checkpointLedger" -
+		(chain_cursor."nextHistoricalCheckpointLedger" - 64),
+		case object."objectType"
+			when 'checkpoint-state' then 0
+			when 'ledger' then 1
+			when 'transactions' then 2
+			when 'results' then 3
+			when 'bucket' then 4
+			else 5
+		end,
+		object."transitionEffectsRequiredAt",
+		object.id
+	limit $1::integer
+`;
 const runtimeTransitionsSql = `
 	with ${canonicalRuntimeTargetCtes}, runtime_roots as materialized (
 		select state."archiveUrlIdentity", target.checkpoint_ledger,

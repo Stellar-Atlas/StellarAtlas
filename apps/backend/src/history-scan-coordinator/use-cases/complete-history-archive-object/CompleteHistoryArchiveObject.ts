@@ -496,6 +496,9 @@ export class CompleteHistoryArchiveObject {
 			object.verificationFacts
 		);
 		if (descendants.length === 0) return false;
+		await this.objectRepository.materializeCheckpointDependencies(
+			object.remoteId
+		);
 		await this.objectRepository.activateObjects(descendants);
 		await this.objectRepository.markCheckpointDescendantsPlanned(
 			object.remoteId
@@ -573,15 +576,6 @@ export class CompleteHistoryArchiveObject {
 		batch: readonly PendingCheckpointFanout[]
 	): Promise<void> {
 		const remoteIds = batch.map((pending) => pending.object.remoteId);
-		if (remoteIds.length === 1) {
-			await this.objectRepository.materializeCheckpointDependencies(
-				remoteIds[0]
-			);
-		} else {
-			await this.objectRepository.materializeCheckpointDependencyBatch(
-				remoteIds
-			);
-		}
 
 		const built = await Promise.all(
 			batch.map(async (pending) => ({
@@ -593,7 +587,28 @@ export class CompleteHistoryArchiveObject {
 			}))
 		);
 		const planned = built.filter((entry) => entry.descendants.length > 0);
-		if (planned.length === 0) return;
+		if (planned.length === 0) {
+			if (remoteIds.length === 1) {
+				await this.objectRepository.materializeCheckpointDependencies(
+					remoteIds[0]
+				);
+			} else {
+				await this.objectRepository.materializeCheckpointDependencyBatch(
+					remoteIds
+				);
+			}
+			return;
+		}
+
+		if (remoteIds.length === 1) {
+			await this.objectRepository.materializeCheckpointDependencies(
+				remoteIds[0]
+			);
+		} else {
+			await this.objectRepository.materializeCheckpointDependencyBatch(
+				remoteIds
+			);
+		}
 
 		const descendants = planned.flatMap((entry) => entry.descendants);
 		const activateImmediately = planned.some(

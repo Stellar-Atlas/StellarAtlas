@@ -74,38 +74,23 @@ export const knownArchiveObjectEventTotalSql = `
 `;
 
 export const knownArchiveObjectEventPageKeysSql = `
-	with requested_roots as materialized (
-		select distinct identity as "archiveUrlIdentity"
-		from unnest($1::text[]) requested(identity)
-		where $2::text is null or identity = $2::text
-	), page_keys as materialized (
-		select candidate."createdAt", candidate."remoteId"
-		from requested_roots requested_root
-		cross join lateral (
-			select event."createdAt", event."remoteId"
-			from history_archive_object_event event
-			where event."archiveUrlIdentity" =
-					requested_root."archiveUrlIdentity"
-				and ($3::text is null or event."evidenceClass" = $3::text)
-				and ($4::text is null or event."eventType" = $4::text)
-				and ($5::text is null or event."objectType" = $5::text)
-				and event."createdAt" <= $6::timestamptz
-				and (
-					$7::timestamptz is null
-					or (
-						event."createdAt",
-						event."remoteId"
-					) < ($7::timestamptz, $8::uuid)
-				)
-			order by event."createdAt" desc, event."remoteId" desc
-			limit $9
-		) candidate
-		order by candidate."createdAt" desc, candidate."remoteId" desc
-		limit $9
-	)
-	select "remoteId"
-	from page_keys
-	order by "createdAt" desc, "remoteId" desc
+        select event."remoteId"
+        from history_archive_object_event event
+        where event."archiveUrlIdentity" = any($1::text[])
+                and ($2::text is null or event."archiveUrlIdentity" = $2::text)
+                and ($3::text is null or event."evidenceClass" = $3::text)
+                and ($4::text is null or event."eventType" = $4::text)
+                and ($5::text is null or event."objectType" = $5::text)
+                and event."createdAt" <= $6::timestamptz
+                and (
+                        $7::timestamptz is null
+                        or (
+                                event."createdAt",
+                                event."remoteId"
+                        ) < ($7::timestamptz, $8::uuid)
+                )
+        order by event."createdAt" desc, event."remoteId" desc
+        limit $9
 `;
 
 async function findEventTotal(

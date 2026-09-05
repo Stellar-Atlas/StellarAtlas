@@ -57,8 +57,7 @@ import { findVerifiedCheckpointsNeedingReconciliation } from './HistoryArchiveCh
 import {
 	findVerifiedCheckpointsNeedingFanout,
 	markCheckpointDescendantsPlanned,
-	markCheckpointDescendantsPlannedBatch,
-	materializeCompactCheckpointPlans
+	markCheckpointDescendantsPlannedBatch
 } from './HistoryArchiveCompactPlanning.js';
 import { getHistoryArchiveRepairPlanSummary } from './HistoryArchiveRepairPlanQuery.js';
 import { findVerifiedCheckpointObjectSources } from './HistoryArchiveVerifiedCheckpointSourceQuery.js';
@@ -97,7 +96,6 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 
 	async recoverCheckpointProofRefreshes(limit: number): Promise<number> {
 		return await this.repository.manager.transaction(async (manager) => {
-			await materializeCompactCheckpointPlans(manager);
 			return await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
 				manager,
 				limit

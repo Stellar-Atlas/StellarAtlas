@@ -21,88 +21,150 @@ export function startHistoryArchiveMaintenanceLoop(
 ): () => void {
 	let stopped = false;
 	const intervals = resolveMaintenanceIntervals(configuredIntervals);
-	let forceRequested = false;
-	let proofRefreshRequested = false;
-	let rerunRequested = false;
-	let running = false;
 
-	const runWork = async (
+	const logFailure = (
 		maintenanceWork: 'execution disposition' | 'proof refresh' | 'transitions',
-		work: () => Promise<void>
-	): Promise<void> => {
+		error: unknown
+	): void => {
+		logger.error('Failed to maintain archive object queue', {
+			app: 'history-scan-coordinator',
+			errorMessage: error instanceof Error ? error.message : String(error),
+			maintenanceWork
+		});
+	};
+
+	let proofRefreshForceRequested = false;
+	let proofRefreshRerunRequested = false;
+	let proofRefreshRunning = false;
+	let transitionForceRequested = false;
+	let transitionRerunRequested = false;
+	let transitionRunning = false;
+	let executionForceRequested = false;
+	let executionRerunRequested = false;
+	let executionRunning = false;
+
+	const runProofRefresh = async (): Promise<void> => {
+		if (proofRefreshRunning) {
+			proofRefreshRerunRequested = true;
+			return;
+		}
+		proofRefreshRunning = true;
 		try {
-			await work();
-		} catch (error: unknown) {
-			logger.error('Failed to maintain archive object queue', {
-				app: 'history-scan-coordinator',
-				errorMessage: error instanceof Error ? error.message : String(error),
-				maintenanceWork
-			});
+			do {
+				proofRefreshRerunRequested = false;
+				const force = proofRefreshForceRequested;
+				proofRefreshForceRequested = false;
+				try {
+					const completedProofs =
+						(await reconciler.executeTargetedProofRefreshIfDue(
+							Date.now(),
+							force
+						)) ?? 0;
+					if (completedProofs > 0 && !stopped) {
+						proofRefreshForceRequested = true;
+						proofRefreshRerunRequested = true;
+						requestTransitions(true);
+						requestExecutionDisposition(true);
+					}
+				} catch (error: unknown) {
+					logFailure('proof refresh', error);
+				}
+			} while (proofRefreshRerunRequested && !stopped);
+		} finally {
+			proofRefreshRunning = false;
+			if (proofRefreshRerunRequested && !stopped) void runProofRefresh();
 		}
 	};
 
-	const runMaintenance = async (): Promise<void> => {
-		if (running) {
-			rerunRequested = true;
+	const requestProofRefresh = (force = false): void => {
+		proofRefreshForceRequested ||= force;
+		proofRefreshRerunRequested = true;
+		void runProofRefresh();
+	};
+
+	const runTransitions = async (): Promise<void> => {
+		if (transitionRunning) {
+			transitionRerunRequested = true;
 			return;
 		}
-		running = true;
+		transitionRunning = true;
 		try {
 			do {
-				rerunRequested = false;
-				const force = forceRequested;
-				const forceProofRefresh = force || proofRefreshRequested;
-				forceRequested = false;
-				proofRefreshRequested = false;
-				const now = Date.now();
-				let completedProofs = 0;
+				transitionRerunRequested = false;
+				const force = transitionForceRequested;
+				transitionForceRequested = false;
 				try {
-					completedProofs =
-						(await reconciler.executeTargetedProofRefreshIfDue(
-							now,
-							forceProofRefresh
-						)) ?? 0;
+					await reconciler.executeTransitionReconciliationIfDue(
+						Date.now(),
+						{},
+						force
+					);
 				} catch (error: unknown) {
-					await runWork('proof refresh', async () => {
-						throw error;
-					});
+					logFailure('transitions', error);
 				}
-				await runWork('transitions', () =>
-					reconciler.executeTransitionReconciliationIfDue(now, {}, force)
-				);
-				let cursorAdvances = 0;
-				await runWork('execution disposition', async () => {
-					cursorAdvances =
+			} while (transitionRerunRequested && !stopped);
+		} finally {
+			transitionRunning = false;
+			if (transitionRerunRequested && !stopped) void runTransitions();
+		}
+	};
+
+	const requestTransitions = (force = false): void => {
+		transitionForceRequested ||= force;
+		transitionRerunRequested = true;
+		void runTransitions();
+	};
+
+	const runExecutionDisposition = async (): Promise<void> => {
+		if (executionRunning) {
+			executionRerunRequested = true;
+			return;
+		}
+		executionRunning = true;
+		try {
+			do {
+				executionRerunRequested = false;
+				const force = executionForceRequested;
+				executionForceRequested = false;
+				try {
+					const cursorAdvances =
 						(await reconciler.executeExecutionDispositionReconciliationIfDue(
 							Date.now(),
 							force
 						)) ?? 0;
-				});
-				if (completedProofs > 0 || cursorAdvances > 0) {
-					forceRequested = true;
-					proofRefreshRequested = true;
-					rerunRequested = true;
+					if (cursorAdvances > 0 && !stopped) {
+						executionForceRequested = true;
+						executionRerunRequested = true;
+						requestProofRefresh(true);
+						requestTransitions(true);
+					}
+				} catch (error: unknown) {
+					logFailure('execution disposition', error);
 				}
-			} while (rerunRequested && !stopped);
+			} while (executionRerunRequested && !stopped);
 		} finally {
-			running = false;
-			if (rerunRequested && !stopped) void runMaintenance();
+			executionRunning = false;
+			if (executionRerunRequested && !stopped) {
+				void runExecutionDisposition();
+			}
 		}
 	};
 
-	const requestMaintenance = (
-		force = false,
-		forceProofRefresh = false
-	): void => {
-		forceRequested ||= force;
-		proofRefreshRequested ||= forceProofRefresh;
-		rerunRequested = true;
-		void runMaintenance();
+	const requestExecutionDisposition = (force = false): void => {
+		executionForceRequested ||= force;
+		executionRerunRequested = true;
+		void runExecutionDisposition();
+	};
+
+	const requestMaintenance = (force = false): void => {
+		requestProofRefresh(force);
+		requestTransitions(force);
+		requestExecutionDisposition(force);
 	};
 
 	const onProofRefreshWake = (message: unknown): void => {
 		if (!isHistoryArchiveProofRefreshWakeMessage(message)) return;
-		requestMaintenance(true, true);
+		requestMaintenance(true);
 	};
 	process.on('message', onProofRefreshWake);
 

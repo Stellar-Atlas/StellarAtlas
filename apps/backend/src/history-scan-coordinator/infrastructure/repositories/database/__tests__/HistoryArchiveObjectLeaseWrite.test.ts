@@ -42,6 +42,11 @@ describe('HistoryArchiveObjectLeaseWrite', () => {
 		);
 	});
 
+	it('keeps successful telemetry out of the completion transaction', () => {
+		expect(historyArchiveObjectVerifiedBatchSql).not.toContain(
+			'insert into "history_archive_object_event"'
+		);
+	});
 	it('uses returned rows instead of the structured update tuple as heartbeat evidence', async () => {
 		const query = jest
 			.fn()

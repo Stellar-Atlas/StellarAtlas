@@ -13,10 +13,11 @@ const latestActivitySql = `
 		)
 		union all
 		(
-			select object_event."createdAt" as "activityAt"
-			from "history_archive_object_event" object_event
-			where object_event."eventType" = 'verified'
-			order by object_event."createdAt" desc
+			select archive_object."verifiedAt" as "activityAt"
+			from "history_archive_object_queue" archive_object
+			where archive_object.status = 'verified'
+				and archive_object."verifiedAt" is not null
+			order by archive_object."verifiedAt" desc
 			limit 1
 		)
 		union all

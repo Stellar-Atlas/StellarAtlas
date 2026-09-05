@@ -133,6 +133,46 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		);
 	});
 
+	it('advances the durable compact cursor before activating frontier dependencies', async () => {
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce([{ locked: true }])
+			.mockResolvedValueOnce([{ advanced: 1, planned: 1, ready: 1 }])
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([{ activated: 2, ready: 1 }])
+			.mockResolvedValueOnce(undefined);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest.fn(
+			async (work: (manager: EntityManager) => Promise<number>) =>
+				await work(manager)
+		);
+		const repository = new HistoryArchiveBrokerFrontierRepository({
+			transaction
+		} as unknown as DataSource);
+
+		await expect(
+			repository.ensurePrefetch(
+				'http://history.stellar.org/prd/core-live/core_live_001'
+			)
+		).resolves.toBe(3);
+		const statements = query.mock.calls.map(([sql]) => String(sql));
+		expect(
+			statements.some(
+				(sql) =>
+					sql.includes('cursor_candidates as materialized') &&
+					sql.includes('update "history_archive_checkpoint_scan_cursor" cursor')
+			)
+		).toBe(true);
+		expect(
+			statements.some((sql) =>
+				sql.includes('current_checkpoints as materialized')
+			)
+		).toBe(true);
+		expect(statements.some((sql) => sql.includes("'ordered-prefetch'"))).toBe(
+			false
+		);
+	});
+
 	it('re-admits existing pending checkpoints inside the bounded prefetch window', async () => {
 		const query = jest
 			.fn()

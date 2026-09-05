@@ -39,12 +39,17 @@ export class HistoryArchiveObjectEventRecorder {
 		object: HistoryArchiveObject,
 		options: HistoryArchiveObjectEventOptions
 	): Promise<void> {
+		if (options.eventType === 'verified') return;
 		await this.eventRepository.appendFromObjectIdempotently(object, options);
 	}
 
 	async recordDurablyBatch(
 		events: readonly HistoryArchiveObjectEventAppend[]
 	): Promise<void> {
-		await this.eventRepository.appendFromObjectsIdempotently(events);
+		const durableEvents = events.filter(
+			(event) => event.options.eventType !== 'verified'
+		);
+		if (durableEvents.length === 0) return;
+		await this.eventRepository.appendFromObjectsIdempotently(durableEvents);
 	}
 }

@@ -474,6 +474,12 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(
 			objectRepository.markCheckpointDescendantsPlannedBatch
 		).toHaveBeenCalledWith([first.remoteId, second.remoteId]);
+		expect(
+			objectRepository.materializeCheckpointDependencyBatch.mock
+				.invocationCallOrder[0]
+		).toBeLessThan(
+			objectRepository.activateObjects.mock.invocationCallOrder[0]!
+		);
 	});
 	it('bounds each fanout write while draining every pending checkpoint', async () => {
 		const checkpoints = Array.from(

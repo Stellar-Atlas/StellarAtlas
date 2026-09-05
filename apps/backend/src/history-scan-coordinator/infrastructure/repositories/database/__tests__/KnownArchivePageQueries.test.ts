@@ -454,7 +454,12 @@ describe('known archive page queries', () => {
 				6
 			]
 		);
-		expect(knownArchiveObjectEventPageKeysSql).toContain('cross join lateral');
+		expect(knownArchiveObjectEventPageKeysSql).toContain(
+			'event."archiveUrlIdentity" = any($1::text[])'
+		);
+		expect(knownArchiveObjectEventPageKeysSql).not.toContain(
+			'cross join lateral'
+		);
 		expect(repository.findBy).toHaveBeenCalledTimes(1);
 	});
 });

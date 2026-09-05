@@ -42,7 +42,7 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 			const completed =
 				await reconciler.executeTargetedProofRefreshIfDue(10_000);
 
-			expect(recoverCheckpointProofRefreshes).toHaveBeenCalledWith(4);
+			expect(recoverCheckpointProofRefreshes).not.toHaveBeenCalled();
 
 			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledWith(
 				4,

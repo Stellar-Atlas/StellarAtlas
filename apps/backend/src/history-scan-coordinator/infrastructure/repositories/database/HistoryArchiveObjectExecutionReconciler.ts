@@ -42,6 +42,10 @@ export async function reconcileHistoryArchiveObjectExecution(
 	repository: Repository<HistoryArchiveObject>,
 	options: { readonly admitGenericObjects?: boolean } = {}
 ): Promise<HistoryArchiveObjectExecutionReconciliationResult> {
+	await synchronizeHistoryArchiveReadyQueue(
+		repository.manager,
+		historyArchiveMaximumWatermark
+	);
 	return await repository.manager.transaction(async (manager) => {
 		const maximumPriority = getHistoryArchiveBrokerMaximumPriority();
 		await manager.query(`set local lock_timeout = '5s'`);
@@ -56,10 +60,6 @@ export async function reconcileHistoryArchiveObjectExecution(
 		const canonicalFirstRoot = getHistoryArchiveCanonicalFirstRoot();
 		await activateCurrentCheckpointDependencies(manager, canonicalFirstRoot);
 		const canonicalAdmittedObjects = 0;
-		const readyState = await synchronizeHistoryArchiveReadyQueue(
-			manager,
-			historyArchiveMaximumWatermark
-		);
 		const [counts] = (await manager.query(
 			buildHistoryArchiveReadyPressureSql(maximumPriority, '$3::text'),
 			[
@@ -74,6 +74,10 @@ export async function reconcileHistoryArchiveObjectExecution(
 		});
 
 		if (pressure.availableSlots === 0) {
+			const readyState = await synchronizeHistoryArchiveReadyQueue(
+				manager,
+				historyArchiveMaximumWatermark
+			);
 			await recordAdmissions(manager, canonicalAdmittedObjects);
 			return {
 				...pressure,
@@ -115,7 +119,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 			canonicalAdmittedObjects +
 			proofAdmittedObjects +
 			Number(admission?.admittedObjects ?? 0);
-		await synchronizeHistoryArchiveReadyQueue(
+		const readyState = await synchronizeHistoryArchiveReadyQueue(
 			manager,
 			historyArchiveMaximumWatermark
 		);

@@ -343,9 +343,10 @@ export function buildHistoryArchiveReadyPressureSql(
 		canonicalFirstRootSql
 	)}, recent_events as (
 		select 1
-		from "history_archive_object_event"
-		where "eventType" = 'verified'
-			and "createdAt" >= now() - make_interval(mins => $2::integer)
+		from "history_archive_object_queue"
+		where status = 'verified'
+			and "verifiedAt" >=
+				now() - make_interval(mins => $2::integer)
 		limit $1::integer
 	)
 	select
