@@ -45,8 +45,25 @@ export function calculateHistoryArchiveCheckpointFanoutBatchSize(
 	return Math.max(16, Math.min(64, Math.ceil(consumerCount / 4)));
 }
 
+export function resolveHistoryArchiveCheckpointFanoutBatchSize(
+	configuredBatchSize: string | undefined,
+	consumerCount: number
+): number {
+	const fallback =
+		calculateHistoryArchiveCheckpointFanoutBatchSize(consumerCount);
+	if (configuredBatchSize === undefined) return fallback;
+	const parsedBatchSize = Number(configuredBatchSize);
+	if (!Number.isSafeInteger(parsedBatchSize) || parsedBatchSize < 1) {
+		return fallback;
+	}
+	return Math.min(parsedBatchSize, Math.max(1, consumerCount));
+}
+
 export const historyArchiveCheckpointFanoutBatchSize =
-	calculateHistoryArchiveCheckpointFanoutBatchSize(historyArchiveConsumerCount);
+	resolveHistoryArchiveCheckpointFanoutBatchSize(
+		process.env.HISTORY_ARCHIVE_CHECKPOINT_FANOUT_BATCH_SIZE,
+		historyArchiveConsumerCount
+	);
 export const historyArchiveCanonicalReserveCount =
 	historyArchiveWorkerCapacity.canonicalReserveCount;
 export const historyArchivePerHostConcurrency = historyArchiveConsumerCount;

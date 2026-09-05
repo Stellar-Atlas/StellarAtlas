@@ -3,6 +3,7 @@ import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../
 import {
 	calculateHistoryArchiveCheckpointFanoutBatchSize,
 	calculateHistoryArchiveSequentialPrefetchDepth,
+	resolveHistoryArchiveCheckpointFanoutBatchSize,
 	resolveHistoryArchiveSequentialPrefetchDepth
 } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
@@ -202,6 +203,17 @@ describe('sequential history archive proof chain', () => {
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(240)).toBe(240);
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(1_000)).toBe(1_000);
 		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(0)).toBe(16);
+		expect(resolveHistoryArchiveCheckpointFanoutBatchSize(undefined, 120)).toBe(
+			30
+		);
+		expect(resolveHistoryArchiveCheckpointFanoutBatchSize('8', 120)).toBe(8);
+		expect(resolveHistoryArchiveCheckpointFanoutBatchSize('0', 120)).toBe(30);
+		expect(resolveHistoryArchiveCheckpointFanoutBatchSize('invalid', 120)).toBe(
+			30
+		);
+		expect(resolveHistoryArchiveCheckpointFanoutBatchSize('500', 120)).toBe(
+			120
+		);
 		expect(resolveHistoryArchiveSequentialPrefetchDepth(undefined, 120)).toBe(
 			120
 		);
