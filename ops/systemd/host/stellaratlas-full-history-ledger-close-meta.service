@@ -39,7 +39,7 @@ Environment=FULL_HISTORY_LEDGER_CLOSE_META_ERROR_BACKOFF_MS=30000
 Environment=FULL_HISTORY_LEDGER_CLOSE_META_IDLE_POLL_MS=30000
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
 ExecStartPre=/usr/bin/test -x /mnt/bulk/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
-ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://192.168.1.221:3000/v1/status 90
+ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://192.168.122.2:3000/v1/status 90
 ExecStart=/usr/bin/env pnpm start:full-history-ledger-close-meta
 Restart=always
 RestartSec=15

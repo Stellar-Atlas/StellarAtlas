@@ -17,7 +17,7 @@ Environment="FULL_HISTORY_NETWORK_PASSPHRASE=Public Global Stellar Network ; Sep
 Environment=FULL_HISTORY_PROMOTION_BATCHES_PER_CYCLE=4
 Environment=FULL_HISTORY_PROMOTION_POLL_INTERVAL_MS=15000
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
-ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://192.168.1.221:3000/v1/status 90
+ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://192.168.122.2:3000/v1/status 90
 ExecStart=/usr/bin/env pnpm start:full-history-promotion
 Restart=always
 RestartSec=15
