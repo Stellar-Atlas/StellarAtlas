@@ -23,19 +23,19 @@ describe('LedgerCloseMeta systemd service', () => {
 			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=256'
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=24'
+			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=12'
 		);
 		expect(service).toContain(
 			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_ENABLED=true'
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS=24576'
+			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS=12288'
 		);
 		expect(service).toContain(
 			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BYTES_PER_SECOND=187500000'
 		);
 		expect(service).toContain('Restart=always');
-		expect(service).toContain('CPUQuota=3200%');
+		expect(service).toContain('CPUQuota=2400%');
 		expect(service).toContain('MemoryMax=128G');
 		expect(service).toContain('WantedBy=stellaratlas.target');
 		expect(hostService).toContain(

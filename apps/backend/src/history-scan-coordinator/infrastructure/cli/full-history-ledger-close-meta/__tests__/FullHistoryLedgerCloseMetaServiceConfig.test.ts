@@ -37,14 +37,14 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 	it('accepts multiple admitted shards with bounded parallel processing', () => {
 		const config = parseFullHistoryLedgerCloseMetaServiceConfig({
 			...environment(),
-			FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '24576',
+			FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '12288',
 			FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY: '256',
-			FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY: '24'
+			FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY: '12'
 		});
 
-		expect(config.cycleLedgerCount).toBe(24_576);
+		expect(config.cycleLedgerCount).toBe(12_288);
 		expect(config.fetchConcurrency).toBe(256);
-		expect(config.processingConcurrency).toBe(24);
+		expect(config.processingConcurrency).toBe(12);
 	});
 
 	it('accepts an inclusive bounded range made of complete typed shards', () => {

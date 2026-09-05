@@ -39,7 +39,7 @@ export interface FullHistoryLedgerCloseMetaComposition {
 export const FULL_HISTORY_LEDGER_CLOSE_META_MAXIMUM_OUTPUT_BYTES_PER_SHARD =
 	8 * 1_024 ** 3;
 export const FULL_HISTORY_LEDGER_CLOSE_META_SERVICE_MEMORY_LIMIT_BYTES =
-	96 * 1_024 ** 3;
+	128 * 1_024 ** 3;
 const fullHistoryLedgerCloseMetaMaximumUncompressedBytes = 4 * 1_024 ** 3;
 const fullHistoryLedgerCloseMetaMaximumDecodedMemoryBytes = 1 * 1_024 ** 3;
 const fullHistoryLedgerCloseMetaPerWorkerOverheadBytes = 2 * 1_024 ** 3;

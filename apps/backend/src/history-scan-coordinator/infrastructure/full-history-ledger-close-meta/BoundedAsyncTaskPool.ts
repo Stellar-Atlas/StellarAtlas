@@ -12,7 +12,7 @@ export class BoundedAsyncTaskPool {
 	readonly #waiting: WaitingPermit[] = [];
 
 	constructor(maximumConcurrency: number, maximumQueueDepth: number) {
-		assertBound(maximumConcurrency, 'maximumConcurrency', 64);
+		assertBound(maximumConcurrency, 'maximumConcurrency', 1_024);
 		assertBound(maximumQueueDepth, 'maximumQueueDepth', 4_096);
 		this.#maximumConcurrency = maximumConcurrency;
 		this.#maximumQueueDepth = maximumQueueDepth;
