@@ -114,7 +114,7 @@ func (c *Client) Insert(ctx context.Context, table, token string, rows []byte) e
 		return fmt.Errorf("invalid insertion token")
 	}
 	query := "INSERT INTO " + quoted(c.database) + "." + quoted(table) +
-		" SETTINGS insert_deduplication_token={token:String}," +
+		" SETTINGS async_insert=0, insert_deduplication_token={token:String}," +
 		" date_time_input_format='best_effort' FORMAT JSONEachRow"
 	params := url.Values{"param_token": []string{token}}
 	if _, err := c.execute(ctx, query, params, rows); err != nil {
@@ -160,7 +160,7 @@ func (c *Client) RecordBatch(ctx context.Context, status BatchStatus) error {
 	}
 	payload = append(payload, '\n')
 	query := "INSERT INTO " + quoted(c.database) +
-		"._ingestion_batches FORMAT JSONEachRow"
+		"._ingestion_batches SETTINGS async_insert=0 FORMAT JSONEachRow"
 	if _, err := c.execute(ctx, query, nil, payload); err != nil {
 		return fmt.Errorf("record batch status: %w", err)
 	}

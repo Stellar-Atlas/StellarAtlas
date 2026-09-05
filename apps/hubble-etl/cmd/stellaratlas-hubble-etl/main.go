@@ -124,8 +124,8 @@ func runBackfill(ctx context.Context, cfg config) error {
 				MaxLedgers:            1024,
 			},
 			WriterLimits: clickhouse.WriterLimits{
-				MaximumRows:  25_000,
-				MaximumBytes: 32 << 20,
+				MaximumRows:  250_000,
+				MaximumBytes: 256 << 20,
 			},
 		})
 		if err != nil {
