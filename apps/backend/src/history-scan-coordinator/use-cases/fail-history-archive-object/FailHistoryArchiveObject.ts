@@ -47,6 +47,9 @@ export class FailHistoryArchiveObject {
 				retryAfterSeconds: failure.retryAfterSeconds
 			});
 
+			const nextAttemptAt = retryPolicy.automaticRetry
+				? retryPolicy.nextAttemptAt
+				: null;
 			const hostFailure =
 				failure.failureChannel === 'archive_availability' &&
 				shouldThrottleHistoryArchiveObjectHost({
@@ -69,7 +72,7 @@ export class FailHistoryArchiveObject {
 				remoteId,
 				{
 					...failure,
-					nextAttemptAt: retryPolicy.nextAttemptAt
+					nextAttemptAt
 				},
 				hostFailure
 			);

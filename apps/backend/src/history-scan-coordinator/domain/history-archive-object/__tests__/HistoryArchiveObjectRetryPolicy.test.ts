@@ -3,6 +3,7 @@ import {
 	getHistoryArchiveObjectEvidenceClass,
 	getHistoryArchiveObjectRetryDelayMs,
 	getHistoryArchiveObjectRetryPolicy,
+	shouldAutomaticallyRetryHistoryArchiveObject,
 	shouldThrottleHistoryArchiveObjectHost
 } from '../HistoryArchiveObjectRetryPolicy.js';
 import type { HistoryArchiveObjectFailureClass } from '../HistoryArchiveObjectRetryPolicy.js';
@@ -86,6 +87,7 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 		});
 
 		expect(result).toEqual({
+			automaticRetry: true,
 			delayMs: 8_000,
 			evidenceClass: 'archive-object',
 			failureClass: 'timeout',
@@ -127,6 +129,32 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 					objectType: 'bucket'
 				})
 			).toBe(delayMs);
+		}
+	);
+
+	it.each([
+		['archive_evidence', 'not-found', false],
+		['archive_availability', 'auth', false],
+		['archive_availability', 'not-found', false],
+		['archive_availability', 'http', false],
+		['archive_availability', 'timeout', true],
+		['archive_availability', 'transport', true],
+		['archive_availability', 'rate-limit', true],
+		['scanner_issue', 'worker', true],
+		['scanner_issue', 'coordinator', true]
+	] satisfies readonly (readonly [
+		'archive_evidence' | 'archive_availability' | 'scanner_issue',
+		HistoryArchiveObjectFailureClass,
+		boolean
+	])[])(
+		'automatic retry decision for %s/%s is %s',
+		(failureChannel, failureClass, expected) => {
+			expect(
+				shouldAutomaticallyRetryHistoryArchiveObject({
+					failureChannel,
+					failureClass
+				})
+			).toBe(expected);
 		}
 	);
 

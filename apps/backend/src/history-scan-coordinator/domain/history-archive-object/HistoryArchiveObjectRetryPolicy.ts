@@ -26,6 +26,7 @@ export interface HistoryArchiveObjectRetryPolicyInput {
 }
 
 export interface HistoryArchiveObjectRetryPolicyResult {
+	readonly automaticRetry: boolean;
 	readonly delayMs: number;
 	readonly evidenceClass: HistoryArchiveObjectEvidenceClass;
 	readonly failureClass: HistoryArchiveObjectFailureClass;
@@ -94,6 +95,10 @@ export function getHistoryArchiveObjectRetryPolicy(
 	);
 
 	return {
+		automaticRetry: shouldAutomaticallyRetryHistoryArchiveObject({
+			failureChannel: input.failureChannel,
+			failureClass
+		}),
 		delayMs,
 		evidenceClass,
 		failureClass,
@@ -160,6 +165,18 @@ export function getHistoryArchiveObjectEvidenceClass(
 	if (failureClass === 'worker') return 'worker-infrastructure';
 	if (failureClass === 'coordinator') return 'coordinator-infrastructure';
 	return 'worker-infrastructure';
+}
+
+export function shouldAutomaticallyRetryHistoryArchiveObject(input: {
+	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
+	readonly failureClass: HistoryArchiveObjectFailureClass;
+}): boolean {
+	if (input.failureChannel === 'scanner_issue') return true;
+	if (input.failureClass === 'rate-limit') return true;
+	return (
+		input.failureChannel === 'archive_availability' &&
+		(input.failureClass === 'timeout' || input.failureClass === 'transport')
+	);
 }
 
 export function shouldThrottleHistoryArchiveObjectHost(input: {

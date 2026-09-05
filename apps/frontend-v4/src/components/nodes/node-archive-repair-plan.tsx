@@ -1,5 +1,6 @@
 'use client';
 
+import { getArchiveRepairDownloadPath } from '@api/archive-repair-download-path';
 import type { PublicHistoryArchiveRepairPlan } from '@api/archive-repair-types';
 import { StatusPill } from '@components/status/status-ui';
 import {
@@ -244,6 +245,11 @@ function formatReplacementReadiness(
 ): React.JSX.Element {
 	const artifact = action.repairArtifact;
 	const candidate = action.knownGoodSources[0];
+	const downloadPath =
+		artifact?.status === 'available' ||
+		artifact?.status === 'verify-on-download'
+			? getArchiveRepairDownloadPath(artifact.downloadUrl)
+			: null;
 	if (artifact?.status === 'available' && action.severity === 'blocked') {
 		return (
 			<>
@@ -255,10 +261,10 @@ function formatReplacementReadiness(
 			</>
 		);
 	}
-	if (artifact?.status === 'available') {
+	if (artifact?.status === 'available' && downloadPath !== null) {
 		return (
 			<>
-				<a className="primary-button" href={artifact.downloadUrl}>
+				<a className="primary-button" href={downloadPath}>
 					Operator-authenticated download
 				</a>
 				<small>
@@ -268,10 +274,10 @@ function formatReplacementReadiness(
 			</>
 		);
 	}
-	if (artifact?.status === 'verify-on-download') {
+	if (artifact?.status === 'verify-on-download' && downloadPath !== null) {
 		return (
 			<>
-				<a className="primary-button" href={artifact.downloadUrl}>
+				<a className="primary-button" href={downloadPath}>
 					Operator-authenticated verify and download
 				</a>
 				<small>
@@ -283,13 +289,20 @@ function formatReplacementReadiness(
 			</>
 		);
 	}
-	if (artifact?.status === 'unavailable') {
+	if (
+		artifact?.status === 'unavailable' ||
+		((artifact?.status === 'available' ||
+			artifact?.status === 'verify-on-download') &&
+			downloadPath === null)
+	) {
 		return (
 			<>
 				<strong>Replacement blocked</strong>
 				<small>
-					{formatArtifactReason(artifact.reason)};{' '}
-					{formatInteger(action.knownGoodSources.length)} attributed source
+					{artifact.status === 'unavailable'
+						? formatArtifactReason(artifact.reason)
+						: 'Invalid repair artifact download path'}
+					; {formatInteger(action.knownGoodSources.length)} attributed source
 					records
 				</small>
 			</>

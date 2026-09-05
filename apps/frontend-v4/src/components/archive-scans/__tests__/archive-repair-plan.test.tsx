@@ -2,6 +2,7 @@
 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { getArchiveRepairDownloadPath } from '../../../api/archive-repair-download-path';
 import type { PublicHistoryArchiveRepairPlan } from '../../../api/archive-repair-types';
 import type { PublicKnownArchiveEvidence } from '../../../domain/known-archive-evidence';
 import { NodeArchiveRepairPlan } from '../../nodes/node-archive-repair-plan';
@@ -85,7 +86,9 @@ describe('archive repair plan', () => {
 		);
 
 		expect(markup).toContain('Operator-authenticated verify and download');
-		expect(markup).toContain(`href="${downloadUrl}"`);
+		expect(markup).toContain(
+			`href="${getArchiveRepairDownloadPath(downloadUrl)}"`
+		);
 		expect(markup).toContain('returns bytes only after their');
 		expect(markup).toContain('Proof-bound operator workflow');
 		expect(markup).toContain('hashes gunzipped bytes for XDR');
@@ -134,7 +137,7 @@ describe('archive repair plan', () => {
 
 		expect(markup).toContain('Operator-authenticated download');
 		expect(markup).toContain(
-			`href="/v1/archive-scans/repair-artifacts/buckets/${'a'.repeat(64)}"`
+			`href="/api/archive-repair-artifacts/buckets/${'a'.repeat(64)}"`
 		);
 		expect(markup).toContain('transactions/file.xdr.gz');
 		expect(markup).toContain('Keep the existing object as a backup.');

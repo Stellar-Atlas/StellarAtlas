@@ -105,7 +105,7 @@ describe('FailHistoryArchiveObject', () => {
 		).toHaveBeenCalledWith(archiveObject.remoteId, 1, 'failed');
 	});
 
-	it('stores retry timing from the object type and failure evidence', async () => {
+	it('stores permanent archive evidence for manual recheck without automatic retry', async () => {
 		const archiveObject = new HistoryArchiveObject({
 			archiveUrl: 'https://history.example.com',
 			archiveUrlIdentity: 'https://history.example.com',
@@ -148,27 +148,18 @@ describe('FailHistoryArchiveObject', () => {
 				errorType: 'archive_http_error',
 				failureChannel: 'archive_availability',
 				httpStatus: 403,
-				nextAttemptAt: new Date('2026-07-06T14:16:00.000Z')
+				nextAttemptAt: null
 			},
-			{
-				archiveUrlIdentity: archiveObject.archiveUrlIdentity,
-				blockedUntil: new Date('2026-07-06T14:16:00.000Z'),
-				errorType: 'archive_http_error',
-				evidenceClass: 'archive-object',
-				failureClass: 'auth',
-				hostIdentity: 'history.example.com',
-				httpStatus: 403,
-				retryAfterUntil: null
-			}
+			undefined
 		);
 		expect(eventRecorder.recordDurably).toHaveBeenCalledWith(archiveObject, {
 			claimAttempt: 1,
 			eventType: 'failed',
 			evidenceClass: 'archive-object'
 		});
-		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
-			archiveObject
-		);
+		expect(
+			objectRepository.enqueueCheckpointProofRefreshes
+		).toHaveBeenCalledWith([archiveObject.remoteId]);
 	});
 
 	it('does not mutate a missing object row', async () => {
@@ -280,7 +271,7 @@ describe('FailHistoryArchiveObject', () => {
 		expect(stateRepository.saveFailure).not.toHaveBeenCalled();
 	});
 
-	it('leaves durable failure effects pending when checkpoint proof refresh fails', async () => {
+	it('surfaces a batched proof-refresh enqueue failure after recording durable evidence', async () => {
 		const archiveObject = new HistoryArchiveObject({
 			archiveUrl: 'https://history.example.com',
 			archiveUrlIdentity: 'https://history.example.com',
@@ -295,7 +286,7 @@ describe('FailHistoryArchiveObject', () => {
 		});
 		archiveObject.attempts = 1;
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
-		checkpointProofRepository.refreshForObject.mockRejectedValue(
+		objectRepository.enqueueCheckpointProofRefreshes.mockRejectedValue(
 			new Error('proof refresh failed')
 		);
 
@@ -316,7 +307,11 @@ describe('FailHistoryArchiveObject', () => {
 		await expect(useCase.reconcilePersisted(archiveObject)).rejects.toThrow(
 			'proof refresh failed'
 		);
-		expect(eventRecorder.recordDurably).not.toHaveBeenCalled();
+		expect(eventRecorder.recordDurably).toHaveBeenCalledWith(archiveObject, {
+			claimAttempt: 1,
+			eventType: 'failed',
+			evidenceClass: 'archive-object'
+		});
 	});
 
 	it('retries durable proof refresh for an exact failed-attempt replay', async () => {
@@ -355,11 +350,13 @@ describe('FailHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
-		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		expect(
+			objectRepository.enqueueCheckpointProofRefreshes
+		).not.toHaveBeenCalled();
 		await useCase.reconcilePersisted(archiveObject);
-		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
-			archiveObject
-		);
+		expect(
+			objectRepository.enqueueCheckpointProofRefreshes
+		).toHaveBeenCalledWith([archiveObject.remoteId]);
 		expect(eventRecorder.recordDurably).toHaveBeenCalled();
 	});
 
