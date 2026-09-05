@@ -25,3 +25,19 @@ export function archiveInventoryRefreshFailed(
 			: 'Archive data is temporarily unavailable. This does not indicate that any archive passed or failed verification.'
 	};
 }
+
+export function archiveInventoryRefreshSucceeded(
+	previous: ArchiveInventoryState,
+	snapshot: ArchiveInventorySnapshot
+): ArchiveInventoryState {
+	const incomingTime = Date.parse(snapshot.summary.generatedAt);
+	if (!Number.isFinite(incomingTime))
+		return archiveInventoryRefreshFailed(previous);
+	const previousTime = previous.snapshot
+		? Date.parse(previous.snapshot.summary.generatedAt)
+		: Number.NEGATIVE_INFINITY;
+	// Separate page/API cache entries can briefly return out of order.
+	// Compare timestamps, not counters: successful retries can reduce failures.
+	if (incomingTime < previousTime) return previous;
+	return { snapshot, error: null };
+}

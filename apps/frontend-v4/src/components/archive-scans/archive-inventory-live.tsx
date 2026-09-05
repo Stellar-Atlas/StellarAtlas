@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
 	archiveInventoryRefreshFailed,
+	archiveInventoryRefreshSucceeded,
 	type ArchiveInventorySnapshot,
 	type ArchiveInventoryState
 } from '@api/archive-inventory-snapshot';
@@ -43,7 +44,10 @@ export function ArchiveInventoryLive({
 					!Array.isArray(snapshot.organizations)
 				)
 					throw new Error('Archive inventory response is invalid');
-				if (!disposed) setState({ snapshot, error: null });
+				if (!disposed)
+					setState((previous) =>
+						archiveInventoryRefreshSucceeded(previous, snapshot)
+					);
 			} catch {
 				if (!disposed) setState(archiveInventoryRefreshFailed);
 			} finally {
