@@ -412,8 +412,8 @@ async function findRuntimeTargets(
 		 select exists (
 			select 1
 			from runtime_target target
-			where not exists (
-				select 1
+			where coalesce((
+				select true
 				from "history_archive_checkpoint_proof" proof
 				join "history_archive_state_snapshot" proof_state
 					on proof_state."archiveUrlIdentity" =
@@ -432,7 +432,8 @@ async function findRuntimeTargets(
 					and proof."proofFactsComplete" = true
 					and proof."proofVersion" =
 						${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
-			)
+				limit 1
+			), false) = false
 		 ) as "hasUnsatisfiedTarget"`
 	)) as readonly { hasUnsatisfiedTarget: boolean }[];
 	if (!runtimeTargetState?.hasUnsatisfiedTarget) {
@@ -459,8 +460,8 @@ async function findRuntimeTargets(
 					and queued.status = 'verified'
 				limit 1
 			) candidate
-                        where not exists (
-                                select 1
+                        where coalesce((
+                                select true
                                 from "history_archive_checkpoint_proof" proof
                                 join "history_archive_state_snapshot" proof_state
                                         on proof_state."archiveUrlIdentity" =
@@ -479,7 +480,8 @@ async function findRuntimeTargets(
                                         and proof."proofFactsComplete" = true
                                         and proof."proofVersion" =
                                                 ${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
-                        )
+                                limit 1
+                        ), false) = false
                  )
 		 select object."remoteId" as "remoteId"
 		 from runtime_object object
