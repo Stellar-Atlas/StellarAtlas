@@ -410,7 +410,7 @@ function toDate(value: Date | string): Date {
 async function setTransactionBounds(manager: EntityManager): Promise<void> {
 	await manager.query(`
 		set local lock_timeout = '2s';
-		set local statement_timeout = '30s'
+		set local statement_timeout = '5min'
 	`);
 }
 
