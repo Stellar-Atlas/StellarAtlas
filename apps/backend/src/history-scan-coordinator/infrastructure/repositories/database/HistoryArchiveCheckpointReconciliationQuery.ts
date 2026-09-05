@@ -427,7 +427,28 @@ async function findRuntimeTargets(
 					and queued.status = 'verified'
 				limit 1
 			) candidate
-		 )
+                        where not exists (
+                                select 1
+                                from "history_archive_checkpoint_proof" proof
+                                join "history_archive_state_snapshot" proof_state
+                                        on proof_state."archiveUrlIdentity" =
+                                                proof."archiveUrlIdentity"
+                                        and proof_state.status = $$available$$
+                                        and proof_state."networkPassphrase" is not null
+                                        and sha256(convert_to(
+                                                proof_state."networkPassphrase",
+                                                $$UTF8$$
+                                        )) = target."network_passphrase_hash"
+                                where proof."checkpointLedger" =
+                                                target.checkpoint_ledger
+                                        and proof.status = $$verified$$
+                                        and proof."failureKind" is null
+                                        and proof."requiredObjectsComplete" = true
+                                        and proof."proofFactsComplete" = true
+                                        and proof."proofVersion" =
+                                                ${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+                        )
+                 )
 		 select object."remoteId" as "remoteId"
 		 from runtime_object object
 		 where (
