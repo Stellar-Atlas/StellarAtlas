@@ -61,10 +61,11 @@ export function startHistoryArchiveMaintenanceLoop(
 							force
 						)) ?? 0;
 					if (completedProofs > 0 && !stopped) {
+						// Proof refresh atomically materializes the next compact
+						// checkpoint plan. Keep draining without starting the
+						// expensive global recovery lanes after every proof wave.
 						proofRefreshForceRequested = true;
 						proofRefreshRerunRequested = true;
-						requestTransitions(true);
-						requestExecutionDisposition(true);
 					}
 				} catch (error: unknown) {
 					logFailure('proof refresh', error);
