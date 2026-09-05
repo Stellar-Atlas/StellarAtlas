@@ -6,10 +6,12 @@ import {
 } from '../HistoryArchiveObjectReadyQueue.js';
 
 describe('HistoryArchiveObjectReadyQueue', () => {
-	it('admits pending work while leaving failed work for explicit recheck', () => {
+	it('admits pending work and only due automatic retries', () => {
 		const sql = historyArchiveSchedulableObjectSql('candidate');
 		expect(sql).toContain(`candidate.status = 'pending'`);
-		expect(sql).not.toContain(`candidate.status in ('pending', 'failed')`);
+		expect(sql).toContain(`candidate.status = 'failed'`);
+		expect(sql).toContain(`candidate."nextAttemptAt" is not null`);
+		expect(sql).toContain(`candidate."nextAttemptAt" <= now()`);
 	});
 
 	it('skips a maintenance refill while another frontier writer owns the lock', async () => {
