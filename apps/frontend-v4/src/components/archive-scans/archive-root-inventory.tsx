@@ -8,7 +8,8 @@ import type {
 	PublicOrganization
 } from '@api/types';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { LocalDateTime } from '../local-date-time';
 
 interface ArchiveRootInventoryProps {
 	readonly nodes: readonly PublicNode[];
@@ -117,8 +118,8 @@ export function ArchiveRootInventory({
 					<div>
 						<h2>Every captured archive root</h2>
 						<span className="muted-inline">
-							Updated {formatDateTime(summary.generatedAt)}; URL path case is
-							preserved when matching advertisers
+							Updated <LocalDateTime dateTime={summary.generatedAt} />; URL path
+							case is preserved when matching advertisers
 						</span>
 					</div>
 					<div className="table-controls archive-inventory-controls">
@@ -317,7 +318,9 @@ function ArchiveRootRow({
 				>
 					Failures and repair
 				</Link>
-				<small>Observed {formatDateTime(source.observedAt)}</small>
+				<small>
+					Observed <LocalDateTime dateTime={source.observedAt} />
+				</small>
 			</td>
 		</tr>
 	);

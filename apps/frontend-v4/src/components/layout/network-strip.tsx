@@ -5,7 +5,7 @@ import type { PublicNetwork } from '../../api/types';
 import { publishLatestLedger } from '../../api/latest-ledger-events';
 import { subscribeToLiveNetworkStream } from '../../api/live-network-stream';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
-import { formatDateTime } from '../../format/formatters';
+import { LocalDateTime } from '../local-date-time';
 
 export function NetworkStrip(): React.JSX.Element {
 	const [network, setNetwork] = useState<PublicNetwork | null>(null);
@@ -35,7 +35,9 @@ export function NetworkStrip(): React.JSX.Element {
 					if (!highestLedger) return;
 					publishLatestLedger(highestLedger);
 					setLiveLedger((current) => {
-						return getHighestLedgerSequence([current, highestLedger]) ?? current;
+						return (
+							getHighestLedgerSequence([current, highestLedger]) ?? current
+						);
 					});
 				}
 			}),
@@ -57,7 +59,10 @@ export function NetworkStrip(): React.JSX.Element {
 				</div>
 				<span>{network?.name ?? 'Public Stellar Network'}</span>
 				<span>Ledger {displayedLedger ?? 'syncing'}</span>
-				<strong>{network ? formatDateTime(network.time) : 'Loading'}</strong>
+				<strong>
+					Network snapshot:{' '}
+					{network ? <LocalDateTime dateTime={network.time} /> : 'Loading'}
+				</strong>
 			</div>
 		</div>
 	);

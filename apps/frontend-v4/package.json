@@ -7,7 +7,7 @@
 		"dev": "node ../../scripts/refuse-frontend-v4-dev.mjs",
 		"build": "pnpm run build:staging",
 		"build:production": "pnpm run build:staging",
-		"build:staging": "pnpm run release:prepare-staging && node ../../scripts/refuse-live-next-build.mjs .next-staging && NEXT_DIST_DIR=.next-staging next build",
+		"build:staging": "pnpm run release:prepare-staging && node ../../scripts/refuse-live-next-build.mjs .next-staging && NEXT_DEPLOYMENT_ID=$(git rev-parse HEAD) NEXT_DIST_DIR=.next-staging next build",
 		"release:prepare-staging": "node ../../scripts/refuse-root.mjs frontend-v4 release:prepare-staging && node ../../scripts/frontend-v4-release.mjs prepare-staging",
 		"release:promote-staging": "node ../../scripts/refuse-root.mjs frontend-v4 release:promote-staging && node ../../scripts/frontend-v4-release.mjs promote-staging",
 		"release:rollback-production": "node ../../scripts/refuse-root.mjs frontend-v4 release:rollback-production && node ../../scripts/frontend-v4-release.mjs rollback-production",

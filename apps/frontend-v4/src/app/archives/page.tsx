@@ -1,61 +1,50 @@
-import { connection } from 'next/server';
-import { fetchHistoryArchiveObjectStatusSummary } from '@api/archive-scans-client';
-import { fetchPublicNodes, fetchPublicOrganizations } from '@api/client';
-import { ArchiveRootInventory } from '@components/archive-scans/archive-root-inventory';
+import { Suspense } from 'react';
+import { fetchArchiveInventorySnapshot } from '@api/archive-inventory-server';
+import { ArchiveInventoryLive } from '@components/archive-scans/archive-inventory-live';
 import { PageHeading } from '@components/layout/page-heading';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 30;
 
-const liveFetchOptions = {
-	cache: 'no-store',
-	timeoutMs: 10_000
-} as const;
-
-export default async function ArchiveInventoryPage(): Promise<React.JSX.Element> {
-	await connection();
-	const [summary, nodes, organizations] = await Promise.all([
-		fetchHistoryArchiveObjectStatusSummary(liveFetchOptions),
-		fetchPublicNodes(liveFetchOptions),
-		fetchPublicOrganizations(liveFetchOptions)
-	]);
-	const canonical = summary.canonicalProofProgress;
-
+export default function ArchiveInventoryPage(): React.JSX.Element {
 	return (
 		<main className="shell archive-inventory-route">
 			<PageHeading
-				description="Every captured history archive root, the validators and listeners that currently advertise it, exact remote failures, proof coverage, outstanding work, and repair evidence."
+				description="Every captured history archive root, its advertising nodes, source-specific failures, checkpoint coverage, and repair evidence."
 				eyebrow="Archive verification"
 				title="Archive root inventory"
-				aside={
-					<div className="heading-metrics">
-						<strong>{summary.sourceCount.toLocaleString()}</strong>
-						<span>captured roots</span>
-						<strong>{canonical.verifiedCheckpoints.toLocaleString()}</strong>
-						<span>unique checkpoints proven</span>
-						<strong>{canonical.remainingCheckpoints.toLocaleString()}</strong>
-						<span>unique checkpoints remaining</span>
-					</div>
-				}
 			/>
 			<section className="archive-inventory-explainer">
 				<strong>How to read this table</strong>
 				<p>
-					A canonical checkpoint position is proven once. Each archive root then
-					contributes source-specific evidence that it served matching bytes.
-					Coverage is durable source attestations divided by the checkpoint
-					positions implied by that root&apos;s newest ledger. Current
-					proof-version and materialized-row counts are diagnostics, not the
-					completion denominator. Remote archive failures belong to that root
-					and its advertising nodes; scanner infrastructure issues are displayed
-					separately and never reported as validator failures.
+					Canonical checkpoint proofs verify shared content once. Source
+					coverage records whether each archive served that content. A canonical
+					replacement does not erase a missing-file finding against the original
+					archive. File counts, checkpoint coverage, and analytics ingestion
+					measure different work.
 				</p>
 			</section>
-			<ArchiveRootInventory
-				nodes={nodes}
-				organizations={organizations}
-				summary={summary}
-			/>
+			<Suspense
+				fallback={
+					<section className="panel detail-panel" role="status">
+						Loading archive inventory…
+					</section>
+				}
+			>
+				<ArchiveInventoryContent />
+			</Suspense>
 		</main>
 	);
+}
+
+async function ArchiveInventoryContent(): Promise<React.JSX.Element> {
+	try {
+		return (
+			<ArchiveInventoryLive
+				initialSnapshot={await fetchArchiveInventorySnapshot()}
+			/>
+		);
+	} catch (error) {
+		console.error('Archive inventory initial load failed', error);
+		return <ArchiveInventoryLive initialSnapshot={null} />;
+	}
 }
