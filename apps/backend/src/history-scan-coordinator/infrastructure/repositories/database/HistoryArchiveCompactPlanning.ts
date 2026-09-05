@@ -312,6 +312,24 @@ export const targetedCheckpointSubstitutionSql = `
 				target_state."networkPassphrase"
 		where failed.status = 'not-evaluable'
 			and failed."failureKind" = 'object-failed'
+                        and (
+                                failed.details->>$$failureHttpStatus$$ in (
+                                        $$403$$, $$404$$, $$410$$
+                                )
+                                or exists (
+                                        select 1
+                                        from jsonb_array_elements(
+                                                coalesce(
+                                                        failed.details->$$objectFailures$$,
+                                                        $$[]$$::jsonb
+                                                )
+                                        ) failure(value)
+                                        where failure.value->>$$httpStatus$$ in (
+                                                $$403$$, $$404$$, $$410$$
+                                        )
+                                )
+                                or not (failed.details ? $$objectFailures$$)
+                        )
 			and (
 				failed.details->>'failureHttpStatus' in ('403', '404', '410')
 				or exists (
@@ -584,6 +602,24 @@ const compactCheckpointPlanSql = `
 		where cursor."nextHistoricalCheckpointLedger" > 63
 			and failed.status = 'not-evaluable'
 			and failed."failureKind" = 'object-failed'
+                        and (
+                                failed.details->>$$failureHttpStatus$$ in (
+                                        $$403$$, $$404$$, $$410$$
+                                )
+                                or exists (
+                                        select 1
+                                        from jsonb_array_elements(
+                                                coalesce(
+                                                        failed.details->$$objectFailures$$,
+                                                        $$[]$$::jsonb
+                                                )
+                                        ) failure(value)
+                                        where failure.value->>$$httpStatus$$ in (
+                                                $$403$$, $$404$$, $$410$$
+                                        )
+                                )
+                                or not (failed.details ? $$objectFailures$$)
+                        )
 			and (
 				failed.details->>'failureHttpStatus' in ('403', '404', '410')
 				or exists (
