@@ -238,7 +238,7 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 		repository,
 		safeLimit
 	);
-	if (sequentialTargets.length >= safeLimit) return sequentialTargets;
+	if (sequentialTargets.length > 0) return sequentialTargets;
 
 	const runtimeTargetLimit = Math.min(
 		safeLimit - sequentialTargets.length,
