@@ -141,7 +141,7 @@ describe('archive repair plan', () => {
 		);
 		expect(markup).toContain('transactions/file.xdr.gz');
 		expect(markup).toContain('Keep the existing object as a backup.');
-		expect(markup).toContain('eligible for recheck after');
+		expect(markup).not.toContain('eligible for recheck after');
 	});
 
 	it('keeps the independent Archivist option reachable through the live repair view for a zero-action plan', () => {

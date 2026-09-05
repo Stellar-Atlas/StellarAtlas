@@ -1,6 +1,7 @@
 import {
 	historyArchiveObjectClaimAdoptionSql,
 	historyArchiveObjectClaimCleanupSql,
+	historyArchiveAutomaticFailedRetrySql,
 	historyArchiveObjectClaimFallbackLockSql,
 	historyArchiveObjectClaimSql
 } from '../HistoryArchiveObjectClaimSql.js';
@@ -129,10 +130,29 @@ describe('HistoryArchiveObjectClaimSql', () => {
 		expect(sql).toContain('not (select incomplete from canonical_scope)');
 	});
 
-	it('allows failed retries only on the twelve even slots', () => {
+	it('allows only explicit or transient automatic failed retries on even slots', () => {
+		const automaticRetrySql =
+			historyArchiveAutomaticFailedRetrySql('candidate');
 		expect(historyArchiveObjectClaimSql).toContain(
 			"free_slot.slot % 2 = 0 and candidate.status = 'failed'"
 		);
+		expect(historyArchiveObjectClaimSql).toContain(
+			'ready."dispatchToken" is not null'
+		);
+		expect(historyArchiveObjectClaimSql).toContain(
+			'ready."claimAttempt" is null'
+		);
+		expect(automaticRetrySql).toContain(
+			'candidate."nextAttemptAt" is not null'
+		);
+		expect(automaticRetrySql).toContain(
+			'candidate."failureChannel" = \'scanner_issue\''
+		);
+		expect(automaticRetrySql).toContain(
+			'candidate."failureChannel" = \'archive_availability\''
+		);
+		expect(automaticRetrySql).not.toContain('archive_evidence');
+		expect(automaticRetrySql).not.toContain("interval '1 hour'");
 	});
 
 	it('updates durable root and object cursors', () => {

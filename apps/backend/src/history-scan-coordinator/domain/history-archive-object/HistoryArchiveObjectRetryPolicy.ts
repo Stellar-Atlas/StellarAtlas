@@ -171,6 +171,7 @@ export function shouldAutomaticallyRetryHistoryArchiveObject(input: {
 	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
 	readonly failureClass: HistoryArchiveObjectFailureClass;
 }): boolean {
+	if (input.failureChannel === 'archive_evidence') return false;
 	if (input.failureChannel === 'scanner_issue') return true;
 	if (input.failureClass === 'rate-limit') return true;
 	return (

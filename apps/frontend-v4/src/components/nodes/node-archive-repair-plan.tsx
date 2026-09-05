@@ -103,7 +103,14 @@ function RepairActionGuidance({
 	readonly action: PublicHistoryArchiveRepairPlan['actions'][number];
 }): React.JSX.Element {
 	const evidence = action.evidence[0];
-	const nextAttemptAt = evidence?.nextAttemptAt;
+	const automaticRetryAt =
+		evidence?.nextAttemptAt !== null &&
+		evidence?.nextAttemptAt !== undefined &&
+		(evidence.failureClass === 'rate-limit' ||
+			evidence.failureClass === 'timeout' ||
+			evidence.failureClass === 'transport')
+			? evidence.nextAttemptAt
+			: null;
 	return (
 		<details className="archive-repair-guidance">
 			<summary>Repair instructions</summary>
@@ -142,10 +149,10 @@ function RepairActionGuidance({
 			) : null}
 			<ProofBoundRepairWorkflow action={action} />
 			<p>{action.summary}</p>
-			{nextAttemptAt ? (
+			{automaticRetryAt ? (
 				<small>
 					The scanner will automatically make this file eligible for recheck
-					after {formatDateTime(nextAttemptAt)}.
+					after {formatDateTime(automaticRetryAt)}.
 				</small>
 			) : null}
 		</details>

@@ -110,16 +110,6 @@ export async function requestHistoryArchiveObjectRecheck(
 		if (ineligible !== null) {
 			return blocked(target.remoteId, ineligible);
 		}
-		if (eligibleAt > requestedAt) {
-			return {
-				blockedUntil: null,
-				eligibleAt,
-				reason: 'retry-window',
-				remoteId: target.remoteId,
-				state: 'not-yet-eligible'
-			};
-		}
-
 		const [hostBackoff] = (await manager.query(selectHostBackoffSql, [
 			target.hostIdentity
 		])) as readonly HostBackoffRow[];

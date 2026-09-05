@@ -112,11 +112,40 @@ const pendingReadySql = `candidate.status = 'pending'
 		candidate."nextAttemptAt" is null
 		or candidate."nextAttemptAt" <= now()
 	)`;
+export function historyArchiveAutomaticFailedRetrySql(
+	objectAlias: string
+): string {
+	return `${objectAlias}."nextAttemptAt" is not null
+	and ${objectAlias}."nextAttemptAt" <= now()
+	and (
+		${objectAlias}."failureChannel" = 'scanner_issue'
+		or (
+			${objectAlias}."failureChannel" = 'archive_availability'
+			and (
+				${objectAlias}."httpStatus" in (408, 429, 504)
+				or (
+					(
+						${objectAlias}."httpStatus" is null
+						or ${objectAlias}."httpStatus" < 400
+					)
+					and upper(coalesce(${objectAlias}."errorType", '')) ~
+						'(RATE_LIMIT|TOO_MANY_REQUESTS|TIMEOUT|TIMEDOUT|ABORT|ECONN|EAI_|ENOTFOUND|NETWORK|SOCKET|TLS|TRANSPORT)'
+				)
+			)
+		)
+	)`;
+}
+
+const automaticFailedReadySql =
+	historyArchiveAutomaticFailedRetrySql('candidate');
 const failedReadySql = `candidate.status = 'failed'
-	and coalesce(
-		candidate."nextAttemptAt",
-		candidate."updatedAt" + interval '1 hour'
-	) <= now()`;
+	and (
+		(
+			ready."dispatchToken" is not null
+			and ready."claimAttempt" is null
+		)
+		or (${automaticFailedReadySql})
+	)`;
 
 export const historyArchiveObjectClaimSql = `
 	with free_slot as materialized (

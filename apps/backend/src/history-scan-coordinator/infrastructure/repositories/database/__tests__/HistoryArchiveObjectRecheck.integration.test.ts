@@ -132,7 +132,7 @@ describe('history archive object recheck persistence', () => {
 		);
 	});
 
-	it('returns not-yet-eligible without admitting a future retry', async () => {
+	it('lets an explicit manual request bypass an object retry window', async () => {
 		const object = remoteFailure('https://future.example/archive');
 		object.nextAttemptAt = new Date(Date.now() + 60_000);
 		await save(object);
@@ -140,11 +140,11 @@ describe('history archive object recheck persistence', () => {
 		const result = await repository.requestObjectRecheck(object.remoteId);
 
 		expect(result).toMatchObject({
-			reason: 'retry-window',
-			state: 'not-yet-eligible'
+			reason: 'eligible-remote-failure',
+			state: 'queued'
 		});
 		expect(result?.eligibleAt?.getTime()).toBe(object.nextAttemptAt.getTime());
-		await expect(readyRemoteIds()).resolves.toEqual([]);
+		await expect(readyRemoteIds()).resolves.toEqual([object.remoteId]);
 	});
 
 	it('respects active host backoff without admitting the object', async () => {

@@ -134,6 +134,7 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 
 	it.each([
 		['archive_evidence', 'not-found', false],
+		['archive_evidence', 'rate-limit', false],
 		['archive_availability', 'auth', false],
 		['archive_availability', 'not-found', false],
 		['archive_availability', 'http', false],
