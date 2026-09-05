@@ -12,8 +12,9 @@ import {
 	chunkFullHistoryValues
 } from './FullHistorySqlValues.js';
 
-// Keep each indexed insert comfortably below the production statement timeout.
-const transactionChunkSize = 100;
+// PostgreSQL permits 65,535 bind parameters; 5,000 rows stays below that
+// for both transaction shapes while avoiding hundreds of tiny indexed writes.
+const transactionChunkSize = 5_000;
 
 interface LedgerRow {
 	readonly bucketListHash: Buffer;
@@ -62,14 +63,16 @@ export async function storeCanonicalBaseFacts(
 	networkHash: FullHistoryHash
 ): Promise<void> {
 	await insertLedgers(manager, input, networkHash);
+	const transactions = orderByTransactionHash(input.transactions);
 	for (const chunk of chunkFullHistoryValues(
-		input.transactions,
+		transactions,
 		transactionChunkSize
 	)) {
 		await insertTransactions(manager, input.batchId, networkHash, chunk);
 	}
+	const results = orderByTransactionHash(input.results);
 	for (const chunk of chunkFullHistoryValues(
-		input.results,
+		results,
 		transactionChunkSize
 	)) {
 		await insertResults(manager, input.batchId, networkHash, chunk);
@@ -117,6 +120,17 @@ export async function assertCanonicalBaseFacts(
 			'Canonical rows carry a different network identity'
 		);
 	}
+}
+
+function orderByTransactionHash<
+	Value extends { readonly transactionHash: FullHistoryHash }
+>(values: readonly Value[]): Value[] {
+	return values
+		.map((value) => ({ key: value.transactionHash.toHex(), value }))
+		.sort((left, right) =>
+			left.key < right.key ? -1 : left.key > right.key ? 1 : 0
+		)
+		.map(({ value }) => value);
 }
 
 async function insertLedgers(
