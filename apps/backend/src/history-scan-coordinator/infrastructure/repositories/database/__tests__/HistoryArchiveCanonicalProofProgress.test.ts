@@ -1,6 +1,18 @@
-import { mapCanonicalProofProgress } from '../HistoryArchiveObjectStatusSummaryQuery.js';
+import {
+	mapCanonicalProofProgress,
+	resolveCanonicalProofProgressArchiveUrlIdentity
+} from '../HistoryArchiveObjectStatusSummaryQuery.js';
 
 describe('canonical archive proof progress', () => {
+	it('uses a reporting root independently of the bootstrap scheduling gate', () => {
+		expect(
+			resolveCanonicalProofProgressArchiveUrlIdentity({
+				HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT: '',
+				HISTORY_ARCHIVE_CANONICAL_STATUS_ROOT:
+					'http://history.stellar.org/prd/core-live/core_live_001/'
+			})
+		).toBe('http://history.stellar.org/prd/core-live/core_live_001');
+	});
 	it('counts only the contiguous proven chain before the open frontier', () => {
 		expect(
 			mapCanonicalProofProgress(

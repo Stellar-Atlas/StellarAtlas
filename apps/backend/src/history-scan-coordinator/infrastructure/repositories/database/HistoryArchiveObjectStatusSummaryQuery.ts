@@ -127,9 +127,7 @@ export async function getHistoryArchiveObjectStatusSummary(
 async function getCanonicalProofProgress(
 	manager: EntityManager
 ): Promise<HistoryArchiveCanonicalProofProgressV1> {
-	const archiveUrlIdentity = normalizeHistoryArchiveRootUrl(
-		process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT ?? ''
-	);
+	const archiveUrlIdentity = resolveCanonicalProofProgressArchiveUrlIdentity();
 	if (archiveUrlIdentity === null) {
 		return emptyCanonicalProofProgress(null);
 	}
@@ -140,6 +138,16 @@ async function getCanonicalProofProgress(
 		return emptyCanonicalProofProgress(archiveUrlIdentity);
 	}
 	return mapCanonicalProofProgress(row, archiveUrlIdentity);
+}
+
+export function resolveCanonicalProofProgressArchiveUrlIdentity(
+	environment: NodeJS.ProcessEnv = process.env
+): string | null {
+	return normalizeHistoryArchiveRootUrl(
+		environment.HISTORY_ARCHIVE_CANONICAL_STATUS_ROOT ??
+			environment.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT ??
+			''
+	);
 }
 
 function emptyCanonicalProofProgress(
