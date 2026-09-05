@@ -139,9 +139,9 @@ verify_source_units() {
 		die "LedgerCloseMeta ingestion must use a bounded CPU quota"
 	grep -Fqx "Restart=always" "$ledger_close_meta_unit" ||
 		die "LedgerCloseMeta ingestion must restart automatically"
-	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=12" \
+	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=24" \
 		"$ledger_close_meta_unit" ||
-		die "LedgerCloseMeta ingestion must cap fetch concurrency at 12"
+		die "LedgerCloseMeta ingestion must cap fetch concurrency at 24"
 	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=4" \
 		"$ledger_close_meta_unit" ||
 		die "LedgerCloseMeta ingestion must cap processing concurrency at 4"

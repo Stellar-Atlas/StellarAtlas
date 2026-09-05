@@ -6,7 +6,6 @@ const maximumProcessingConcurrency = 8;
 const minimumTypedShardLedgers = 64;
 const maximumTypedShardLedgers = 1_024;
 const maximumCycleLedgers = 65_536;
-const maximumAdmissionCycleLedgers = 1_024;
 const sharedMemoryRoot = '/dev/shm';
 
 export interface FullHistoryLedgerCloseMetaServiceConfig {
@@ -120,20 +119,17 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			? typedShardLedgerCount
 			: typedShardLedgerCount * maximumProcessingConcurrency,
 		typedShardLedgerCount,
-		admissionEnabled ? maximumAdmissionCycleLedgers : maximumCycleLedgers,
+		maximumCycleLedgers,
 		'cycle ledgers'
 	);
 	if (cycleLedgerCount % typedShardLedgerCount !== 0) {
 		throw new Error('cycle ledgers must contain whole typed shards');
 	}
-	if (admissionEnabled && cycleLedgerCount !== typedShardLedgerCount) {
-		throw new Error('an admitted cycle must contain exactly one typed shard');
-	}
 	const processingConcurrency = integer(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY,
 		admissionEnabled ? 1 : maximumProcessingConcurrency,
 		1,
-		admissionEnabled ? 1 : maximumProcessingConcurrency,
+		maximumProcessingConcurrency,
 		'processing concurrency'
 	);
 	if (processingConcurrency > cycleLedgerCount / typedShardLedgerCount) {
