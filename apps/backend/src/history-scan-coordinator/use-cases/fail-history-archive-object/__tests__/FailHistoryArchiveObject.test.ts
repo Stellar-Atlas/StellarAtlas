@@ -162,6 +162,54 @@ describe('FailHistoryArchiveObject', () => {
 		).toHaveBeenCalledWith([archiveObject.remoteId]);
 	});
 
+	it('reconciles failed non-root transitions with set-based writes', async () => {
+		const first = failedCategoryObject(
+			'11111111-1111-4111-8111-111111111111',
+			'ledger',
+			'ledger:0000007f'
+		);
+		const second = failedCategoryObject(
+			'22222222-2222-4222-8222-222222222222',
+			'results',
+			'results:0000007f'
+		);
+		objectRepository.markTransitionEffectsCompletedBatch.mockResolvedValue(
+			new Set([first.remoteId, second.remoteId])
+		);
+		const useCase = new FailHistoryArchiveObject(
+			objectRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			stateRepository
+		);
+
+		await useCase.reconcileFailedTransitionBatch([first, second, first]);
+
+		expect(eventRecorder.recordDurablyBatch).toHaveBeenCalledTimes(1);
+		expect(eventRecorder.recordDurablyBatch).toHaveBeenCalledWith([
+			expect.objectContaining({ object: first }),
+			expect.objectContaining({ object: second })
+		]);
+		expect(
+			objectRepository.markTransitionEffectsCompletedBatch
+		).toHaveBeenCalledWith([
+			{
+				claimAttempt: first.attempts,
+				remoteId: first.remoteId,
+				status: 'failed'
+			},
+			{
+				claimAttempt: second.attempts,
+				remoteId: second.remoteId,
+				status: 'failed'
+			}
+		]);
+		expect(
+			objectRepository.enqueueCheckpointProofRefreshes
+		).toHaveBeenCalledWith([first.remoteId, second.remoteId]);
+		expect(objectRepository.withTransitionEffectsLock).not.toHaveBeenCalled();
+	});
+
 	it('does not mutate a missing object row', async () => {
 		objectRepository.findByRemoteId.mockResolvedValue(null);
 
@@ -397,6 +445,31 @@ describe('FailHistoryArchiveObject', () => {
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
 });
+
+function failedCategoryObject(
+	remoteId: string,
+	objectType: 'ledger' | 'results',
+	objectKey: string
+): HistoryArchiveObject {
+	const object = new HistoryArchiveObject({
+		archiveUrl: 'https://history.example.com',
+		archiveUrlIdentity: 'https://history.example.com',
+		checkpointLedger: 127,
+		objectKey,
+		objectOrder: 20,
+		objectType,
+		objectUrl: 'https://history.example.com/' + objectKey + '.xdr.gz',
+		remoteId,
+		status: 'failed'
+	});
+	object.attempts = 1;
+	object.errorMessage = 'HTTP 404 Not Found';
+	object.errorType = 'archive_http_error';
+	object.failureChannel = 'archive_availability';
+	object.httpStatus = 404;
+	object.transitionEffectsRequiredAt = new Date();
+	return object;
+}
 
 function createRootObject(): HistoryArchiveObject {
 	return new HistoryArchiveObject({

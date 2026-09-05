@@ -127,6 +127,66 @@ export class FailHistoryArchiveObject {
 		);
 	}
 
+	async reconcileFailedTransitionBatch(
+		objects: readonly HistoryArchiveObject[]
+	): Promise<void> {
+		const unique = [
+			...new Map(
+				objects
+					.filter(
+						(object) =>
+							object.status === 'failed' &&
+							object.transitionEffectsCompletedAt === null
+					)
+					.map((object) => [`${object.remoteId}:${object.attempts}`, object])
+			).values()
+		];
+		const batched = unique.filter(
+			(object) => object.objectType !== 'history-archive-state'
+		);
+		if (batched.length > 0) {
+			const now = new Date();
+			await this.eventRecorder.recordDurablyBatch(
+				batched.map((object) => ({
+					object,
+					options: {
+						claimAttempt: object.attempts,
+						eventType: 'failed',
+						evidenceClass: getHistoryArchiveObjectRetryPolicy({
+							currentRetryCount: Math.max(0, object.attempts - 1),
+							errorType: object.errorType,
+							failureChannel: object.failureChannel ?? 'scanner_issue',
+							httpStatus: object.httpStatus,
+							now,
+							objectType: object.objectType
+						}).evidenceClass
+					}
+				}))
+			);
+			const completed =
+				await this.objectRepository.markTransitionEffectsCompletedBatch(
+					batched.map((object) => ({
+						claimAttempt: object.attempts,
+						remoteId: object.remoteId,
+						status: 'failed'
+					}))
+				);
+			const completedRemoteIds = batched
+				.filter((object) => completed.has(object.remoteId))
+				.map((object) => object.remoteId);
+			if (completedRemoteIds.length > 0) {
+				await this.objectRepository.enqueueCheckpointProofRefreshes(
+					completedRemoteIds
+				);
+			}
+		}
+
+		for (const object of unique) {
+			if (object.objectType !== 'history-archive-state') continue;
+			await this.reconcileClaimAttempt(object.remoteId, object.attempts);
+		}
+	}
+
 	async reconcilePersisted(object: HistoryArchiveObject): Promise<void> {
 		if (object.status !== 'failed') return;
 		if (object.transitionEffectsCompletedAt !== null) return;

@@ -2,6 +2,7 @@ import { mock } from 'jest-mock-extended';
 import type { Logger } from 'logger';
 import { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { historyArchiveConsumerCount } from '../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type { CompleteHistoryArchiveObject } from '../complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import type { FailHistoryArchiveObject } from '../fail-history-archive-object/FailHistoryArchiveObject.js';
 import {
@@ -9,21 +10,26 @@ import {
 	ReconcileHistoryArchiveObjectTransitions
 } from './ReconcileHistoryArchiveObjectTransitions.js';
 
+const expectedReconciliationBatchSize = Math.min(
+	5_000,
+	historyArchiveConsumerCount * 8
+);
+
 describe('archive transition reconciliation batch configuration', () => {
 	it('derives the default and cap from worker capacity', () => {
 		expect(
 			parseHistoryArchiveTransitionReconciliationBatchSize(undefined)
-		).toBe(240);
+		).toBe(expectedReconciliationBatchSize);
 		expect(parseHistoryArchiveTransitionReconciliationBatchSize('48')).toBe(48);
 		expect(parseHistoryArchiveTransitionReconciliationBatchSize('192')).toBe(
 			192
 		);
-		expect(parseHistoryArchiveTransitionReconciliationBatchSize('500')).toBe(
-			240
+		expect(parseHistoryArchiveTransitionReconciliationBatchSize('5000')).toBe(
+			5_000
 		);
 		expect(
 			parseHistoryArchiveTransitionReconciliationBatchSize('invalid')
-		).toBe(240);
+		).toBe(expectedReconciliationBatchSize);
 	});
 });
 
@@ -87,14 +93,13 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 			[verified],
 			{}
 		);
-		expect(fail.reconcileClaimAttempt).toHaveBeenCalledWith(
-			failed.remoteId,
-			failed.attempts
+		expect(fail.reconcileFailedTransitionBatch).toHaveBeenCalledWith([failed]);
+		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(
+			expectedReconciliationBatchSize
 		);
-		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(240);
 		expect(
 			repository.findVerifiedCheckpointsNeedingReconciliation
-		).toHaveBeenCalledWith(240);
+		).toHaveBeenCalledWith(expectedReconciliationBatchSize);
 	});
 
 	it('continues the batch when one transition effect fails', async () => {
@@ -133,10 +138,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		await reconciler.executeIfDue(10_000);
 
-		expect(fail.reconcileClaimAttempt).toHaveBeenCalledWith(
-			failed.remoteId,
-			failed.attempts
-		);
+		expect(fail.reconcileFailedTransitionBatch).toHaveBeenCalledWith([failed]);
 		expect(logger.error).toHaveBeenCalledWith(
 			'Failed to reconcile archive object transition',
 			expect.objectContaining({ errorMessage: 'proof unavailable' })
@@ -311,7 +313,9 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		});
 
 		expect(repository.promotePlannedObjects).not.toHaveBeenCalled();
-		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(240);
+		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(
+			expectedReconciliationBatchSize
+		);
 	});
 
 	it('disables legacy generic admission unless explicitly enabled', async () => {

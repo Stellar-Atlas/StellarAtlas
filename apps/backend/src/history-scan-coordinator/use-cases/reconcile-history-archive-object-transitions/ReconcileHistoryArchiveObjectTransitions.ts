@@ -14,10 +14,13 @@ import {
 
 export { parseTargetedProofRefreshBatchSize };
 
-// Re-select priority frequently so completed proof-frontier objects do not wait
-// behind a long, stale transition batch.
-const defaultReconciliationBatchSize = historyArchiveConsumerCount;
-const maximumReconciliationBatchSize = historyArchiveConsumerCount;
+// Drain terminal effects faster than workers can create them while keeping each
+// set-based transaction bounded. Priority is re-selected between batches.
+const maximumReconciliationBatchSize = 5_000;
+const defaultReconciliationBatchSize = Math.min(
+	maximumReconciliationBatchSize,
+	historyArchiveConsumerCount * 8
+);
 
 export function parseHistoryArchiveTransitionReconciliationBatchSize(
 	configuredBatchSize: string | undefined
@@ -165,15 +168,18 @@ export class ReconcileHistoryArchiveObjectTransitions {
 							}
 						}
 					}
-					for (const object of objects) {
-						if (object.status !== 'failed') continue;
+					const failedObjects = objects.filter(
+						(object) => object.status === 'failed'
+					);
+					if (failedObjects.length > 0) {
 						try {
-							await this.failObject.reconcileClaimAttempt(
-								object.remoteId,
-								object.attempts
+							await this.failObject.reconcileFailedTransitionBatch(
+								failedObjects
 							);
 						} catch (error) {
-							this.logFailure(error, object, 'transition');
+							for (const object of failedObjects) {
+								this.logFailure(error, object, 'transition');
+							}
 						}
 					}
 				}
