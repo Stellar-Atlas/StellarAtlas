@@ -36,6 +36,19 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(reserveBrokerJobsSql).toContain('"updatedAt" = now()');
 	});
 
+	it('trusts materialized cohort admission while retaining mutable object guards', () => {
+		expect(reserveBrokerJobsSql).toContain(
+			'object."executionDisposition" = \'executable\''
+		);
+		expect(reserveBrokerJobsSql).toContain('object."dependencyReady" = true');
+		expect(reserveBrokerJobsSql).not.toContain(
+			'chain_cursor."nextHistoricalCheckpointLedger"'
+		);
+		expect(reserveBrokerJobsSql).not.toContain(
+			'history_archive_checkpoint_bucket_set_member'
+		);
+	});
+
 	it('allows an explicit retry token to bypass canonical-root selection', () => {
 		const sql = reserveBrokerJobsSql.replace(/\s+/g, ' ');
 		expect(sql).toContain('ready."dispatchToken" is not null or (');

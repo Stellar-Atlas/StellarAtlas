@@ -6,7 +6,6 @@ import {
 import type { HistoryArchiveObjectType } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import {
 	historyArchiveCheckpointNotFoundCooldownSql,
-	historyArchiveSchedulableObjectSql,
 	notifyHistoryArchiveReadyWork,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
@@ -19,6 +18,27 @@ import { materializeCompactCheckpointPlanResult } from './HistoryArchiveCompactP
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 
 const maximumArchiveSourceFrontierRows = 4_096;
+
+// The ready table is the materialized sequential-cohort admission result. Re-running
+// the bucket-set cohort EXISTS tree while reserving every broker batch turns a
+// constant-size dequeue into a scan of checkpoint dependency history. Keep only
+// cheap mutable-state guards here; ready-queue reconciliation owns cohort changes.
+const brokerReservationSchedulableObjectSql = `
+	object."executionDisposition" = 'executable'
+	and object."dependencyReady" = true
+	and (
+		object."transitionEffectsRequiredAt" is null
+		or object."transitionEffectsCompletedAt" is not null
+	)
+	and (
+		object.status = 'pending'
+		or (
+			object.status = 'failed'
+			and object."nextAttemptAt" is not null
+			and object."nextAttemptAt" <= now()
+		)
+	)
+`;
 
 export type { HistoryArchiveBrokerPriority } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 
@@ -79,7 +99,7 @@ export const reserveBrokerJobsSql = `
 			and ready."availableAt" <= now()
 			and (
 				ready."dispatchToken" is not null
-				or (${historyArchiveSchedulableObjectSql('object')})
+				or (${brokerReservationSchedulableObjectSql})
 			)
 			and ready.priority <= $3::smallint
 			and (
