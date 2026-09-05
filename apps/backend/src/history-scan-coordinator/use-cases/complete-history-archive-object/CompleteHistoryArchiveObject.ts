@@ -198,7 +198,7 @@ export class CompleteHistoryArchiveObject {
 			const refreshedByRemoteId = new Map(
 				refreshed.map((object) => [object.remoteId, object])
 			);
-			let checkpointTransitionReady = false;
+			const checkpointFanouts: Promise<void>[] = [];
 			for (const item of prepared) {
 				const object =
 					refreshedByRemoteId.get(item.remoteId) ??
@@ -218,12 +218,16 @@ export class CompleteHistoryArchiveObject {
 				) {
 					this.requestProofCompletionEvent(object);
 					if (object.objectType === 'checkpoint-state') {
-						checkpointTransitionReady = true;
+						checkpointFanouts.push(
+							this.requestCheckpointFanoutEvent(object, true)
+						);
 					}
 				}
 			}
-			if (checkpointTransitionReady) {
-				notifyHistoryArchiveProofRefreshReady();
+			if (checkpointFanouts.length > 0) {
+				void Promise.all(checkpointFanouts).catch(() => {
+					notifyHistoryArchiveProofRefreshReady();
+				});
 			}
 		} catch (error) {
 			const failure = err<boolean, Error>(mapUnknownToError(error));

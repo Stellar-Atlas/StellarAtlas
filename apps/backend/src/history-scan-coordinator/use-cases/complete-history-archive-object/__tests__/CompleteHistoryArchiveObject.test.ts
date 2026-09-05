@@ -291,8 +291,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
-		expect(objectRepository.activateObjects).not.toHaveBeenCalled();
-		await useCase.reconcilePersisted(archiveObject);
+		await new Promise<void>((resolve) => setImmediate(resolve));
 		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
 		expect(objectRepository.activateObjects).toHaveBeenCalledTimes(1);
 		expect(objectRepository.promotePlannedObjects).not.toHaveBeenCalled();
