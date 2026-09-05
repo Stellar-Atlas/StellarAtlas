@@ -407,6 +407,38 @@ async function findRuntimeTargets(
 	repository: Repository<HistoryArchiveObject>,
 	limit: number
 ): Promise<readonly HistoryArchiveObject[]> {
+	const [runtimeTargetState] = (await repository.manager.query(
+		`with ${canonicalRuntimeTargetCtes}
+		 select exists (
+			select 1
+			from runtime_target target
+			where not exists (
+				select 1
+				from "history_archive_checkpoint_proof" proof
+				join "history_archive_state_snapshot" proof_state
+					on proof_state."archiveUrlIdentity" =
+						proof."archiveUrlIdentity"
+					and proof_state.status = $$available$$
+					and proof_state."networkPassphrase" is not null
+					and sha256(convert_to(
+						proof_state."networkPassphrase",
+						$$UTF8$$
+					)) = target."network_passphrase_hash"
+				where proof."checkpointLedger" =
+						target.checkpoint_ledger
+					and proof.status = $$verified$$
+					and proof."failureKind" is null
+					and proof."requiredObjectsComplete" = true
+					and proof."proofFactsComplete" = true
+					and proof."proofVersion" =
+						${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+			)
+		 ) as "hasUnsatisfiedTarget"`
+	)) as readonly { hasUnsatisfiedTarget: boolean }[];
+	if (!runtimeTargetState?.hasUnsatisfiedTarget) {
+		return [];
+	}
+
 	const rows = (await repository.manager.query(
 		`with ${canonicalRuntimeTargetCtes},
 		 runtime_object as materialized (
