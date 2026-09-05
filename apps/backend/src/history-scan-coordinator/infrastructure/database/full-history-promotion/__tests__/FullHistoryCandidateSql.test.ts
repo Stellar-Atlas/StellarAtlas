@@ -5,25 +5,22 @@ import {
 } from '../FullHistoryCandidateSql.js';
 
 describe('FullHistoryCandidateSql', () => {
-	it('loads parsed transaction data through exact source observations', () => {
-		expect(fullHistoryObservedEnvelopesSql).toContain(
-			'parsed_transaction_envelope_observation'
-		);
-		expect(fullHistoryObservedResultsSql).toContain(
-			'parsed_transaction_result_observation'
-		);
-		expect(fullHistoryObservedTransactionBoundsSql).toContain(
-			'parsed_transaction_envelope_observation'
-		);
-		expect(fullHistoryObservedTransactionBoundsSql).toContain(
-			'parsed_transaction_result_observation'
-		);
+	it('selects transactions by the exact proof-gated ledger hashes', () => {
 		for (const sql of [
 			fullHistoryObservedEnvelopesSql,
 			fullHistoryObservedResultsSql,
 			fullHistoryObservedTransactionBoundsSql
 		]) {
+			expect(sql).toContain('parsed_ledger_header_observation');
 			expect(sql).not.toContain('"lastScanJobRemoteId"');
+			expect(sql).not.toContain('parsed_transaction_envelope_observation');
+			expect(sql).not.toContain('parsed_transaction_result_observation');
 		}
+		expect(fullHistoryObservedEnvelopesSql).toContain(
+			'envelope."transactionSetHash" = header."transactionSetHash"'
+		);
+		expect(fullHistoryObservedResultsSql).toContain(
+			'result."transactionResultHash" = header."transactionResultHash"'
+		);
 	});
 });

@@ -3,6 +3,7 @@ import { err, ok, Result } from 'neverthrow';
 import { availableParallelism } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
+import { normalizeHistoryArchiveRootUrl } from 'shared';
 import { historyArchiveWorkerSlotLimit } from 'history-scanner-dto';
 import {
 	type CoordinatorAuthConfig,
@@ -35,6 +36,7 @@ export interface Config {
 	historyBucketCacheMaxBytes: number;
 	historyArchiveContentReuseEnabled: boolean;
 	historyArchiveParsedHistoryEnabled: boolean;
+	historyArchiveParsedHistoryRootUrl: string | null;
 	historyArchiveObjectJobSource: 'nats' | 'legacy-http';
 	natsArchiveJobConsumer: string;
 	natsArchiveJobStream: string;
@@ -72,6 +74,7 @@ const defaultConfig = {
 	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024,
 	historyArchiveContentReuseEnabled: true,
 	historyArchiveParsedHistoryEnabled: false,
+	historyArchiveParsedHistoryRootUrl: null,
 	historyArchiveObjectJobSource: 'legacy-http' as const,
 	natsArchiveJobConsumer: 'stellaratlas-history-object-workers',
 	natsArchiveJobStream: 'STELLARATLAS_HISTORY_OBJECTS',
@@ -332,6 +335,22 @@ export function getConfigFromEnv(): Result<Config, Error> {
 			new Error('HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED must be true or false')
 		);
 	}
+	const parsedHistoryRootValue =
+		process.env.HISTORY_ARCHIVE_PARSED_HISTORY_ROOT_URL?.trim();
+	const historyArchiveParsedHistoryRootUrl =
+		parsedHistoryRootValue === undefined || parsedHistoryRootValue.length === 0
+			? null
+			: normalizeHistoryArchiveRootUrl(parsedHistoryRootValue);
+	if (
+		historyArchiveParsedHistoryEnabled &&
+		historyArchiveParsedHistoryRootUrl === null
+	) {
+		return err(
+			new Error(
+				'HISTORY_ARCHIVE_PARSED_HISTORY_ROOT_URL must be a valid archive root when parsed history is enabled'
+			)
+		);
+	}
 
 	const historyArchiveObjectJobSource =
 		process.env.HISTORY_ARCHIVE_OBJECT_JOB_SOURCE ??
@@ -404,6 +423,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 			defaultConfig.historyBucketCacheMaxBytes,
 		historyArchiveContentReuseEnabled,
 		historyArchiveParsedHistoryEnabled,
+		historyArchiveParsedHistoryRootUrl,
 		historyArchiveObjectJobSource,
 		natsArchiveJobConsumer:
 			process.env.NATS_ARCHIVE_JOB_CONSUMER ??

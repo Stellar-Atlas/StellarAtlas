@@ -141,15 +141,15 @@ async function loadCandidate(
 	])) as FullHistoryCandidateLedgerRow[];
 	const boundsRows = (await manager.query(
 		fullHistoryObservedTransactionBoundsSql,
-		[sources.transactions.remoteId, sources.results.remoteId]
+		[sources.ledger.remoteId]
 	)) as TransactionBoundsRow[];
 	validateTransactionBounds(boundsRows);
 	const envelopeRows = (await manager.query(fullHistoryObservedEnvelopesSql, [
-		sources.transactions.remoteId,
+		sources.ledger.remoteId,
 		FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT + 1
 	])) as FullHistoryCandidateEnvelopeRow[];
 	const resultRows = (await manager.query(fullHistoryObservedResultsSql, [
-		sources.results.remoteId,
+		sources.ledger.remoteId,
 		FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT + 1
 	])) as FullHistoryCandidateResultRow[];
 	if (

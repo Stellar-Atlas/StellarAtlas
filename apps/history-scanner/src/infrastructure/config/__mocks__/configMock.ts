@@ -18,6 +18,7 @@ export class ConfigMock implements Config {
 	historyBucketCacheMaxBytes = 1024 * 1024 * 1024;
 	historyArchiveContentReuseEnabled = false;
 	historyArchiveParsedHistoryEnabled = false;
+	historyArchiveParsedHistoryRootUrl: string | null = null;
 	coordinatorAPIBaseUrl = 'http://127.0.0.1:3000';
 	coordinatorAuth: CoordinatorAuthConfig = {
 		type: 'internal',

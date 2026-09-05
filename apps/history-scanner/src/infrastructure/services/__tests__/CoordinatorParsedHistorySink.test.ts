@@ -21,7 +21,7 @@ describe('CoordinatorParsedHistorySink', () => {
 			'https://history.stellar.org',
 			'remote-id',
 			exceptionLogger,
-			2
+			{ maxRecordsPerBatch: 2 }
 		);
 
 		await sink.emit(createLedgerHeaderRecord(1));
@@ -63,8 +63,7 @@ describe('CoordinatorParsedHistorySink', () => {
 			'https://history.stellar.org',
 			'remote-id',
 			exceptionLogger,
-			1,
-			[0]
+			{ maxRecordsPerBatch: 1, retryDelaysMs: [0] }
 		);
 
 		await sink.emit(createLedgerHeaderRecord(1));
@@ -87,8 +86,7 @@ describe('CoordinatorParsedHistorySink', () => {
 			'https://history.stellar.org',
 			'remote-id',
 			exceptionLogger,
-			1,
-			[0, 0]
+			{ maxRecordsPerBatch: 1, retryDelaysMs: [0, 0] }
 		);
 
 		await expect(sink.emit(createLedgerHeaderRecord(1))).rejects.toBe(conflict);
@@ -112,7 +110,7 @@ describe('CoordinatorParsedHistorySink', () => {
 			'https://history.stellar.org',
 			'remote-id',
 			exceptionLogger,
-			2
+			{ maxRecordsPerBatch: 2 }
 		);
 
 		await sink.emit(createTransactionEnvelopeRecord(1, 0));
@@ -155,9 +153,7 @@ describe('CoordinatorParsedHistorySink', () => {
 			'https://history.stellar.org',
 			'remote-id',
 			exceptionLogger,
-			50,
-			[0],
-			1
+			{ maxRecordsPerBatch: 1, retryDelaysMs: [0] }
 		);
 
 		await sink.emit(createTransactionEnvelopeRecord(1, 0));

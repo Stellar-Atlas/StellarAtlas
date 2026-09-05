@@ -3,7 +3,10 @@ import { pipeline } from 'node:stream/promises';
 import { err, ok, type Result } from 'neverthrow';
 import { Url, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
-import { type HistoryArchiveObjectVerificationFactsV1 } from 'shared';
+import {
+	normalizeHistoryArchiveRootUrl,
+	type HistoryArchiveObjectVerificationFactsV1
+} from 'shared';
 import type { HistoryArchiveWorkerStageDTO } from 'history-scanner-dto';
 import { Category } from '../../domain/history-archive/Category.js';
 import { hashBucketList } from '../../domain/history-archive/hashBucketList.js';
@@ -71,7 +74,8 @@ export class ArchiveObjectCategoryVerifier {
 		private readonly contentReuseEnabled = false,
 		private readonly createHasherPool: HasherPoolFactory = (workerCount) =>
 			new HasherPool(workerCount),
-		private readonly parsedHistoryEnabled = false
+		private readonly parsedHistoryEnabled = false,
+		private readonly parsedHistoryRootUrl: string | null = null
 	) {
 		this.contentReuseVerifier = new ArchiveObjectContentReuseVerifier(
 			this.httpService,
@@ -212,17 +216,6 @@ export class ArchiveObjectCategoryVerifier {
 	): Promise<
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
-		if (this.contentReuseEnabled && executionId !== undefined) {
-			const reuseResult = await this.contentReuseVerifier.tryReuse(
-				job,
-				executionId,
-				releaseDownloadPermit
-			);
-			if (reuseResult.isErr()) return err(reuseResult.error);
-			if (reuseResult.value !== null) return ok(reuseResult.value);
-			releaseDownloadPermit = undefined;
-		}
-
 		const category = getCategory(job.objectType);
 		const workerStages = getCategoryWorkerStages(job.objectType);
 		if (category === null || workerStages === null) {
@@ -232,6 +225,22 @@ export class ArchiveObjectCategoryVerifier {
 				failureChannel: 'scanner_issue',
 				httpStatus: null
 			});
+		}
+		const persistParsedHistory = this.shouldPersistParsedHistory(job, category);
+
+		if (
+			this.contentReuseEnabled &&
+			!persistParsedHistory &&
+			executionId !== undefined
+		) {
+			const reuseResult = await this.contentReuseVerifier.tryReuse(
+				job,
+				executionId,
+				releaseDownloadPermit
+			);
+			if (reuseResult.isErr()) return err(reuseResult.error);
+			if (reuseResult.value !== null) return ok(reuseResult.value);
+			releaseDownloadPermit = undefined;
 		}
 
 		const urlResult = Url.create(job.objectUrl);
@@ -293,15 +302,15 @@ export class ArchiveObjectCategoryVerifier {
 				scannerIssueFailure({ error, errorType: 'worker_pool_setup_failure' })
 			);
 		}
-		const parsedHistorySink =
-			this.parsedHistoryEnabled && shouldPersistParsedHistory(category)
-				? new CoordinatorParsedHistorySink(
-						this.scanCoordinator,
-						job.archiveUrl,
-						job.remoteId,
-						this.exceptionLogger
-					)
-				: undefined;
+		const parsedHistorySink = persistParsedHistory
+			? new CoordinatorParsedHistorySink(
+					this.scanCoordinator,
+					job.archiveUrl,
+					job.remoteId,
+					this.exceptionLogger,
+					{ deferWritesUntilFlush: true }
+				)
+			: undefined;
 
 		const categoryVerificationData = createCategoryVerificationData();
 		const contentDigest = new XdrContentDigestTransform();
@@ -363,6 +372,20 @@ export class ArchiveObjectCategoryVerifier {
 			releaseDownloadPermit();
 		}
 		return verificationResult;
+	}
+
+	private shouldPersistParsedHistory(
+		job: HistoryArchiveObjectJobDTO,
+		category: Category
+	): boolean {
+		if (!this.parsedHistoryEnabled || !shouldPersistParsedHistory(category)) {
+			return false;
+		}
+		if (this.parsedHistoryRootUrl === null) return false;
+		return (
+			normalizeHistoryArchiveRootUrl(job.archiveUrl) ===
+			normalizeHistoryArchiveRootUrl(this.parsedHistoryRootUrl)
+		);
 	}
 
 	private getHasherPool(): HasherPool {

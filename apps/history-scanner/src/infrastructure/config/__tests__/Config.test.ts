@@ -73,7 +73,8 @@ describe('Config', () => {
 				historyScanRangeSize: 250000,
 				historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024,
 				historyArchiveContentReuseEnabled: true,
-				historyArchiveParsedHistoryEnabled: false
+				historyArchiveParsedHistoryEnabled: false,
+				historyArchiveParsedHistoryRootUrl: null
 			});
 			expect(result.value.historyHasherWorkers).toBeGreaterThanOrEqual(1);
 			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(32_767);
@@ -108,10 +109,21 @@ describe('Config', () => {
 				false
 			);
 			process.env.HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED = 'true';
+			const missingRootResult = getConfigFromEnv();
+			expect(missingRootResult.isErr()).toBe(true);
+			if (!missingRootResult.isErr()) throw new Error('Expected error');
+			expect(missingRootResult.error.message).toContain(
+				'HISTORY_ARCHIVE_PARSED_HISTORY_ROOT_URL'
+			);
+			process.env.HISTORY_ARCHIVE_PARSED_HISTORY_ROOT_URL =
+				'https://archive.example/History/';
 			const enabledResult = getConfigFromEnv();
 			expect(enabledResult.isOk()).toBe(true);
 			if (!enabledResult.isOk()) throw enabledResult.error;
 			expect(enabledResult.value.historyArchiveParsedHistoryEnabled).toBe(true);
+			expect(enabledResult.value.historyArchiveParsedHistoryRootUrl).toBe(
+				'https://archive.example/History'
+			);
 			process.env.HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED = 'invalid';
 			const invalidResult = getConfigFromEnv();
 			expect(invalidResult.isErr()).toBe(true);

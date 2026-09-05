@@ -67,11 +67,14 @@ export const fullHistoryObservedEnvelopesSql = `
 		envelope."transactionIndex",
 		envelope."transactionSetHash",
 		envelope."envelopeXdr"
-	from "parsed_transaction_envelope_observation" observation
+	from "parsed_ledger_header_observation" header_observation
+	join "parsed_ledger_header" header
+		on header.id = header_observation."parsedLedgerHeaderId"
 	join "parsed_transaction_envelope" envelope
-		on envelope.id = observation."parsedTransactionEnvelopeId"
-	where observation."sourceObjectRemoteId" =
-		${resolvedContentSourceSql(1, 'transactions')}
+		on envelope."ledgerSequence" = header."ledgerSequence"
+		and envelope."transactionSetHash" = header."transactionSetHash"
+	where header_observation."sourceObjectRemoteId" =
+		${resolvedContentSourceSql(1, 'ledger')}
 	order by envelope."ledgerSequence", envelope."transactionIndex"
 	limit $2
 `;
@@ -83,11 +86,14 @@ export const fullHistoryObservedResultsSql = `
 		result."transactionResultHash",
 		result."transactionHash",
 		result."resultXdr"
-	from "parsed_transaction_result_observation" observation
+	from "parsed_ledger_header_observation" header_observation
+	join "parsed_ledger_header" header
+		on header.id = header_observation."parsedLedgerHeaderId"
 	join "parsed_transaction_result" result
-		on result.id = observation."parsedTransactionResultId"
-	where observation."sourceObjectRemoteId" =
-		${resolvedContentSourceSql(1, 'results')}
+		on result."ledgerSequence" = header."ledgerSequence"
+		and result."transactionResultHash" = header."transactionResultHash"
+	where header_observation."sourceObjectRemoteId" =
+		${resolvedContentSourceSql(1, 'ledger')}
 	order by result."ledgerSequence", result."transactionIndex"
 	limit $2
 `;
@@ -103,21 +109,27 @@ export const fullHistoryObservedTransactionBoundsSql = `
 			count(*)::bigint as "envelopeCount",
 			coalesce(sum(octet_length(envelope."envelopeXdr")), 0)::bigint
 				as "envelopeBytes"
-		from "parsed_transaction_envelope_observation" observation
+		from "parsed_ledger_header_observation" header_observation
+		join "parsed_ledger_header" header
+			on header.id = header_observation."parsedLedgerHeaderId"
 		join "parsed_transaction_envelope" envelope
-			on envelope.id = observation."parsedTransactionEnvelopeId"
-		where observation."sourceObjectRemoteId" =
-			${resolvedContentSourceSql(1, 'transactions')}
+			on envelope."ledgerSequence" = header."ledgerSequence"
+			and envelope."transactionSetHash" = header."transactionSetHash"
+		where header_observation."sourceObjectRemoteId" =
+			${resolvedContentSourceSql(1, 'ledger')}
 	) envelope
 	cross join (
 		select
 			count(*)::bigint as "resultCount",
 			coalesce(sum(octet_length(result."resultXdr")), 0)::bigint
 				as "resultBytes"
-		from "parsed_transaction_result_observation" observation
+		from "parsed_ledger_header_observation" header_observation
+		join "parsed_ledger_header" header
+			on header.id = header_observation."parsedLedgerHeaderId"
 		join "parsed_transaction_result" result
-			on result.id = observation."parsedTransactionResultId"
-		where observation."sourceObjectRemoteId" =
-			${resolvedContentSourceSql(2, 'results')}
+			on result."ledgerSequence" = header."ledgerSequence"
+			and result."transactionResultHash" = header."transactionResultHash"
+		where header_observation."sourceObjectRemoteId" =
+			${resolvedContentSourceSql(1, 'ledger')}
 	) result
 `;

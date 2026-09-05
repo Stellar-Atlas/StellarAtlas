@@ -8,6 +8,9 @@ export const TYPES = {
 	HistoryArchiveParsedHistoryEnabled: Symbol(
 		'HistoryArchiveParsedHistoryEnabled'
 	),
+	HistoryArchiveParsedHistoryRootUrl: Symbol(
+		'HistoryArchiveParsedHistoryRootUrl'
+	),
 	ScanScheduler: Symbol('ScanScheduler'),
 	ScanCoordinatorService: Symbol('ScanCoordinatorService'),
 	HistoryArchiveObjectJobSource: Symbol('HistoryArchiveObjectJobSource'),

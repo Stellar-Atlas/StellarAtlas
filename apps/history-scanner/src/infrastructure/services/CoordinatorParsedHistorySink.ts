@@ -24,12 +24,14 @@ import { ScannerIssueError } from '../../domain/scanner/ScannerIssueError.js';
 import { ParsedHistoryRegistrationConflictError } from './ParsedHistoryRegistrationConflictError.js';
 
 export interface CoordinatorParsedHistorySinkOptions {
+	readonly deferWritesUntilFlush?: boolean;
 	readonly maxPayloadBytes?: number;
 	readonly maxRecordsPerBatch?: number;
 	readonly retryDelaysMs?: readonly number[];
 }
 
 interface BufferedBatch<RecordType extends object> {
+	readonly pending: RecordType[][];
 	readonly records: RecordType[];
 	readonly emptyPayloadBytes: number;
 	payloadBytes: number;
@@ -40,6 +42,7 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 	private readonly headers: BufferedBatch<ParsedLedgerHeaderDTO>;
 	private readonly envelopes: BufferedBatch<ParsedTransactionEnvelopeDTO>;
 	private readonly results: BufferedBatch<ParsedTransactionResultDTO>;
+	private readonly deferWritesUntilFlush: boolean;
 	private readonly maxPayloadBytes: number;
 	private readonly maxRecordsPerBatch: number;
 	private readonly retryDelaysMs: readonly number[];
@@ -51,6 +54,7 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 		private readonly exceptionLogger: ExceptionLogger,
 		options: CoordinatorParsedHistorySinkOptions = {}
 	) {
+		this.deferWritesUntilFlush = options.deferWritesUntilFlush ?? false;
 		this.maxPayloadBytes =
 			options.maxPayloadBytes ?? parsedHistoryBatchPayloadLimitBytes;
 		this.maxRecordsPerBatch =
@@ -91,30 +95,36 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 	}
 
 	private async flushHeaders(): Promise<void> {
-		if (this.headers.records.length === 0) return;
-
-		const batch = this.createHeaderBatch(this.drain(this.headers));
-		this.assertPayloadBound(batch);
-		const result = await this.registerHeadersWithRetry(batch);
-		this.throwRegistrationFailure(result);
+		this.stage(this.headers);
+		while (this.headers.pending.length > 0) {
+			const batch = this.createHeaderBatch(this.headers.pending[0]!);
+			this.assertPayloadBound(batch);
+			const result = await this.registerHeadersWithRetry(batch);
+			this.throwRegistrationFailure(result);
+			this.headers.pending.shift();
+		}
 	}
 
 	private async flushEnvelopes(): Promise<void> {
-		if (this.envelopes.records.length === 0) return;
-
-		const batch = this.createEnvelopeBatch(this.drain(this.envelopes));
-		this.assertPayloadBound(batch);
-		const result = await this.registerEnvelopesWithRetry(batch);
-		this.throwRegistrationFailure(result);
+		this.stage(this.envelopes);
+		while (this.envelopes.pending.length > 0) {
+			const batch = this.createEnvelopeBatch(this.envelopes.pending[0]!);
+			this.assertPayloadBound(batch);
+			const result = await this.registerEnvelopesWithRetry(batch);
+			this.throwRegistrationFailure(result);
+			this.envelopes.pending.shift();
+		}
 	}
 
 	private async flushResults(): Promise<void> {
-		if (this.results.records.length === 0) return;
-
-		const batch = this.createResultBatch(this.drain(this.results));
-		this.assertPayloadBound(batch);
-		const result = await this.registerResultsWithRetry(batch);
-		this.throwRegistrationFailure(result);
+		this.stage(this.results);
+		while (this.results.pending.length > 0) {
+			const batch = this.createResultBatch(this.results.pending[0]!);
+			this.assertPayloadBound(batch);
+			const result = await this.registerResultsWithRetry(batch);
+			this.throwRegistrationFailure(result);
+			this.results.pending.shift();
+		}
 	}
 
 	private async appendHeader(record: ParsedLedgerHeaderDTO): Promise<void> {
@@ -150,12 +160,16 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			buffer.records.length > 0 &&
 			buffer.payloadBytes + separatorBytes + recordBytes > this.maxPayloadBytes
 		) {
-			await flush();
+			if (this.deferWritesUntilFlush) this.stage(buffer);
+			else await flush();
 		}
 
 		buffer.payloadBytes += (buffer.records.length === 0 ? 0 : 1) + recordBytes;
 		buffer.records.push(record);
-		if (buffer.records.length >= this.maxRecordsPerBatch) await flush();
+		if (buffer.records.length >= this.maxRecordsPerBatch) {
+			if (this.deferWritesUntilFlush) this.stage(buffer);
+			else await flush();
+		}
 	}
 
 	private createHeaderBatch(
@@ -195,7 +209,18 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 		createBatch: (records: readonly RecordType[]) => object
 	): BufferedBatch<RecordType> {
 		const emptyPayloadBytes = this.payloadSize(createBatch([]));
-		return { emptyPayloadBytes, payloadBytes: emptyPayloadBytes, records: [] };
+		return {
+			emptyPayloadBytes,
+			payloadBytes: emptyPayloadBytes,
+			pending: [],
+			records: []
+		};
+	}
+
+	private stage<RecordType extends object>(
+		buffer: BufferedBatch<RecordType>
+	): void {
+		if (buffer.records.length > 0) buffer.pending.push(this.drain(buffer));
 	}
 
 	private drain<RecordType extends object>(
