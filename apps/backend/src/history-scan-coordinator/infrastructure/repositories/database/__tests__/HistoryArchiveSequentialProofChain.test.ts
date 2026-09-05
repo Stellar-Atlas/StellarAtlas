@@ -3,6 +3,7 @@ import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../
 import {
 	calculateHistoryArchiveCheckpointFanoutBatchSize,
 	calculateHistoryArchiveSequentialPrefetchDepth,
+	historyArchiveSequentialPrefetchDepth,
 	resolveHistoryArchiveCheckpointFanoutBatchSize,
 	resolveHistoryArchiveSequentialPrefetchDepth
 } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
@@ -268,11 +269,21 @@ describe('sequential history archive proof chain', () => {
 			'failed."failureKind" = \'object-failed\''
 		);
 		expect(targetedCheckpointSubstitutionSql).toContain(
-			'failed_object."httpStatus" in (403, 404, 410)'
+			'failed_object."httpStatus" in ('
 		);
 		expect(targetedCheckpointSubstitutionSql).toContain(
-			'failed_bucket."httpStatus" in (403, 404, 410)'
+			'failed_bucket."httpStatus" in ('
 		);
+		expect(targetedCheckpointSubstitutionSql).toContain(
+			'or failed_object.attempts >='
+		);
+		expect(targetedCheckpointSubstitutionSql).toContain(
+			'or failed_bucket.attempts >='
+		);
+		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toContain(
+			"recovered.status = 'verified'"
+		);
+		expect(targetedCheckpointSubstitutionSql).not.toContain('scanner_issue');
 		expect(targetedCheckpointSubstitutionSql).toContain(
 			'insert into "history_archive_checkpoint_substitution"'
 		);
@@ -416,7 +427,9 @@ describe('sequential history archive proof chain', () => {
 		expect(gate).toContain(
 			'chain_cursor."nextHistoricalCheckpointLedger" - 64'
 		);
-		expect(gate).toContain('64 + 4032');
+		expect(gate).toContain(
+			`64 + ${(historyArchiveSequentialPrefetchDepth - 1) * 64}`
+		);
 		expect(gate).toContain('candidate."objectType" = \'bucket\'');
 		expect(gate).toContain('observation."checkpointLedger" between');
 	});

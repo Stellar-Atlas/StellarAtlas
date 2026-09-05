@@ -210,6 +210,25 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                                                                 and failed.status = 'failed'
                                                                 and failed."httpStatus" in (403, 404, 410)
                                                         )
+                                                        or exists (
+                                                                select 1
+                                                                from jsonb_array_elements(
+                                                                        case
+                                                                                when jsonb_typeof(
+                                                                                        proof.details->'objectFailures'
+                                                                                ) = 'array'
+                                                                                then proof.details->'objectFailures'
+                                                                                else '[]'::jsonb
+                                                                        end
+                                                                ) prior_failure
+                                                                join "history_archive_object_queue" recovered
+                                                                        on recovered."remoteId" = case
+                                                                                when prior_failure->>'remoteId' ~
+                                                                                        '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+                                                                                then (prior_failure->>'remoteId')::uuid
+                                                                        end
+                                                                        and recovered.status = 'verified'
+                                                        )
                                                 )
                                         )
                                 )

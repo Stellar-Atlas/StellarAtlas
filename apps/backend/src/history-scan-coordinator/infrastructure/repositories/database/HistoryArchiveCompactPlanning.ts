@@ -14,6 +14,31 @@ import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveC
 
 const maximumCheckpointFanoutBatch = historyArchiveCheckpointFanoutBatchSize;
 const maximumCheckpointCursorBatch = 128;
+export const historyArchiveCanonicalSubstitutionAttemptThreshold = 3;
+
+function exhaustedArchiveEvidenceExistsSql(proofAlias: string): string {
+	return `exists (
+                select 1
+                from "history_archive_object_queue" exhausted
+                where exhausted."archiveUrlIdentity" =
+                        ${proofAlias}."archiveUrlIdentity"
+                        and exhausted."checkpointLedger" =
+                                ${proofAlias}."checkpointLedger"
+                        and exhausted."objectType" in (
+                                'checkpoint-state', 'ledger', 'transactions',
+                                'results', 'bucket'
+                        )
+                        and exhausted.status = 'failed'
+                        and exhausted.attempts >=
+                                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
+                        and coalesce(
+                                exhausted."failureChannel",
+                                'archive_evidence'
+                        ) in (
+                                'archive_evidence', 'archive_availability'
+                        )
+        )`;
+}
 
 export async function findVerifiedCheckpointsNeedingFanout(
 	repository: Repository<HistoryArchiveObject>,
@@ -324,6 +349,7 @@ export const targetedCheckpointSubstitutionSql = `
                                                 $$403$$, $$404$$, $$410$$
                                         )
                                 )
+                                or ${exhaustedArchiveEvidenceExistsSql('failed')}
                                 or not (failed.details ? $$objectFailures$$)
                         )
 			and (
@@ -339,7 +365,13 @@ export const targetedCheckpointSubstitutionSql = `
 							'checkpoint-state', 'ledger', 'transactions', 'results'
 						)
 						and failed_object.status = 'failed'
-						and failed_object."httpStatus" in (403, 404, 410)
+						and (
+						        failed_object."httpStatus" in (
+						                403, 404, 410
+						        )
+						        or failed_object.attempts >=
+						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
+						)
 						and coalesce(
 							failed_object."failureChannel", 'archive_evidence'
 						) in ('archive_evidence', 'archive_availability')
@@ -358,7 +390,13 @@ export const targetedCheckpointSubstitutionSql = `
 						and failed_bucket."objectType" = 'bucket'
 						and failed_bucket."bucketHash" = dependency."bucketHash"
 						and failed_bucket.status = 'failed'
-						and failed_bucket."httpStatus" in (403, 404, 410)
+						and (
+						        failed_bucket."httpStatus" in (
+						                403, 404, 410
+						        )
+						        or failed_bucket.attempts >=
+						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
+						)
 						and coalesce(
 							failed_bucket."failureChannel", 'archive_evidence'
 						) in ('archive_evidence', 'archive_availability')
@@ -614,6 +652,7 @@ const compactCheckpointPlanSql = `
                                                 $$403$$, $$404$$, $$410$$
                                         )
                                 )
+                                or ${exhaustedArchiveEvidenceExistsSql('failed')}
                                 or not (failed.details ? $$objectFailures$$)
                         )
 			and (
@@ -629,7 +668,13 @@ const compactCheckpointPlanSql = `
 							'checkpoint-state', 'ledger', 'transactions', 'results'
 						)
 						and failed_object.status = 'failed'
-						and failed_object."httpStatus" in (403, 404, 410)
+						and (
+						        failed_object."httpStatus" in (
+						                403, 404, 410
+						        )
+						        or failed_object.attempts >=
+						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
+						)
 						and coalesce(
 							failed_object."failureChannel", 'archive_evidence'
 						) in ('archive_evidence', 'archive_availability')
@@ -648,7 +693,13 @@ const compactCheckpointPlanSql = `
 						and failed_bucket."objectType" = 'bucket'
 						and failed_bucket."bucketHash" = dependency."bucketHash"
 						and failed_bucket.status = 'failed'
-						and failed_bucket."httpStatus" in (403, 404, 410)
+						and (
+						        failed_bucket."httpStatus" in (
+						                403, 404, 410
+						        )
+						        or failed_bucket.attempts >=
+						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
+						)
 						and coalesce(
 							failed_bucket."failureChannel", 'archive_evidence'
 						) in ('archive_evidence', 'archive_availability')
