@@ -36,17 +36,24 @@ SELECT
 	closed_at,
 	toString(id) AS transaction_id,
 	if(account = {account:String}, 'source', 'effect') AS relationship
-FROM ${database}.history_transactions
-WHERE account = {account:String}
-	OR id IN (
-		SELECT transaction_id
-		FROM ${database}.history_operations
-		WHERE id IN (
-			SELECT operation_id
-			FROM ${database}.history_effects
-			WHERE address = {account:String}
-		)
-	)
+FROM (
+        SELECT transaction_hash, ledger_sequence, account, account_muxed, account_sequence, operation_count, successful, transaction_result_code, memo_type, memo, closed_at, id
+        FROM ${database}.history_transactions
+        WHERE account = {account:String}
+        UNION ALL
+        SELECT transaction_hash, ledger_sequence, account, account_muxed, account_sequence, operation_count, successful, transaction_result_code, memo_type, memo, closed_at, id
+        FROM ${database}.history_transactions
+        WHERE account != {account:String}
+                AND id IN (
+                        SELECT transaction_id
+                        FROM ${database}.history_operations
+                        WHERE id IN (
+                                SELECT operation_id
+                                FROM ${database}.history_effects
+                                WHERE address = {account:String}
+                        )
+                )
+)
 ORDER BY ledger_sequence DESC, id DESC
 LIMIT {row_limit:UInt32} OFFSET {offset:UInt64}
 FORMAT JSON`;
