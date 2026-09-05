@@ -414,24 +414,29 @@ async function findRuntimeTargets(
 			from runtime_target target
 			where coalesce((
 				select true
-				from "history_archive_checkpoint_proof" proof
+				from lateral (
+					select proof."archiveUrlIdentity"
+					from "history_archive_checkpoint_proof" proof
+					where proof."checkpointLedger" =
+							target.checkpoint_ledger
+						and proof.status = $$verified$$
+						and proof."failureKind" is null
+						and proof."requiredObjectsComplete" = true
+						and proof."proofFactsComplete" = true
+						and proof."proofVersion" =
+							${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+					order by proof."evaluatedAt" desc
+					offset 0
+				) proof
 				join "history_archive_state_snapshot" proof_state
 					on proof_state."archiveUrlIdentity" =
 						proof."archiveUrlIdentity"
-					and proof_state.status = $$available$$
+				where proof_state.status = $$available$$
 					and proof_state."networkPassphrase" is not null
 					and sha256(convert_to(
 						proof_state."networkPassphrase",
 						$$UTF8$$
 					)) = target."network_passphrase_hash"
-				where proof."checkpointLedger" =
-						target.checkpoint_ledger
-					and proof.status = $$verified$$
-					and proof."failureKind" is null
-					and proof."requiredObjectsComplete" = true
-					and proof."proofFactsComplete" = true
-					and proof."proofVersion" =
-						${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
 				limit 1
 			), false) = false
 		 ) as "hasUnsatisfiedTarget"`
@@ -462,24 +467,29 @@ async function findRuntimeTargets(
 			) candidate
                         where coalesce((
                                 select true
-                                from "history_archive_checkpoint_proof" proof
+                                from lateral (
+                                        select proof."archiveUrlIdentity"
+                                        from "history_archive_checkpoint_proof" proof
+                                        where proof."checkpointLedger" =
+                                                target.checkpoint_ledger
+                                                and proof.status = $$verified$$
+                                                and proof."failureKind" is null
+                                                and proof."requiredObjectsComplete" = true
+                                                and proof."proofFactsComplete" = true
+                                                and proof."proofVersion" =
+                                                        ${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+                                        order by proof."evaluatedAt" desc
+                                        offset 0
+                                ) proof
                                 join "history_archive_state_snapshot" proof_state
                                         on proof_state."archiveUrlIdentity" =
                                                 proof."archiveUrlIdentity"
-                                        and proof_state.status = $$available$$
+                                where proof_state.status = $$available$$
                                         and proof_state."networkPassphrase" is not null
                                         and sha256(convert_to(
                                                 proof_state."networkPassphrase",
                                                 $$UTF8$$
                                         )) = target."network_passphrase_hash"
-                                where proof."checkpointLedger" =
-                                                target.checkpoint_ledger
-                                        and proof.status = $$verified$$
-                                        and proof."failureKind" is null
-                                        and proof."requiredObjectsComplete" = true
-                                        and proof."proofFactsComplete" = true
-                                        and proof."proofVersion" =
-                                                ${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
                                 limit 1
                         ), false) = false
                  )
