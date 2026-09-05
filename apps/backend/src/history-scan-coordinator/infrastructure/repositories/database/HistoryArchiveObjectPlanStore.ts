@@ -372,7 +372,7 @@ const activateObjectsSql = `
 		select target."remoteId", target."archiveUrlIdentity", 1,
 			now(), now(), now()
 		from targets target
-		order by target."archiveUrlIdentity", target."remoteId"
+		order by target."remoteId"
 		on conflict ("objectRemoteId") do nothing
 		returning "objectRemoteId"
 	), deleted_plan as (

@@ -128,6 +128,7 @@ export const orderedCheckpointPrefetchSql = `
                 select inserted."remoteId", inserted."archiveUrlIdentity", 2,
                         now(), now(), now()
                 from inserted
+                order by inserted."remoteId"
                 on conflict ("objectRemoteId") do nothing
                 returning "objectRemoteId"
         )
@@ -289,6 +290,7 @@ export const activateCurrentCheckpointDependenciesSql = `
 		select activated."remoteId", activated."archiveUrlIdentity", 1,
 			now(), now(), now()
 		from activated
+		order by activated."remoteId"
 		on conflict ("objectRemoteId") do nothing
 		returning "objectRemoteId"
 	)

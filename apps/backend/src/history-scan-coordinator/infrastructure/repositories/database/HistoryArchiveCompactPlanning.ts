@@ -521,6 +521,7 @@ export const targetedCompactCheckpointPlanSql = `
 			and candidate.checkpoint_ledger = inserted."checkpointLedger"
 		join advanced
 			on advanced."archiveUrlIdentity" = inserted."archiveUrlIdentity"
+		order by inserted."remoteId"
 		on conflict ("objectRemoteId") do nothing
 		returning "objectRemoteId"
 	)
