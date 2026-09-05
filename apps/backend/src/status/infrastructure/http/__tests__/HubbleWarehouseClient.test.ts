@@ -58,7 +58,7 @@ describe('ClickHouseHubbleWarehouse', () => {
 				select: ['id; DROP TABLE history_transactions']
 			})
 		).rejects.toBeInstanceOf(HubbleWarehouseInputError);
-		expect(requests).toHaveLength(3);
+		expect(requests).toHaveLength(4);
 	});
 
 	it('queries official metadata columns whose names begin with an underscore', async () => {
@@ -119,6 +119,9 @@ function mockFetch(requests: URL[]): typeof fetch {
 			return jsonResponse({
 				data: [{ rows: '1', table: 'history_transactions' }]
 			});
+		}
+		if (query.includes(' AS ranges,')) {
+			return jsonResponse({ data: [{ ranges: [[2, 66]], range_count: '1' }] });
 		}
 		if (query.includes('._ingestion_batches FINAL')) {
 			return jsonResponse({

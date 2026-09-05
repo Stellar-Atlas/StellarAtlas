@@ -116,7 +116,7 @@ export function registerHubbleSemanticRoutes(
 					})
 				]);
 			return {
-				contractEvents: contractEvents.rows,
+				contractEvents: await warehouse.classifyEventRows(contractEvents.rows),
 				ledger: ledger.rows[0] ?? null,
 				operations: operations.rows,
 				tokenTransfers: tokenTransfers.rows,
@@ -354,7 +354,11 @@ export function registerHubbleSemanticRoutes(
 					{ direction: 'desc', field: '_row_number' }
 				]
 			});
-			return semanticPage(result, limit, offset);
+			const page = semanticPage(result, limit, offset);
+			return {
+				...page,
+				rows: await warehouse.classifyEventRows(result.rows.slice(0, limit))
+			};
 		});
 	});
 

@@ -63,6 +63,7 @@ type RootRow = {
 	readonly pendingcheckpoints?: NumericValue;
 	readonly pendingObjects?: NumericValue;
 	readonly pendingobjects?: NumericValue;
+	readonly retainedRemoteFailureObjects?: NumericValue;
 	readonly remoteFailureObjects?: NumericValue;
 	readonly remotefailureobjects?: NumericValue;
 	readonly rollupComplete?: boolean;
@@ -194,7 +195,8 @@ function mapSequentialCoverage(row: RootRow): KnownArchiveSequentialCoverageV1 {
 	);
 	return {
 		advertisedLatestCheckpointLedger: nullableNumber(
-			row.advertisedLatestCheckpointLedger ?? row.advertisedlatestcheckpointledger,
+			row.advertisedLatestCheckpointLedger ??
+				row.advertisedlatestcheckpointledger,
 			'advertisedLatestCheckpointLedger'
 		),
 		blockedCheckpointLedger,
@@ -205,19 +207,19 @@ function mapSequentialCoverage(row: RootRow): KnownArchiveSequentialCoverageV1 {
 			blockerObservedAt === null
 				? null
 				: {
-					checkpointLedger: blockedCheckpointLedger,
-					errorType: nullableString(
-						row.blockerErrorType ?? row.blockererrortype,
-						'blockerErrorType'
-					),
-					httpStatus: nullableNumber(
-						row.blockerHttpStatus ?? row.blockerhttpstatus,
-						'blockerHttpStatus'
-					),
-					objectType: blockerObjectType,
-					objectUrl: blockerObjectUrl,
-					observedAt: blockerObservedAt.toISOString()
-				},
+						checkpointLedger: blockedCheckpointLedger,
+						errorType: nullableString(
+							row.blockerErrorType ?? row.blockererrortype,
+							'blockerErrorType'
+						),
+						httpStatus: nullableNumber(
+							row.blockerHttpStatus ?? row.blockerhttpstatus,
+							'blockerHttpStatus'
+						),
+						objectType: blockerObjectType,
+						objectUrl: blockerObjectUrl,
+						observedAt: blockerObservedAt.toISOString()
+					},
 		lastContinuouslyVerifiedCheckpointLedger: nullableNumber(
 			row.lastContinuouslyVerifiedCheckpointLedger ??
 				row.lastcontinuouslyverifiedcheckpointledger,
@@ -237,7 +239,20 @@ function mapObjectCounts(
 	row: RootRow,
 	future: RootRow | undefined
 ): KnownArchiveObjectCountsV1 {
+	const retainedRemoteFailureObjects = snapshotNumberField(
+		row.retainedRemoteFailureObjects ?? 0,
+		future?.retainedRemoteFailureObjects ?? 0,
+		'retainedRemoteFailureObjects'
+	);
+	const remoteFailureObjects = snapshotNumberField(
+		row.remoteFailureObjects ?? row.remotefailureobjects,
+		future?.remoteFailureObjects ?? future?.remotefailureobjects,
+		'remoteFailureObjects'
+	);
 	return {
+		retainedRemoteFailureObjects,
+		unresolvedRemoteFailureObjects:
+			remoteFailureObjects + retainedRemoteFailureObjects,
 		activeObjects: snapshotNumberField(
 			row.activeObjects ?? row.activeobjects,
 			future?.activeObjects ?? future?.activeobjects,
@@ -253,11 +268,7 @@ function mapObjectCounts(
 			future?.pendingObjects ?? future?.pendingobjects,
 			'pendingObjects'
 		),
-		remoteFailureObjects: snapshotNumberField(
-			row.remoteFailureObjects ?? row.remotefailureobjects,
-			future?.remoteFailureObjects ?? future?.remotefailureobjects,
-			'remoteFailureObjects'
-		),
+		remoteFailureObjects,
 		totalObjects: snapshotNumberField(
 			row.totalObjects ?? row.totalobjects,
 			future?.totalObjects ?? future?.totalobjects,
@@ -348,17 +359,25 @@ function nullableDate(value: Date | string | null | undefined): Date | null {
 	}
 	return date;
 }
-function nullableNumber(value: NumericValue | undefined, field: string): number | null {
+function nullableNumber(
+	value: NumericValue | undefined,
+	field: string
+): number | null {
 	if (value === null || value === undefined) return null;
 	return requireNumber(value, field);
 }
 
-function nullableString(value: string | null | undefined, field: string): string | null {
+function nullableString(
+	value: string | null | undefined,
+	field: string
+): string | null {
 	if (value === null || value === undefined) return null;
 	return requireString(value, field);
 }
 
-function nullableObjectType(value: string | null | undefined): HistoryArchiveObjectTypeV1 | null {
+function nullableObjectType(
+	value: string | null | undefined
+): HistoryArchiveObjectTypeV1 | null {
 	if (value === null || value === undefined) return null;
 	if (
 		value === 'history-archive-state' ||
@@ -368,13 +387,25 @@ function nullableObjectType(value: string | null | undefined): HistoryArchiveObj
 		value === 'results' ||
 		value === 'scp' ||
 		value === 'bucket'
-	) return value;
-	throw new Error('Known archive evidence root row has invalid blockerObjectType');
+	)
+		return value;
+	throw new Error(
+		'Known archive evidence root row has invalid blockerObjectType'
+	);
 }
 
-function requireCoverageStatus(value: string | undefined): KnownArchiveSequentialCoverageStatusV1 {
-	if (value === 'advancing' || value === 'blocked' || value === 'caught-up' || value === 'unavailable') {
+function requireCoverageStatus(
+	value: string | undefined
+): KnownArchiveSequentialCoverageStatusV1 {
+	if (
+		value === 'advancing' ||
+		value === 'blocked' ||
+		value === 'caught-up' ||
+		value === 'unavailable'
+	) {
 		return value;
 	}
-	throw new Error('Known archive evidence root row has invalid sequentialCoverageStatus');
+	throw new Error(
+		'Known archive evidence root row has invalid sequentialCoverageStatus'
+	);
 }

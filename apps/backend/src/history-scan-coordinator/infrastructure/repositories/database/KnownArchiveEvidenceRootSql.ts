@@ -1,3 +1,8 @@
+import {
+	retainedRemoteCountSql,
+	retainedRemoteFutureCountSql
+} from './RetainedRemoteFindingQuery.js';
+
 export const knownArchiveEvidenceRootSql = `
 	with requested_roots as (
 		select *
@@ -25,6 +30,7 @@ export const knownArchiveEvidenceRootSql = `
 		coalesce(summary."activeObjects", 0) as "activeObjects",
 		coalesce(summary."verifiedObjects", 0) as "verifiedObjects",
 		coalesce(summary."remoteFailureObjects", 0) as "remoteFailureObjects",
+		${retainedRemoteCountSql('root."archiveUrlIdentity"')} as "retainedRemoteFailureObjects",
 		coalesce(summary."workerIssueObjects", 0) as "workerIssueObjects",
 		coalesce(summary."bucketObjects", 0) as "bucketObjects",
 		coalesce(summary."verifiedBucketObjects", 0) as "verifiedBucketObjects",
@@ -122,6 +128,7 @@ export const knownArchiveEvidenceRootSql = `
 export const knownArchiveEvidenceFutureObjectSql = `
 	select
 		archive_object."archiveUrlIdentity",
+		${retainedRemoteFutureCountSql('archive_object."archiveUrlIdentity"', '$2::timestamptz')} as "retainedRemoteFailureObjects",
 		count(*) as "totalObjects",
 		count(*) filter (where archive_object.status = 'pending')
 			as "pendingObjects",

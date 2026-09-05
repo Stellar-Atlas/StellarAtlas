@@ -8,6 +8,7 @@ import type {
 	KnownArchiveCheckpointCountsV1,
 	KnownArchiveFailureFiltersV1,
 	KnownArchiveObjectCountsV1,
+	KnownArchiveRemoteFailureV1,
 	KnownArchiveSequentialCoverageV1
 } from 'shared';
 
@@ -49,6 +50,7 @@ export interface KnownArchiveRootReadModel extends KnownArchiveRootScope {
 }
 
 export interface KnownArchiveFailureReadModel {
+	readonly retainedFinding?: KnownArchiveRemoteFailureV1['retainedFinding'];
 	readonly evidenceClass: HistoryArchiveObjectEvidenceClass;
 	readonly object: HistoryArchiveObject;
 }

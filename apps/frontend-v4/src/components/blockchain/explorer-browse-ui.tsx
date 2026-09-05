@@ -1,5 +1,6 @@
 export const explorerBrowseSections = [
 	'Transactions',
+	'Transfers',
 	'Operations',
 	'Assets',
 	'Contracts'

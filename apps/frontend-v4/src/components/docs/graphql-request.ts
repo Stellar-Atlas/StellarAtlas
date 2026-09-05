@@ -1,4 +1,26 @@
 export const graphqlExamples = {
+	transfers: {
+		label: 'Exact asset transfers (typed, cursor-paginated)',
+		query: `query Transfers($input: HubbleTransferInput) {
+  hubbleTransfers(input: $input) {
+    limit nextCursor elapsedMilliseconds
+    watermark { minimumLedger maximumLedger observedAt coverage }
+    transfers {
+      id ledgerSequence closedAt transactionHash from to eventTopic
+      amountRaw amountScale asset { id type code issuer }
+    }
+  }
+}`,
+		variables: {
+			input: {
+				asset: 'native',
+				eventTopic: 'transfer',
+				minLedger: 26000000,
+				maxLedger: 26000099,
+				limit: 10
+			}
+		}
+	},
 	ledgers: {
 		label: 'Paginated ledger rows',
 		query: `query LedgerRows($input: HubbleQueryInput!) {
@@ -26,6 +48,10 @@ export const graphqlExamples = {
   hubbleStatus {
     servingWarehouse minimumLedger maximumLedger
     completedBatches failedBatches datasetCount
+    coverage {
+      contiguousFirstLedger contiguousLastLedger contiguousLedgerCount
+      supplementalLedgerCount totalLedgerCount nextLedger gapCount
+    }
   }
 }`,
 		variables: {}
@@ -54,7 +80,28 @@ export function graphqlPageVariables(
 	if (!isRecord(variables.input) || !isRecord(result) || result.errors)
 		return null;
 	const data = result.data;
-	if (!isRecord(data) || !isRecord(data.hubbleQuery)) return null;
+	if (!isRecord(data)) return null;
+	const typedPage =
+		data.hubbleTransfers ??
+		data.hubbleAccountTransfers ??
+		data.hubbleAssetTransfers;
+	if (isRecord(typedPage)) {
+		if (
+			direction < 0 ||
+			typeof typedPage.nextCursor !== 'string' ||
+			!typedPage.nextCursor
+		)
+			return null;
+		return JSON.stringify(
+			{
+				...variables,
+				input: { ...variables.input, after: typedPage.nextCursor }
+			},
+			null,
+			2
+		);
+	}
+	if (!isRecord(data.hubbleQuery)) return null;
 	const page = data.hubbleQuery;
 	if (
 		typeof page.limit !== 'number' ||

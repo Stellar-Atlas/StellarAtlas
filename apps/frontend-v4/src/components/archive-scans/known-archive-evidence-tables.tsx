@@ -1,3 +1,6 @@
+import { RetainedRemoteFinding } from './retained-remote-finding';
+import { LocalDateTime } from '../local-date-time';
+import { unresolvedRemoteFailureCount } from '@domain/known-archive-evidence';
 import type {
 	PublicHistoryArchiveObjectEventPage,
 	PublicHistoryArchiveObjectPage,
@@ -57,7 +60,7 @@ export function RemoteFailureTable({
 								<ObjectIdentity object={failure.object} />
 							</td>
 							<td className="known-evidence-error" data-label="Exact result">
-								{formatObjectError(failure.object)}
+								<RetainedRemoteFinding failure={failure} />
 							</td>
 							<td data-label="Source evidence">
 								<div className="failed-archive-source">
@@ -67,7 +70,12 @@ export function RemoteFailureTable({
 								<VerifiedAlternateCopies failure={failure} />
 							</td>
 							<td data-label="Observed">
-								{formatDateTime(failure.object.updatedAt)}
+								<LocalDateTime
+									dateTime={
+										failure.retainedFinding?.observedAt ??
+										failure.object.updatedAt
+									}
+								/>
 							</td>
 							<td data-label="Action">
 								<ArchiveObjectRetryButton
@@ -279,12 +287,12 @@ export function ArchiveRootSummaryTable({
 								<td
 									data-label="Unresolved remote checks"
 									className={
-										root.objects.remoteFailureObjects > 0
+										unresolvedRemoteFailureCount(root.objects) > 0
 											? 'known-evidence-error'
 											: ''
 									}
 								>
-									{formatInteger(root.objects.remoteFailureObjects)}
+									{formatInteger(unresolvedRemoteFailureCount(root.objects))}
 								</td>
 								<td data-label="Continuous history">
 									<SequentialCoverageSummary root={root} />

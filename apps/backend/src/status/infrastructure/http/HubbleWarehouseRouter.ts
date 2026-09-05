@@ -9,6 +9,7 @@ import {
 	type HubbleWarehouse
 } from './HubbleWarehouseClient.js';
 import { registerHubbleSemanticRoutes } from './HubbleSemanticRoutes.js';
+import { registerHubbleTransferRoutes } from './HubbleTransferRoutes.js';
 
 export interface HubbleWarehouseRouterConfig {
 	readonly warehouse: HubbleWarehouse;
@@ -70,6 +71,7 @@ export function hubbleWarehouseRouter(
 		});
 	});
 
+	registerHubbleTransferRoutes(router, config.warehouse);
 	registerHubbleSemanticRoutes(router, config.warehouse);
 
 	router.get('/:dataset', async (request, response) => {

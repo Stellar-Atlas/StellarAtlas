@@ -15,7 +15,13 @@ import {
 	type HubbleWarehouse
 } from './HubbleWarehouseClient.js';
 
-const schema = buildSchema(`
+import {
+	hubbleTransferSchema,
+	hubbleTransferResolvers
+} from './HubbleTransferGraphql.js';
+
+const schema = buildSchema(
+	`
 	scalar JSON
 
 	type Query {
@@ -25,6 +31,7 @@ const schema = buildSchema(`
 	}
 
 	type HubbleStatus {
+		coverage: HubbleLedgerCoverage!
 		availableQueries: [String!]!
 		compatibility: String!
 		completedBatches: String!
@@ -35,6 +42,18 @@ const schema = buildSchema(`
 		officialSchemaSource: String!
 		servingWarehouse: String!
 		totalRows: String!
+	}
+
+	type HubbleLedgerCoverage {
+		contiguousFirstLedger: String
+		contiguousLastLedger: String
+		contiguousLedgerCount: String!
+		supplementalLedgerCount: String!
+		totalLedgerCount: String!
+		nextLedger: String!
+		minimumLedger: String
+		maximumLedger: String
+		gapCount: Int!
 	}
 
 	type HubbleDataset {
@@ -96,7 +115,8 @@ const schema = buildSchema(`
 		ASC
 		DESC
 	}
-`);
+` + hubbleTransferSchema
+);
 
 const jsonScalar = schema.getType('JSON');
 if (jsonScalar instanceof GraphQLScalarType) {
@@ -132,6 +152,7 @@ export function hubbleWarehouseGraphqlHandler(
 	return createHandler({
 		schema,
 		rootValue: {
+			...hubbleTransferResolvers(warehouse, mapGraphqlError),
 			hubbleDatasets: async () => (await warehouse.catalog()).datasets,
 			hubbleQuery: async ({ input }: GraphqlQueryArguments) => {
 				try {
@@ -144,8 +165,15 @@ export function hubbleWarehouseGraphqlHandler(
 				try {
 					const catalog = await warehouse.catalog();
 					return {
-						availableQueries: ['hubbleDatasets', 'hubbleQuery'],
+						availableQueries: [
+							'hubbleDatasets',
+							'hubbleQuery',
+							'hubbleTransfers',
+							'hubbleAccountTransfers',
+							'hubbleAssetTransfers'
+						],
 						compatibility: 'official-stellar-etl-schema',
+						coverage: catalog.coverage,
 						completedBatches: catalog.ingestion.completedBatches,
 						datasetCount: catalog.datasets.length,
 						failedBatches: catalog.ingestion.failedBatches,

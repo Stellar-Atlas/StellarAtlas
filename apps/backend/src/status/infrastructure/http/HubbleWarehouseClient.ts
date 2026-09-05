@@ -27,13 +27,22 @@ export {
 	HubbleWarehouseUnavailableError
 } from './HubbleWarehouseErrors.js';
 
+import { classifyHubbleEventRows } from './HubbleEventRelationshipQuery.js';
+import { queryHubbleLedgerCoverage } from './HubbleLedgerCoverage.js';
+import { queryHubbleTransferActivity } from './HubbleTransferQuery.js';
+import { normalizeHubbleTransferInput } from './HubbleTransferValidation.js';
+import type {
+	HubbleTransferInput,
+	HubbleTransferPage
+} from './HubbleTransferContracts.js';
 import { queryHubbleAccountTransactions } from './HubbleAccountTransactionQuery.js';
 import { queryHubbleAssetHolders } from './HubbleAssetHolderQuery.js';
 import type {
 	HubbleAccountTransactionQuery,
 	HubbleAssetHolderPage,
 	HubbleAssetHolderQuery,
-	HubbleSemanticPage
+	HubbleSemanticPage,
+	HubbleSemanticQueryExecutor
 } from './HubbleSemanticWarehouse.js';
 
 interface ClickHouseResponse<T> {
@@ -158,30 +167,42 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 		}
 	}
 
+	private semanticExecutor(): HubbleSemanticQueryExecutor {
+		return {
+			database: this.database,
+			execute: (sql, parameters) => this.execute(sql, parameters),
+			maximumRows: this.maximumRows
+		};
+	}
+
+	async classifyEventRows(
+		rows: readonly Record<string, unknown>[]
+	): Promise<readonly Record<string, unknown>[]> {
+		return classifyHubbleEventRows(this.semanticExecutor(), rows);
+	}
+
+	async transferActivity(
+		request: HubbleTransferInput
+	): Promise<HubbleTransferPage> {
+		const input = normalizeHubbleTransferInput(request);
+		const catalog = await this.catalog();
+		return queryHubbleTransferActivity(
+			this.semanticExecutor(),
+			input,
+			Number(catalog.ingestion.maximumLedger ?? 0)
+		);
+	}
+
 	async accountTransactions(
 		input: HubbleAccountTransactionQuery
 	): Promise<HubbleSemanticPage> {
-		return queryHubbleAccountTransactions(
-			{
-				database: this.database,
-				execute: (sql, parameters) => this.execute(sql, parameters),
-				maximumRows: this.maximumRows
-			},
-			input
-		);
+		return queryHubbleAccountTransactions(this.semanticExecutor(), input);
 	}
 
 	async assetHolders(
 		input: HubbleAssetHolderQuery
 	): Promise<HubbleAssetHolderPage> {
-		return queryHubbleAssetHolders(
-			{
-				database: this.database,
-				execute: (sql, parameters) => this.execute(sql, parameters),
-				maximumRows: this.maximumRows
-			},
-			input
-		);
+		return queryHubbleAssetHolders(this.semanticExecutor(), input);
 	}
 
 	async query(input: HubbleQuery): Promise<HubbleQueryResult> {
@@ -305,6 +326,7 @@ FORMAT JSON`,
 				)
 			]
 		);
+		const coverage = await queryHubbleLedgerCoverage(this.semanticExecutor());
 		const rowsByTable = new Map(
 			(partResponse.data ?? []).map((row) => [row.table, row.rows])
 		);
@@ -331,6 +353,7 @@ FORMAT JSON`,
 		const ingestion = ingestionResponse.data?.[0];
 		return {
 			database: this.database,
+			coverage,
 			datasets: [...datasets.entries()].map(([name, columns]) => ({
 				columns,
 				name,
@@ -398,6 +421,14 @@ FORMAT JSON`,
 
 class UnavailableHubbleWarehouse implements HubbleWarehouse {
 	constructor(private readonly reason: string) {}
+
+	async classifyEventRows(): Promise<readonly Record<string, unknown>[]> {
+		throw new HubbleWarehouseUnavailableError(this.reason);
+	}
+
+	async transferActivity(): Promise<HubbleTransferPage> {
+		throw new HubbleWarehouseUnavailableError(this.reason);
+	}
 
 	async accountTransactions(): Promise<HubbleSemanticPage> {
 		throw new HubbleWarehouseUnavailableError(this.reason);

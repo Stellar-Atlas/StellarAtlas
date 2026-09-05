@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { TransferActivityPanel } from '../analytics/transfer-activity-panel';
 import {
 	getExplorerRecentTransactions,
 	getExplorerInitialData,
@@ -221,6 +222,9 @@ export function BlockchainExplorer(): React.JSX.Element {
 						</p>
 					) : null}
 				</section>
+			</div>
+			<div hidden={section !== 'Transfers'}>
+				<TransferActivityPanel />
 			</div>
 			<div hidden={section !== 'Operations'}>
 				<ExplorerOperationsPanel

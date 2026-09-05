@@ -10,9 +10,9 @@ import {
 import styles from './graphql-playground.module.css';
 
 export function GraphqlPlayground(): React.JSX.Element {
-	const [query, setQuery] = useState<string>(graphqlExamples.ledgers.query);
+	const [query, setQuery] = useState<string>(graphqlExamples.transfers.query);
 	const [variables, setVariables] = useState(
-		JSON.stringify(graphqlExamples.ledgers.variables, null, 2)
+		JSON.stringify(graphqlExamples.transfers.variables, null, 2)
 	);
 	const [status, setStatus] = useState(
 		'No request sent. Queries run only when you select Run query.'
@@ -24,10 +24,15 @@ export function GraphqlPlayground(): React.JSX.Element {
 		next: string | null;
 	}>({ previous: null, next: null });
 	const controller = useRef<AbortController | null>(null);
+	const navigationHistory = useRef<string[]>([]);
+	const lastSuccessfulVariables = useRef<string | null>(null);
 
 	useEffect(() => () => controller.current?.abort(), []);
 
-	async function run(nextVariables = variables): Promise<void> {
+	async function run(
+		nextVariables = variables,
+		direction: 'reset' | 'next' | 'previous' = 'reset'
+	): Promise<void> {
 		if (controller.current) return;
 		const abort = new AbortController();
 		controller.current = abort;
@@ -65,8 +70,16 @@ export function GraphqlPlayground(): React.JSX.Element {
 				`HTTP ${result.status} · ${Math.round(performance.now() - started)} ms${queryErrors ? ' · GraphQL errors returned (see response)' : ''}`
 			);
 			if (result.ok && !queryErrors) {
+				if (direction === 'reset') navigationHistory.current = [];
+				else if (
+					direction === 'next' &&
+					lastSuccessfulVariables.current !== null
+				)
+					navigationHistory.current.push(lastSuccessfulVariables.current);
+				else if (direction === 'previous') navigationHistory.current.pop();
+				lastSuccessfulVariables.current = nextVariables;
 				setPages({
-					previous: graphqlPageVariables(nextVariables, decoded, -1),
+					previous: navigationHistory.current.at(-1) ?? null,
 					next: graphqlPageVariables(nextVariables, decoded, 1)
 				});
 			}
@@ -93,10 +106,13 @@ export function GraphqlPlayground(): React.JSX.Element {
 		setStatus('Example loaded. Select Run query to send it.');
 	}
 
-	function page(nextVariables: string | null): void {
+	function page(
+		nextVariables: string | null,
+		direction: 'next' | 'previous'
+	): void {
 		if (nextVariables === null) return;
 		setVariables(nextVariables);
-		void run(nextVariables);
+		void run(nextVariables, direction);
 	}
 
 	return (
@@ -117,7 +133,7 @@ export function GraphqlPlayground(): React.JSX.Element {
 				Example
 				<select
 					disabled={busy}
-					defaultValue="ledgers"
+					defaultValue="transfers"
 					onChange={(event) =>
 						changeExample(event.target.value as keyof typeof graphqlExamples)
 					}
@@ -170,13 +186,13 @@ export function GraphqlPlayground(): React.JSX.Element {
 				)}
 				<button
 					disabled={busy || pages.previous === null}
-					onClick={() => page(pages.previous)}
+					onClick={() => page(pages.previous, 'previous')}
 				>
 					Previous page
 				</button>
 				<button
 					disabled={busy || pages.next === null}
-					onClick={() => page(pages.next)}
+					onClick={() => page(pages.next, 'next')}
 				>
 					Next page
 				</button>
@@ -194,9 +210,10 @@ export function GraphqlPlayground(): React.JSX.Element {
 				</pre>
 			)}
 			<p>
-				Pagination uses the returned limit and offset. A full page permits a
-				next request, not a guarantee of another row. Change the example’s
-				ledger filters to query another range.
+				Typed transfer queries use the returned nextCursor; Previous page reuses
+				the previous request. Generic dataset queries retain offset pagination.
+				Ledger bounds describe the requested window, not a frozen database
+				snapshot or a guarantee that ingestion has filled every gap.
 			</p>
 			<p>
 				Coverage is partial while ingestion catches up. Minimum and maximum

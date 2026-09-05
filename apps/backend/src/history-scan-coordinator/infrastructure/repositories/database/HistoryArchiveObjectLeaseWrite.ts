@@ -1,3 +1,4 @@
+import { resolveVerifiedRemoteFindingsSql } from './HistoryArchiveRetainedRemoteFindingSql.js';
 import type { Repository } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type {
@@ -68,6 +69,11 @@ export async function markHistoryArchiveObjectsVerified(
 			payload
 		])) as readonly { readonly remoteId: string }[];
 		const verified = new Set(rows.map((row) => row.remoteId));
+		// Only IDs returned by the fenced same-source completion may resolve findings.
+		// A separate command sees row-trigger captures from the completion statement.
+		if (verified.size > 0) {
+			await manager.query(resolveVerifiedRemoteFindingsSql, [[...verified]]);
+		}
 
 		await recordHistoryArchiveContentEvidenceBatch(
 			manager,

@@ -4,6 +4,13 @@ export async function createEvidenceSummarySchema(
 	dataSource: DataSource
 ): Promise<void> {
 	await dataSource.query(`
+		create table history_archive_retained_remote_summary (
+			"archiveUrlIdentity" text not null, "objectType" text not null,
+			"retainedObjects" bigint not null,
+			primary key ("archiveUrlIdentity", "objectType")
+		);
+	`);
+	await dataSource.query(`
 		create table history_archive_evidence_root_summary (
 			"archiveUrlIdentity" text primary key,
 			"totalObjects" bigint not null,

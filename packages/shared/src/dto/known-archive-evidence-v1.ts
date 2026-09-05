@@ -13,7 +13,11 @@ export interface KnownArchiveObjectCountsV1 {
 	readonly activeObjects: number;
 	readonly bucketObjects: number;
 	readonly pendingObjects: number;
+	/** Current terminal remote failures; still part of the object-status partition. */
 	readonly remoteFailureObjects: number;
+	/** Additive fields are optional for compatibility with older evidence responses. */
+	readonly retainedRemoteFailureObjects?: number;
+	readonly unresolvedRemoteFailureObjects?: number;
 	readonly totalObjects: number;
 	readonly verifiedBucketObjects: number;
 	readonly verifiedObjects: number;
@@ -29,10 +33,7 @@ export interface KnownArchiveCheckpointCountsV1 {
 }
 
 export type KnownArchiveSequentialCoverageStatusV1 =
-	| 'advancing'
-	| 'blocked'
-	| 'caught-up'
-	| 'unavailable';
+	'advancing' | 'blocked' | 'caught-up' | 'unavailable';
 
 export interface KnownArchiveSequentialCoverageBlockerV1 {
 	readonly checkpointLedger: number;
@@ -77,7 +78,17 @@ export interface KnownArchiveVerifiedCopySetV1 {
 	readonly sampleLimit: number;
 }
 
+export interface KnownArchiveRetainedRemoteFindingV1 {
+	readonly observedAt: string;
+	readonly failureChannel: 'archive_evidence' | 'archive_availability';
+	readonly errorType: string | null;
+	readonly errorMessage: string | null;
+	readonly httpStatus: number | null;
+}
+
 export interface KnownArchiveRemoteFailureV1 {
+	/** Last unresolved source evidence, separate from the object's current worker state. */
+	readonly retainedFinding?: KnownArchiveRetainedRemoteFindingV1;
 	readonly networkVerifiedCopies: KnownArchiveVerifiedCopySetV1;
 	readonly object: HistoryArchiveObjectV1;
 	readonly sameOrganizationVerifiedCopies: KnownArchiveVerifiedCopySetV1;

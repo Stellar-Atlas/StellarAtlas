@@ -22,6 +22,7 @@ type Config struct {
 	DecodeLimits      lcmbatch.Limits
 	WriterLimits      clickhouse.WriterLimits
 	MaximumBatches    int
+	PriorityBatchID   string
 	PressureGuard     *PressureGuard
 	OnProgress        func(Summary)
 }
@@ -33,13 +34,16 @@ type Failure struct {
 }
 
 type Summary struct {
-	CatalogBatches   int       `json:"catalogBatches"`
-	CompletedBatches int       `json:"completedBatches"`
-	FailedBatches    int       `json:"failedBatches"`
-	IngestedBatches  int       `json:"ingestedBatches"`
-	IngestedLedgers  uint64    `json:"ingestedLedgers"`
-	IngestedRows     uint64    `json:"ingestedRows"`
-	Failures         []Failure `json:"failures,omitempty"`
+	CatalogBatches           int       `json:"catalogBatches"`
+	CompletedBatches         int       `json:"completedBatches"`
+	FailedBatches            int       `json:"failedBatches"`
+	IngestedBatches          int       `json:"ingestedBatches"`
+	IngestedLedgers          uint64    `json:"ingestedLedgers"`
+	IngestedRows             uint64    `json:"ingestedRows"`
+	LastCompletedBatchID     string    `json:"lastCompletedBatchId,omitempty"`
+	LastCompletedStartLedger uint32    `json:"lastCompletedStartLedger,omitempty"`
+	LastCompletedEndLedger   uint32    `json:"lastCompletedEndLedger,omitempty"`
+	Failures                 []Failure `json:"failures,omitempty"`
 }
 
 type result struct {
@@ -72,25 +76,13 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 	if err != nil {
 		return summary, fmt.Errorf("read warehouse completion state: %w", err)
 	}
-	pending := make([]catalog.Batch, 0, len(batches))
-	for _, batch := range batches {
-		if digest, ok := completed[batch.ID]; ok {
-			if digest != batch.SourceSHA256 {
-				return summary, fmt.Errorf(
-					"batch %s changed immutable digest from %s to %s",
-					batch.ID,
-					digest,
-					batch.SourceSHA256,
-				)
-			}
-			summary.CompletedBatches++
-			continue
-		}
-		pending = append(pending, batch)
+	pending, completedCount, err := selectPendingBatches(
+		batches, completed, config.PriorityBatchID, config.MaximumBatches,
+	)
+	if err != nil {
+		return summary, err
 	}
-	if config.MaximumBatches > 0 && len(pending) > config.MaximumBatches {
-		pending = pending[:config.MaximumBatches]
-	}
+	summary.CompletedBatches = completedCount
 	if len(pending) == 0 {
 		return summary, nil
 	}
@@ -164,6 +156,9 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		summary.IngestedBatches++
 		summary.IngestedLedgers += uint64(item.receipt.LedgerCount)
 		summary.IngestedRows += item.receipt.RowCount
+		summary.LastCompletedBatchID = item.batch.ID
+		summary.LastCompletedStartLedger = item.batch.StartLedger
+		summary.LastCompletedEndLedger = item.batch.EndLedger
 		if config.OnProgress != nil {
 			config.OnProgress(summary)
 		}

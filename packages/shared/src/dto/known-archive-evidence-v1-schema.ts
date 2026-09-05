@@ -33,6 +33,8 @@ const KnownArchiveObjectCountsV1Schema: JSONSchemaType<KnownArchiveObjectCountsV
 			bucketObjects: { type: 'number' },
 			pendingObjects: { type: 'number' },
 			remoteFailureObjects: { type: 'number' },
+			retainedRemoteFailureObjects: { type: 'number', nullable: true },
+			unresolvedRemoteFailureObjects: { type: 'number', nullable: true },
 			totalObjects: { type: 'number' },
 			verifiedBucketObjects: { type: 'number' },
 			verifiedObjects: { type: 'number' },
@@ -71,61 +73,63 @@ const KnownArchiveCheckpointCountsV1Schema: JSONSchemaType<KnownArchiveCheckpoin
 		additionalProperties: false
 	};
 
-const KnownArchiveSequentialCoverageBlockerV1Schema: JSONSchemaType<KnownArchiveSequentialCoverageBlockerV1> = {
-	type: 'object',
-	properties: {
-		checkpointLedger: { type: 'number' },
-		errorType: nullable({ type: 'string' }),
-		httpStatus: nullable({ type: 'number' }),
-		objectType: {
-			type: 'string',
-			enum: [
-				'history-archive-state',
-				'checkpoint-state',
-				'ledger',
-				'transactions',
-				'results',
-				'scp',
-				'bucket'
-			]
+const KnownArchiveSequentialCoverageBlockerV1Schema: JSONSchemaType<KnownArchiveSequentialCoverageBlockerV1> =
+	{
+		type: 'object',
+		properties: {
+			checkpointLedger: { type: 'number' },
+			errorType: nullable({ type: 'string' }),
+			httpStatus: nullable({ type: 'number' }),
+			objectType: {
+				type: 'string',
+				enum: [
+					'history-archive-state',
+					'checkpoint-state',
+					'ledger',
+					'transactions',
+					'results',
+					'scp',
+					'bucket'
+				]
+			},
+			objectUrl: { type: 'string', format: 'uri' },
+			observedAt: { type: 'string', format: 'date-time' }
 		},
-		objectUrl: { type: 'string', format: 'uri' },
-		observedAt: { type: 'string', format: 'date-time' }
-	},
-	required: [
-		'checkpointLedger',
-		'errorType',
-		'httpStatus',
-		'objectType',
-		'objectUrl',
-		'observedAt'
-	],
-	additionalProperties: false
-};
+		required: [
+			'checkpointLedger',
+			'errorType',
+			'httpStatus',
+			'objectType',
+			'objectUrl',
+			'observedAt'
+		],
+		additionalProperties: false
+	};
 
-const KnownArchiveSequentialCoverageV1Schema: JSONSchemaType<KnownArchiveSequentialCoverageV1> = {
-	type: 'object',
-	properties: {
-		advertisedLatestCheckpointLedger: nullable({ type: 'number' }),
-		blockedCheckpointLedger: nullable({ type: 'number' }),
-		blocker: nullable(KnownArchiveSequentialCoverageBlockerV1Schema),
-		lastContinuouslyVerifiedCheckpointLedger: nullable({ type: 'number' }),
-		nextCheckpointLedger: nullable({ type: 'number' }),
-		status: {
-			type: 'string',
-			enum: ['advancing', 'blocked', 'caught-up', 'unavailable']
-		}
-	},
-	required: [
-		'advertisedLatestCheckpointLedger',
-		'blockedCheckpointLedger',
-		'blocker',
-		'lastContinuouslyVerifiedCheckpointLedger',
-		'nextCheckpointLedger',
-		'status'
-	],
-	additionalProperties: false
-};
+const KnownArchiveSequentialCoverageV1Schema: JSONSchemaType<KnownArchiveSequentialCoverageV1> =
+	{
+		type: 'object',
+		properties: {
+			advertisedLatestCheckpointLedger: nullable({ type: 'number' }),
+			blockedCheckpointLedger: nullable({ type: 'number' }),
+			blocker: nullable(KnownArchiveSequentialCoverageBlockerV1Schema),
+			lastContinuouslyVerifiedCheckpointLedger: nullable({ type: 'number' }),
+			nextCheckpointLedger: nullable({ type: 'number' }),
+			status: {
+				type: 'string',
+				enum: ['advancing', 'blocked', 'caught-up', 'unavailable']
+			}
+		},
+		required: [
+			'advertisedLatestCheckpointLedger',
+			'blockedCheckpointLedger',
+			'blocker',
+			'lastContinuouslyVerifiedCheckpointLedger',
+			'nextCheckpointLedger',
+			'status'
+		],
+		additionalProperties: false
+	};
 
 export const KnownArchiveRootEvidenceV1Schema: JSONSchemaType<KnownArchiveRootEvidenceV1> =
 	{
@@ -194,6 +198,28 @@ const KnownArchiveRemoteFailureV1Schema: JSONSchemaType<KnownArchiveRemoteFailur
 	{
 		type: 'object',
 		properties: {
+			retainedFinding: {
+				type: 'object',
+				nullable: true,
+				additionalProperties: false,
+				properties: {
+					observedAt: { type: 'string' },
+					failureChannel: {
+						type: 'string',
+						enum: ['archive_evidence', 'archive_availability']
+					},
+					errorType: nullable({ type: 'string' }),
+					errorMessage: nullable({ type: 'string' }),
+					httpStatus: nullable({ type: 'number' })
+				},
+				required: [
+					'observedAt',
+					'failureChannel',
+					'errorType',
+					'errorMessage',
+					'httpStatus'
+				]
+			},
 			networkVerifiedCopies: KnownArchiveVerifiedCopySetV1Schema,
 			object: HistoryArchiveObjectV1Schema,
 			sameOrganizationVerifiedCopies: KnownArchiveVerifiedCopySetV1Schema

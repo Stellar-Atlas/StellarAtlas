@@ -55,3 +55,49 @@ describe('GraphQL documentation requests', () => {
 		).toBeNull();
 	});
 });
+
+describe('typed transfer GraphQL pagination', () => {
+	it('uses the server cursor without changing exact filters', () => {
+		const variables = JSON.stringify({
+			account: 'GACCOUNT',
+			input: { asset: 'native', minAmountRaw: '9007199254740993', limit: 10 }
+		});
+		const result = {
+			data: {
+				hubbleAccountTransfers: {
+					nextCursor: 'opaque-cursor',
+					transfers: [{ amountRaw: '9007199254740993' }]
+				}
+			}
+		};
+		expect(JSON.parse(graphqlPageVariables(variables, result, 1)!)).toEqual({
+			account: 'GACCOUNT',
+			input: {
+				asset: 'native',
+				minAmountRaw: '9007199254740993',
+				limit: 10,
+				after: 'opaque-cursor'
+			}
+		});
+		expect(graphqlPageVariables(variables, result, -1)).toBeNull();
+	});
+	it('does not invent a cursor after the final or failed page', () => {
+		expect(
+			graphqlPageVariables(
+				'{"input":{}}',
+				{ data: { hubbleTransfers: { nextCursor: null, transfers: [] } } },
+				1
+			)
+		).toBeNull();
+		expect(
+			graphqlPageVariables(
+				'{"input":{}}',
+				{
+					data: { hubbleTransfers: { nextCursor: 'x' } },
+					errors: [{ message: 'bad' }]
+				},
+				1
+			)
+		).toBeNull();
+	});
+});

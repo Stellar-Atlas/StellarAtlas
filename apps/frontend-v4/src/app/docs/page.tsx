@@ -1,3 +1,4 @@
+import { TransferActivityPanel } from '../../components/analytics/transfer-activity-panel';
 import { PageHeading } from '../../components/layout/page-heading';
 import { PublicOpenApiReference } from '../../components/docs/public-openapi-reference';
 import { GraphqlPlayground } from '../../components/docs/graphql-playground';
@@ -96,6 +97,9 @@ const endpointGroups: EndpointGroup[] = [
 		description:
 			'Query the self-hosted Stellar ETL/Hubble schema in ClickHouse. List responses expose limit and offset; semantic list routes may also return nextOffset, and holder lists return nextCursor. Supply supported ledger-range filters for partition-pruned queries. The catalog reports ingestion bounds and dataset row counts, not guaranteed gap-free historical coverage.',
 		endpoints: [
+			'/v1/analytics/activity/transfers?asset=:asset&event_topic=transfer&min_ledger=:first&max_ledger=:last',
+			'/v1/analytics/accounts/:account/activity/transfers?min_amount_raw=:integer&after=:cursor',
+			'/v1/analytics/assets/:asset/activity/transfers?from=:account&to=:account&after=:cursor',
 			'/v1/analytics/datasets',
 			'/v1/analytics/datasets/:dataset',
 			'/v1/analytics/transactions/:transactionHash',
@@ -213,6 +217,7 @@ export default function DocsPage(): React.JSX.Element {
 					placeholders with real identifiers; use the operation’s documented
 					filters and pagination parameters.
 				</p>
+				<TransferActivityPanel />
 				<GraphqlPlayground />
 				<p className="muted-inline">
 					This page and Swagger list public read surfaces. Authenticated

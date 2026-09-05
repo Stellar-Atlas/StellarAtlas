@@ -7,14 +7,20 @@ import {
 } from '../explorer-browse-ui';
 
 describe('explorer browse navigation and recovery', () => {
-	it('offers four compact browse sections with one selected section', () => {
+	it('offers five compact browse sections with one selected section', () => {
 		const markup = renderToStaticMarkup(
 			createElement(ExplorerBrowseNavigation, {
 				active: 'Transactions',
 				onChange: () => undefined
 			})
 		);
-		for (const label of ['Transactions', 'Operations', 'Assets', 'Contracts'])
+		for (const label of [
+			'Transactions',
+			'Transfers',
+			'Operations',
+			'Assets',
+			'Contracts'
+		])
 			expect(markup).toContain(label);
 		expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
 		expect(markup).toContain('aria-label="Browse blockchain data"');

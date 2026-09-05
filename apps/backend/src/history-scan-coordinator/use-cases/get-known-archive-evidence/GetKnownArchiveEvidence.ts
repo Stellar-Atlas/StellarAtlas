@@ -108,11 +108,11 @@ export class GetKnownArchiveEvidence {
 						root.sequentialCoverage.blocker === null
 							? null
 							: {
-								...root.sequentialCoverage.blocker,
-								objectUrl: requirePublicObjectUrl(
-									root.sequentialCoverage.blocker.objectUrl
-								)
-							}
+									...root.sequentialCoverage.blocker,
+									objectUrl: requirePublicObjectUrl(
+										root.sequentialCoverage.blocker.objectUrl
+									)
+								}
 				}
 			}));
 			const objectRows = readModel.objectPage.objects.slice(
@@ -187,6 +187,11 @@ export class GetKnownArchiveEvidence {
 								pages.copyLimit
 							),
 							object: mapHistoryArchiveObject(failure.object),
+							...(failure.retainedFinding === undefined
+								? {}
+								: {
+										retainedFinding: failure.retainedFinding
+									}),
 							sameOrganizationVerifiedCopies: mapCopySet(
 								coverage?.sameOrganization,
 								pages.copyLimit
@@ -381,6 +386,13 @@ function sumObjectCounts(
 			pendingObjects: total.pendingObjects + current.pendingObjects,
 			remoteFailureObjects:
 				total.remoteFailureObjects + current.remoteFailureObjects,
+			retainedRemoteFailureObjects:
+				(total.retainedRemoteFailureObjects ?? 0) +
+				(current.retainedRemoteFailureObjects ?? 0),
+			unresolvedRemoteFailureObjects:
+				(total.unresolvedRemoteFailureObjects ?? 0) +
+				(current.unresolvedRemoteFailureObjects ??
+					current.remoteFailureObjects),
 			totalObjects: total.totalObjects + current.totalObjects,
 			verifiedBucketObjects:
 				total.verifiedBucketObjects + current.verifiedBucketObjects,
@@ -392,6 +404,8 @@ function sumObjectCounts(
 			bucketObjects: 0,
 			pendingObjects: 0,
 			remoteFailureObjects: 0,
+			retainedRemoteFailureObjects: 0,
+			unresolvedRemoteFailureObjects: 0,
 			totalObjects: 0,
 			verifiedBucketObjects: 0,
 			verifiedObjects: 0,

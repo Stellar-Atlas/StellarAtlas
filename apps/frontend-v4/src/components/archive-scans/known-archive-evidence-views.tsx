@@ -1,3 +1,4 @@
+import { unresolvedRemoteFailureCount } from '@domain/known-archive-evidence';
 import type { PublicHistoryArchiveObjectEvidenceClass } from '@api/archive-evidence-types';
 import type { PublicKnownArchiveEvidence } from '@domain/known-archive-evidence';
 import { formatInteger } from '@format/formatters';
@@ -28,7 +29,7 @@ export function KnownArchiveEvidenceTabContent({
 	tabId,
 	view
 }: KnownArchiveEvidenceTabContentProps): React.JSX.Element {
-	const findingCount = evidence.totals.objects.remoteFailureObjects;
+	const findingCount = unresolvedRemoteFailureCount(evidence.totals.objects);
 	return (
 		<div
 			aria-labelledby={tabId}

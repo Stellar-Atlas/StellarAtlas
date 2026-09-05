@@ -61,6 +61,7 @@ export interface HubbleIngestionCoverage {
 
 export interface HubbleCatalog {
 	readonly database: string;
+	readonly coverage: HubbleLedgerCoverage;
 	readonly datasets: readonly HubbleDataset[];
 	readonly generatedAt: string;
 	readonly ingestion: HubbleIngestionCoverage;
@@ -76,7 +77,17 @@ export interface HubbleQueryResult {
 	readonly rows: readonly Record<string, unknown>[];
 }
 
+import type {
+	HubbleTransferInput,
+	HubbleTransferPage
+} from './HubbleTransferContracts.js';
+import type { HubbleLedgerCoverage } from './HubbleLedgerCoverage.js';
+
 export interface HubbleWarehouse {
+	transferActivity(input: HubbleTransferInput): Promise<HubbleTransferPage>;
+	classifyEventRows(
+		rows: readonly Record<string, unknown>[]
+	): Promise<readonly Record<string, unknown>[]>;
 	accountTransactions(
 		query: HubbleAccountTransactionQuery
 	): Promise<HubbleSemanticPage>;

@@ -1,3 +1,10 @@
+import { mapRetainedRemoteFinding } from './RetainedRemoteFindingMapper.js';
+import {
+	retainedRemoteCountSql,
+	retainedRemoteFutureCountSql,
+	retainedRemotePageKeysSql,
+	retainedRemoteFindingJsonSql
+} from './RetainedRemoteFindingQuery.js';
 import type { EntityManager } from 'typeorm';
 import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import type { HistoryArchiveObjectEvidenceClass } from '../../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
@@ -11,6 +18,7 @@ import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 export type KnownArchiveFailurePageKind = 'remote' | 'infrastructure';
 
 type FailureRow = Parameters<typeof createObjectFromRow>[0] & {
+	readonly retainedFinding?: unknown;
 	readonly evidenceClass?: string;
 	readonly evidenceclass?: string;
 };
@@ -73,7 +81,8 @@ export async function findKnownArchiveFailurePage(
 				evidenceClass: requireEvidenceClass(
 					row.evidenceClass ?? row.evidenceclass
 				),
-				object: createObjectFromRow(row)
+				object: createObjectFromRow(row),
+				retainedFinding: mapRetainedRemoteFinding(row.retainedFinding)
 			};
 		}),
 		total
@@ -148,7 +157,15 @@ export function knownArchiveFailureCountSql(
 			) future_objects
 		)
 		select
-			summary_count.count - future_count.count as "failureCount",
+			summary_count.count - future_count.count
+				${
+					kind === 'remote'
+						? `+ (select coalesce(sum(
+					${retainedRemoteCountSql('requested_root."archiveUrlIdentity"', '$3::text')}
+					- ${retainedRemoteFutureCountSql('requested_root."archiveUrlIdentity"', '$4::timestamptz', '$3::text')}
+				), 0) from requested_roots requested_root)`
+						: ''
+				} as "failureCount",
 			rollup_state."rollupComplete"
 		from summary_count
 		cross join future_count
@@ -167,7 +184,7 @@ export function knownArchiveFailurePageSql(
 			select distinct identity as "archiveUrlIdentity"
 			from unnest($1::text[]) requested(identity)
 			where $2::text is null or identity = $2::text
-		), page_keys as materialized (
+		), current_page_keys as materialized (
 			select candidate."createdAt", candidate."remoteId"
 			from requested_roots requested_root
 			cross join lateral (
@@ -181,10 +198,23 @@ export function knownArchiveFailurePageSql(
 			order by candidate."createdAt" desc, candidate."remoteId" desc
 			limit $7
 		)
+		, page_keys as materialized (
+			select * from current_page_keys
+			${kind === 'remote' ? `union all select * from (${retainedRemotePageKeysSql}) retained_keys` : ''}
+			order by "createdAt" desc, "remoteId" desc
+			limit $7
+		)
 		select archive_object.*, ${evidenceClassSql} as "evidenceClass"
+			${kind === 'remote' ? `, ${retainedRemoteFindingJsonSql}` : ''}
 		from page_keys page_key
 		join history_archive_object_queue archive_object
 			on archive_object."remoteId" = page_key."remoteId"
+		${
+			kind === 'remote'
+				? `left join history_archive_retained_remote_finding finding
+			on finding."objectRemoteId" = page_key."remoteId"`
+				: ''
+		}
 		order by page_key."createdAt" desc, page_key."remoteId" desc
 	`;
 }

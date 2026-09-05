@@ -23,6 +23,7 @@ type config struct {
 	client            *clickhouse.Client
 	databaseURL       string
 	maximumBatches    int
+	priorityBatchID   string
 	networkPassphrase string
 	once              bool
 	storageRoot       string
@@ -100,6 +101,7 @@ func loadConfig() (config, error) {
 		client:            client,
 		databaseURL:       os.Getenv("ACTIVE_DATABASE_URL"),
 		maximumBatches:    maximumBatches,
+		priorityBatchID:   strings.TrimSpace(os.Getenv("HUBBLE_ETL_PRIORITY_BATCH_ID")),
 		networkPassphrase: env("FULL_HISTORY_NETWORK_PASSPHRASE", publicNetworkPassphrase),
 		once:              once,
 		storageRoot: env(
@@ -120,6 +122,7 @@ func runBackfill(ctx context.Context, cfg config) error {
 			Client:            cfg.client,
 			DatabaseURL:       cfg.databaseURL,
 			MaximumBatches:    cfg.maximumBatches,
+			PriorityBatchID:   cfg.priorityBatchID,
 			NetworkPassphrase: cfg.networkPassphrase,
 			StorageRoot:       cfg.storageRoot,
 			WorkerCount:       cfg.workers,
@@ -127,6 +130,9 @@ func runBackfill(ctx context.Context, cfg config) error {
 			OnProgress: func(summary backfill.Summary) {
 				_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
 					"event":           "batch-completed",
+					"batchId":         summary.LastCompletedBatchID,
+					"startLedger":     summary.LastCompletedStartLedger,
+					"endLedger":       summary.LastCompletedEndLedger,
 					"ingestedBatches": summary.IngestedBatches,
 					"ingestedLedgers": summary.IngestedLedgers,
 					"ingestedRows":    summary.IngestedRows,

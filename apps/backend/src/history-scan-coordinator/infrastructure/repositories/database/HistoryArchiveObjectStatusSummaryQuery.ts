@@ -1,3 +1,4 @@
+import { retainedRemoteCountSql } from './RetainedRemoteFindingQuery.js';
 import type { EntityManager } from 'typeorm';
 import {
 	normalizeHistoryArchiveRootUrl,
@@ -447,7 +448,7 @@ export const evidenceHealthSql = `
 		rollup_readiness.ready,
 		coalesce(sum(summary."activeObjects"), 0)::bigint
 			as "activeObjectChecks",
-		coalesce(sum(summary."remoteFailureObjects"), 0)::bigint
+		coalesce(sum(summary."remoteFailureObjects" + ${retainedRemoteCountSql('summary."archiveUrlIdentity"')}), 0)::bigint
 			as "archiveEvidenceFailures",
 		coalesce(sum(summary."workerIssueObjects"), 0)::bigint
 			as "scannerIssueFailures",
@@ -519,7 +520,7 @@ export const sourceStatusSummarySql = `
 			aliases."archiveUrl",
 			coalesce(sum(summary."activeObjects"), 0)
 				as "activeObjectChecks",
-			coalesce(sum(summary."remoteFailureObjects"), 0)
+			coalesce(sum(summary."remoteFailureObjects" + ${retainedRemoteCountSql('summary."archiveUrlIdentity"')}), 0)
 				as "archiveEvidenceFailures",
 			coalesce(sum(summary."workerIssueObjects"), 0)
 				as "scannerIssueFailures",

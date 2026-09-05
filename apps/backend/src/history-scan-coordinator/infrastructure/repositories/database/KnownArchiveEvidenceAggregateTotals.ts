@@ -31,7 +31,8 @@ export function applyKnownArchiveFailureAggregateTotal(
 		...page,
 		snapshotTotal: sumCounts(selected, (root) =>
 			kind === 'remote'
-				? root.objects.remoteFailureObjects
+				? (root.objects.unresolvedRemoteFailureObjects ??
+					root.objects.remoteFailureObjects)
 				: root.objects.workerIssueObjects
 		)
 	};

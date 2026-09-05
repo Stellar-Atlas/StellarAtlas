@@ -67,7 +67,7 @@ export function assessKnownArchiveEvidence(
 	if (evidence === null) return 'unknown';
 	const { checkpoints, objects } = evidence.totals;
 	if (checkpoints.mismatchedCheckpoints > 0) return 'integrity_failure';
-	if (objects.remoteFailureObjects > 0) return 'remote_retry';
+	if (unresolvedRemoteFailureCount(objects) > 0) return 'remote_retry';
 	if (objects.workerIssueObjects > 0) return 'scanner_issue';
 	if (objects.activeObjects > 0) return 'checking';
 	if (objects.pendingObjects > 0 || checkpoints.pendingCheckpoints > 0) {
@@ -148,4 +148,12 @@ export function getVerifiedCopyObjectUrl(
 function shortIdentifier(value: string): string {
 	if (value.length <= 18) return value;
 	return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
+/** New APIs expose retained findings separately; older snapshots still carry current failures. */
+export function unresolvedRemoteFailureCount(objects: {
+	readonly remoteFailureObjects: number;
+	readonly unresolvedRemoteFailureObjects?: number;
+}): number {
+	return objects.unresolvedRemoteFailureObjects ?? objects.remoteFailureObjects;
 }

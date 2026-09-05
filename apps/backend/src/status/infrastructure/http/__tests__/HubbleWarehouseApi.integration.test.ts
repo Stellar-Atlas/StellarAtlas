@@ -1,4 +1,5 @@
 import express from 'express';
+import { summarizeHubbleLedgerCoverage } from '../HubbleLedgerCoverage.js';
 import request from 'supertest';
 import type {
 	HubbleCatalog,
@@ -10,6 +11,9 @@ import { hubbleWarehouseRouter } from '../HubbleWarehouseRouter.js';
 
 const catalog: HubbleCatalog = {
 	database: 'stellar_hubble',
+	coverage: summarizeHubbleLedgerCoverage([
+		{ start_ledger: 2, end_ledger: 66 }
+	]),
 	datasets: [
 		{
 			columns: [
@@ -325,6 +329,10 @@ function mockWarehouse(): HubbleWarehouse & {
 	query: jest.Mock;
 } {
 	return {
+		transferActivity: jest.fn(),
+		classifyEventRows: jest.fn(
+			async (rows: readonly Record<string, unknown>[]) => rows
+		),
 		accountTransactions: jest.fn().mockResolvedValue({
 			elapsedMilliseconds: 1,
 			limit: 25,

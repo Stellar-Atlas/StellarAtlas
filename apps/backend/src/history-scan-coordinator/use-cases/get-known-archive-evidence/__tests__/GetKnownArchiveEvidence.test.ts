@@ -46,7 +46,17 @@ describe('GetKnownArchiveEvidence', () => {
 			objectPage: { objects: [remoteFailure, objectNext], total: 9 },
 			remoteFailures: {
 				failures: [
-					{ evidenceClass: 'archive-object', object: remoteFailure },
+					{
+						evidenceClass: 'archive-object',
+						object: remoteFailure,
+						retainedFinding: {
+							observedAt: '2026-07-09T12:00:00.000Z',
+							failureChannel: 'archive_availability',
+							errorType: 'HISTORY_FILE_NOT_FOUND',
+							errorMessage: 'previous source 404',
+							httpStatus: 404
+						}
+					},
 					{ evidenceClass: 'archive-object', object: remoteFailureNext }
 				],
 				total: 2
@@ -85,9 +95,14 @@ describe('GetKnownArchiveEvidence', () => {
 			sameOrganizationArchiveUrlIdentities: [rootA, rootB]
 		});
 
+		if (result.isErr()) throw result.error;
 		expect(result.isOk()).toBe(true);
 		if (result.isErr()) return;
 		expect(result.value.nodePublicKeys).toEqual(['GA', 'GB']);
+		expect(
+			result.value.remoteFailures.failures[0]?.retainedFinding?.httpStatus
+		).toBe(404);
+		expect(result.value.totals.objects.unresolvedRemoteFailureObjects).toBe(2);
 		expect(result.value.totals.nodes).toBe(2);
 		expect(result.value.totals.archiveRoots).toBe(2);
 		expect(result.value.totals.objects.totalObjects).toBe(20);
@@ -120,7 +135,7 @@ describe('GetKnownArchiveEvidence', () => {
 			total: 1
 		});
 		expect(result.value.remoteFailures.failures[0]?.object.error?.message).toBe(
-			'Remote archive returned HTTP 404'
+			'missing object'
 		);
 	});
 
@@ -247,6 +262,14 @@ function createRoot(archiveUrl: string) {
 			verifiedBucketObjects: 2,
 			verifiedObjects: 6,
 			workerIssueObjects: 0
+		},
+		sequentialCoverage: {
+			advertisedLatestCheckpointLedger: null,
+			blockedCheckpointLedger: null,
+			blocker: null,
+			lastContinuouslyVerifiedCheckpointLedger: null,
+			nextCheckpointLedger: null,
+			status: 'unavailable' as const
 		},
 		scannerOwnedState: null
 	};

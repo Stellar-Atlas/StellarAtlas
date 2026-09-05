@@ -1,3 +1,4 @@
+import { historyArchiveRetainedRemoteFindingSql } from '../HistoryArchiveRetainedRemoteFindingSql.js';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
@@ -16,7 +17,8 @@ export const evidenceBucketHash = 'a'.repeat(64);
 export const evidenceBucketKey = `bucket:${evidenceBucketHash}`;
 
 export async function createKnownEvidenceDataSource(
-	url: string
+	url: string,
+	activateRetention = true
 ): Promise<DataSource> {
 	const dataSource = new DataSource({
 		dropSchema: true,
@@ -38,6 +40,11 @@ export async function createKnownEvidenceDataSource(
 			"blockedUntil" timestamptz not null
 		)
 	`);
+	await dataSource.query(historyArchiveRetainedRemoteFindingSql);
+	if (activateRetention)
+		await dataSource.query(
+			'alter table history_archive_object_queue enable trigger history_archive_retain_remote_transition'
+		);
 	const migrationRunner = dataSource.createQueryRunner();
 	await migrationRunner.connect();
 	try {
@@ -63,7 +70,7 @@ export async function resetKnownEvidence(
 	dataSource: DataSource
 ): Promise<void> {
 	await dataSource.query(
-		'truncate history_archive_object_event, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_state_snapshot, history_archive_object_host_throttle restart identity cascade'
+		'truncate history_archive_retained_remote_finding, history_archive_retained_remote_summary, history_archive_object_event, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_state_snapshot, history_archive_object_host_throttle restart identity cascade'
 	);
 }
 
