@@ -14,8 +14,6 @@ import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveC
 
 const maximumCheckpointFanoutBatch = historyArchiveCheckpointFanoutBatchSize;
 const maximumCheckpointCursorBatch = 128;
-const checkpointFanoutLedgerSpan =
-	(historyArchiveSequentialPrefetchDepth - 1) * 64;
 
 export async function findVerifiedCheckpointsNeedingFanout(
 	repository: Repository<HistoryArchiveObject>,
@@ -42,10 +40,8 @@ export async function findVerifiedCheckpointsNeedingFanout(
 			'history_archive_checkpoint_scan_cursor',
 			'fanout_cursor',
 			`fanout_cursor."archiveUrlIdentity" = object."archiveUrlIdentity"
-				and object."checkpointLedger" between
-					fanout_cursor."nextHistoricalCheckpointLedger" - 64
-					and fanout_cursor."nextHistoricalCheckpointLedger" - 64 +
-						${checkpointFanoutLedgerSpan}`
+				and object."checkpointLedger" =
+					fanout_cursor."nextHistoricalCheckpointLedger" - 64`
 		)
 		.where('object.objectType = :objectType', {
 			objectType: 'checkpoint-state'
