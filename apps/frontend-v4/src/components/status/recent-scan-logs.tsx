@@ -6,7 +6,8 @@ import type {
 	PublicScanLogStatus,
 	PublicStatusLevel
 } from '@api/types';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import { StatusPill } from './status-ui';
 import {
 	getStatusTablePage,
@@ -22,6 +23,7 @@ export function RecentScanLogs({
 	readonly available: boolean;
 	readonly scanLogs: PublicScanLogStatus;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const [filter, setFilter] = useState<ScanLogFilter>('all');
 	const [page, setPage] = useState(0);
 	const networkScans = useMemo(
@@ -142,6 +144,7 @@ function NetworkScanRow({
 }: {
 	readonly scan: PublicNetworkScanLogEntry;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const scheduling = scan.archiveScheduling;
 	const status: PublicStatusLevel = scan.completed ? 'ok' : 'degraded';
 
@@ -149,7 +152,9 @@ function NetworkScanRow({
 		<tr>
 			<td>
 				<strong>{formatDateTime(scan.time)}</strong>
-				<small>{formatLatestClose(scan.latestLedgerCloseTime)}</small>
+				<small>
+					{formatLatestClose(scan.latestLedgerCloseTime, formatDateTime)}
+				</small>
 			</td>
 			<td>
 				<StatusPill
@@ -216,7 +221,10 @@ function filterNetworkScans(
 	return scans;
 }
 
-function formatLatestClose(value: string | null): string {
+function formatLatestClose(
+	value: string | null,
+	formatDateTime: (value: string) => string
+): string {
 	return value === null ? 'latest close not recorded' : formatDateTime(value);
 }
 

@@ -530,6 +530,9 @@ importers:
         specifier: 0.185.1
         version: 0.185.1
     devDependencies:
+      '@jest/globals':
+        specifier: 30.4.1
+        version: 30.4.1
       '@types/node':
         specifier: ^26.0.1
         version: 26.0.1

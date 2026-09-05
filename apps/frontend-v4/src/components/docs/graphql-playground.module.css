@@ -1,5 +1,6 @@
 .playground {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 1rem;
 	min-width: 0;
 	padding: 1.25rem;
@@ -13,12 +14,14 @@
 }
 .playground label {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 0.5rem;
 	min-width: 0;
 }
 .playground textarea,
 .playground select {
 	width: 100%;
+	min-width: 0;
 	box-sizing: border-box;
 	border: 1px solid #496060;
 	border-radius: 0.35rem;
@@ -61,6 +64,6 @@
 }
 @media (max-width: 720px) {
 	.editors {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 	}
 }

@@ -1,5 +1,6 @@
 import type { PublicFullHistoryStatus } from '@api/types';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import { StatusRow } from './status-ui';
 
 export function LedgerCloseMetaStatusRow({
@@ -7,6 +8,7 @@ export function LedgerCloseMetaStatusRow({
 }: {
 	readonly fullHistory: PublicFullHistoryStatus;
 }): React.JSX.Element | null {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const coverage = fullHistory.ledgerCloseMeta;
 	if (coverage === null) return null;
 	const recordCount = coverage.outputs.reduce(

@@ -7,16 +7,14 @@ import type {
 	PublicHistoryArchiveStatusSummary
 } from '@api/types';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
-import {
-	formatArchiveObjectTypeLabel,
-	sanitizeArchiveEvidenceText
-} from '@domain/history-archive';
+import { formatArchiveObjectTypeLabel } from '@domain/history-archive';
 import {
 	getArchiveFailureState,
 	type ArchiveHealthAssessment,
 	type ArchiveHealthState
 } from '@domain/history-archive-health';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import { ArchiveHealthPill } from './status-ui';
 import { CheckpointProofGuide } from './checkpoint-proof-guide';
 import type { ArchiveSourceFindingPresentation } from './status-dashboard-headlines';
@@ -24,6 +22,20 @@ import {
 	getStatusTablePage,
 	StatusTablePagination
 } from './status-table-pagination';
+
+import {
+	hasIntegrityMismatch,
+	formatSourceIntegrity,
+	formatRemoteAvailability,
+	formatCheckpointCoverage,
+	formatSourceState,
+	formatFailureDetail,
+	formatArchiveSourceLabel
+} from './archive-status-formatters';
+export {
+	formatArchiveFailureDetail,
+	formatArchiveSourceLabel
+} from './archive-status-formatters';
 
 interface StatusArchiveEvidenceTablesProps {
 	readonly events: PublicHistoryArchiveObjectEvents;
@@ -43,6 +55,7 @@ export function StatusArchiveEvidenceTables({
 	health,
 	summary
 }: StatusArchiveEvidenceTablesProps): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	return (
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
@@ -163,6 +176,7 @@ function FailureEventRow({
 }: {
 	readonly event: ArchiveEvent;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const state = getArchiveFailureState(event.evidenceClass);
 	return (
 		<tr>
@@ -261,6 +275,7 @@ function ArchiveSourceRow({
 }: {
 	readonly source: ArchiveSource;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	return (
 		<tr>
 			<td>
@@ -432,85 +447,6 @@ function compareArchiveSources(
 		right.verifiedCheckpointProofs - left.verifiedCheckpointProofs;
 	if (coverageOrder !== 0) return coverageOrder;
 	return left.archiveUrl.localeCompare(right.archiveUrl);
-}
-
-function hasIntegrityMismatch(source: ArchiveSource): boolean {
-	return source.mismatchCheckpointProofs > 0;
-}
-
-function formatSourceIntegrity(source: ArchiveSource): string {
-	if (source.mismatchCheckpointProofs > 0) {
-		return `${formatInteger(source.mismatchCheckpointProofs)} confirmed mismatches`;
-	}
-	if (source.unclassifiedFailures > 0) {
-		return 'Not evaluated for legacy evidence';
-	}
-	return 'No confirmed mismatch';
-}
-
-function formatRemoteAvailability(source: ArchiveSource): string {
-	if (source.archiveEvidenceFailures > 0) {
-		return `${formatInteger(source.archiveEvidenceFailures)} file checks awaiting retry`;
-	}
-	if (
-		source.rootObjectStatus === 'failed' &&
-		source.rootFailureChannel === 'archive_evidence'
-	) {
-		return 'Root file check awaiting retry';
-	}
-	if (source.stateStatus === 'unreachable')
-		return 'Source currently unreachable';
-	return 'No unresolved remote checks';
-}
-
-function formatCheckpointCoverage(source: ArchiveSource): string {
-	if (source.totalCheckpointProofs === 0) return 'No proof rows discovered yet';
-	return `${formatInteger(source.verifiedCheckpointProofs)} / ${formatInteger(source.totalCheckpointProofs)} verified`;
-}
-
-function formatSourceState(source: ArchiveSource): string {
-	if (
-		source.rootObjectStatus === 'failed' &&
-		source.rootFailureChannel === 'archive_evidence'
-	) {
-		return 'State captured previously; latest root check awaiting retry';
-	}
-	if (
-		source.rootObjectStatus === 'failed' &&
-		source.rootFailureChannel === 'scanner_issue'
-	) {
-		return 'State captured previously; latest root check had a scanner issue';
-	}
-	if (source.rootObjectStatus === 'verified')
-		return 'Latest root state verified';
-	if (source.rootObjectStatus === 'scanning')
-		return 'Checking latest root state';
-	if (source.rootObjectStatus === 'pending') return 'Latest root check queued';
-	return source.stateStatus === 'available'
-		? 'State captured; root check not queued'
-		: 'No current root state captured';
-}
-
-function formatFailureDetail(event: ArchiveEvent): string {
-	return formatArchiveFailureDetail(event.error);
-}
-
-export function formatArchiveFailureDetail(
-	error: ArchiveEvent['error']
-): string {
-	return error === null
-		? 'Failure detail not recorded'
-		: sanitizeArchiveEvidenceText(error.message);
-}
-
-export function formatArchiveSourceLabel(value: string): string {
-	try {
-		const url = new URL(value);
-		const path = url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '');
-		return `${url.protocol}//${url.host}${path}`;
-	} catch {
-		return sanitizeArchiveEvidenceText(value);
-	}
 }
 
 const ARCHIVE_SOURCE_PAGE_SIZE = 10;

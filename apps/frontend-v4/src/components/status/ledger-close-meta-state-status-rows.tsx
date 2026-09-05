@@ -3,7 +3,8 @@ import type {
 	PublicFullHistoryStateImportStatus,
 	PublicFullHistoryStatus
 } from '@api/types';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import { StatusRow, type StatusPillTone } from './status-ui';
 
 export function LedgerCloseMetaStateStatusRows({
@@ -25,6 +26,7 @@ function StateImportRow({
 }: {
 	readonly imports: PublicFullHistoryStateImportStatus;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const lifecycle = imports.lifecycle;
 	const empty = lifecycle.total === 0;
 	const failed = lifecycle.failed > 0;
@@ -35,7 +37,7 @@ function StateImportRow({
 			detail={
 				empty
 					? 'No account or trustline change batch has been registered for import yet.'
-					: `${formatInteger(lifecycle.importing)} importing, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(imports.latestUpdatedAt)}`
+					: `${formatInteger(lifecycle.importing)} importing, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(imports.latestUpdatedAt, formatDateTime)}`
 			}
 			label="Account and trustline state"
 			pillText={
@@ -65,6 +67,7 @@ function CanonicalStateLinkageRow({
 }: {
 	readonly linkage: PublicFullHistoryCanonicalStateLinkageStatus;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const lifecycle = linkage.lifecycle;
 	const empty = lifecycle.total === 0;
 	const failed = lifecycle.failed > 0;
@@ -80,7 +83,7 @@ function CanonicalStateLinkageRow({
 			detail={
 				empty
 					? 'No LedgerCloseMeta batch overlaps proof-gated canonical history yet.'
-					: `Ledger hash linkage runs independently of account and trustline imports. It compares the LedgerCloseMeta ledger header and hash projection with proof-gated canonical ledgers: ${formatInteger(lifecycle.checking)} checking, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(linkage.latestUpdatedAt)}. It does not compare account or trustline contents with a canonical state snapshot and is not SCP evidence.`
+					: `Ledger hash linkage runs independently of account and trustline imports. It compares the LedgerCloseMeta ledger header and hash projection with proof-gated canonical ledgers: ${formatInteger(lifecycle.checking)} checking, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(linkage.latestUpdatedAt, formatDateTime)}. It does not compare account or trustline contents with a canonical state snapshot and is not SCP evidence.`
 			}
 			label="Canonical ledger linkage"
 			pillText={
@@ -117,7 +120,10 @@ function progressTone(
 	return 'good';
 }
 
-function formatNullableDate(value: string | null): string {
+function formatNullableDate(
+	value: string | null,
+	formatDateTime: (value: string) => string
+): string {
 	return value === null ? 'not reported' : formatDateTime(value);
 }
 

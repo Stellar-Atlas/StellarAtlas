@@ -5,7 +5,8 @@ import type {
 } from '@api/types';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import type { ArchiveHealthState } from '@domain/history-archive-health';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import { ArchiveHealthPill } from './status-ui';
 
 export function ArchiveScanDetails({
@@ -13,6 +14,7 @@ export function ArchiveScanDetails({
 }: {
 	readonly scan: PublicArchiveScanLogEntry;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const concurrencyMetric = getArchiveConcurrencyMetric(scan);
 
 	return (

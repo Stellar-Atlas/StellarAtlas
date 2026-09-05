@@ -45,7 +45,8 @@ describe('StatusDashboard historical backfill', () => {
 		expect(markup).toContain(
 			'182 checkpoints indexed; checkpoint 63,386,175 needs 9 more bucket checks on best source'
 		);
-		expect(markup).toContain('Remote evidence');
+		expect(markup).toContain('Remote checks pending');
+		expect(markup).toContain('1 remote file check awaiting retry');
 		expect(markup).not.toContain('Waiting for proof 63,386,175');
 	});
 });

@@ -368,6 +368,7 @@ tr.selected-row td {
 .docs-panel,
 .error-panel {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 12px;
 	padding: 24px;
 }
@@ -397,6 +398,7 @@ tr.selected-row td {
 
 .endpoint-paths {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 8px;
 }
 
@@ -468,4 +470,10 @@ code {
 	to {
 		opacity: 1;
 	}
+}
+
+.docs-panel > *,
+.endpoint-paths > * {
+	min-width: 0;
+	overflow-wrap: anywhere;
 }

@@ -13,7 +13,8 @@ import {
 	formatArchiveWorkerStageLabel,
 	sanitizeArchiveEvidenceText
 } from '@domain/history-archive';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 
 interface HistoryArchiveObjectEventLogProps {
 	readonly events: ObjectEvents;
@@ -38,6 +39,7 @@ export function HistoryArchiveObjectEventLog({
 	framed = true,
 	title = 'Recent archive file activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const [filter, setFilter] = useState<EventFilter>('all');
 	const [page, setPage] = useState(0);
 	const failedEvents = events.events.filter(
@@ -278,6 +280,7 @@ function EventRow({
 }: {
 	readonly event: ObjectEvents['events'][number];
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	return (
 		<tr>
 			<td>
@@ -304,7 +307,7 @@ function EventRow({
 			</td>
 			<td>
 				<strong>{formatEventStage(event)}</strong>
-				<small>{formatEventWork(event)}</small>
+				<small>{formatEventWork(event, formatDateTime)}</small>
 			</td>
 		</tr>
 	);
@@ -407,7 +410,10 @@ function formatArchiveSource(value: string): string {
 	}
 }
 
-function formatEventWork(event: ObjectEvents['events'][number]): string {
+function formatEventWork(
+	event: ObjectEvents['events'][number],
+	formatDateTime: (value: string) => string
+): string {
 	const parts = [
 		`attempt ${event.claimAttempt === null ? 'n/a' : formatInteger(event.claimAttempt)}`,
 		event.bytesDownloaded === null ? null : formatBytes(event.bytesDownloaded),

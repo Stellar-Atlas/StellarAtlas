@@ -41,3 +41,26 @@ export function formatLocalDateTime(date: Date): string {
 		timeZoneName: 'short'
 	}).format(date);
 }
+
+export function useLocalDateTimeFormatter(): (value: string) => string {
+	const hydrated = useSyncExternalStore(
+		subscribeToHydration,
+		clientSnapshot,
+		serverSnapshot
+	);
+	return hydrated ? formatLocalTimestamp : formatServerTimestamp;
+}
+
+function formatLocalTimestamp(value: string): string {
+	const date = new Date(value);
+	return Number.isFinite(date.getTime())
+		? formatLocalDateTime(date)
+		: 'Time unavailable';
+}
+
+function formatServerTimestamp(value: string): string {
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return 'Time unavailable';
+	const iso = date.toISOString();
+	return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}

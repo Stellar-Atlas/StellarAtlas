@@ -7,7 +7,8 @@ import type {
 	PublicStatusLevel
 } from '@api/types';
 import { assessArchiveHealth } from '@domain/history-archive-health';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import {
 	ArchiveHealthRow,
 	StatusPill,
@@ -30,6 +31,7 @@ export function ProductionServiceStatusPanel({
 	dataQuality,
 	frontend
 }: ProductionServiceStatusPanelProps): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const networkScan = dataQuality.dataFreshness.networkScan;
 	const archiveHealth = assessArchiveHealth({
 		evidenceAvailable: true,
@@ -61,7 +63,7 @@ export function ProductionServiceStatusPanel({
 					value={frontend.configured ? 'Online' : 'Missing'}
 				/>
 				<StatusRow
-					detail={`Latest successful scan ${formatFreshness(networkScan.latestAt, networkScan.ageMs)}`}
+					detail={`Latest successful scan ${formatFreshness(networkScan.latestAt, networkScan.ageMs, formatDateTime)}`}
 					label="Network scanner"
 					status={networkScan.status}
 					value={statusLabel(networkScan.status)}
@@ -100,7 +102,8 @@ function getWorstStatus(
 
 function formatFreshness(
 	latestAt: string | null,
-	ageMs: number | null
+	ageMs: number | null,
+	formatDateTime: (value: string) => string
 ): string {
 	if (latestAt === null) return 'not recorded';
 	return `${formatDateTime(latestAt)} (${formatDuration(ageMs)})`;

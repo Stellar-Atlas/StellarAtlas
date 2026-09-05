@@ -12,7 +12,8 @@ import type {
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import { formatCanonicalEvidenceSelection } from '../canonical-history-copy';
 import { StatCard } from '../stat-card';
 import {
@@ -72,6 +73,7 @@ export function StatusDashboard({
 	scanLogsAvailable,
 	workers
 }: StatusDashboardProps): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const scan = dataQuality.scans.networkScan;
 	const archiveObjectActivity = summarizeArchiveObjects(
 		archiveObjects,
@@ -182,7 +184,8 @@ export function StatusDashboard({
 							label="Network scan"
 							status={dataQuality.dataFreshness.networkScan.status}
 							value={formatNullableDate(
-								dataQuality.dataFreshness.networkScan.latestAt
+								dataQuality.dataFreshness.networkScan.latestAt,
+								formatDateTime
 							)}
 						/>
 						<StatusRow
@@ -239,6 +242,7 @@ function CanonicalHistoryStatusRow({
 }: {
 	readonly fullHistory: PublicFullHistoryStatus;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	const coverage = fullHistory.canonicalCoverage;
 	if (coverage === null) {
 		return (
@@ -256,7 +260,10 @@ function CanonicalHistoryStatusRow({
 		['promoting', 'running', 'waiting-for-proof'].includes(promotion.state)
 			? 'ok'
 			: 'unavailable';
-	const promotionLabel = describeCanonicalPromotion(fullHistory);
+	const promotionLabel = describeCanonicalPromotion(
+		fullHistory,
+		formatDateTime
+	);
 	const evidence = coverage.latestEvidence;
 	const evidenceDetail =
 		evidence === null
@@ -274,7 +281,8 @@ function CanonicalHistoryStatusRow({
 }
 
 function describeCanonicalPromotion(
-	fullHistory: PublicFullHistoryStatus
+	fullHistory: PublicFullHistoryStatus,
+	formatDateTime: (value: string) => string
 ): string {
 	const promotion = fullHistory.canonicalPromotion;
 	if (promotion === null) return 'continuous promotion has not started';
@@ -398,7 +406,10 @@ function formatArchiveWorkerDetail(
 	return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured worker processes; ${activeText}${downloadText}${staleText}`;
 }
 
-function formatNullableDate(value: string | null): string {
+function formatNullableDate(
+	value: string | null,
+	formatDateTime: (value: string) => string
+): string {
 	return value === null ? 'No data' : formatDateTime(value);
 }
 

@@ -7,7 +7,8 @@ import type {
 	PublicWorkerStatus
 } from '@api/types';
 import { formatArchiveObjectTypeLabel } from '@domain/history-archive';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { useLocalDateTimeFormatter } from '../local-date-time';
 import { getArchiveDownloadActivity } from './archive-download-activity';
 import { StatusPill } from './status-ui';
 
@@ -165,6 +166,7 @@ function ArchiveWorkerRow({
 }: {
 	readonly worker: ArchiveWorkerStatusRowDTO;
 }): React.JSX.Element {
+	const formatDateTime = useLocalDateTimeFormatter();
 	return (
 		<tr>
 			<td>

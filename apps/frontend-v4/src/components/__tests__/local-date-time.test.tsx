@@ -1,7 +1,11 @@
 /// <reference types="jest" />
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { LocalDateTime, formatLocalDateTime } from '../local-date-time';
+import {
+	LocalDateTime,
+	formatLocalDateTime,
+	useLocalDateTimeFormatter
+} from '../local-date-time';
 
 const timestamp = '2026-09-05T19:13:00.000Z';
 
@@ -66,5 +70,23 @@ describe('local date time', () => {
 				createElement(LocalDateTime, { dateTime: 'not-a-timestamp' })
 			)
 		).toBe('<span>Time unavailable</span>');
+	});
+});
+
+function TimestampProbe(): React.JSX.Element {
+	const format = useLocalDateTimeFormatter();
+	return createElement(
+		'span',
+		null,
+		format(timestamp),
+		' / ',
+		format('invalid')
+	);
+}
+
+describe('local date time string formatter', () => {
+	it('keeps server-rendered status text labeled and hydration-stable', () => {
+		const markup = renderToStaticMarkup(createElement(TimestampProbe));
+		expect(markup).toBe('<span>2026-09-05 19:13 UTC / Time unavailable</span>');
 	});
 });
