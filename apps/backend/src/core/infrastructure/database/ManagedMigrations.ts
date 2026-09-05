@@ -90,6 +90,8 @@ import { HistoryArchiveStatementSummaryNoopGuardMigration1788170000000 } from '@
 import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import { HistoryArchiveSharedCheckpointBackfillMigration1788495000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788495000000-HistoryArchiveSharedCheckpointBackfillMigration.js';
 import { HistoryArchiveSharedCheckpointReadMigration1788496000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788496000000-HistoryArchiveSharedCheckpointReadMigration.js';
+import { HistoryArchiveCheckpointProofStatementAttestationMigration1788587936000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788587936000-HistoryArchiveCheckpointProofStatementAttestationMigration.js';
+import { FullHistoryPromotionCheckpointIndexMigration1788592000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788592000000-FullHistoryPromotionCheckpointIndexMigration.js';
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
 export const managedMigrations = [
@@ -183,5 +185,7 @@ export const managedMigrations = [
 	HistoryArchiveStatementSummaryNoopGuardMigration1788170000000,
 	HistoryArchiveSharedBucketSetShadowMigration1788494000000,
 	HistoryArchiveSharedCheckpointBackfillMigration1788495000000,
-	HistoryArchiveSharedCheckpointReadMigration1788496000000
+	HistoryArchiveSharedCheckpointReadMigration1788496000000,
+	HistoryArchiveCheckpointProofStatementAttestationMigration1788587936000,
+	FullHistoryPromotionCheckpointIndexMigration1788592000000
 ] as const;
