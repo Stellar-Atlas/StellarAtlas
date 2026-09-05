@@ -29,7 +29,7 @@ export async function findPrioritizedHistoryArchiveObjectTransitions(
 				])) as readonly TransitionTargetRow[]);
 	const remaining = safeLimit - runtimeRows.length;
 	const genericRows =
-		remaining <= 0 || maximumPriority === 0
+		remaining <= 0 || maximumPriority === 0 || runtimeRows.length > 0
 			? []
 			: ((await repository.manager.query(
 					genericTransitionsSqlByMaximumPriority[maximumPriority],
