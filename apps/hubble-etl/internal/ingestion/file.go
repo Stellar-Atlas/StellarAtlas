@@ -41,25 +41,6 @@ func File(
 	if client == nil {
 		return receipt, fmt.Errorf("ClickHouse client is required")
 	}
-	complete, err := client.BatchComplete(
-		ctx,
-		request.BatchID,
-		request.SourceSHA256,
-	)
-	if err != nil {
-		return receipt, fmt.Errorf("check immutable batch status: %w", err)
-	}
-	if complete {
-		return Receipt{
-			BatchID:      request.BatchID,
-			SourceSHA256: request.SourceSHA256,
-			StartLedger:  request.ExpectedStart,
-			EndLedger:    request.MaximumEnd,
-			LedgerCount:  request.MaximumEnd - request.ExpectedStart + 1,
-			Skipped:      true,
-		}, nil
-	}
-
 	batch, err := lcmbatch.DecodeFile(
 		request.Path,
 		request.ExpectedStart,

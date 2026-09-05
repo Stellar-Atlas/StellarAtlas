@@ -15,7 +15,7 @@ EnvironmentFile=/etc/stellaratlas/hubble-etl.env
 Environment=FULL_HISTORY_DATA_ROOT=/mnt/bulk/stellarbeat-data/full-history/typed
 Environment=HUBBLE_ETL_MAX_BATCHES=0
 Environment=HUBBLE_ETL_ONCE=false
-Environment=HUBBLE_ETL_WORKERS=2
+Environment=HUBBLE_ETL_WORKERS=4
 ExecStart=/mnt/fast/stellaratlas/bin/stellaratlas-hubble-etl-current run
 Restart=on-failure
 RestartSec=5s
