@@ -22,6 +22,8 @@ type Config struct {
 	DecodeLimits      lcmbatch.Limits
 	WriterLimits      clickhouse.WriterLimits
 	MaximumBatches    int
+	PressureGuard     *PressureGuard
+	OnProgress        func(Summary)
 }
 
 type Failure struct {
@@ -101,6 +103,11 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		go func() {
 			defer workers.Done()
 			for batch := range jobs {
+				if config.PressureGuard != nil {
+					if err := config.PressureGuard.Wait(ctx); err != nil {
+						return
+					}
+				}
 				path, err := sourcePath(config.StorageRoot, batch.StorageKey)
 				var receipt ingestion.Receipt
 				if err == nil {
@@ -157,6 +164,9 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		summary.IngestedBatches++
 		summary.IngestedLedgers += uint64(item.receipt.LedgerCount)
 		summary.IngestedRows += item.receipt.RowCount
+		if config.OnProgress != nil {
+			config.OnProgress(summary)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return summary, err

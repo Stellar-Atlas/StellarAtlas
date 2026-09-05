@@ -27,6 +27,7 @@ type config struct {
 	once              bool
 	storageRoot       string
 	workers           int
+	pressureGuard     *backfill.PressureGuard
 }
 
 func main() {
@@ -90,7 +91,12 @@ func loadConfig() (config, error) {
 	if err != nil {
 		return result, fmt.Errorf("HUBBLE_ETL_ONCE: %w", err)
 	}
+	guard, err := loadPressureGuard()
+	if err != nil {
+		return result, err
+	}
 	result = config{
+		pressureGuard:     guard,
 		client:            client,
 		databaseURL:       os.Getenv("ACTIVE_DATABASE_URL"),
 		maximumBatches:    maximumBatches,
@@ -117,6 +123,16 @@ func runBackfill(ctx context.Context, cfg config) error {
 			NetworkPassphrase: cfg.networkPassphrase,
 			StorageRoot:       cfg.storageRoot,
 			WorkerCount:       cfg.workers,
+			PressureGuard:     cfg.pressureGuard,
+			OnProgress: func(summary backfill.Summary) {
+				_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+					"event":           "batch-completed",
+					"ingestedBatches": summary.IngestedBatches,
+					"ingestedLedgers": summary.IngestedLedgers,
+					"ingestedRows":    summary.IngestedRows,
+					"failedBatches":   summary.FailedBatches,
+				})
+			},
 			DecodeLimits: lcmbatch.Limits{
 				MaxCompressedBytes:    8 << 30,
 				MaxUncompressedBytes:  32 << 30,
@@ -146,6 +162,39 @@ func runBackfill(ctx context.Context, cfg config) error {
 		case <-time.After(30 * time.Second):
 		}
 	}
+}
+
+func loadPressureGuard() (*backfill.PressureGuard, error) {
+	enabled, err := strconv.ParseBool(env("HUBBLE_ETL_ADMISSION_ENABLED", "true"))
+	if err != nil {
+		return nil, fmt.Errorf("HUBBLE_ETL_ADMISSION_ENABLED: %w", err)
+	}
+	if !enabled {
+		return nil, nil
+	}
+	guard := &backfill.PressureGuard{}
+	for _, setting := range []struct {
+		name, fallback string
+		maximum        int
+		target         *int
+	}{
+		{"HUBBLE_ETL_ADMISSION_MAX_IO_FULL_BASIS_POINTS", "2000", 10000, &guard.MaximumFullBasisPoints},
+		{"HUBBLE_ETL_ADMISSION_MAX_IO_SOME_BASIS_POINTS", "3000", 10000, &guard.MaximumSomeBasisPoints},
+		{"HUBBLE_ETL_ADMISSION_MAX_MD0_INFLIGHT_REQUESTS", "256", 1000000, &guard.MaximumInflight},
+	} {
+		value, err := nonNegativeInt(env(setting.name, setting.fallback))
+		if err != nil || value > setting.maximum {
+			return nil, fmt.Errorf("%s must be between 0 and %d", setting.name, setting.maximum)
+		}
+		*setting.target = value
+	}
+	if guard.MaximumFullBasisPoints > guard.MaximumSomeBasisPoints {
+		return nil, fmt.Errorf("full I/O threshold cannot exceed some I/O threshold")
+	}
+	guard.Log = func(event, reason string) {
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"event": event, "reason": reason})
+	}
+	return guard, nil
 }
 
 func env(name, fallback string) string {

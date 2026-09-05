@@ -16,6 +16,12 @@ Environment=FULL_HISTORY_DATA_ROOT=/mnt/bulk/stellarbeat-data/full-history/typed
 Environment=HUBBLE_ETL_MAX_BATCHES=0
 Environment=HUBBLE_ETL_ONCE=false
 Environment=HUBBLE_ETL_WORKERS=2
+# Admit a new immutable batch only while the shared RAID is within these limits.
+# Missing local probes defer work; already admitted batches finish normally.
+Environment=HUBBLE_ETL_ADMISSION_ENABLED=true
+Environment=HUBBLE_ETL_ADMISSION_MAX_IO_FULL_BASIS_POINTS=2000
+Environment=HUBBLE_ETL_ADMISSION_MAX_IO_SOME_BASIS_POINTS=3000
+Environment=HUBBLE_ETL_ADMISSION_MAX_MD0_INFLIGHT_REQUESTS=256
 ExecStart=/mnt/fast/stellaratlas/bin/stellaratlas-hubble-etl-current run
 Restart=on-failure
 RestartSec=5s
