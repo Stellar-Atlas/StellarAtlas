@@ -155,9 +155,10 @@ describe('checkpoint proof refresh exception diagnostics', () => {
 			);
 			const repository = mock<HistoryArchiveObjectRepository>();
 			repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
-				claimed: 3,
+				claimed: 4,
 				completed: 2,
 				failed: 1,
+				superseded: 1,
 				failures: [failure]
 			});
 			const logger = mock<Logger>();
@@ -172,9 +173,10 @@ describe('checkpoint proof refresh exception diagnostics', () => {
 				'Failed targeted checkpoint proof refresh',
 				{
 					app: 'history-scan-coordinator',
-					claimed: 3,
+					claimed: 4,
 					completed: 2,
 					failed: 1,
+					superseded: 1,
 					failures: [failure]
 				}
 			);

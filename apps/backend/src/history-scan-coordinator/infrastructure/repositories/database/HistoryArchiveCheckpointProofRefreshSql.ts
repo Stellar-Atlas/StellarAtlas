@@ -43,7 +43,8 @@ const scpVerifiedSql = `(checkpoint_rollup.has_scp
 
 function buildHistoryArchiveCheckpointProofRefreshSql(
 	targetCtesSql: string,
-	upsertSql: string
+	upsertSql: string,
+	claimReceiptSql = ''
 ): string {
 	return `
 	with ${targetCtesSql}, checkpoint_rollup as (
@@ -534,6 +535,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			or ${historyArchiveCheckpointProofPreservedAttestationSql}
 	)
 	select
+		${claimReceiptSql}
 		(select count(*)::integer from target_checkpoints) as "targetCount",
 		(select count(*)::integer from handled) as "handledCount",
 		(select count(*)::integer from upserted) as "upsertedCount",
@@ -574,5 +576,9 @@ export const historyArchiveCheckpointProofQueuedRefreshSql =
 export const historyArchiveCheckpointProofBatchQueuedRefreshSql =
 	buildHistoryArchiveCheckpointProofRefreshSql(
 		historyArchiveCheckpointProofBatchTargetCtesSql,
-		historyArchiveCheckpointProofBatchQueuedUpsertSql
+		historyArchiveCheckpointProofBatchQueuedUpsertSql,
+		`(select coalesce(jsonb_agg(jsonb_build_object(
+			'archiveUrlIdentity', target."archiveUrlIdentity",
+			'checkpointLedger', target."checkpointLedger"
+		)), '[]'::jsonb) from locked_targets target) as "lockedTargets",`
 	);

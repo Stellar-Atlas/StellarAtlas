@@ -152,6 +152,7 @@ export interface HistoryArchiveCheckpointProofRefreshFailure {
 
 export interface HistoryArchiveCheckpointProofRefreshDrainResult {
 	readonly claimed: number;
+	readonly superseded?: number;
 	readonly completed: number;
 	readonly failed: number;
 	readonly failures?: readonly HistoryArchiveCheckpointProofRefreshFailure[];

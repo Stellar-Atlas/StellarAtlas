@@ -43,6 +43,10 @@ export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 }
 
 interface ProofRefreshWriteResult {
+	readonly lockedTargets?: readonly {
+		readonly archiveUrlIdentity: string;
+		readonly checkpointLedger: number;
+	}[];
 	readonly handledCount?: number | string;
 	readonly handledcount?: number | string;
 	readonly targetCount?: number | string;
@@ -302,6 +306,7 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 		claimed: targets.length,
 		completed: outcome.completed,
 		failed: outcome.failed,
+		superseded: outcome.superseded,
 		...(outcome.failures === undefined ? {} : { failures: outcome.failures })
 	};
 }
@@ -460,6 +465,7 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 
 interface ProofRefreshBatchOutcome {
 	readonly completed: number;
+	readonly superseded: number;
 	readonly failed: number;
 	readonly failures?: readonly HistoryArchiveCheckpointProofRefreshFailure[];
 }
@@ -468,19 +474,24 @@ async function refreshProofRefreshBatchWithIsolation(
 	dataSource: DataSource,
 	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
 ): Promise<ProofRefreshBatchOutcome> {
-	if (targets.length === 0) return { completed: 0, failed: 0 };
+	if (targets.length === 0) return { completed: 0, superseded: 0, failed: 0 };
 	try {
-		const completed = await refreshClaimedHistoryArchiveCheckpointProofs(
+		const outcome = await refreshClaimedHistoryArchiveCheckpointProofs(
 			dataSource,
 			targets
 		);
-		return { completed, failed: targets.length - completed };
+		return { ...outcome, failed: 0 };
 	} catch (error) {
 		if (targets.length === 1) {
 			const target = targets[0];
-			if (target === undefined) return { completed: 0, failed: 0 };
-			const failure = await recordProofRefreshFailure(dataSource, target, error);
-			return { completed: 0, failed: 1, failures: [failure] };
+			if (target === undefined)
+				return { completed: 0, superseded: 0, failed: 0 };
+			const failure = await recordProofRefreshFailure(
+				dataSource,
+				target,
+				error
+			);
+			return { completed: 0, superseded: 0, failed: 1, failures: [failure] };
 		}
 		const midpoint = Math.ceil(targets.length / 2);
 		const first = await refreshProofRefreshBatchWithIsolation(
@@ -493,6 +504,7 @@ async function refreshProofRefreshBatchWithIsolation(
 		);
 		return {
 			completed: first.completed + second.completed,
+			superseded: first.superseded + second.superseded,
 			failed: first.failed + second.failed,
 			failures: [...(first.failures ?? []), ...(second.failures ?? [])]
 		};
@@ -502,7 +514,7 @@ async function refreshProofRefreshBatchWithIsolation(
 async function refreshClaimedHistoryArchiveCheckpointProofWave(
 	manager: EntityManager,
 	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
-): Promise<number> {
+): Promise<readonly ClaimedHistoryArchiveCheckpointProofRefresh[]> {
 	const payload = JSON.stringify(targets);
 	const [write] = (await manager.query(
 		historyArchiveCheckpointProofBatchQueuedRefreshSql,
@@ -510,7 +522,23 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 	)) as readonly ProofRefreshWriteResult[];
 	const targetCount = Number(write?.targetCount ?? write?.targetcount ?? 0);
 	const handledCount = Number(write?.handledCount ?? write?.handledcount ?? 0);
+	// Only the SQL-locked claims may be acknowledged. A locked claim with no
+	// derivable target is an actual failure, not superseded work.
+	const lockedTargets = write?.lockedTargets;
+	const lockedKeys = new Set(
+		lockedTargets?.map((target) =>
+			JSON.stringify([target.archiveUrlIdentity, target.checkpointLedger])
+		)
+	);
+	const completedTargets = targets.filter((target) =>
+		lockedKeys.has(
+			JSON.stringify([target.archiveUrlIdentity, target.checkpointLedger])
+		)
+	);
 	if (
+		lockedTargets === undefined ||
+		lockedTargets.length !== completedTargets.length ||
+		lockedTargets.length !== targetCount ||
 		!proofRefreshBatchHandledEveryValidTarget(
 			targets.length,
 			targetCount,
@@ -527,28 +555,30 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 				' claims'
 		);
 	}
+	if (completedTargets.length === 0) return [];
+	const completedPayload = JSON.stringify(completedTargets);
 	await manager.query(
 		historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
-		[payload]
+		[completedPayload]
 	);
 	// Next-checkpoint admission and terminal recovery run from durable proof
 	// state after this transaction commits.
 	const deleted = (await manager.query(completeProofRefreshBatchSql, [
-		payload
+		completedPayload
 	])) as unknown;
 	const deletedRows = extractQueryRows<{ readonly checkpointLedger: number }>(
 		deleted
 	);
-	if (deletedRows.length !== targets.length) {
+	if (deletedRows.length !== completedTargets.length) {
 		throw new Error(
 			'Checkpoint proof batch completed ' +
 				deletedRows.length +
 				'/' +
-				targets.length +
-				' claims'
+				completedTargets.length +
+				' active claims'
 		);
 	}
-	return deletedRows.length;
+	return completedTargets;
 }
 
 async function claimLockedContiguousProofRefreshes(
@@ -591,8 +621,8 @@ async function claimLockedSequentialProofRefreshes(
 export async function refreshClaimedHistoryArchiveCheckpointProofs(
 	dataSource: DataSource,
 	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
-): Promise<number> {
-	if (targets.length === 0) return 0;
+): Promise<{ readonly completed: number; readonly superseded: number }> {
+	if (targets.length === 0) return { completed: 0, superseded: 0 };
 	const archiveUrlIdentities = [
 		...new Set(targets.map((target) => target.archiveUrlIdentity))
 	];
@@ -606,7 +636,7 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 		if (targets.length !== 1) {
 			const initialCompleted =
 				await refreshClaimedHistoryArchiveCheckpointProofWave(manager, targets);
-			completedTargets.push(...targets);
+			completedTargets.push(...initialCompleted);
 			for (let index = 1; index < transactionSize; index += 1) {
 				const savepoint = 'history_archive_proof_chain_' + index;
 				await manager.query('savepoint ' + savepoint);
@@ -619,11 +649,12 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 						await manager.query('release savepoint ' + savepoint);
 						break;
 					}
-					await refreshClaimedHistoryArchiveCheckpointProofWave(
-						manager,
-						nextTargets
+					completedTargets.push(
+						...(await refreshClaimedHistoryArchiveCheckpointProofWave(
+							manager,
+							nextTargets
+						))
 					);
-					completedTargets.push(...nextTargets);
 					await manager.query('release savepoint ' + savepoint);
 				} catch {
 					await manager.query('rollback to savepoint ' + savepoint);
@@ -632,7 +663,10 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 				}
 			}
 			await materializeNextCompactCheckpointPlans(manager, completedTargets);
-			return initialCompleted;
+			return {
+				completed: initialCompleted.length,
+				superseded: targets.length - initialCompleted.length
+			};
 		}
 		const firstContiguousTargets = await claimLockedContiguousProofRefreshes(
 			manager,
@@ -640,8 +674,9 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 			Math.min(maximumSetBasedConsecutiveProofRefreshWaveSize, transactionSize)
 		);
 		const firstWave = [...targets, ...firstContiguousTargets];
-		await refreshClaimedHistoryArchiveCheckpointProofWave(manager, firstWave);
-		completedTargets.push(...firstWave);
+		const firstCompleted =
+			await refreshClaimedHistoryArchiveCheckpointProofWave(manager, firstWave);
+		completedTargets.push(...firstCompleted);
 		let processed = firstWave.length;
 		let wave = 1;
 		while (processed < transactionSize) {
@@ -666,8 +701,12 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 					vectorSize
 				);
 				const vector = [...nextTargets, ...contiguousTargets];
-				await refreshClaimedHistoryArchiveCheckpointProofWave(manager, vector);
-				completedTargets.push(...vector);
+				completedTargets.push(
+					...(await refreshClaimedHistoryArchiveCheckpointProofWave(
+						manager,
+						vector
+					))
+				);
 				processed += vector.length;
 				await manager.query('release savepoint ' + savepoint);
 			} catch {
@@ -678,7 +717,10 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 			wave++;
 		}
 		await materializeNextCompactCheckpointPlans(manager, completedTargets);
-		return targets.length;
+		const completed = targets.filter((target) =>
+			firstCompleted.includes(target)
+		).length;
+		return { completed, superseded: targets.length - completed };
 	});
 }
 export async function recordProofRefreshFailure(
@@ -695,7 +737,9 @@ export async function recordProofRefreshFailure(
 		target.generation
 	]);
 	return mapCheckpointProofRefreshFailure(
-		target, error, extractQueryRows(recorded).length > 0
+		target,
+		error,
+		extractQueryRows(recorded).length > 0
 	);
 }
 
@@ -1052,12 +1096,14 @@ with targets as materialized (
 select target."archiveUrlIdentity",
 target."checkpointLedger",
 target.generation,
-target."leaseToken"
+target."leaseToken",
+target."evidenceUpdatedAt"
 from jsonb_to_recordset($1::jsonb) as target(
 "archiveUrlIdentity" text,
 "checkpointLedger" integer,
 generation bigint,
-"leaseToken" uuid
+"leaseToken" uuid,
+"evidenceUpdatedAt" timestamptz
 )
 )
 delete from history_archive_checkpoint_proof_refresh_queue queue
@@ -1066,6 +1112,8 @@ where queue."archiveUrlIdentity" = targets."archiveUrlIdentity"
 and queue."checkpointLedger" = targets."checkpointLedger"
 and queue."leaseToken" = targets."leaseToken"
 and queue.generation = targets.generation
+and queue."evidenceUpdatedAt" = targets."evidenceUpdatedAt"
+and queue."leaseUntil" > now()
 returning queue."checkpointLedger"
 `;
 

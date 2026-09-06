@@ -274,12 +274,18 @@ describe('sequential history archive proof chain', () => {
 		expect(targetedCheckpointSubstitutionSql).toContain(
 			'failed_bucket."httpStatus" in ('
 		);
-		expect(targetedCheckpointSubstitutionSql).toContain(
-			'or failed_object.attempts >='
-		);
-		expect(targetedCheckpointSubstitutionSql).toContain(
-			'or failed_bucket.attempts >='
-		);
+		for (const alias of ['failed_object', 'failed_bucket']) {
+			expect(targetedCheckpointSubstitutionSql).not.toContain(`${alias}.attempts`);
+			expect(targetedCheckpointSubstitutionSql).toContain(
+				`${alias}.status = 'failed' and (`
+			);
+			expect(targetedCheckpointSubstitutionSql).toContain(
+				`${alias}."failureChannel" in ('archive_evidence', 'archive_availability')`
+			);
+			expect(targetedCheckpointSubstitutionSql).toContain(
+				`or (${alias}."failureChannel" is null and ${alias}."httpStatus" in (403, 404, 410))`
+			);
+		}
 		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toContain(
 			"recovered.status = 'verified'"
 		);

@@ -105,6 +105,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 				claimed: result.claimed,
 				completed: result.completed,
 				failed: result.failed,
+				superseded: result.superseded ?? 0,
 				...(result.failures === undefined ? {} : { failures: result.failures })
 			});
 		}
