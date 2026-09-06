@@ -8,6 +8,7 @@
 }
 
 .status-panel-grid {
+	align-items: start;
 	display: grid;
 	gap: 16px;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -355,5 +356,100 @@
 	}
 	.status-dashboard .status-current-job {
 		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.status-stream-notice {
+	color: var(--muted);
+	font-size: 0.85rem;
+	line-height: 1.45;
+	margin: 0 0 1rem;
+}
+
+@media (max-width: 960px) {
+	.status-panel-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.status-dashboard
+		:is(
+			.status-worker-table,
+			.archive-summary-table,
+			.archive-checkpoint-proof-table,
+			.status-network-scan-table
+		) {
+		min-inline-size: 0;
+		table-layout: auto;
+	}
+	.status-dashboard
+		:is(
+			.status-worker-table,
+			.archive-summary-table,
+			.archive-checkpoint-proof-table,
+			.status-network-scan-table
+		),
+	.status-dashboard
+		:is(
+			.status-worker-table,
+			.archive-summary-table,
+			.archive-checkpoint-proof-table,
+			.status-network-scan-table
+		)
+		:is(tbody, tr, td) {
+		display: block;
+		inline-size: 100%;
+		box-sizing: border-box;
+	}
+	.status-dashboard
+		:is(
+			.status-worker-table,
+			.archive-summary-table,
+			.archive-checkpoint-proof-table,
+			.status-network-scan-table
+		)
+		thead {
+		position: absolute;
+		inline-size: 1px;
+		block-size: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+	.status-dashboard
+		:is(
+			.status-worker-table,
+			.archive-summary-table,
+			.archive-checkpoint-proof-table,
+			.status-network-scan-table
+		)
+		tr {
+		border-block-end: 1px solid var(--border);
+		padding: 0.75rem;
+	}
+	.status-dashboard
+		:is(
+			.status-worker-table,
+			.archive-summary-table,
+			.archive-checkpoint-proof-table,
+			.status-network-scan-table
+		)
+		td {
+		border: 0;
+		padding: 0.35rem 0;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	.status-dashboard
+		:is(
+			.status-worker-table,
+			.archive-summary-table,
+			.archive-checkpoint-proof-table,
+			.status-network-scan-table
+		)
+		td[data-label]::before {
+		content: attr(data-label);
+		display: block;
+		color: var(--muted);
+		font-size: 0.72rem;
+		font-weight: 600;
+		margin-block-end: 0.2rem;
 	}
 }

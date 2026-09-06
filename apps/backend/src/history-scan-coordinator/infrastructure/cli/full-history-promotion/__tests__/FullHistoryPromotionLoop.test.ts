@@ -1,5 +1,6 @@
 import { fullHistoryUint64 } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { FullHistoryCanonicalError } from '../../../../domain/full-history/FullHistoryCanonicalError.js';
+import { FullHistoryLedgerObservationsMissingError } from '../../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import {
 	fullHistoryPromotionLoopErrorCode,
 	runFullHistoryPromotionLoop,
@@ -108,6 +109,48 @@ describe('continuous full-history promotion loop', () => {
 			status: 'cycle-failed'
 		});
 		expect(events[1]).toMatchObject({ status: 'promoted' });
+		expect(JSON.stringify(events)).not.toContain('operator:secret');
+	});
+
+	it('logs exact missing ledger metadata without exposing arbitrary errors', async () => {
+		const diagnostic = {
+			checkpointLedger: 63494143,
+			ledgerObjectRemoteId: 'a1afab30-9602-47f3-8f3c-1a85aa64c5d4',
+			expectedLedgerCount: 64,
+			observedLedgerCount: 0
+		};
+		const events: FullHistoryPromotionLoopEvent[] = [];
+		let stopped = false;
+		await runFullHistoryPromotionLoop(
+			{
+				errorBackoffMs: 30_000,
+				maximumCheckpointsPerCycle: 1,
+				networkPassphrase: 'test',
+				pollIntervalMs: 1_000
+			},
+			{
+				emit: (event) => events.push(event),
+				promoteNext: async () => {
+					const error = new FullHistoryLedgerObservationsMissingError(
+						diagnostic
+					);
+					error.message = 'postgresql://operator:secret@database.example';
+					throw error;
+				},
+				shouldStop: () => stopped,
+				wait: async () => {
+					stopped = true;
+				}
+			}
+		);
+		expect(events).toEqual([
+			{
+				errorCode: 'promotion-candidate-incomplete',
+				missingLedgerObservations: diagnostic,
+				retryInMs: 30_000,
+				status: 'cycle-failed'
+			}
+		]);
 		expect(JSON.stringify(events)).not.toContain('operator:secret');
 	});
 

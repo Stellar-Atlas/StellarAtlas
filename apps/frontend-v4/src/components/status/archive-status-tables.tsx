@@ -180,19 +180,21 @@ function FailureEventRow({
 	const state = getArchiveFailureState(event.evidenceClass);
 	return (
 		<tr>
-			<td>
+			<td data-label="Check type">
 				<ArchiveHealthPill
 					state={state}
 					text={state === 'remote_retry' ? 'Remote retry' : undefined}
 				/>
 			</td>
-			<td>{formatArchiveSourceLabel(event.archiveUrl)}</td>
-			<td>
+			<td data-label="Archive source">
+				{formatArchiveSourceLabel(event.archiveUrl)}
+			</td>
+			<td data-label="Archive file">
 				<strong>{formatArchiveObjectTypeLabel(event.objectType)}</strong>
 				<small>{event.objectKey}</small>
 			</td>
-			<td>{formatFailureDetail(event)}</td>
-			<td>{formatDateTime(event.createdAt)}</td>
+			<td data-label="Observed result">{formatFailureDetail(event)}</td>
+			<td data-label="Observed">{formatDateTime(event.createdAt)}</td>
 		</tr>
 	);
 }
@@ -278,15 +280,19 @@ function ArchiveSourceRow({
 	const formatDateTime = useLocalDateTimeFormatter();
 	return (
 		<tr>
-			<td>
+			<td data-label="Archive source">
 				<strong>{formatArchiveSourceLabel(source.archiveUrl)}</strong>
 				<small>{formatDateTime(source.observedAt)}</small>
 			</td>
-			<td>{formatSourceIntegrity(source)}</td>
-			<td>{formatRemoteAvailability(source)}</td>
-			<td>{formatSourceState(source)}</td>
-			<td>{formatCheckpointCoverage(source)}</td>
-			<td>
+			<td data-label="Integrity proof">{formatSourceIntegrity(source)}</td>
+			<td data-label="Remote availability">
+				{formatRemoteAvailability(source)}
+			</td>
+			<td data-label="Root state">{formatSourceState(source)}</td>
+			<td data-label="Checkpoint coverage">
+				{formatCheckpointCoverage(source)}
+			</td>
+			<td data-label="Proof work">
 				{formatInteger(source.activeObjectChecks)} active;{' '}
 				{formatInteger(source.pendingCheckpointProofs)} waiting for files;{' '}
 				{formatInteger(source.notEvaluableCheckpointProofs)} incomplete
@@ -361,30 +367,32 @@ function CheckpointProofDetail({
 					</thead>
 					<tbody>
 						<tr>
-							<td>
+							<td data-label="Root observations with mismatch">
 								{formatInteger(
 									checkpoints.categoryConsistencyFailedCheckpoints
 								)}
 							</td>
-							<td>
+							<td data-label="Root observations waiting for files">
 								{formatInteger(
 									checkpoints.categoryConsistencyPendingCheckpoints
 								)}
 							</td>
-							<td>
+							<td data-label="Root observations not evaluated">
 								{formatInteger(
 									checkpoints.categoryConsistencyNotEvaluatedCheckpoints
 								)}
 							</td>
-							<td>
+							<td data-label="Root observations file-complete">
 								{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
 							</td>
-							<td>
+							<td data-label="Root attestations verified">
 								{formatInteger(
 									checkpoints.categoryConsistentArchiveCheckpoints
 								)}
 							</td>
-							<td>{formatInteger(checkpoints.totalArchiveCheckpoints)}</td>
+							<td data-label="Materialized root-checkpoint observations">
+								{formatInteger(checkpoints.totalArchiveCheckpoints)}
+							</td>
 						</tr>
 					</tbody>
 				</table>

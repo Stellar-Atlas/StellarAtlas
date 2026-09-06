@@ -6,7 +6,10 @@ import type {
 	FullHistoryPromotionTarget
 } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidate.js';
 import type { FullHistoryCheckpointCandidateRepository } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidateRepository.js';
-import { FullHistoryPromotionError } from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
+import {
+	FullHistoryLedgerObservationsMissingError,
+	FullHistoryPromotionError
+} from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import { FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import {
@@ -139,6 +142,14 @@ async function loadCandidate(
 	const ledgerRows = (await manager.query(fullHistoryObservedLedgersSql, [
 		sources.ledger.remoteId
 	])) as FullHistoryCandidateLedgerRow[];
+	if (ledgerRows.length !== expectedLedgerCount) {
+		throw new FullHistoryLedgerObservationsMissingError({
+			checkpointLedger: target.checkpointLedger,
+			ledgerObjectRemoteId: sources.ledger.remoteId,
+			expectedLedgerCount,
+			observedLedgerCount: ledgerRows.length
+		});
+	}
 	const boundsRows = (await manager.query(
 		fullHistoryObservedTransactionBoundsSql,
 		[sources.ledger.remoteId]
@@ -153,7 +164,6 @@ async function loadCandidate(
 		FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT + 1
 	])) as FullHistoryCandidateResultRow[];
 	if (
-		ledgerRows.length !== expectedLedgerCount ||
 		envelopeRows.length > FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT ||
 		resultRows.length > FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT
 	) {

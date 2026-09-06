@@ -13,6 +13,20 @@ export function LedgerCloseMetaStateStatusRows({
 	readonly fullHistory: PublicFullHistoryStatus;
 }): React.JSX.Element {
 	const state = fullHistory.ledgerCloseMetaState;
+	if (
+		fullHistory.status === 'unavailable' &&
+		state.imports.lifecycle.total === 0 &&
+		state.canonicalLinkage.lifecycle.total === 0
+	) {
+		return (
+			<StatusRow
+				label="State import and linkage records"
+				status="unavailable"
+				value="Telemetry unavailable"
+				detail="Import and linkage records have not loaded; no empty-state conclusion is available."
+			/>
+		);
+	}
 	return (
 		<>
 			<StateImportRow imports={state.imports} />
@@ -37,16 +51,16 @@ function StateImportRow({
 			detail={
 				empty
 					? 'No account or trustline change batch has been registered for import yet.'
-					: `${formatInteger(lifecycle.importing)} importing, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(imports.latestUpdatedAt, formatDateTime)}`
+					: `Last recorded: ${formatInteger(lifecycle.importing)} importing, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed. Updated ${formatNullableDate(imports.latestUpdatedAt, formatDateTime)}; not live worker status.`
 			}
-			label="Account and trustline state"
+			label="Account and trustline state (recorded)"
 			pillText={
 				empty
 					? 'Awaiting data'
 					: failed
 						? 'Needs attention'
 						: active
-							? 'Importing'
+							? 'Recorded importing'
 							: waiting
 								? 'Queued'
 								: 'Imported'
@@ -83,16 +97,16 @@ function CanonicalStateLinkageRow({
 			detail={
 				empty
 					? 'No LedgerCloseMeta batch overlaps proof-gated canonical history yet.'
-					: `Ledger hash linkage runs independently of account and trustline imports. It compares the LedgerCloseMeta ledger header and hash projection with proof-gated canonical ledgers: ${formatInteger(lifecycle.checking)} checking, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(linkage.latestUpdatedAt, formatDateTime)}. It does not compare account or trustline contents with a canonical state snapshot and is not SCP evidence.`
+					: `Compares decoded ledger headers and hashes with proof-gated canonical ledgers. Last recorded: ${formatInteger(lifecycle.checking)} checking, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed. Updated ${formatNullableDate(linkage.latestUpdatedAt, formatDateTime)}; not live worker status. This does not verify account/trustline contents or SCP signatures.`
 			}
-			label="Canonical ledger linkage"
+			label="Canonical ledger linkage (recorded)"
 			pillText={
 				empty
 					? 'Awaiting overlap'
 					: failed
 						? 'Needs attention'
 						: active
-							? 'Checking'
+							? 'Recorded checking'
 							: waiting
 								? 'Queued'
 								: inconsistent

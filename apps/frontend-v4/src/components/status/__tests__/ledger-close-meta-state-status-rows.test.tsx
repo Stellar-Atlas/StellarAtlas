@@ -19,6 +19,38 @@ describe('LedgerCloseMetaStateStatusRows', () => {
 		expect(html).not.toContain('Degraded');
 	});
 
+	it('does not turn unavailable history telemetry into empty successful records', () => {
+		const fullHistory = {
+			...status(emptyState()),
+			status: 'unavailable' as const
+		};
+		const html = renderToStaticMarkup(
+			<LedgerCloseMetaStateStatusRows fullHistory={fullHistory} />
+		);
+		expect(html).toContain('Telemetry unavailable');
+		expect(html).not.toContain('No account or trustline change batch');
+		expect(html).not.toContain('No LedgerCloseMeta batch overlaps');
+		expect(html).not.toContain('status-pill good');
+	});
+
+	it('identifies old importing records without claiming a live worker', () => {
+		const state = populatedState();
+		const imports = {
+			...state.imports,
+			latestUpdatedAt: '2026-08-09T12:00:00.000Z',
+			lifecycle: { complete: 0, failed: 0, importing: 3, pending: 0, total: 3 }
+		};
+		const html = renderToStaticMarkup(
+			<LedgerCloseMetaStateStatusRows
+				fullHistory={status({ ...state, imports })}
+			/>
+		);
+		expect(html).toContain('Recorded importing');
+		expect(html).toContain('Last recorded: 3 importing');
+		expect(html).toContain('not live worker status');
+		expect(html).toContain('2026-08-09 12:00 UTC');
+	});
+
 	it('shows import and proof linkage failures without overstating the proof', () => {
 		const state = populatedState();
 		const html = renderToStaticMarkup(
@@ -30,8 +62,8 @@ describe('LedgerCloseMetaStateStatusRows', () => {
 		expect(html).toContain('Needs attention');
 		expect(html).toContain('proof-gated canonical ledgers');
 		expect(html).not.toContain('proof-v6');
-		expect(html).toContain('does not compare account or trustline contents');
-		expect(html).toContain('not SCP evidence');
+		expect(html).toContain('does not verify account/trustline contents');
+		expect(html).toContain('or SCP signatures');
 	});
 });
 

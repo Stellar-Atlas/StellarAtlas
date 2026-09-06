@@ -21,3 +21,18 @@ export class FullHistoryPromotionError extends Error {
 		super(message, options);
 	}
 }
+export interface FullHistoryLedgerObservationCount {
+	readonly checkpointLedger: number;
+	readonly ledgerObjectRemoteId: string;
+	readonly expectedLedgerCount: number;
+	readonly observedLedgerCount: number;
+}
+
+export class FullHistoryLedgerObservationsMissingError extends FullHistoryPromotionError {
+	constructor(readonly diagnostic: FullHistoryLedgerObservationCount) {
+		super(
+			'candidate-incomplete',
+			'Exact checkpoint ledger observations are incomplete'
+		);
+	}
+}

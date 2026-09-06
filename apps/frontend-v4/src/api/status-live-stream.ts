@@ -121,10 +121,10 @@ const connectStatusStream = (): void => {
 	});
 	candidate.addEventListener('message', (event) => {
 		if (socket !== candidate) return;
-		armStaleStreamTimeout(candidate);
 		try {
 			const message = parseStatusLiveMessage(JSON.parse(event.data as string));
 			if (message !== null) {
+				if (message.type !== 'error') armStaleStreamTimeout(candidate);
 				notify(message);
 				return;
 			}

@@ -1,6 +1,6 @@
 'use client';
 
-import { historyArchiveWorkerTelemetryLimit } from 'history-scanner-dto';
+import { useState } from 'react';
 import type {
 	ArchiveWorkerOutcomeDTO,
 	ArchiveWorkerStatusRowDTO,
@@ -11,28 +11,38 @@ import { formatInteger } from '@format/formatters';
 import { useLocalDateTimeFormatter } from '../local-date-time';
 import { getArchiveDownloadActivity } from './archive-download-activity';
 import { StatusPill } from './status-ui';
-
-const MAX_ARCHIVE_WORKER_SLOTS = historyArchiveWorkerTelemetryLimit;
-const MAX_RENDERED_ARCHIVE_WORKER_ROWS = 48;
-
-type ArchiveWorkerSlot = {
-	readonly slotIndex: number;
-	readonly worker: ArchiveWorkerStatusRowDTO | null;
-};
+import {
+	createWorkerSlots,
+	archiveWorkerPageSize,
+	formatArchiveWorkerCapacity
+} from './archive-worker-table-model';
+import {
+	getStatusTablePage,
+	StatusTablePagination
+} from './status-table-pagination';
 
 export function ArchiveWorkerStatusTable({
 	workers
 }: {
 	readonly workers: PublicWorkerStatus;
 }): React.JSX.Element {
+	const [page, setPage] = useState(0);
 	const archive = workers.archiveWorkers;
+	const unavailable =
+		archive.status === 'unavailable' &&
+		archive.workers.length === 0 &&
+		archive.configuredWorkerProcesses === 0;
 	const aggregateOnly = archive.telemetryMode === 'aggregate-only';
 	const allWorkerSlots = createWorkerSlots(
 		archive.workers,
 		archive.configuredWorkerProcesses
 	);
-	const workerSlots = selectWorkerSlots(allWorkerSlots);
-	const hiddenWorkerSlotCount = allWorkerSlots.length - workerSlots.length;
+	const workerPage = getStatusTablePage(
+		allWorkerSlots,
+		page,
+		archiveWorkerPageSize
+	);
+	const workerSlots = workerPage.rows;
 	const downloadActivity = getArchiveDownloadActivity(archive.workers);
 	return (
 		<section className="panel detail-panel status-worker-panel">
@@ -40,15 +50,20 @@ export function ArchiveWorkerStatusTable({
 				<div>
 					<h2>Archive workers</h2>
 					<span className="muted-inline">
-						{aggregateOnly
-							? `${formatInteger(archive.activeWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} active (aggregate telemetry)`
-							: `${formatInteger(archive.freshWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} fresh; ${formatInteger(downloadActivity.activeDownloads)} downloading; ${formatInteger(downloadActivity.waitingForDownloadSlots)} waiting for a slot${archive.startupGraceActive ? ' during startup' : ''}`}
+						{unavailable
+							? 'Worker telemetry unavailable'
+							: aggregateOnly
+								? `${formatInteger(archive.activeWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} active (aggregate telemetry)`
+								: `${formatInteger(archive.freshWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} fresh; ${formatInteger(downloadActivity.activeDownloads)} downloading; ${formatInteger(downloadActivity.waitingForDownloadSlots)} waiting for a slot${archive.startupGraceActive ? ' during startup' : ''}`}
 					</span>
-					{!aggregateOnly && hiddenWorkerSlotCount > 0 ? (
+					{!unavailable ? (
 						<span className="muted-inline">
-							Showing {formatInteger(workerSlots.length)} of{' '}
-							{formatInteger(allWorkerSlots.length)} worker slots; active and
-							unhealthy slots first.
+							{formatArchiveWorkerCapacity(archive)}
+						</span>
+					) : null}
+					{!aggregateOnly && !unavailable ? (
+						<span className="muted-inline">
+							All slots available below, in stable slot-number order.
 						</span>
 					) : null}
 				</div>
@@ -81,71 +96,30 @@ export function ArchiveWorkerStatusTable({
 						) : (
 							<tr>
 								<td colSpan={6}>
-									{aggregateOnly
-										? 'Per-worker telemetry is unavailable during mixed rollout.'
-										: 'No recent worker registrations.'}
+									{unavailable
+										? 'Worker registrations have not loaded.'
+										: aggregateOnly
+											? 'Per-worker telemetry is unavailable during mixed rollout.'
+											: 'No recent worker registrations.'}
 								</td>
 							</tr>
 						)}
 					</tbody>
 				</table>
 			</div>
+			{!aggregateOnly ? (
+				<StatusTablePagination
+					label="Archive worker pages"
+					onPageChange={setPage}
+					page={workerPage.page}
+					pageSize={archiveWorkerPageSize}
+					totalRows={allWorkerSlots.length}
+				/>
+			) : null}
 		</section>
 	);
 }
 
-function createWorkerSlots(
-	workers: readonly ArchiveWorkerStatusRowDTO[],
-	configuredWorkerProcesses: number
-): readonly ArchiveWorkerSlot[] {
-	const configuredSlots = Math.min(
-		MAX_ARCHIVE_WORKER_SLOTS,
-		Math.max(0, configuredWorkerProcesses)
-	);
-	const workersBySlot = new Map<number, ArchiveWorkerStatusRowDTO>();
-	for (const worker of workers) {
-		if (
-			worker.slotIndex < configuredSlots &&
-			!workersBySlot.has(worker.slotIndex)
-		) {
-			workersBySlot.set(worker.slotIndex, worker);
-		}
-	}
-	return Array.from({ length: configuredSlots }, (_, slotIndex) => ({
-		slotIndex,
-		worker: workersBySlot.get(slotIndex) ?? null
-	}));
-}
-
-function selectWorkerSlots(
-	workerSlots: readonly ArchiveWorkerSlot[]
-): readonly ArchiveWorkerSlot[] {
-	if (workerSlots.length <= MAX_RENDERED_ARCHIVE_WORKER_ROWS) {
-		return workerSlots;
-	}
-	return [...workerSlots]
-		.sort(
-			(left, right) =>
-				workerSlotPriority(left) - workerSlotPriority(right) ||
-				left.slotIndex - right.slotIndex
-		)
-		.slice(0, MAX_RENDERED_ARCHIVE_WORKER_ROWS)
-		.sort((left, right) => left.slotIndex - right.slotIndex);
-}
-
-function workerSlotPriority(slot: ArchiveWorkerSlot): number {
-	const worker = slot.worker;
-	if (worker === null) return 2;
-	if (
-		worker.status === 'stale' ||
-		worker.lastOutcome === 'archive_error' ||
-		worker.lastOutcome === 'worker_issue'
-	) {
-		return 0;
-	}
-	if (worker.status === 'active' || worker.currentObject !== null) return 1;
-	return 3;
-}
 function MissingArchiveWorkerRow({
 	slotIndex
 }: {
@@ -153,10 +127,12 @@ function MissingArchiveWorkerRow({
 }): React.JSX.Element {
 	return (
 		<tr className="status-worker-missing">
-			<td>
+			<td data-label="Slot / process">
 				<strong>Slot {formatInteger(slotIndex)}</strong>
 			</td>
-			<td colSpan={5}>No recent worker registration.</td>
+			<td colSpan={5} data-label="Registration">
+				No recent worker registration.
+			</td>
 		</tr>
 	);
 }
@@ -169,7 +145,7 @@ function ArchiveWorkerRow({
 	const formatDateTime = useLocalDateTimeFormatter();
 	return (
 		<tr>
-			<td>
+			<td data-label="Slot / process">
 				<strong>Slot {formatInteger(worker.slotIndex)}</strong>
 				<small>{worker.workerId}</small>
 				<small>
@@ -177,21 +153,21 @@ function ArchiveWorkerRow({
 					gen {formatInteger(worker.processGeneration)}
 				</small>
 			</td>
-			<td>{formatCurrentObject(worker)}</td>
-			<td>
+			<td data-label="Current file">{formatCurrentObject(worker)}</td>
+			<td data-label="Stage">
 				<span className={`status-worker-state ${worker.status}`}>
 					{worker.status}
 				</span>
 				<small>{formatStage(worker.stage)}</small>
 			</td>
-			<td>
+			<td data-label="Progress">
 				<ArchiveWorkerProgress worker={worker} />
 			</td>
-			<td>
+			<td data-label="Heartbeat">
 				{formatAge(worker.heartbeatAgeMs)} ago
 				<small>{formatDateTime(worker.lastHeartbeatAt)}</small>
 			</td>
-			<td>
+			<td data-label="Last outcome">
 				{formatOutcome(worker.lastOutcome)}
 				<small>
 					{worker.lastOutcomeAt === null

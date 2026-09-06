@@ -23,6 +23,8 @@ import {
 } from '@domain/history-archive-health';
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { getArchiveDownloadActivity } from './archive-download-activity';
+import { platformMonitoringStatus } from './status-dashboard-health';
+import { formatArchiveWorkerCapacity } from './archive-worker-table-model';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
 import { resolveArchiveRuntimeActivity } from './archive-runtime-activity';
 import { RecentScanLogs } from './recent-scan-logs';
@@ -110,10 +112,9 @@ export function StatusDashboard({
 		staleChecks: archiveRuntimeActivity.staleChecks,
 		state: archiveScannerHealth
 	});
-	const archiveVerifierDetail = formatArchiveWorkerDetail(
-		archiveRuntimeActivity,
-		workers
-	);
+	const archiveVerifierDetail = archiveTelemetryAvailable
+		? formatArchiveWorkerDetail(archiveRuntimeActivity, workers)
+		: 'Archive runtime telemetry is unavailable; current check counts are not reported.';
 	const networkMonitoringStatus = combineStatusLevels(
 		scan.status,
 		dataQuality.dataFreshness.networkScan.status
@@ -134,7 +135,10 @@ export function StatusDashboard({
 			value: archiveRuntimeHeadline
 		},
 		network: {
-			detail: `${formatInteger(scan.completedScans)} recent scans completed; latest data age ${formatDuration(dataQuality.dataFreshness.networkScan.ageMs)}`,
+			detail:
+				scan.status === 'unavailable'
+					? 'Network scan counts unavailable; waiting for telemetry.'
+					: `${formatInteger(scan.completedScans)} recent scans completed; latest data age ${formatDuration(dataQuality.dataFreshness.networkScan.ageMs)}`,
 			status: networkMonitoringStatus
 		},
 		platform: {
@@ -164,7 +168,13 @@ export function StatusDashboard({
 							<strong>Platform and monitoring</strong>
 							<span>StellarAtlas runtime and network data freshness</span>
 						</div>
-						<StatusPill status={api.status} />
+						<StatusPill
+							status={platformMonitoringStatus(
+								api.status,
+								networkMonitoringStatus,
+								fullHistory
+							)}
+						/>
 					</div>
 					<div className="status-list">
 						<StatusRow
@@ -189,10 +199,18 @@ export function StatusDashboard({
 							)}
 						/>
 						<StatusRow
-							detail={`${formatInteger(scan.completedScans)} completed, ${formatInteger(scan.incompleteScans)} incomplete`}
+							detail={
+								scan.status === 'unavailable'
+									? 'Network scan counts are unavailable.'
+									: `${formatInteger(scan.completedScans)} completed, ${formatInteger(scan.incompleteScans)} incomplete`
+							}
 							label="Network scanner records"
 							status={scan.status}
-							value={`${formatInteger(scan.completedScans)} / ${formatInteger(scan.totalScans)}`}
+							value={
+								scan.status === 'unavailable'
+									? 'Unavailable'
+									: `${formatInteger(scan.completedScans)} / ${formatInteger(scan.totalScans)}`
+							}
 						/>
 					</div>
 				</section>
@@ -247,10 +265,18 @@ function CanonicalHistoryStatusRow({
 	if (coverage === null) {
 		return (
 			<StatusRow
-				detail="No proof-gated checkpoint has been promoted into the local index."
+				detail={
+					fullHistory.status === 'unavailable'
+						? 'Canonical history telemetry is unavailable; indexed coverage has not been reported.'
+						: 'No proof-gated checkpoint has been promoted into the local index.'
+				}
 				label="Canonical history"
 				status="unavailable"
-				value="Not indexed"
+				value={
+					fullHistory.status === 'unavailable'
+						? 'Telemetry unavailable'
+						: 'Not indexed'
+				}
 			/>
 		);
 	}
@@ -403,7 +429,12 @@ function formatArchiveWorkerDetail(
 		objectWorkers.telemetryMode === 'per-worker'
 			? `; ${formatInteger(downloadActivity.activeDownloads)} network download${downloadActivity.activeDownloads === 1 ? '' : 's'} active; ${formatInteger(downloadActivity.waitingForDownloadSlots)} waiting for a download slot`
 			: '';
-	return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured worker processes; ${activeText}${downloadText}${staleText}`;
+	const capacity =
+		objectWorkers.status === 'unavailable' &&
+		objectWorkers.configuredWorkerProcesses === 0
+			? 'Worker capacity unavailable'
+			: formatArchiveWorkerCapacity(objectWorkers);
+	return `${capacity}; ${activeText}${downloadText}${staleText}`;
 }
 
 function formatNullableDate(

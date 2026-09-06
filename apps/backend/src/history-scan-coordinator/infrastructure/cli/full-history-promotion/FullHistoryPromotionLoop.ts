@@ -5,6 +5,8 @@ import {
 } from '../../../domain/full-history/FullHistoryCanonicalError.js';
 import {
 	FullHistoryPromotionError,
+	FullHistoryLedgerObservationsMissingError,
+	type FullHistoryLedgerObservationCount,
 	type FullHistoryPromotionErrorReason
 } from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 
@@ -33,6 +35,7 @@ export interface FullHistoryPromotionLoopEvent {
 	readonly batchId?: string;
 	readonly checkpointLedger?: number | null;
 	readonly errorCode?: FullHistoryPromotionLoopErrorCode;
+	readonly missingLedgerObservations?: FullHistoryLedgerObservationCount;
 	readonly nextLedger?: string | null;
 	readonly retryInMs?: number;
 	readonly status:
@@ -64,6 +67,9 @@ export async function runFullHistoryPromotionLoop(
 				cycleFailed = true;
 				dependencies.emit({
 					errorCode: fullHistoryPromotionLoopErrorCode(error),
+					...(error instanceof FullHistoryLedgerObservationsMissingError
+						? { missingLedgerObservations: error.diagnostic }
+						: {}),
 					retryInMs: config.errorBackoffMs,
 					status: 'cycle-failed'
 				});

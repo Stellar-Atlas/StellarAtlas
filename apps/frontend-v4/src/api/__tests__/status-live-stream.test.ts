@@ -57,6 +57,62 @@ describe('status WebSocket lifecycle', () => {
 			harness.restore();
 		}
 	});
+
+	it('does not let errors or malformed messages keep a stale stream alive', () => {
+		const harness = installSocketHarness();
+		try {
+			const unsubscribe = subscribeToStatusStream(() => undefined);
+			harness.sockets[0]?.emit('open');
+			const watchdog = [...harness.timers.keys()];
+
+			for (const data of [
+				JSON.stringify({
+					type: 'error',
+					payload: { message: 'Snapshot failed' }
+				}),
+				'{invalid',
+				JSON.stringify({ type: 'status-patch', payload: {} })
+			])
+				harness.sockets[0]?.emit('message', { data });
+
+			expect([...harness.timers.keys()]).toEqual(watchdog);
+			runLatestTimer(harness.timers);
+			expect(harness.sockets[0]?.closeCalls).toBe(1);
+			runLatestTimer(harness.timers);
+			expect(harness.sockets).toHaveLength(2);
+			unsubscribe();
+		} finally {
+			harness.restore();
+		}
+	});
+
+	it('renews the watchdog for a valid status update', () => {
+		const harness = installSocketHarness();
+		try {
+			const unsubscribe = subscribeToStatusStream(() => undefined);
+			harness.sockets[0]?.emit('open');
+			const watchdog = [...harness.timers.keys()];
+			harness.sockets[0]?.emit('message', {
+				data: JSON.stringify({
+					type: 'status-patch',
+					payload: {
+						generatedAt: '2026-09-06T20:00:00Z',
+						api: {
+							generatedAt: '2026-09-06T20:00:00Z',
+							service: 'api',
+							status: 'ok'
+						}
+					}
+				})
+			});
+			expect([...harness.timers.keys()]).not.toEqual(watchdog);
+			expect(harness.timers.size).toBe(1);
+			expect(harness.sockets[0]?.closeCalls).toBe(0);
+			unsubscribe();
+		} finally {
+			harness.restore();
+		}
+	});
 });
 
 interface SocketHarness {

@@ -150,26 +150,32 @@ function NetworkScanRow({
 
 	return (
 		<tr>
-			<td>
+			<td data-label="Scan time">
 				<strong>{formatDateTime(scan.time)}</strong>
 				<small>
 					{formatLatestClose(scan.latestLedgerCloseTime, formatDateTime)}
 				</small>
 			</td>
-			<td>
+			<td data-label="Status">
 				<StatusPill
 					status={status}
 					text={scan.completed ? 'complete' : 'incomplete'}
 				/>
 			</td>
-			<td>{scan.latestLedger}</td>
-			<td>{formatInteger(scan.ledgersCount)}</td>
-			<td>{formatInteger(scheduling.discoveredArchiveUrlCount)}</td>
-			<td>{formatInteger(scheduling.scheduledArchiveScanJobCount)}</td>
-			<td>
+			<td data-label="Latest ledger">{scan.latestLedger}</td>
+			<td data-label="Processed ledgers">{formatInteger(scan.ledgersCount)}</td>
+			<td data-label="Archive roots observed">
+				{formatInteger(scheduling.discoveredArchiveUrlCount)}
+			</td>
+			<td data-label="New checks queued">
+				{formatInteger(scheduling.scheduledArchiveScanJobCount)}
+			</td>
+			<td data-label="Already tracked checks">
 				{formatInteger(scheduling.duplicateSuppressedArchiveScanJobCount)}
 			</td>
-			<td>{formatInteger(scheduling.schedulerErrorCount)}</td>
+			<td data-label="Scheduler errors">
+				{formatInteger(scheduling.schedulerErrorCount)}
+			</td>
 		</tr>
 	);
 }

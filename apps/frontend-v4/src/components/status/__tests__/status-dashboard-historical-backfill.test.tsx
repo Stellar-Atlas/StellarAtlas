@@ -5,9 +5,56 @@ import {
 	createStatusLivePayload,
 	generatedAt
 } from '../../../api/__tests__/support/status-live-contract-fixtures';
-import { StatusDashboard } from '../status-dashboard';
+import {
+	StatusDashboard,
+	type StatusDashboardProps
+} from '../status-dashboard';
 
 describe('StatusDashboard historical backfill', () => {
+	it('does not turn wholly unavailable snapshots into zero or empty claims', () => {
+		const props = statusProps();
+		const markup = renderToStaticMarkup(
+			<StatusDashboard
+				{...props}
+				archiveEvidenceAvailable={false}
+				archiveObjectsAvailable={false}
+				workers={{
+					...props.workers,
+					archiveWorkers: {
+						...props.workers.archiveWorkers,
+						status: 'unavailable',
+						configuredWorkerProcesses: 0,
+						workers: []
+					}
+				}}
+				dataQuality={{
+					...props.dataQuality,
+					scans: {
+						...props.dataQuality.scans,
+						networkScan: {
+							...props.dataQuality.scans.networkScan,
+							status: 'unavailable',
+							completedScans: 0,
+							totalScans: 0
+						}
+					}
+				}}
+				fullHistory={{
+					...props.fullHistory,
+					status: 'unavailable',
+					canonicalCoverage: null
+				}}
+			/>
+		);
+		expect(markup).toContain('Archive runtime telemetry is unavailable');
+		expect(markup).toContain('Network scan counts unavailable');
+		expect(markup).toContain('Telemetry unavailable');
+		expect(markup).not.toContain('no active object checks at this instant');
+		expect(markup).not.toContain('0 configured worker slots');
+		expect(markup).not.toContain('0 recent scans');
+		expect(markup).not.toContain('No proof-gated checkpoint has been promoted');
+	});
+
 	it('includes quantified checkpoint progress in the platform status panel', () => {
 		const payload = createStatusLivePayload();
 		const fullHistory = record(payload.fullHistory);
@@ -47,6 +94,11 @@ describe('StatusDashboard historical backfill', () => {
 		);
 		expect(markup).toContain('Remote checks pending');
 		expect(markup).toContain('1 remote file check awaiting retry');
+		expect(markup).toContain('root-checkpoint attestations');
+		expect(markup).not.toContain('current checkpoint proof');
+		expect(markup).toContain('data-label="Archive source"');
+		expect(markup).toContain('data-label="Root attestations verified"');
+		expect(markup).toContain('data-label="Scan time"');
 		expect(markup).not.toContain('Waiting for proof 63,386,175');
 	});
 });
@@ -67,4 +119,21 @@ function record(value: unknown): Record<string, unknown> {
 		throw new TypeError('Expected a record fixture');
 	}
 	return value as Record<string, unknown>;
+}
+
+function statusProps(): StatusDashboardProps {
+	const message = parseStatusLiveMessage({
+		payload: createStatusLivePayload(),
+		type: 'status'
+	});
+	if (message?.type !== 'status')
+		throw new Error('Expected valid status fixture');
+	return {
+		...message.payload,
+		archiveEvidenceAvailable: true,
+		archiveEventsAvailable: true,
+		archiveObjects: emptyArchiveObjects(),
+		archiveObjectsAvailable: false,
+		scanLogsAvailable: true
+	};
 }
