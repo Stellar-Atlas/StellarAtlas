@@ -1,3 +1,4 @@
+import { sendApiWorkerMessage } from './ApiClusterIpc.js';
 import cluster from 'node:cluster';
 import process from 'node:process';
 import { config as loadEnv } from 'dotenv';
@@ -61,22 +62,14 @@ function runPrimary(): void {
 					projectionWriterByWorkerId.get(worker.id) !== true
 				)
 					continue;
-				try {
-					worker.send(message);
-				} catch {
-					// A concurrently exiting writer will be replaced by the supervisor.
-				}
+				sendApiWorkerMessage(worker, message);
 			}
 			return;
 		}
 		if (!isHistoryArchiveWorkerStatusIpcMessageDTO(message)) return;
 		for (const worker of Object.values(cluster.workers ?? {})) {
 			if (worker === undefined || worker.id === source.id) continue;
-			try {
-				worker.send(message);
-			} catch {
-				// A concurrently exiting worker will be replaced by the supervisor.
-			}
+			sendApiWorkerMessage(worker, message);
 		}
 	});
 

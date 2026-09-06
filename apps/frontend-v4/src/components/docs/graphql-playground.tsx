@@ -7,6 +7,11 @@ import {
 	isRecord,
 	parseGraphqlVariables
 } from './graphql-request';
+import {
+	transactionPageVariables,
+	transactionRelations,
+	type TransactionRelation
+} from './graphql-transaction-request';
 import styles from './graphql-playground.module.css';
 
 export function GraphqlPlayground(): React.JSX.Element {
@@ -23,6 +28,9 @@ export function GraphqlPlayground(): React.JSX.Element {
 		previous: string | null;
 		next: string | null;
 	}>({ previous: null, next: null });
+	const [transactionPages, setTransactionPages] = useState<
+		Partial<Record<TransactionRelation, string | null>>
+	>({});
 	const controller = useRef<AbortController | null>(null);
 	const navigationHistory = useRef<string[]>([]);
 	const lastSuccessfulVariables = useRef<string | null>(null);
@@ -39,6 +47,7 @@ export function GraphqlPlayground(): React.JSX.Element {
 		const timeout = setTimeout(() => abort.abort(), 20_000);
 		setBusy(true);
 		setPages({ previous: null, next: null });
+		setTransactionPages({});
 		setStatus('Sending POST /graphql…');
 		setResponse('');
 		const started = performance.now();
@@ -78,6 +87,14 @@ export function GraphqlPlayground(): React.JSX.Element {
 					navigationHistory.current.push(lastSuccessfulVariables.current);
 				else if (direction === 'previous') navigationHistory.current.pop();
 				lastSuccessfulVariables.current = nextVariables;
+				setTransactionPages(
+					Object.fromEntries(
+						transactionRelations.map((relation) => [
+							relation,
+							transactionPageVariables(nextVariables, decoded, relation)
+						])
+					)
+				);
 				setPages({
 					previous: navigationHistory.current.at(-1) ?? null,
 					next: graphqlPageVariables(nextVariables, decoded, 1)
@@ -102,6 +119,7 @@ export function GraphqlPlayground(): React.JSX.Element {
 		setQuery(graphqlExamples[key].query);
 		setVariables(JSON.stringify(graphqlExamples[key].variables, null, 2));
 		setPages({ previous: null, next: null });
+		setTransactionPages({});
 		setResponse('');
 		setStatus('Example loaded. Select Run query to send it.');
 	}
@@ -156,6 +174,7 @@ export function GraphqlPlayground(): React.JSX.Element {
 						onChange={(event) => {
 							setQuery(event.target.value);
 							setPages({ previous: null, next: null });
+							setTransactionPages({});
 						}}
 					/>
 				</label>
@@ -169,6 +188,7 @@ export function GraphqlPlayground(): React.JSX.Element {
 						onChange={(event) => {
 							setVariables(event.target.value);
 							setPages({ previous: null, next: null });
+							setTransactionPages({});
 						}}
 					/>
 				</label>
@@ -196,6 +216,17 @@ export function GraphqlPlayground(): React.JSX.Element {
 				>
 					Next page
 				</button>
+				{transactionRelations.map((relation) =>
+					transactionPages[relation] ? (
+						<button
+							key={relation}
+							disabled={busy}
+							onClick={() => page(transactionPages[relation] ?? null, 'next')}
+						>
+							Next {relation}
+						</button>
+					) : null
+				)}
 			</div>
 			<p role="status" aria-live="polite">
 				{status}
@@ -210,10 +241,13 @@ export function GraphqlPlayground(): React.JSX.Element {
 				</pre>
 			)}
 			<p>
-				Typed transfer queries use the returned nextCursor; Previous page reuses
-				the previous request. Generic dataset queries retain offset pagination.
-				Ledger bounds describe the requested window, not a frozen database
-				snapshot or a guarantee that ingestion has filled every gap.
+				Transaction operations, effects, and events have independent page
+				buttons. The optional ledgerSequence hint speeds up transaction lookup;
+				the hash remains the identifier. Typed transfer queries use the returned
+				nextCursor; Previous page reuses the previous request. Generic dataset
+				queries retain offset pagination. Ledger bounds describe the requested
+				window, not a frozen database snapshot or a guarantee that ingestion has
+				filled every gap.
 			</p>
 			<p>
 				Coverage is partial while ingestion catches up. Minimum and maximum

@@ -95,14 +95,14 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Query the self-hosted Stellar ETL/Hubble schema in ClickHouse. List responses expose limit and offset; semantic list routes may also return nextOffset, and holder lists return nextCursor. Supply supported ledger-range filters for partition-pruned queries. The catalog reports ingestion bounds and dataset row counts, not guaranteed gap-free historical coverage.',
+			'Query the self-hosted Stellar ETL/Hubble schema in ClickHouse. List responses expose limit and offset; semantic list routes may also return nextOffset, and holder lists return nextCursor. Supply supported ledger-range filters for partition-pruned queries. The catalog separates the contiguous ingested range from supplemental ranges and reports remaining gaps. Typed transaction detail uses independent operation, effect, and event cursors.',
 		endpoints: [
 			'/v1/analytics/activity/transfers?asset=:asset&event_topic=transfer&min_ledger=:first&max_ledger=:last',
 			'/v1/analytics/accounts/:account/activity/transfers?min_amount_raw=:integer&after=:cursor',
 			'/v1/analytics/assets/:asset/activity/transfers?from=:account&to=:account&after=:cursor',
 			'/v1/analytics/datasets',
 			'/v1/analytics/datasets/:dataset',
-			'/v1/analytics/transactions/:transactionHash',
+			'/v1/analytics/transactions/:transactionHash?view=typed&ledger_sequence=:optionalLedger&limit=:limit',
 			'/v1/analytics/ledgers/:sequence',
 			'/v1/analytics/ledgers/:sequence/transactions?limit=:limit&offset=:offset',
 			'/v1/analytics/operations/:operationId',
@@ -197,9 +197,9 @@ export default function DocsPage(): React.JSX.Element {
 				<div className="endpoint-paths">
 					<a
 						className="primary-button"
-						href="/api-docs?view=swagger#/Analytics/getAnalyticsLedger"
+						href="/api-docs?view=swagger#/Analytics/getAnalyticsTransaction"
 					>
-						Try a ledger REST request
+						Try a transaction REST request
 					</a>
 					<a href="/api-docs?view=swagger#/Analytics/listHubbleDatasets">
 						Inspect datasets and current coverage

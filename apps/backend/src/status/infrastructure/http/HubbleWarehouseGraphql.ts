@@ -1,3 +1,7 @@
+import {
+	hubbleTransactionSchema,
+	hubbleTransactionResolvers
+} from './HubbleTransactionGraphql.js';
 import type { RequestHandler } from 'express';
 import {
 	buildSchema,
@@ -115,7 +119,9 @@ const schema = buildSchema(
 		ASC
 		DESC
 	}
-` + hubbleTransferSchema
+` +
+		hubbleTransferSchema +
+		hubbleTransactionSchema
 );
 
 const jsonScalar = schema.getType('JSON');
@@ -153,6 +159,7 @@ export function hubbleWarehouseGraphqlHandler(
 		schema,
 		rootValue: {
 			...hubbleTransferResolvers(warehouse, mapGraphqlError),
+			...hubbleTransactionResolvers(warehouse, mapGraphqlError),
 			hubbleDatasets: async () => (await warehouse.catalog()).datasets,
 			hubbleQuery: async ({ input }: GraphqlQueryArguments) => {
 				try {
@@ -166,6 +173,7 @@ export function hubbleWarehouseGraphqlHandler(
 					const catalog = await warehouse.catalog();
 					return {
 						availableQueries: [
+							'hubbleTransaction',
 							'hubbleDatasets',
 							'hubbleQuery',
 							'hubbleTransfers',

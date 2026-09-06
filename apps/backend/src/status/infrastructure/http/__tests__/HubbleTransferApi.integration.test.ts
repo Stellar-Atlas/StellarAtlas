@@ -21,6 +21,7 @@ const page = {
 function fixture() {
 	const transferActivity = jest.fn().mockResolvedValue(page);
 	const warehouse: HubbleWarehouse = {
+		transactionDetail: jest.fn(),
 		transferActivity,
 		classifyEventRows: jest.fn(),
 		accountTransactions: jest.fn(),

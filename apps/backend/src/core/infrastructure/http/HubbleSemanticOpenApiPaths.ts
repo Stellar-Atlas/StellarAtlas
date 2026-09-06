@@ -1,3 +1,8 @@
+import {
+	hubbleTransactionDescription,
+	hubbleTransactionParameters,
+	hubbleTransactionResponse
+} from './HubbleTransactionOpenApi.js';
 import type { OpenApiRecord } from './OpenApiDocumentProjection.js';
 
 const analyticsTag = ['Analytics'];
@@ -338,12 +343,11 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 
 	'/v1/analytics/transactions/{transactionHash}': {
 		get: {
-			description:
-				'Locates a transaction by hash and returns its decoded transaction, ledger, operations, contract events, and token transfers.',
+			description: hubbleTransactionDescription,
 			operationId: 'getAnalyticsTransaction',
-			parameters: [transactionHashParameter],
+			parameters: [transactionHashParameter, ...hubbleTransactionParameters],
 			responses: {
-				'200': objectResponse,
+				'200': hubbleTransactionResponse,
 				'400': errorResponse('The transaction hash is invalid.'),
 				'404': errorResponse(
 					'The transaction is outside the currently ingested range or does not exist.'

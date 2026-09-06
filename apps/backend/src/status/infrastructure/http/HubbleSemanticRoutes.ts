@@ -1,3 +1,4 @@
+import { registerHubbleTransactionRoutes } from './HubbleTransactionRoutes.js';
 import type { Request, Response, Router } from 'express';
 import {
 	HubbleWarehouseInputError,
@@ -24,6 +25,7 @@ export function registerHubbleSemanticRoutes(
 	router: Router,
 	warehouse: HubbleWarehouse
 ): void {
+	registerHubbleTransactionRoutes(router, warehouse);
 	router.get('/transactions/:transactionHash', async (request, response) => {
 		await semanticSend(response, async () => {
 			const transactionHash = requireTransactionHash(

@@ -29,6 +29,27 @@ const invocation: HubbleEventProvenance = {
 };
 
 describe('Hubble event classification', () => {
+	it('recognizes JSON-encoded native fee topics without mutating stored values', () => {
+		const topics = [JSON.stringify({ symbol: 'fee' })];
+		const row = {
+			...event,
+			contract_id: Asset.native().contractId(Networks.PUBLIC),
+			topics_decoded: topics
+		};
+		expect(classifyHubbleEvent(row, invocation).eventKind).toBe('fee');
+		expect(row.topics_decoded).toBe(topics);
+		expect(typeof row.topics_decoded[0]).toBe('string');
+		expect(
+			classifyHubbleEvent(
+				{ ...row, operation_id: '101', contract_id: 'custom-contract' },
+				invocation
+			).sorobanExecutionEvidence
+		).toBe(true);
+		expect(
+			classifyHubbleEvent({ ...row, topics_decoded: ['not-json'] }, invocation)
+				.eventKind
+		).not.toBe('fee');
+	});
 	it('classifies the actual 2019 fee sample as classic, despite contract type/id and successful-call flag', () => {
 		// Read-only live API sample, 2026-09-05: ledger 26,000,000, transaction hash
 		// 5601a324dae6b95aeb626e4de68268fbb996a655979228178d291fc4b8c908cd.

@@ -1,4 +1,31 @@
 export const graphqlExamples = {
+	transaction: {
+		label: 'Transaction, operations, effects and contract events',
+		query: `query Transaction($transactionHash: String!, $ledgerSequence: Int, $limit: Int, $operationsAfter: String, $effectsAfter: String, $eventsAfter: String) {
+  hubbleTransaction(transactionHash: $transactionHash, ledgerSequence: $ledgerSequence, limit: $limit, operationsAfter: $operationsAfter, effectsAfter: $effectsAfter, eventsAfter: $eventsAfter) {
+    transaction { hash ledgerSequence closedAt sourceAccount successful operationCount feeChargedRaw memo resultCode }
+    operations {
+      limit nextCursor
+      items { id index type sourceAccount envelopeDecoded amounts { field decimal raw scale source } detailsJson }
+    }
+    effects {
+      limit nextCursor
+      items { id operationId index type account amounts { field decimal raw scale source } detailsJson }
+    }
+    events {
+      limit nextCursor
+      items { id contractId type successful topicsJson dataJson eventXdr classification { transactionKind eventKind sorobanExecutionEvidence provenance } }
+    }
+    coverage observedAt
+  }
+}`,
+		variables: {
+			transactionHash:
+				'5601a324dae6b95aeb626e4de68268fbb996a655979228178d291fc4b8c908cd',
+			ledgerSequence: 26000000,
+			limit: 5
+		}
+	},
 	transfers: {
 		label: 'Exact asset transfers (typed, cursor-paginated)',
 		query: `query Transfers($input: HubbleTransferInput) {

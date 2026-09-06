@@ -59,7 +59,9 @@ export function classifyHubbleEvent(
 	context: HubbleEventProvenance | null
 ): HubbleEventClassification {
 	const topics = event.topics_decoded;
-	const firstTopic: unknown = Array.isArray(topics) ? topics[0] : null;
+	const firstTopic: unknown = decodeFirstTopic(
+		Array.isArray(topics) ? topics[0] : null
+	);
 	// A user contract may also emit a topic called "fee". Only the native asset's
 	// transaction-level contract event supplies protocol-fee provenance here.
 	const fee =
@@ -139,4 +141,14 @@ export function classifyHubbleEvent(
 		sorobanExecutionEvidence:
 			invokes && (eventKind === 'contract' || eventKind === 'diagnostic')
 	};
+}
+
+/** ClickHouse stores decoded topic values as JSON strings; retain original row values. */
+function decodeFirstTopic(topic: unknown): unknown {
+	if (typeof topic !== 'string') return topic;
+	try {
+		return JSON.parse(topic) as unknown;
+	} catch {
+		return null;
+	}
 }

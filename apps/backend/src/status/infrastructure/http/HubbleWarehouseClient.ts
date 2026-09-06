@@ -1,3 +1,8 @@
+import { queryHubbleTransactionDetail } from './HubbleTransactionQuery.js';
+import type {
+	HubbleTransactionDetail,
+	HubbleTransactionInput
+} from './HubbleTransactionContracts.js';
 import type {
 	HubbleCatalog,
 	HubbleColumn,
@@ -173,6 +178,12 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 			execute: (sql, parameters) => this.execute(sql, parameters),
 			maximumRows: this.maximumRows
 		};
+	}
+
+	async transactionDetail(
+		input: HubbleTransactionInput
+	): Promise<HubbleTransactionDetail | null> {
+		return queryHubbleTransactionDetail(this.semanticExecutor(), input);
 	}
 
 	async classifyEventRows(
@@ -421,6 +432,10 @@ FORMAT JSON`,
 
 class UnavailableHubbleWarehouse implements HubbleWarehouse {
 	constructor(private readonly reason: string) {}
+
+	async transactionDetail(): Promise<HubbleTransactionDetail | null> {
+		throw new HubbleWarehouseUnavailableError(this.reason);
+	}
 
 	async classifyEventRows(): Promise<readonly Record<string, unknown>[]> {
 		throw new HubbleWarehouseUnavailableError(this.reason);

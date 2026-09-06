@@ -1,4 +1,8 @@
 import type {
+	HubbleTransactionDetail,
+	HubbleTransactionInput
+} from './HubbleTransactionContracts.js';
+import type {
 	HubbleAccountTransactionQuery,
 	HubbleAssetHolderPage,
 	HubbleAssetHolderQuery,
@@ -84,6 +88,9 @@ import type {
 import type { HubbleLedgerCoverage } from './HubbleLedgerCoverage.js';
 
 export interface HubbleWarehouse {
+	transactionDetail(
+		input: HubbleTransactionInput
+	): Promise<HubbleTransactionDetail | null>;
 	transferActivity(input: HubbleTransferInput): Promise<HubbleTransferPage>;
 	classifyEventRows(
 		rows: readonly Record<string, unknown>[]
