@@ -14,8 +14,18 @@
 }
 @media (max-width: 960px) {
 	.inventory :global(.table-controls) {
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-items: stretch;
+		flex: 0 1 auto;
+		inline-size: 100%;
 		gap: 8px;
+	}
+	.inventory :global(.table-controls) :is(input, select, button) {
+		inline-size: 100%;
+		min-inline-size: 0;
+		min-block-size: 44px;
+		box-sizing: border-box;
 	}
 	.inventory :global(.responsive-table) table {
 		min-inline-size: 0;
