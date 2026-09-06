@@ -1,3 +1,4 @@
+import { canonicalCheckpointHasSharedDependenciesSql } from './HistoryArchiveSharedDependencyCutoverSql.js';
 import { canonicalBucketHasStrictSourceProofSql } from './HistoryArchiveCanonicalBucketProofSql.js';
 import { canonicalCategoryHasStrictSourceProofSql } from './HistoryArchiveCanonicalCategoryProofSql.js';
 import { canonicalBucketMaterializationCteSql } from './HistoryArchiveCanonicalBucketMaterializationSql.js';
@@ -90,12 +91,21 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		where hash.value is not null
 			and lower(hash.value) ~ '^[0-9a-f]{64}$'
 			and lower(hash.value) !~ '^0+$'
+	), shared_checkpoints as materialized (
+		select checkpoint."archiveUrlIdentity", checkpoint."checkpointLedger"
+		from checkpoints checkpoint
+		where ${canonicalCheckpointHasSharedDependenciesSql()}
 	), ${canonicalCategoryTargetsCteSql}, ${canonicalBucketMaterializationCteSql}, inserted as (
 		insert into "history_archive_checkpoint_bucket_dependency" (
 			"archiveUrlIdentity", "checkpointLedger", "bucketHash"
 		)
 		select "archiveUrlIdentity", "checkpointLedger", "bucketHash"
 		from hashes
+		where not exists (
+			select 1 from shared_checkpoints checkpoint
+			where checkpoint."archiveUrlIdentity" = hashes."archiveUrlIdentity"
+				and checkpoint."checkpointLedger" = hashes."checkpointLedger"
+		)
 		on conflict do nothing
 		returning "archiveUrlIdentity"
 	), marked as (

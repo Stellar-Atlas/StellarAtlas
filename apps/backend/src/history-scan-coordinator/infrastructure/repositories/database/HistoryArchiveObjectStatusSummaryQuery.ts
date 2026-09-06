@@ -1,3 +1,4 @@
+import { historyArchivePublicSourcePredicateSql } from './HistoryArchivePublicSourceScopeSql.js';
 import { retainedRemoteCountSql } from './RetainedRemoteFindingQuery.js';
 import type { EntityManager } from 'typeorm';
 import {
@@ -101,7 +102,7 @@ export async function getHistoryArchiveObjectStatusSummary(
 		sourceCount,
 		transitionReconciliation
 	] = await Promise.all([
-		getCheckpointCoverage(manager, null),
+		getCheckpointCoverage(manager, null, 'public-sources'),
 		getCanonicalProofProgress(manager),
 		getStatusSourceSummaries(manager),
 		getEvidenceHealth(manager),
@@ -422,15 +423,14 @@ export const canonicalProofProgressSql = `
 export const sourceCountSql = `
 	select count(distinct "archiveUrl")::int as "sourceCount"
 	from history_archive_state_snapshot
-	where "archiveUrlIdentity" = regexp_replace("archiveUrl", '/+$', '')
+	where ${historyArchivePublicSourcePredicateSql}
 `;
 
 export const evidenceHealthSql = `
 	with canonical_sources as materialized (
 		select "archiveUrlIdentity"
 		from history_archive_state_snapshot
-		where "archiveUrlIdentity" =
-			regexp_replace("archiveUrl", '/+$', '')
+		where ${historyArchivePublicSourcePredicateSql}
 	), rollup_readiness as materialized (
 		select
 			coalesce((
@@ -474,8 +474,7 @@ export const sourceStatusSummarySql = `
 	with source_aliases as materialized (
 		select "archiveUrl", "archiveUrlIdentity"
 		from history_archive_state_snapshot
-		where "archiveUrlIdentity" =
-			regexp_replace("archiveUrl", '/+$', '')
+		where ${historyArchivePublicSourcePredicateSql}
 	), current_state as (
 		select distinct on ("archiveUrl")
 			"archiveUrl",
@@ -486,8 +485,7 @@ export const sourceStatusSummarySql = `
 			source,
 			"currentLedger"
 		from history_archive_state_snapshot
-		where "archiveUrlIdentity" =
-			regexp_replace("archiveUrl", '/+$', '')
+		where ${historyArchivePublicSourcePredicateSql}
 		order by
 			"archiveUrl",
 			"observedAt" desc,

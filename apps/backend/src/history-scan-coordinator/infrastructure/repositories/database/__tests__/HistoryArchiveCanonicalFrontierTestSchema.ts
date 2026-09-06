@@ -1,8 +1,17 @@
+import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '../../../database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import type { DataSource } from 'typeorm';
 
 export async function createCanonicalFrontierTestSchema(
 	dataSource: DataSource
 ): Promise<void> {
+	const sharedRunner = dataSource.createQueryRunner();
+	try {
+		await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
+			sharedRunner
+		);
+	} finally {
+		await sharedRunner.release();
+	}
 	await dataSource.query(`
 		create table if not exists "history_archive_object_ready" (
 			"objectRemoteId" uuid primary key references
@@ -48,7 +57,8 @@ export async function createCanonicalFrontierTestSchema(
 			"createdAt" timestamptz not null default now(),
 			primary key ("archiveUrlIdentity", "checkpointLedger"),
 			check ("archiveUrlIdentity" <> "sourceArchiveUrlIdentity"),
-			check (reason = 'remote-http-missing')
+			constraint "CK_history_archive_checkpoint_substitution_reason"
+				check (reason = 'remote-http-missing')
 		)
 	`);
 	await dataSource.query(`
@@ -56,6 +66,7 @@ export async function createCanonicalFrontierTestSchema(
 			"archiveUrlIdentity" text not null,
 			"checkpointLedger" integer not null,
 			"bucketHash" text not null,
+			"createdAt" timestamptz not null default now(),
 			primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash")
 		)
 	`);

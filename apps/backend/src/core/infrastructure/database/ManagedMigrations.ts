@@ -1,3 +1,4 @@
+import { HistoryArchiveRemoteFailureContinuationMigration1788601000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788601000000-HistoryArchiveRemoteFailureContinuationMigration.js';
 import { HistoryArchiveRetainedRemoteFindingMigration1788600000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788600000000-HistoryArchiveRetainedRemoteFindingMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { HistoryArchiveWorkerStatusMigration1784790000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784790000000-HistoryArchiveWorkerStatusMigration.js';
@@ -189,5 +190,6 @@ export const managedMigrations = [
 	HistoryArchiveSharedCheckpointReadMigration1788496000000,
 	HistoryArchiveCheckpointProofStatementAttestationMigration1788587936000,
 	FullHistoryPromotionCheckpointIndexMigration1788592000000,
-	HistoryArchiveRetainedRemoteFindingMigration1788600000000
+	HistoryArchiveRetainedRemoteFindingMigration1788600000000,
+	HistoryArchiveRemoteFailureContinuationMigration1788601000000
 ] as const;

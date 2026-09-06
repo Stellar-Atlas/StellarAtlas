@@ -1,3 +1,4 @@
+import { historyArchivePublicSourcePredicateSql } from './HistoryArchivePublicSourceScopeSql.js';
 import type { EntityManager } from 'typeorm';
 import type { HistoryArchiveCheckpointCoverageV1 } from 'shared';
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
@@ -42,9 +43,14 @@ type CheckpointCoverageRow = {
 
 export async function getCheckpointCoverage(
 	manager: EntityManager,
-	archiveUrlIdentity: string | null
+	archiveUrlIdentity: string | null,
+	scope: 'all-evidence' | 'public-sources' = 'all-evidence'
 ): Promise<HistoryArchiveCheckpointCoverageV1> {
-	const [row] = (await manager.query(checkpointCoverageSql, [
+	const sql =
+		scope === 'public-sources'
+			? publicCheckpointCoverageSql
+			: checkpointCoverageSql;
+	const [row] = (await manager.query(sql, [
 		archiveUrlIdentity
 	])) as readonly CheckpointCoverageRow[];
 
@@ -115,11 +121,26 @@ function lowercase(
 	return field.toLowerCase() as keyof CheckpointCoverageRow;
 }
 
-const archiveFilterSql =
-	'($1::text is null or "archiveUrlIdentity" = $1::text)';
+export const checkpointCoverageSql = buildCheckpointCoverageSql(false);
+export const publicCheckpointCoverageSql = buildCheckpointCoverageSql(true);
 
-export const checkpointCoverageSql = `
-	with root_state as (
+function buildCheckpointCoverageSql(publicSourcesOnly: boolean): string {
+	const archiveFilterSql =
+		'($1::text is null or "archiveUrlIdentity" = $1::text)' +
+		(publicSourcesOnly
+			? ' and "archiveUrlIdentity" in (select "archiveUrlIdentity" from public_sources)'
+			: '');
+	const publicSourcesSql = publicSourcesOnly
+		? `
+		public_sources as materialized (
+			select "archiveUrlIdentity" from history_archive_state_snapshot
+			where ${historyArchivePublicSourcePredicateSql}
+		),
+	`
+		: '';
+
+	return `
+	with ${publicSourcesSql}root_state as (
 		select
 			"archiveUrlIdentity",
 			floor((greatest("currentLedger", 63) + 1)::numeric / 64)::integer
@@ -261,3 +282,4 @@ export const checkpointCoverageSql = `
 	cross join current_proof_summary
 	cross join durable_proof_summary
 `;
+}

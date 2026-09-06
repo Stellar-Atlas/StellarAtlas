@@ -1,3 +1,4 @@
+import { HistoryArchiveRemoteFailureContinuationMigration1788601000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788601000000-HistoryArchiveRemoteFailureContinuationMigration.js';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import {
@@ -38,10 +39,13 @@ describe('compact history archive checkpoint planning', () => {
 		await dataSource.initialize();
 		await createCanonicalFrontierTestSchema(dataSource);
 		await dataSource.query(
-			'alter table "history_archive_checkpoint_bucket_dependency" add column "createdAt" timestamptz not null default now()'
+			'alter table "history_archive_checkpoint_bucket_dependency" add column if not exists "createdAt" timestamptz not null default now()'
 		);
 		const runner = dataSource.createQueryRunner();
 		try {
+			await new HistoryArchiveRemoteFailureContinuationMigration1788601000000().up(
+				runner
+			);
 			await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
 				runner
 			);

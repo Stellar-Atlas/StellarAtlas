@@ -10,36 +10,11 @@ import {
 	historyArchiveCanonicalFirstScopeSelectSql
 } from './HistoryArchiveCanonicalFirst.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
+import { remoteCheckpointFailureExistsSql } from './HistoryArchiveCheckpointRemoteFailureSql.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 const maximumCheckpointFanoutBatch = historyArchiveCheckpointFanoutBatchSize;
 const maximumCheckpointCursorBatch = 128;
-export const historyArchiveCanonicalSubstitutionAttemptThreshold = 3;
-
-function exhaustedArchiveEvidenceExistsSql(proofAlias: string): string {
-	return `exists (
-                select 1
-                from "history_archive_object_queue" exhausted
-                where exhausted."archiveUrlIdentity" =
-                        ${proofAlias}."archiveUrlIdentity"
-                        and exhausted."checkpointLedger" =
-                                ${proofAlias}."checkpointLedger"
-                        and exhausted."objectType" in (
-                                'checkpoint-state', 'ledger', 'transactions',
-                                'results', 'bucket'
-                        )
-                        and exhausted.status = 'failed'
-                        and exhausted.attempts >=
-                                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
-                        and coalesce(
-                                exhausted."failureChannel",
-                                'archive_evidence'
-                        ) in (
-                                'archive_evidence', 'archive_availability'
-                        )
-        )`;
-}
-
 export async function findVerifiedCheckpointsNeedingFanout(
 	repository: Repository<HistoryArchiveObject>,
 	limit: number
@@ -333,79 +308,7 @@ export const targetedCheckpointSubstitutionSql = `
 				target_state."networkPassphrase"
 		where failed.status = 'not-evaluable'
 			and failed."failureKind" = 'object-failed'
-                        and (
-                                failed.details->>$$failureHttpStatus$$ in (
-                                        $$403$$, $$404$$, $$410$$
-                                )
-                                or exists (
-                                        select 1
-                                        from jsonb_array_elements(
-                                                coalesce(
-                                                        failed.details->$$objectFailures$$,
-                                                        $$[]$$::jsonb
-                                                )
-                                        ) failure(value)
-                                        where failure.value->>$$httpStatus$$ in (
-                                                $$403$$, $$404$$, $$410$$
-                                        )
-                                )
-                                or ${exhaustedArchiveEvidenceExistsSql('failed')}
-                                or not (failed.details ? $$objectFailures$$)
-                        )
-			and (
-				failed.details->>'failureHttpStatus' in ('403', '404', '410')
-				or exists (
-					select 1
-					from "history_archive_object_queue" failed_object
-					where failed_object."archiveUrlIdentity" =
-						failed."archiveUrlIdentity"
-						and failed_object."checkpointLedger" =
-							failed."checkpointLedger"
-						and failed_object."objectType" in (
-							'checkpoint-state', 'ledger', 'transactions', 'results'
-						)
-						and failed_object.status = 'failed'
-						and (
-						        failed_object."httpStatus" in (
-						                403, 404, 410
-						        )
-						        or failed_object.attempts >=
-						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
-						)
-						and coalesce(
-							failed_object."failureChannel", 'archive_evidence'
-						) in ('archive_evidence', 'archive_availability')
-				)
-				or exists (
-					select 1
-					from lateral (
-						${historyArchiveCheckpointBucketDependenciesSql(
-							'failed."archiveUrlIdentity"',
-							'failed."checkpointLedger"'
-						)}
-					) dependency
-					join "history_archive_object_queue" failed_bucket
-						on failed_bucket."archiveUrlIdentity" =
-							dependency."archiveUrlIdentity"
-						and failed_bucket."objectType" = 'bucket'
-						and failed_bucket."bucketHash" = dependency."bucketHash"
-						and failed_bucket.status = 'failed'
-						and (
-						        failed_bucket."httpStatus" in (
-						                403, 404, 410
-						        )
-						        or failed_bucket.attempts >=
-						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
-						)
-						and coalesce(
-							failed_bucket."failureChannel", 'archive_evidence'
-						) in ('archive_evidence', 'archive_availability')
-					where dependency."archiveUrlIdentity" =
-						failed."archiveUrlIdentity"
-						and dependency."checkpointLedger" =
-							failed."checkpointLedger"
-				)
-			)
+			and ${remoteCheckpointFailureExistsSql('failed')}
 	), inserted as (
 		insert into "history_archive_checkpoint_substitution" (
 			"archiveUrlIdentity", "checkpointLedger",
@@ -414,7 +317,7 @@ export const targetedCheckpointSubstitutionSql = `
 		)
 		select candidate."archiveUrlIdentity", candidate."checkpointLedger",
 			candidate.failed_proof_id, candidate.source_archive_identity,
-			candidate.source_proof_id, 'remote-http-missing'
+			candidate.source_proof_id, 'remote-source-failure'
 		from substitution_candidates candidate
 		on conflict ("archiveUrlIdentity", "checkpointLedger") do nothing
 		returning 1
@@ -636,79 +539,7 @@ const compactCheckpointPlanSql = `
 		where cursor."nextHistoricalCheckpointLedger" > 63
 			and failed.status = 'not-evaluable'
 			and failed."failureKind" = 'object-failed'
-                        and (
-                                failed.details->>$$failureHttpStatus$$ in (
-                                        $$403$$, $$404$$, $$410$$
-                                )
-                                or exists (
-                                        select 1
-                                        from jsonb_array_elements(
-                                                coalesce(
-                                                        failed.details->$$objectFailures$$,
-                                                        $$[]$$::jsonb
-                                                )
-                                        ) failure(value)
-                                        where failure.value->>$$httpStatus$$ in (
-                                                $$403$$, $$404$$, $$410$$
-                                        )
-                                )
-                                or ${exhaustedArchiveEvidenceExistsSql('failed')}
-                                or not (failed.details ? $$objectFailures$$)
-                        )
-			and (
-				failed.details->>'failureHttpStatus' in ('403', '404', '410')
-				or exists (
-					select 1
-					from "history_archive_object_queue" failed_object
-					where failed_object."archiveUrlIdentity" =
-						failed."archiveUrlIdentity"
-						and failed_object."checkpointLedger" =
-							failed."checkpointLedger"
-						and failed_object."objectType" in (
-							'checkpoint-state', 'ledger', 'transactions', 'results'
-						)
-						and failed_object.status = 'failed'
-						and (
-						        failed_object."httpStatus" in (
-						                403, 404, 410
-						        )
-						        or failed_object.attempts >=
-						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
-						)
-						and coalesce(
-							failed_object."failureChannel", 'archive_evidence'
-						) in ('archive_evidence', 'archive_availability')
-				)
-				or exists (
-					select 1
-					from lateral (
-						${historyArchiveCheckpointBucketDependenciesSql(
-							'failed."archiveUrlIdentity"',
-							'failed."checkpointLedger"'
-						)}
-					) dependency
-					join "history_archive_object_queue" failed_bucket
-						on failed_bucket."archiveUrlIdentity" =
-							dependency."archiveUrlIdentity"
-						and failed_bucket."objectType" = 'bucket'
-						and failed_bucket."bucketHash" = dependency."bucketHash"
-						and failed_bucket.status = 'failed'
-						and (
-						        failed_bucket."httpStatus" in (
-						                403, 404, 410
-						        )
-						        or failed_bucket.attempts >=
-						                ${historyArchiveCanonicalSubstitutionAttemptThreshold}
-						)
-						and coalesce(
-							failed_bucket."failureChannel", 'archive_evidence'
-						) in ('archive_evidence', 'archive_availability')
-					where dependency."archiveUrlIdentity" =
-						failed."archiveUrlIdentity"
-						and dependency."checkpointLedger" =
-							failed."checkpointLedger"
-				)
-			)
+			and ${remoteCheckpointFailureExistsSql('failed')}
 	), substitutions as (
 		insert into "history_archive_checkpoint_substitution" (
 			"archiveUrlIdentity", "checkpointLedger",
@@ -717,7 +548,7 @@ const compactCheckpointPlanSql = `
 		)
 		select candidate."archiveUrlIdentity", candidate."checkpointLedger",
 			candidate.failed_proof_id, candidate.source_archive_identity,
-			candidate.source_proof_id, 'remote-http-missing'
+			candidate.source_proof_id, 'remote-source-failure'
 		from substitution_candidates candidate
 		on conflict ("archiveUrlIdentity", "checkpointLedger") do nothing
 		returning "archiveUrlIdentity", "checkpointLedger"

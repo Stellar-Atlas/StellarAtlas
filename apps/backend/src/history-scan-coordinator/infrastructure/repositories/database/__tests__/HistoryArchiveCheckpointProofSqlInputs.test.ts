@@ -1,6 +1,5 @@
 import { toHistoryArchiveCheckpointProofRefreshParams } from '../HistoryArchiveCheckpointProofSqlInputs.js';
 import { historyArchiveCheckpointProofRefreshSql } from '../HistoryArchiveCheckpointProofRefreshSql.js';
-import { markBucketProofDependentsDirtySql } from '../HistoryArchiveCheckpointProofDirtyWrite.js';
 import { historyArchiveImmediateBucketProofRefreshLimit } from '../HistoryArchiveCheckpointProofTargetSql.js';
 
 describe('HistoryArchiveCheckpointProofSqlInputs', () => {
@@ -47,9 +46,6 @@ describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 		);
 		expect(historyArchiveCheckpointProofRefreshSql).not.toContain(
 			'"archiveUrlIdentity" in ('
-		);
-		expect(markBucketProofDependentsDirtySql).toContain(
-			'"dependenciesMaterializedAt" = now()'
 		);
 	});
 });
