@@ -71,6 +71,7 @@ function warehouse(
 					: rows
 		})),
 		classifyEventRows: jest.fn(async (r) => r),
+		contractEvents: jest.fn(),
 		transactionDetail: jest.fn(async () => null),
 		transferActivity: jest.fn(),
 		accountTransactions: jest.fn(),

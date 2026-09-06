@@ -18,23 +18,21 @@ async function fixture() {
 	});
 	const transactionDetail = jest.fn().mockResolvedValue(page);
 	const warehouse: HubbleWarehouse = {
+		contractEvents: jest.fn(),
 		transactionDetail,
 		transferActivity: jest.fn(),
 		classifyEventRows: jest.fn().mockResolvedValue([]),
 		accountTransactions: jest.fn(),
 		assetHolders: jest.fn(),
 		catalog: jest.fn(),
-		query: jest
-			.fn()
-			.mockImplementation(async (input) => ({
-				dataset: input.dataset,
-				columns: [],
-				limit: 1,
-				offset: 0,
-				elapsedMilliseconds: 0,
-				rows:
-					input.dataset === 'history_transactions' ? [transactionFixture] : []
-			}))
+		query: jest.fn().mockImplementation(async (input) => ({
+			dataset: input.dataset,
+			columns: [],
+			limit: 1,
+			offset: 0,
+			elapsedMilliseconds: 0,
+			rows: input.dataset === 'history_transactions' ? [transactionFixture] : []
+		}))
 	};
 	const app = express();
 	app.use(express.json());

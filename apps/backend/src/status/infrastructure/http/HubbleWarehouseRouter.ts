@@ -1,3 +1,4 @@
+import { registerHubbleContractEventRoutes } from './HubbleContractEventRoutes.js';
 import express, { type Request, type Response, Router } from 'express';
 import {
 	HubbleWarehouseInputError,
@@ -74,6 +75,7 @@ export function hubbleWarehouseRouter(
 
 	registerHubbleTransferRoutes(router, config.warehouse);
 	registerHubbleExplorerRoutes(router, config.warehouse);
+	registerHubbleContractEventRoutes(router, config.warehouse);
 	registerHubbleSemanticRoutes(router, config.warehouse);
 
 	router.get('/:dataset', async (request, response) => {

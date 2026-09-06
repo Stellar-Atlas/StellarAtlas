@@ -1,3 +1,9 @@
+import { queryHubbleContractEvents } from './HubbleContractEventQuery.js';
+import { normalizeHubbleContractEventInput } from './HubbleContractEventValidation.js';
+import type {
+	HubbleContractEventInput,
+	HubbleContractEventPage
+} from './HubbleContractEventContracts.js';
 import { queryHubbleTransactionDetail } from './HubbleTransactionQuery.js';
 import type {
 	HubbleTransactionDetail,
@@ -149,7 +155,6 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 						'base64'
 					);
 	}
-
 	async catalog(force = false): Promise<HubbleCatalog> {
 		const now = Date.now();
 		if (!force && this.cache !== undefined && this.cache.expiresAt > now) {
@@ -179,19 +184,26 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 			maximumRows: this.maximumRows
 		};
 	}
-
+	async contractEvents(
+		request: HubbleContractEventInput
+	): Promise<HubbleContractEventPage> {
+		const input = normalizeHubbleContractEventInput(request);
+		return queryHubbleContractEvents(
+			this.semanticExecutor(),
+			input,
+			(await this.catalog()).coverage
+		);
+	}
 	async transactionDetail(
 		input: HubbleTransactionInput
 	): Promise<HubbleTransactionDetail | null> {
 		return queryHubbleTransactionDetail(this.semanticExecutor(), input);
 	}
-
 	async classifyEventRows(
 		rows: readonly Record<string, unknown>[]
 	): Promise<readonly Record<string, unknown>[]> {
 		return classifyHubbleEventRows(this.semanticExecutor(), rows);
 	}
-
 	async transferActivity(
 		request: HubbleTransferInput
 	): Promise<HubbleTransferPage> {
@@ -203,19 +215,16 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 			Number(catalog.ingestion.maximumLedger ?? 0)
 		);
 	}
-
 	async accountTransactions(
 		input: HubbleAccountTransactionQuery
 	): Promise<HubbleSemanticPage> {
 		return queryHubbleAccountTransactions(this.semanticExecutor(), input);
 	}
-
 	async assetHolders(
 		input: HubbleAssetHolderQuery
 	): Promise<HubbleAssetHolderPage> {
 		return queryHubbleAssetHolders(this.semanticExecutor(), input);
 	}
-
 	async query(input: HubbleQuery): Promise<HubbleQueryResult> {
 		const catalog = await this.catalog();
 		const dataset = catalog.datasets.find(
@@ -433,31 +442,27 @@ FORMAT JSON`,
 
 class UnavailableHubbleWarehouse implements HubbleWarehouse {
 	constructor(private readonly reason: string) {}
-
+	async contractEvents(): Promise<HubbleContractEventPage> {
+		throw new HubbleWarehouseUnavailableError(this.reason);
+	}
 	async transactionDetail(): Promise<HubbleTransactionDetail | null> {
 		throw new HubbleWarehouseUnavailableError(this.reason);
 	}
-
 	async classifyEventRows(): Promise<readonly Record<string, unknown>[]> {
 		throw new HubbleWarehouseUnavailableError(this.reason);
 	}
-
 	async transferActivity(): Promise<HubbleTransferPage> {
 		throw new HubbleWarehouseUnavailableError(this.reason);
 	}
-
 	async accountTransactions(): Promise<HubbleSemanticPage> {
 		throw new HubbleWarehouseUnavailableError(this.reason);
 	}
-
 	async assetHolders(): Promise<HubbleAssetHolderPage> {
 		throw new HubbleWarehouseUnavailableError(this.reason);
 	}
-
 	async catalog(): Promise<HubbleCatalog> {
 		throw new HubbleWarehouseUnavailableError(this.reason);
 	}
-
 	async query(): Promise<HubbleQueryResult> {
 		throw new HubbleWarehouseUnavailableError(this.reason);
 	}

@@ -1,4 +1,12 @@
 import {
+	hubbleContractEventSchema,
+	hubbleContractEventResolvers
+} from './HubbleContractEventGraphql.js';
+import {
+	hubbleExplorerSchema,
+	hubbleExplorerResolvers
+} from './HubbleExplorerGraphql.js';
+import {
 	hubbleTransactionSchema,
 	hubbleTransactionResolvers
 } from './HubbleTransactionGraphql.js';
@@ -121,7 +129,9 @@ const schema = buildSchema(
 	}
 ` +
 		hubbleTransferSchema +
-		hubbleTransactionSchema
+		hubbleTransactionSchema +
+		hubbleContractEventSchema +
+		hubbleExplorerSchema
 );
 
 const jsonScalar = schema.getType('JSON');
@@ -160,6 +170,8 @@ export function hubbleWarehouseGraphqlHandler(
 		rootValue: {
 			...hubbleTransferResolvers(warehouse, mapGraphqlError),
 			...hubbleTransactionResolvers(warehouse, mapGraphqlError),
+			...hubbleContractEventResolvers(warehouse, mapGraphqlError),
+			...hubbleExplorerResolvers(warehouse, mapGraphqlError),
 			hubbleDatasets: async () => (await warehouse.catalog()).datasets,
 			hubbleQuery: async ({ input }: GraphqlQueryArguments) => {
 				try {
@@ -178,7 +190,12 @@ export function hubbleWarehouseGraphqlHandler(
 							'hubbleQuery',
 							'hubbleTransfers',
 							'hubbleAccountTransfers',
-							'hubbleAssetTransfers'
+							'hubbleAssetTransfers',
+							'hubbleContractEvents',
+							'hubbleTrades',
+							'hubbleTrade',
+							'hubbleOffers',
+							'hubbleOffer'
 						],
 						compatibility: 'official-stellar-etl-schema',
 						coverage: catalog.coverage,

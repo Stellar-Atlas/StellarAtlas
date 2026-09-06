@@ -8,7 +8,7 @@ export const hubbleGraphqlSchemas: Record<string, OpenApiRecord> = {
 		variables: { type: 'object', additionalProperties: true, nullable: true }
 	}, ['query']),
 	HubbleGraphqlResponse: object({
-		data: { type: 'object', additionalProperties: true, nullable: true, description: 'Fields selected by the query; typed transaction and transfer fields use their documented GraphQL types.' },
+		data: { type: 'object', additionalProperties: true, nullable: true, description: 'Fields selected by the query; typed transaction, transfer, contract-event, trade and offer fields use their documented GraphQL types.' },
 		errors: array(object({
 			message: text,
 			locations: array(object({ line: { type: 'integer' }, column: { type: 'integer' } })),
@@ -18,6 +18,18 @@ export const hubbleGraphqlSchemas: Record<string, OpenApiRecord> = {
 	}, [])
 };
 const examples: OpenApiRecord = {
+ contractEvents: {
+  summary: 'Historical contract diagnostics with typed cursor pagination',
+  value: { query: 'query Events($after: String) { hubbleContractEvents(contractId: "CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA", input: {minLedger:63490364,maxLedger:63490364,typeCode:2,successful:false,limit:2,after:$after}) { items { id transactionHash typeCode successful topicsJson dataJson eventXdr classification { transactionKind eventKind sorobanExecutionEvidence provenance } } nextCursor watermark { minimumLedger maximumLedger observedAt coverage } coverage { contiguousLastLedger maximumLedger gapCount } } }', variables: { after: null } }
+ },
+ trades: {
+  summary: 'Parsed trades: source Float64 amounts are disclosed, not exact decimal reconstruction',
+  value: { query: '{ hubbleTrades(input: {minLedger:63490364,maxLedger:63490364,limit:2}) { rows { id operationId sellingAmount buyingAmount amountPrecision price { numerator denominator } sellingAsset { id code issuer } buyingAsset { id code issuer } } nextOffset coverageStatus semantics } }' }
+ },
+ offers: {
+  summary: 'Offer observations in one ledger, not a complete live order book',
+  value: { query: '{ hubbleOffer(id:"1848813589",input:{minLedger:63490364,maxLedger:63490364}) { record { id seller amount amountPrecision deleted price { numerator denominator } } coverageStatus semantics } }' }
+ },
 	coverage: {
 		summary: 'Current parsed coverage (metadata only)',
 		value: { query: '{ hubbleStatus { servingWarehouse coverage { contiguousFirstLedger contiguousLastLedger supplementalLedgerCount maximumLedger gapCount } } }' }

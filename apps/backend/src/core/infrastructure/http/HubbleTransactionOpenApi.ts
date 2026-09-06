@@ -97,7 +97,7 @@ const classification = object({
 		enum: ['complete', 'missing', 'incomplete', 'mismatch']
 	}
 });
-const event = object({
+export const hubbleTypedEventSchema = object({
 	id: text,
 	transactionId: exactInteger,
 	transactionHash: text,
@@ -118,7 +118,7 @@ export const hubbleTypedTransactionSchema = object({
 	transaction,
 	operations: page(operation),
 	effects: page(effect),
-	events: page(event),
+	events: page(hubbleTypedEventSchema),
 	observedAt: { type: 'string', format: 'date-time' },
 	coverage: { type: 'string', enum: ['ingested-only'] }
 });

@@ -1,3 +1,4 @@
+import { withHubbleContractEventPath, hubbleContractEventSchemas } from './HubbleContractEventOpenApi.js';
 import {
 	readOpenApiRecord,
 	type OpenApiRecord
@@ -176,7 +177,7 @@ const ledgerCoverageSchema: OpenApiRecord = {
 };
 
 const hubblePaths: Readonly<Record<string, OpenApiRecord>> = withHubbleExplorerPaths({
-	...hubbleSemanticPaths,
+	...withHubbleContractEventPath(hubbleSemanticPaths),
 	...hubbleTransferPaths,
 	...hubbleGraphqlPaths,
 	'/v1/analytics/datasets': {
@@ -356,7 +357,7 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 	const components = readOpenApiRecord(source.components) ?? {};
 	const existingSchemas = readOpenApiRecord(components.schemas) ?? {};
 	const schemas = {
-		...hubbleSemanticSchemas, ...hubbleExplorerSchemas, ...hubbleGraphqlSchemas, ...hubbleTransferSchemas,
+		...hubbleContractEventSchemas, ...hubbleSemanticSchemas, ...hubbleExplorerSchemas, ...hubbleGraphqlSchemas, ...hubbleTransferSchemas,
 		HubbleLedgerCoverage: hubbleCoverageSchema,
 		HubbleError: hubbleErrorSchema,
 		HubbleTypedTransaction: hubbleTypedTransactionSchema

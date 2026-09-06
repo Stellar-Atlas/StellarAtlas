@@ -1,24 +1,16 @@
+import { resolveHubbleActivityWindow } from './HubbleActivityWindow.js';
 import { completedHubbleBatchPredicate } from './HubbleBatchVisibility.js';
 import type {
 	HubbleTransferInput,
-	HubbleTransferPage,
-	HubbleTransferWatermark
+	HubbleTransferPage
 } from './HubbleTransferContracts.js';
 import {
-	decodeTransferCursor,
 	encodeTransferCursor,
 	transferFilterFingerprint
 } from './HubbleTransferCursor.js';
 import { mapHubbleTransfer, transferPosition } from './HubbleTransferMapper.js';
-import {
-	defaultTransferLedgerSpan,
-	normalizeHubbleTransferInput,
-	validateTransferLedgerRange
-} from './HubbleTransferValidation.js';
-import {
-	HubbleWarehouseInputError,
-	HubbleWarehouseUnavailableError
-} from './HubbleWarehouseErrors.js';
+import { normalizeHubbleTransferInput } from './HubbleTransferValidation.js';
+import { HubbleWarehouseUnavailableError } from './HubbleWarehouseErrors.js';
 import {
 	quoteHubbleIdentifier,
 	type HubblePreparedParameter,
@@ -31,52 +23,14 @@ export async function queryHubbleTransferActivity(
 	maximumPublishedLedger: number
 ): Promise<HubbleTransferPage> {
 	const input = normalizeHubbleTransferInput(request);
-	const limit = input.limit!;
-	if (limit > executor.maximumRows)
-		throw new HubbleWarehouseInputError(
-			'Transfer limit exceeds the configured warehouse maximum'
-		);
 	const fingerprint = transferFilterFingerprint(input);
-	const cursor =
-		input.after === undefined
-			? undefined
-			: decodeTransferCursor(input.after, fingerprint);
-	if (
-		!Number.isSafeInteger(maximumPublishedLedger) ||
-		maximumPublishedLedger < 0 ||
-		maximumPublishedLedger > 2_147_483_647
-	)
-		throw new HubbleWarehouseUnavailableError(
-			'Invalid transfer ingestion watermark'
+	const { limit, minimumLedger, maximumLedger, watermark, cursor } =
+		resolveHubbleActivityWindow(
+			input,
+			maximumPublishedLedger,
+			executor.maximumRows,
+			fingerprint
 		);
-	const maximumLedger =
-		cursor?.watermark.maximumLedger ??
-		Math.min(input.maxLedger ?? maximumPublishedLedger, maximumPublishedLedger);
-	const minimumLedger =
-		cursor?.watermark.minimumLedger ??
-		input.minLedger ??
-		Math.max(1, maximumLedger - defaultTransferLedgerSpan + 1);
-	if (input.minLedger !== undefined && input.maxLedger !== undefined)
-		validateTransferLedgerRange(input.minLedger, input.maxLedger);
-	if (maximumLedger > 0 && minimumLedger <= maximumLedger)
-		validateTransferLedgerRange(minimumLedger, maximumLedger);
-	if (
-		cursor !== undefined &&
-		(maximumLedger > maximumPublishedLedger ||
-			maximumLedger > (input.maxLedger ?? maximumPublishedLedger) ||
-			minimumLedger !==
-				(input.minLedger ??
-					Math.max(1, maximumLedger - defaultTransferLedgerSpan + 1)))
-	)
-		throw new HubbleWarehouseInputError(
-			'Transfer cursor ledger window no longer matches the filters or published watermark'
-		);
-	const watermark: HubbleTransferWatermark = cursor?.watermark ?? {
-		minimumLedger: maximumPublishedLedger === 0 ? 0 : minimumLedger,
-		maximumLedger,
-		observedAt: new Date().toISOString(),
-		coverage: 'ingested-only'
-	};
 	if (maximumLedger === 0 || minimumLedger > maximumLedger)
 		return {
 			transfers: [],
