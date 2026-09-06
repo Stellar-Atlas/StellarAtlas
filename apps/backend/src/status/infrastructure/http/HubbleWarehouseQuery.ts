@@ -117,7 +117,7 @@ function equalityStrategy(type: string): {
 	readonly type: string;
 } {
 	const nativeType = orderedParameterType(type);
-	if (nativeType !== 'String') {
+	if (nativeType !== 'String' || unwrappedColumnType(type) === 'String') {
 		return { expression: (value) => value, type: nativeType };
 	}
 	return {
@@ -126,13 +126,18 @@ function equalityStrategy(type: string): {
 	};
 }
 
-function orderedParameterType(type: string): string {
+function unwrappedColumnType(type: string): string {
 	let current = type.trim();
 	for (;;) {
 		const match = /^(?:Nullable|LowCardinality)\((.*)\)$/.exec(current);
 		if (match === null) break;
 		current = match[1]!.trim();
 	}
+	return current;
+}
+
+function orderedParameterType(type: string): string {
+	const current = unwrappedColumnType(type);
 	if (
 		/^(?:U?Int(?:8|16|32|64|128|256)|Float(?:32|64)|Bool|Date|Date32|DateTime(?:64)?(?:\(.*\))?|Decimal(?:32|64|128|256)?(?:\(.*\))?|UUID)$/.test(
 			current
