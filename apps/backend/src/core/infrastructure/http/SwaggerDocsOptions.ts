@@ -17,5 +17,13 @@ const swaggerCss = [
 export const swaggerDocsOptions = {
 	customCss: swaggerCss,
 	customSiteTitle: 'StellarAtlas API docs',
-	explorer: true
+	explorer: true,
+	swaggerOptions: {
+		filter: true,
+		deepLinking: true,
+		defaultModelsExpandDepth: 0,
+		defaultModelExpandDepth: 1,
+		docExpansion: 'none',
+		displayRequestDuration: true
+	}
 };

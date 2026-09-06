@@ -1,28 +1,10 @@
-const apiBaseUrl =
-	process.env.STELLAR_ATLAS_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:3000';
-const normalizedApiBaseUrl = apiBaseUrl.endsWith('/')
-	? apiBaseUrl.slice(0, -1)
-	: apiBaseUrl;
+import { renderSwaggerReference } from './render-reference';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<Response> {
-	const upstream = await fetch(`${normalizedApiBaseUrl}/docs/`, {
-		cache: 'no-store'
-	});
-	const body = await upstream.text();
-	const url = new URL(request.url);
-	const rewrittenBody = rewriteSwaggerHtml(body, Date.now().toString(36), {
-		embedded: url.searchParams.get('embedded') === '1',
-		theme: url.searchParams.get('theme') === 'light' ? 'light' : 'dark'
-	});
-
-	return new Response(rewrittenBody, {
-		headers: {
-			'cache-control': 'no-store',
-			'content-type': upstream.headers.get('content-type') ?? 'text/html'
-		},
-		status: upstream.status
-	});
+	return renderSwaggerReference(
+		request,
+		new URL(request.url).searchParams.get('embedded') === '1'
+	);
 }
-import { rewriteSwaggerHtml } from './swagger-proxy';

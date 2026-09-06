@@ -1,5 +1,25 @@
 import { buildEntityHref, type ExplorerFilters } from './explorer-analytics';
 
+export function decodeExplorerIdentifier(value: string): string | null {
+	try {
+		const decoded = decodeURIComponent(value);
+		if (
+			!decoded ||
+			decoded.includes('%') ||
+			decoded.includes('/') ||
+			decoded.includes(String.fromCharCode(92)) ||
+			[...decoded].some(
+				(character) =>
+					character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
+			)
+		)
+			return null;
+		return decoded;
+	} catch {
+		return null;
+	}
+}
+
 const filterNames = new Set([
 	'min_ledger',
 	'max_ledger',

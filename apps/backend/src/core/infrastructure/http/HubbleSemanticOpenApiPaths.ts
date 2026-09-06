@@ -5,7 +5,22 @@ import {
 } from './HubbleTransactionOpenApi.js';
 import type { OpenApiRecord } from './OpenApiDocumentProjection.js';
 
-import { analyticsTag, publicAccess, errorResponse, transactionHashParameter, accountParameter, limitParameter, offsetParameter, minimumLedgerParameter, maximumLedgerParameter, transactionHashQueryParameter, ledgerSequenceParameter, operationIdParameter, contractIdParameter, assetParameter } from './HubbleSemanticOpenApiParameters.js';
+import {
+	analyticsTag,
+	publicAccess,
+	errorResponse,
+	transactionHashParameter,
+	accountParameter,
+	limitParameter,
+	offsetParameter,
+	minimumLedgerParameter,
+	maximumLedgerParameter,
+	transactionHashQueryParameter,
+	ledgerSequenceParameter,
+	operationIdParameter,
+	contractIdParameter,
+	assetParameter
+} from './HubbleSemanticOpenApiParameters.js';
 import { semanticResponse } from './HubbleSemanticOpenApiSchemas.js';
 
 export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
@@ -61,7 +76,8 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	},
 	'/v1/analytics/operations/{operationId}/effects': {
 		get: {
-			description: 'Returns one page of decoded effects emitted by one operation. Follow nextOffset until null.',
+			description:
+				'Returns one page of decoded effects emitted by one operation. Follow nextOffset until null.',
 			operationId: 'listAnalyticsOperationEffects',
 			parameters: [operationIdParameter, limitParameter, offsetParameter],
 			responses: {
@@ -249,6 +265,9 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				'400': errorResponse('The transaction hash is invalid.'),
 				'404': errorResponse(
 					'The transaction is outside the currently ingested range or does not exist.'
+				),
+				'500': errorResponse(
+					'Unexpected transaction query failure (hubble_query_failed).'
 				),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},

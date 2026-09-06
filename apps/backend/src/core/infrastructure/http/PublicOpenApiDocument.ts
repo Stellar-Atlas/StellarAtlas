@@ -15,6 +15,12 @@ const publicServer = {
 
 const publicTagDefinitions = [
 	{
+		description:
+			'Parsed historical activity and entity lookup.\n\n**Start here:** transaction detail (`view=typed`), transfer activity, then operations, assets, contracts, offers and trades below. Entity examples use explicit single-ledger windows.\n\n**Pagination:** follow nextOffset with unchanged filters; typed transfer and transaction relationships use their own cursors.\n\n**Coverage and precision:** check returned window and coverage. Observed assets/contracts and historical offers are not complete current-chain inventories. Exact identifiers stay strings; trade/offer amounts marked source_float64 retain source rounding.',
+		name: 'Analytics'
+	},
+
+	{
 		description: 'Current Stellar public-network state and measurements.',
 		name: 'Network'
 	},
@@ -48,11 +54,6 @@ const publicTagDefinitions = [
 		description:
 			'Read-only Horizon compatibility, SEP-54 Galexie objects, and immutable decoded-history artifacts.',
 		name: 'Data access'
-	},
-	{
-		description:
-			'Hubble-compatible historical analytics queries served by StellarAtlas.',
-		name: 'Analytics'
 	},
 	{
 		description: 'Federated Byzantine Agreement System quorum evidence.',

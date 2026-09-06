@@ -7,7 +7,10 @@ import { ExplorerRecordLookup } from '@components/blockchain/explorer-record-loo
 import { ExplorerTransactionDetail } from '@components/blockchain/explorer-transaction-detail';
 import { TransferActivityPanel } from '@components/analytics/transfer-activity-panel';
 import { isAnalyticsCollection } from '../../../api/explorer-analytics';
-import { explorerRouteFilters } from '../../../api/explorer-search-route';
+import {
+	decodeExplorerIdentifier,
+	explorerRouteFilters
+} from '../../../api/explorer-search-route';
 interface Props {
 	readonly params: Promise<{ segments: string[] }>;
 	readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -18,8 +21,13 @@ async function EntityRoute({
 }: Props): Promise<React.JSX.Element> {
 	const { segments } = await params;
 	const query = await searchParams;
-	const [collection, identifier] = segments;
+	const [collection, rawIdentifier] = segments;
+	const identifier =
+		rawIdentifier === undefined
+			? undefined
+			: decodeExplorerIdentifier(rawIdentifier);
 	if (!collection || segments.length > 2) notFound();
+	if (identifier === null) notFound();
 	const filters = explorerRouteFilters(query);
 	if (isAnalyticsCollection(collection))
 		return (

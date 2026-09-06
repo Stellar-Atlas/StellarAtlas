@@ -161,13 +161,7 @@
 	padding: 1.2rem 0.5rem;
 	color: var(--muted);
 }
-@media (max-width: 680px) {
-	.panel {
-		padding: 0.8rem;
-	}
-	.form {
-		grid-template-columns: 1fr;
-	}
+@media (max-width: 960px) {
 	.table,
 	.table tbody,
 	.table tr,
@@ -199,12 +193,13 @@
 		color: var(--muted);
 		font-size: 0.72rem;
 	}
-	.navigation {
-		flex-wrap: nowrap;
-		overflow-x: auto;
+}
+@media (max-width: 680px) {
+	.panel {
+		padding: 0.8rem;
 	}
-	.navigation a {
-		flex-shrink: 0;
+	.form {
+		grid-template-columns: 1fr;
 	}
 	.details {
 		grid-template-columns: 1fr;

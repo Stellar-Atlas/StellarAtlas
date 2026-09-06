@@ -11,20 +11,36 @@
 	padding: 1.25rem 2rem;
 	border-bottom: 1px solid var(--border);
 }
-.heading h1 { font-size: 1.35rem; margin-bottom: 0.4rem; }
-.heading p { color: var(--muted); font-size: 0.85rem; }
-.links { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; font-size: 0.85rem; }
+.heading h1 {
+	font-size: 1.35rem;
+	margin-bottom: 0.4rem;
+}
+.heading p {
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+.links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem 1.25rem;
+	font-size: 0.85rem;
+}
 .reference {
 	display: block;
 	width: 100%;
-	height: calc(100dvh - 205px);
-	min-height: 600px;
+	height: 600px;
+	min-height: 320px;
 	border: 0;
 	background: var(--background);
 }
 @media (max-width: 720px) {
-	.heading { padding: 1rem; }
-	.heading p { line-height: 1.5; }
-	.links { gap: 0.75rem; }
-	.reference { height: 80dvh; min-height: 560px; }
+	.heading {
+		padding: 1rem;
+	}
+	.heading p {
+		line-height: 1.5;
+	}
+	.links {
+		gap: 0.75rem;
+	}
 }

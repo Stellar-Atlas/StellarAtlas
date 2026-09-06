@@ -1,11 +1,13 @@
-jest.mock('../explorer-entity.module.css', () => ({}));
+import { jest } from '@jest/globals';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ExplorerEntityNavigation } from '../explorer-entity-navigation';
-import {
-	ExplorerEntityTable,
-	ExplorerEntityDetails
-} from '../explorer-entity-table';
+jest.unstable_mockModule('../explorer-entity.module.css', () => ({
+	default: {}
+}));
+const { ExplorerEntityNavigation } =
+	await import('../explorer-entity-navigation');
+const { ExplorerEntityTable, ExplorerEntityDetails } =
+	await import('../explorer-entity-table');
 describe('parsed explorer presentation', () => {
 	it('exposes all working browse routes including trades and offers', () => {
 		const html = renderToStaticMarkup(

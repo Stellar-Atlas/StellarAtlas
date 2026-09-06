@@ -151,7 +151,11 @@ export interface SwaggerDisplayOptions {
 	readonly theme?: 'dark' | 'light';
 }
 
-export function rewriteSwaggerHtml(body: string, version: string, options: SwaggerDisplayOptions = {}): string {
+export function rewriteSwaggerHtml(
+	body: string,
+	version: string,
+	options: SwaggerDisplayOptions = {}
+): string {
 	let rewritten = body
 		.replaceAll('href="./', 'href="/api-docs/')
 		.replaceAll('src="./', 'src="/api-docs/')
@@ -160,22 +164,45 @@ export function rewriteSwaggerHtml(body: string, version: string, options: Swagg
 			`src="/api-docs/swagger-ui-init.js?v=${encodeURIComponent(version)}"`
 		);
 
-	if (!options.embedded && !rewritten.includes('data-stellaratlas-docs-shell')) {
+	if (
+		!options.embedded &&
+		!rewritten.includes('data-stellaratlas-docs-shell')
+	) {
 		rewritten = rewritten.replace(
 			/<body([^>]*)>/i,
 			`<body$1>${documentationShell}`
 		);
 	}
 
+	if (options.embedded) {
+		rewritten = rewritten.replace(
+			/<body([^>]*)>/i,
+			'<body$1><style data-stellaratlas-docs-embed>html, body { height: auto !important; min-height: 0 !important; } body { display: flow-root; }</style>'
+		);
+	}
+
 	if (options.theme === 'light') {
 		const colors: Readonly<Record<string, string>> = {
-			'#101417': '#f4f7fa', '#182023': '#ffffff', '#11181b': '#eef3f8',
-			'#0f1517': '#ffffff', '#e8f0ef': '#172231', '#c3d0ce': '#415166',
-			'#d9e7e4': '#172231', '#d7fffb': '#172231', '#79c7c0': '#2878b8',
-			'#2b373b': '#d8e1ea', '#334247': '#bfd3e8'
+			'#101417': '#f4f7fa',
+			'#182023': '#ffffff',
+			'#11181b': '#eef3f8',
+			'#0f1517': '#ffffff',
+			'#e8f0ef': '#172231',
+			'#c3d0ce': '#415166',
+			'#d9e7e4': '#172231',
+			'#d7fffb': '#172231',
+			'#79c7c0': '#2878b8',
+			'#2b373b': '#d8e1ea',
+			'#334247': '#bfd3e8'
 		};
-		rewritten = rewritten.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, (style) =>
-			style.replace(/#[0-9a-f]{6}/gi, (color) => colors[color.toLowerCase()] ?? color));
+		rewritten = rewritten.replace(
+			/<style\b[^>]*>[\s\S]*?<\/style>/gi,
+			(style) =>
+				style.replace(
+					/#[0-9a-f]{6}/gi,
+					(color) => colors[color.toLowerCase()] ?? color
+				)
+		);
 	}
 	return rewritten;
 }

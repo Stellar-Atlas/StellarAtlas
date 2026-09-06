@@ -4,11 +4,29 @@ import {
 	parseEntityPage
 } from '../explorer-analytics';
 import {
+	decodeExplorerIdentifier,
 	explorerRouteFilters,
 	resolveExplorerSearch,
 	normalizeExplorerTimes
 } from '../explorer-search-route';
 describe('explorer entity routes', () => {
+	it('decodes asset and trade route identifiers exactly once', () => {
+		for (const id of ['USDC:GABC', '272689036991197185:0', 'native']) {
+			expect(decodeExplorerIdentifier(id)).toBe(id);
+			expect(decodeExplorerIdentifier(encodeURIComponent(id))).toBe(id);
+			const href = buildEntityHref('assets', id);
+			const routeId = href.slice('/explorer/assets/'.length);
+			expect(
+				buildEntityApiPath('assets', decodeExplorerIdentifier(routeId)!, {})
+			).not.toContain('%253A');
+		}
+	});
+	it('rejects malformed or multiply encoded route identifiers', () => {
+		for (const value of ['%', 'USD%253AGABC', '%2Ffoo', '%5Cfoo', '%00', '']) {
+			expect(decodeExplorerIdentifier(value)).toBeNull();
+		}
+	});
+
 	it('routes identifiers without losing large operation precision', () => {
 		expect(resolveExplorerSearch('272689036992143361')).toBe(
 			'/explorer/operations/272689036992143361'
