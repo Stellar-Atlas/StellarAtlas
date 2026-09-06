@@ -47,7 +47,7 @@ export class GetKnownOrganizations {
 		const matchingOrganizations = filterKnownOrganizations(
 			scopedOrganizations,
 			request.query
-		);
+		).toSorted(compareOrganizationNames);
 		const organizations = matchingOrganizations.slice(
 			request.offset,
 			request.offset + request.limit
@@ -151,4 +151,26 @@ function countScopes(
 	};
 	for (const organization of organizations) totals[organization.scope] += 1;
 	return totals;
+}
+
+const organizationNameOrder = new Intl.Collator('en', {
+	numeric: true,
+	sensitivity: 'base'
+});
+function compareOrganizationNames(
+	left: KnownOrganizationsInventoryDTO['organizations'][number],
+	right: KnownOrganizationsInventoryDTO['organizations'][number]
+): number {
+	const label = (entry: typeof left): string =>
+		entry.organization.name?.trim() ||
+		entry.organization.dba?.trim() ||
+		entry.organization.homeDomain;
+	return (
+		organizationNameOrder.compare(label(left), label(right)) ||
+		(left.organization.id < right.organization.id
+			? -1
+			: left.organization.id > right.organization.id
+				? 1
+				: 0)
+	);
 }

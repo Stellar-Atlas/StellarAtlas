@@ -1,0 +1,58 @@
+.inventory {
+	min-inline-size: 0;
+}
+.inventory td {
+	overflow-wrap: anywhere;
+}
+.detail {
+	align-items: start;
+}
+.detail :global(.details) dd,
+.detail :global(.row) small {
+	overflow-wrap: anywhere;
+	min-inline-size: 0;
+}
+@media (max-width: 960px) {
+	.inventory :global(.table-controls) {
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.inventory :global(.responsive-table) table {
+		min-inline-size: 0;
+	}
+	.inventory table,
+	.inventory :is(tbody, tr, td) {
+		display: block;
+		inline-size: 100%;
+		box-sizing: border-box;
+	}
+	.inventory thead {
+		position: absolute;
+		inline-size: 1px;
+		block-size: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+	.inventory tr {
+		border-block-end: 1px solid var(--border);
+		padding: 12px 16px;
+	}
+	.inventory td {
+		border: 0;
+		min-inline-size: 0;
+		padding: 6px 0;
+	}
+	.inventory td[data-label]::before {
+		content: attr(data-label);
+		display: block;
+		font-size: 0.72rem;
+		color: var(--muted);
+		margin-block-end: 3px;
+	}
+	.inventory :global(.tags) {
+		justify-content: flex-start;
+	}
+	.detail {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

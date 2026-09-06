@@ -37,6 +37,9 @@ describe('OrganizationTomlEvidence', () => {
 		expect(html).toContain('Last-known-good content');
 		expect(html).toContain('VERSION=&quot;2.0.0&quot;');
 		expect(html).toContain('Authoritative certificate-verified content');
+		expect(html).toContain(
+			'<time dateTime="2026-07-10T12:00:00.000Z" title="2026-07-10T12:00:00.000Z">2026-07-10 12:00 UTC</time>'
+		);
 	});
 
 	it('states when a failed latest attempt has no last-known-good document', () => {

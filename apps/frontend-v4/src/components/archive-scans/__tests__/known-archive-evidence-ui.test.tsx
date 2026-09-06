@@ -70,6 +70,15 @@ describe('known archive evidence UI', () => {
 		expect(markup).toContain('Source evidence');
 		expect(markup).toContain('Checked source');
 		expect(markup).toContain('2 verified alternate copies');
+		expect(markup).toContain(
+			'<details class="verified-alternate-copies"><summary>'
+		);
+		expect(markup).not.toContain(
+			'<details open="" class="verified-alternate-copies">'
+		);
+		expect(markup).toContain(
+			'Verified <time dateTime="2026-07-10T00:00:00.000Z" title="2026-07-10T00:00:00.000Z">2026-07-10 00:00 UTC</time>'
+		);
 		expect(markup).toContain('Retry once');
 		expect(markup).toContain('Same organization (1)');
 		expect(markup).toContain('Other network source (1)');

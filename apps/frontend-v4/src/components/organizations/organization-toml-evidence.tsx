@@ -1,5 +1,5 @@
 import type { PublicOrganization } from '../../api/types';
-import { formatDateTime } from '../../format/formatters';
+import { LocalDateTime } from '../local-date-time';
 
 const TLS_WARNING = 'TlsCertificateVerificationDisabled';
 
@@ -98,8 +98,8 @@ export function OrganizationTomlEvidence({
 			{latestInsecureAttempt !== null && !latestAttemptQuarantined ? (
 				<p className="toml-evidence-notice warning">
 					A TLS certificate warning remains retained from the fetch at{' '}
-					{formatDateTime(latestInsecureAttempt.observedAt)}. Its response was
-					quarantined from authoritative metadata.
+					<LocalDateTime dateTime={latestInsecureAttempt.observedAt} />. Its
+					response was quarantined from authoritative metadata.
 				</p>
 			) : null}
 			{retainedLegacyTlsWarning ? (
@@ -147,7 +147,11 @@ function EvidenceFact({
 			<span>{label}</span>
 			<strong>{value}</strong>
 			<small>
-				{observedAt ? formatDateTime(observedAt) : 'Time unavailable'}
+				{observedAt ? (
+					<LocalDateTime dateTime={observedAt} />
+				) : (
+					'Time unavailable'
+				)}
 			</small>
 			<small>{detail}</small>
 			{usedTlsFallback ? (

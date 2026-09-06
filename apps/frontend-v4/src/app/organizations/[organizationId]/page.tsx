@@ -23,7 +23,7 @@ async function OrganizationDetailRouteContent({
 	organizationId: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const organizationReference = decodeURIComponent(organizationId);
+	const organizationReference = organizationId;
 	const [network, knownOrganization] = await Promise.all([
 		fetchPublicNetwork({ revalidate }),
 		fetchKnownOrganization(organizationReference, { revalidate })
@@ -67,6 +67,8 @@ async function OrganizationDetailRouteContent({
 				archiveEvidence={archiveEvidence}
 				network={network}
 				organization={organization}
+				scope={knownOrganization.scope}
+				lastMeasurementAt={knownOrganization.lastMeasurementAt}
 			/>
 		</main>
 	);

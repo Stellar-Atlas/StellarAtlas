@@ -5,7 +5,6 @@ import { PageHeading } from '../../components/layout/page-heading';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
 import { OrganizationTable } from '../../components/organizations/organization-table';
 import { defaultOrganizationInventoryFilter } from '../../domain/known-network-scopes';
-import { getTopOrganizations } from '../../domain/network';
 import { formatInteger } from '../../format/formatters';
 
 export const revalidate = 10;
@@ -30,10 +29,6 @@ async function OrganizationsRouteContent({
 			{ revalidate }
 		)
 	]);
-	const organizations = knownOrganizations.organizations.map(
-		(knownOrganization) => knownOrganization.organization
-	);
-	const topOrganizations = getTopOrganizations(organizations);
 
 	return (
 		<main className="shell" data-inventory-scope={knownOrganizations.scope}>
@@ -47,12 +42,18 @@ async function OrganizationsRouteContent({
 				title="Organizations"
 				aside={
 					<div className="heading-metrics">
-						<strong>{formatInteger(knownOrganizations.count)}</strong>
-						<span>discovered</span>
 						<strong>
-							{formatInteger(topOrganizations.at(0)?.validators.length ?? 0)}
+							{formatInteger(knownOrganizations.scopeTotals['all-known'])}
 						</strong>
-						<span>largest validator set</span>
+						<span>known</span>
+						<strong>
+							{formatInteger(knownOrganizations.scopeTotals.current)}
+						</strong>
+						<span>current</span>
+						<strong>
+							{formatInteger(knownOrganizations.scopeTotals.archived)}
+						</strong>
+						<span>archived</span>
 					</div>
 				}
 			/>

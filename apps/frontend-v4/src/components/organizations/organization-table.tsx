@@ -2,23 +2,22 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
+import { LocalDateTime } from '../local-date-time';
+import {
+	organizationInventoryAvailability,
+	organizationInventoryTags,
+	organizationInventoryHref
+} from './organization-inventory-model';
+import styles from './organization-inventory.module.css';
 import type {
 	PublicKnownNetworkPage,
 	PublicKnownOrganizationListItem,
 	PublicKnownOrganizationScope
 } from '../../api/known-network-types';
-import {
-	formatOrganization24HourAvailability,
-	formatOrganization30DayAvailability
-} from '../../domain/availability';
-import {
-	getOrganizationLabel,
-	getOrganizationTags
-} from '../../domain/network';
+import { getOrganizationLabel } from '../../domain/network';
 import { StatusTags } from '../status-tags';
 import {
-	defaultOrganizationInventoryFilter,
 	isOrganizationInventoryFilter,
 	organizationInventoryFilterLabels,
 	organizationInventoryFilterOrder
@@ -43,6 +42,8 @@ export function OrganizationTable({
 }: OrganizationTableProps): React.JSX.Element {
 	const router = useRouter();
 	const [input, setInput] = useState(query);
+	const [isPending, startTransition] = useTransition();
+	useEffect(() => setInput(query), [query]);
 	const pageNumber = Math.floor(page.offset / page.limit) + 1;
 	const pageCount = Math.max(1, Math.ceil(page.total / page.limit));
 	const navigate = (
@@ -50,17 +51,19 @@ export function OrganizationTable({
 		nextQuery: string,
 		nextPage: number
 	): void => {
-		const params = new URLSearchParams();
-		params.set('scope', nextScope);
-		if (nextQuery.trim()) params.set('q', nextQuery.trim());
-		if (nextPage > 1) params.set('page', nextPage.toString());
-		router.push(`/organizations?${params.toString()}`);
+		startTransition(() =>
+			router.push(organizationInventoryHref(nextScope, nextQuery, nextPage))
+		);
 	};
-	const firstVisible = page.total === 0 ? 0 : page.offset + 1;
-	const lastVisible = page.offset + organizations.length;
+	const firstVisible = organizations.length === 0 ? 0 : page.offset + 1;
+	const lastVisible =
+		organizations.length === 0 ? 0 : page.offset + organizations.length;
 
 	return (
-		<section className="panel data-panel">
+		<section
+			className={`panel data-panel ${styles.inventory}`}
+			aria-busy={isPending}
+		>
 			<div className="panel-heading controls-heading">
 				<div>
 					<h2>Organizations</h2>
@@ -69,13 +72,16 @@ export function OrganizationTable({
 						{totalCount} known
 					</span>
 				</div>
-				<div className="table-controls">
+				<form
+					className="table-controls"
+					onSubmit={(event) => {
+						event.preventDefault();
+						navigate(scope, input, 1);
+					}}
+				>
 					<input
 						aria-label="Filter organizations"
 						onChange={(event) => setInput(event.currentTarget.value)}
-						onKeyDown={(event) => {
-							if (event.key === 'Enter') navigate(scope, input, 1);
-						}}
 						placeholder="Filter organizations"
 						value={input}
 					/>
@@ -94,8 +100,16 @@ export function OrganizationTable({
 							</option>
 						))}
 					</select>
-				</div>
+					<button type="submit" disabled={isPending}>
+						Search
+					</button>
+				</form>
 			</div>
+			{isPending ? (
+				<p className="muted-copy" role="status">
+					Updating organizations…
+				</p>
+			) : null}
 			<div className="responsive-table">
 				<table>
 					<thead>
@@ -110,10 +124,16 @@ export function OrganizationTable({
 					<tbody>
 						{organizations.map((knownOrganization) => {
 							const organization = knownOrganization.organization;
-							const availability24Hours =
-								formatOrganization24HourAvailability(organization);
-							const availability30Days =
-								formatOrganization30DayAvailability(organization);
+							const availability24Hours = organizationInventoryAvailability(
+								organization,
+								knownOrganization.scope,
+								'24h'
+							);
+							const availability30Days = organizationInventoryAvailability(
+								organization,
+								knownOrganization.scope,
+								'30d'
+							);
 							return (
 								<tr
 									className={
@@ -123,16 +143,30 @@ export function OrganizationTable({
 									}
 									key={organization.id}
 								>
-									<td>
+									<td data-label="Organization">
 										<Link
 											href={`/organizations/${encodeURIComponent(organization.id)}`}
 										>
 											<strong>{getOrganizationLabel(organization)}</strong>
 										</Link>
 										<small>{organization.homeDomain}</small>
+										{knownOrganization.scope === 'archived' ? (
+											<small>
+												Last measured:{' '}
+												{knownOrganization.lastMeasurementAt ? (
+													<LocalDateTime
+														dateTime={knownOrganization.lastMeasurementAt}
+													/>
+												) : (
+													'Not recorded'
+												)}
+											</small>
+										) : null}
 									</td>
-									<td>{organization.validators.length}</td>
-									<td>
+									<td data-label="Validators">
+										{organization.validators.length}
+									</td>
+									<td data-label="24H availability">
 										<span className={`metric-text ${availability24Hours.tone}`}>
 											{availability24Hours.value}
 										</span>
@@ -140,7 +174,7 @@ export function OrganizationTable({
 											<small>{availability24Hours.detail}</small>
 										) : null}
 									</td>
-									<td>
+									<td data-label="30D availability">
 										<span className={`metric-text ${availability30Days.tone}`}>
 											{availability30Days.value}
 										</span>
@@ -148,19 +182,24 @@ export function OrganizationTable({
 											<small>{availability30Days.detail}</small>
 										) : null}
 									</td>
-									<td>
+									<td data-label="Status">
 										<StatusTags
-											tags={[
-												...getOrganizationTags(organization),
-												...(knownOrganization.scope === 'archived'
-													? [{ label: 'archived', tone: 'neutral' as const }]
-													: [])
-											]}
+											tags={organizationInventoryTags(
+												organization,
+												knownOrganization.scope
+											)}
 										/>
 									</td>
 								</tr>
 							);
 						})}
+						{organizations.length === 0 ? (
+							<tr>
+								<td colSpan={5}>
+									No organizations match this search and scope.
+								</td>
+							</tr>
+						) : null}
 					</tbody>
 				</table>
 			</div>

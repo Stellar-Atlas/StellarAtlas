@@ -13,6 +13,7 @@ import {
 	getVerifiedCopyObjectUrl
 } from '@domain/known-archive-evidence';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import { LocalDateTime } from '../local-date-time';
 import {
 	archiveRefreshFailureLabel,
 	classifyArchiveRefreshFailure
@@ -61,14 +62,14 @@ export function VerifiedAlternateCopies({
 	}
 
 	return (
-		<div className="verified-alternate-copies">
-			<strong>
+		<details className="verified-alternate-copies">
+			<summary>
 				{formatInteger(total)} verified alternate{' '}
 				{total === 1 ? 'copy' : 'copies'}
-			</strong>
+			</summary>
 			<VerifiedCopyGroup label="Same organization" set={sameOrganization} />
 			<VerifiedCopyGroup label="Other network source" set={network} />
-		</div>
+		</details>
 	);
 }
 
@@ -103,7 +104,9 @@ function VerifiedCopyGroup({
 								</a>
 							)}
 							{copy.verifiedAt ? (
-								<small>Verified {formatDateTime(copy.verifiedAt)}</small>
+								<small>
+									Verified <LocalDateTime dateTime={copy.verifiedAt} />
+								</small>
 							) : null}
 						</li>
 					);

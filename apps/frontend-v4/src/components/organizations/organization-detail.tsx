@@ -1,50 +1,75 @@
 import { Fragment } from 'react';
+import type { PublicKnownOrganizationRecordScope } from '@api/known-network-types';
+import { LocalDateTime } from '../local-date-time';
+import {
+	organizationInventoryAvailability,
+	organizationInventoryTags
+} from './organization-inventory-model';
+import styles from './organization-inventory.module.css';
 import Link from 'next/link';
 import type {
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization
 } from '../../api/types';
-import { getNodeLabel, getOrganizationTags } from '../../domain/network';
-import {
-	formatNode30DayValidating,
-	formatOrganization24HourAvailability,
-	formatOrganization30DayAvailability
-} from '../../domain/availability';
+import { getNodeLabel } from '../../domain/network';
+import { formatNode30DayValidating } from '../../domain/availability';
 import { formatBoolean } from '../../format/formatters';
 import { StatusTags } from '../status-tags';
 import { OrganizationTomlEvidence } from './organization-toml-evidence';
 
 interface OrganizationDetailProps {
 	archiveEvidence: React.ReactNode;
-	network: PublicNetwork;
+	network: Pick<PublicNetwork, 'nodes'>;
 	organization: PublicOrganization;
+	scope: PublicKnownOrganizationRecordScope;
+	lastMeasurementAt: string | null;
 }
 
 export function OrganizationDetail({
 	archiveEvidence,
 	network,
-	organization
+	organization,
+	scope,
+	lastMeasurementAt
 }: OrganizationDetailProps): React.JSX.Element {
 	const validators = getOrganizationValidatorRows(
 		network.nodes,
 		organization.validators
 	);
-	const availability24Hours =
-		formatOrganization24HourAvailability(organization);
-	const availability30Days = formatOrganization30DayAvailability(organization);
+	const availability24Hours = organizationInventoryAvailability(
+		organization,
+		scope,
+		'24h'
+	);
+	const availability30Days = organizationInventoryAvailability(
+		organization,
+		scope,
+		'30d'
+	);
 
 	return (
-		<section className="detail-grid">
-			<Fragment key={`archive-evidence:${organization.id}`}>
-				{archiveEvidence}
-			</Fragment>
+		<section className={`detail-grid ${styles.detail}`}>
 			<article className="panel detail-panel">
 				<div className="panel-heading">
-					<h2>Organization status</h2>
-					<StatusTags tags={getOrganizationTags(organization)} />
+					<h2>
+						{scope === 'archived'
+							? 'Archived organization record'
+							: 'Organization status'}
+					</h2>
+					<StatusTags tags={organizationInventoryTags(organization, scope)} />
 				</div>
 				<dl className="details">
+					<div>
+						<dt>Last measured</dt>
+						<dd>
+							{lastMeasurementAt ? (
+								<LocalDateTime dateTime={lastMeasurementAt} />
+							) : (
+								'Not recorded'
+							)}
+						</dd>
+					</div>
 					<div>
 						<dt>Home domain</dt>
 						<dd>{organization.homeDomain}</dd>
@@ -62,8 +87,16 @@ export function OrganizationDetail({
 						<dd>{organization.validators.length}</dd>
 					</div>
 					<div>
-						<dt>Quorum path available</dt>
-						<dd>{formatBoolean(organization.subQuorumAvailable)}</dd>
+						<dt>
+							{scope === 'archived'
+								? 'Recorded quorum path'
+								: 'Quorum path available'}
+						</dt>
+						<dd>
+							{scope === 'archived'
+								? `${formatBoolean(organization.subQuorumAvailable)} (historical snapshot)`
+								: formatBoolean(organization.subQuorumAvailable)}
+						</dd>
 					</div>
 					<div>
 						<dt>24H availability</dt>
@@ -127,6 +160,9 @@ export function OrganizationDetail({
 					) : null}
 				</div>
 			</article>
+			<Fragment key={`archive-evidence:${organization.id}`}>
+				{archiveEvidence}
+			</Fragment>
 			<OrganizationTomlEvidence organization={organization} />
 		</section>
 	);
