@@ -1,5 +1,56 @@
+import { graphqlExamples } from '../graphql-request';
 import { transactionPageVariables } from '../graphql-transaction-request';
 describe('transaction documentation pagination', () => {
+	it.each(['transaction', 'soroban'] as const)(
+		'keeps all three relationship controls pageable for %s',
+		(key) => {
+			const example = graphqlExamples[key];
+			expect(example.kind).toBe('transaction');
+			expect(example.query).toBe(graphqlExamples.transaction.query);
+			const previous = {
+				...example.variables,
+				operationsAfter: 'op-old',
+				effectsAfter: 'effect-old',
+				eventsAfter: 'event-old'
+			};
+			const result = {
+				data: {
+					hubbleTransaction: {
+						operations: { nextCursor: 'op-next' },
+						effects: { nextCursor: 'effect-next' },
+						events: { nextCursor: 'event-next' }
+					}
+				}
+			};
+			for (const relation of ['operations', 'effects', 'events'] as const) {
+				const paged = transactionPageVariables(
+					JSON.stringify(previous),
+					result,
+					relation
+				);
+				expect(JSON.parse(paged!)).toEqual({
+					...previous,
+					[relation + 'After']:
+						result.data.hubbleTransaction[relation].nextCursor
+				});
+			}
+		}
+	);
+	it('keeps the classic pagination fixture and loads the published Soroban invocation separately', () => {
+		expect(graphqlExamples.transaction.variables).toMatchObject({
+			ledgerSequence: 26000000,
+			limit: 5
+		});
+		expect(graphqlExamples.soroban.label).toBe(
+			'Soroban invocation and contract events'
+		);
+		expect(graphqlExamples.soroban.variables).toEqual({
+			transactionHash:
+				'446670351d9f2af449eda3bfa0e36c3e128e2720443293dd5b585b3bbadeb485',
+			ledgerSequence: 63490364,
+			limit: 10
+		});
+	});
 	const variables = JSON.stringify({
 		transactionHash: 'a'.repeat(64),
 		ledgerSequence: 26000000,

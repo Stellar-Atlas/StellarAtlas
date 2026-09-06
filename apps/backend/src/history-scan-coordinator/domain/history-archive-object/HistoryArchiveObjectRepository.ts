@@ -142,10 +142,19 @@ export interface HistoryArchiveObjectExecutionReconciliationResult {
 	readonly watermark: number;
 }
 
+export interface HistoryArchiveCheckpointProofRefreshFailure {
+	readonly archiveUrlIdentity: string;
+	readonly checkpointLedger: number;
+	readonly databaseErrorCode: string | null;
+	readonly errorMessage: string;
+	readonly failureRecorded: boolean;
+}
+
 export interface HistoryArchiveCheckpointProofRefreshDrainResult {
 	readonly claimed: number;
 	readonly completed: number;
 	readonly failed: number;
+	readonly failures?: readonly HistoryArchiveCheckpointProofRefreshFailure[];
 }
 
 export type HistoryArchiveCheckpointProofRefreshPriority = 0 | 1;

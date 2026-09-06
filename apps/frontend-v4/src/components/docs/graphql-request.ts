@@ -1,7 +1,15 @@
-export const graphqlExamples = {
-	transaction: {
-		label: 'Transaction, operations, effects and contract events',
-		query: `query Transaction($transactionHash: String!, $ledgerSequence: Int, $limit: Int, $operationsAfter: String, $effectsAfter: String, $eventsAfter: String) {
+interface TransactionExample {
+	readonly kind: 'transaction';
+	readonly label: string;
+	readonly query: string;
+	readonly variables: {
+		readonly transactionHash: string;
+		readonly ledgerSequence: number;
+		readonly limit: number;
+	};
+}
+
+const transactionQuery = `query Transaction($transactionHash: String!, $ledgerSequence: Int, $limit: Int, $operationsAfter: String, $effectsAfter: String, $eventsAfter: String) {
   hubbleTransaction(transactionHash: $transactionHash, ledgerSequence: $ledgerSequence, limit: $limit, operationsAfter: $operationsAfter, effectsAfter: $effectsAfter, eventsAfter: $eventsAfter) {
     transaction { hash ledgerSequence closedAt sourceAccount successful operationCount feeChargedRaw memo resultCode }
     operations {
@@ -18,14 +26,31 @@ export const graphqlExamples = {
     }
     coverage observedAt
   }
-}`,
-		variables: {
+}`;
+
+function transactionExample(
+	label: string,
+	variables: TransactionExample['variables']
+): TransactionExample {
+	return { kind: 'transaction', label, query: transactionQuery, variables };
+}
+
+export const graphqlExamples = {
+	transaction: transactionExample(
+		'Transaction, operations, effects and contract events',
+		{
 			transactionHash:
 				'5601a324dae6b95aeb626e4de68268fbb996a655979228178d291fc4b8c908cd',
 			ledgerSequence: 26000000,
 			limit: 5
 		}
-	},
+	),
+	soroban: transactionExample('Soroban invocation and contract events', {
+		transactionHash:
+			'446670351d9f2af449eda3bfa0e36c3e128e2720443293dd5b585b3bbadeb485',
+		ledgerSequence: 63490364,
+		limit: 10
+	}),
 	transfers: {
 		label: 'Exact asset transfers (typed, cursor-paginated)',
 		query: `query Transfers($input: HubbleTransferInput) {

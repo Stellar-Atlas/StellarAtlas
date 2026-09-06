@@ -1,7 +1,9 @@
+import { mapCheckpointProofRefreshFailure } from './HistoryArchiveCheckpointProofRefreshFailure.js';
 import { historyArchiveConsumerCount } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type { DataSource, EntityManager } from 'typeorm';
 import type {
 	HistoryArchiveCheckpointProofRefreshDrainResult,
+	HistoryArchiveCheckpointProofRefreshFailure,
 	HistoryArchiveCheckpointProofRefreshPriority
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import {
@@ -299,7 +301,8 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 	return {
 		claimed: targets.length,
 		completed: outcome.completed,
-		failed: outcome.failed
+		failed: outcome.failed,
+		...(outcome.failures === undefined ? {} : { failures: outcome.failures })
 	};
 }
 
@@ -458,6 +461,7 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 interface ProofRefreshBatchOutcome {
 	readonly completed: number;
 	readonly failed: number;
+	readonly failures?: readonly HistoryArchiveCheckpointProofRefreshFailure[];
 }
 
 async function refreshProofRefreshBatchWithIsolation(
@@ -475,8 +479,8 @@ async function refreshProofRefreshBatchWithIsolation(
 		if (targets.length === 1) {
 			const target = targets[0];
 			if (target === undefined) return { completed: 0, failed: 0 };
-			await recordProofRefreshFailure(dataSource, target, error);
-			return { completed: 0, failed: 1 };
+			const failure = await recordProofRefreshFailure(dataSource, target, error);
+			return { completed: 0, failed: 1, failures: [failure] };
 		}
 		const midpoint = Math.ceil(targets.length / 2);
 		const first = await refreshProofRefreshBatchWithIsolation(
@@ -489,7 +493,8 @@ async function refreshProofRefreshBatchWithIsolation(
 		);
 		return {
 			completed: first.completed + second.completed,
-			failed: first.failed + second.failed
+			failed: first.failed + second.failed,
+			failures: [...(first.failures ?? []), ...(second.failures ?? [])]
 		};
 	}
 }
@@ -676,19 +681,22 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 		return targets.length;
 	});
 }
-async function recordProofRefreshFailure(
+export async function recordProofRefreshFailure(
 	dataSource: DataSource,
 	target: ClaimedHistoryArchiveCheckpointProofRefresh,
 	error: unknown
-): Promise<void> {
+): Promise<HistoryArchiveCheckpointProofRefreshFailure> {
 	const message = error instanceof Error ? error.message : String(error);
-	await dataSource.query(failProofRefreshSql, [
+	const recorded = await dataSource.query(failProofRefreshSql, [
 		target.archiveUrlIdentity,
 		target.checkpointLedger,
 		target.leaseToken,
 		message.slice(0, 1_000),
 		target.generation
 	]);
+	return mapCheckpointProofRefreshFailure(
+		target, error, extractQueryRows(recorded).length > 0
+	);
 }
 
 function extractQueryRows<T>(result: unknown): readonly T[] {
@@ -1075,6 +1083,7 @@ const failProofRefreshSql = `
 		and "checkpointLedger" = $2::integer
 		and "leaseToken" = $3::uuid
 		and generation = $5::bigint
+	returning "archiveUrlIdentity"
 `;
 
 export const proofRefreshQueueStatusSql = `

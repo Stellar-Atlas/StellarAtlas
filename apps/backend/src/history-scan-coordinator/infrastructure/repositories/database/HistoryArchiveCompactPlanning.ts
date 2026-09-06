@@ -373,6 +373,8 @@ export const targetedCompactCheckpointPlanSql = `
 					floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1
 				)::integer
 			) as "latestCheckpointLedger",
+			(floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1)::integer
+				as "authorizedCheckpointLedger",
 			cursor."lastForwardCheckpointLedger",
 			completed."checkpointLedger" + 64 as checkpoint_ledger,
 			root."archiveUrl", root."hostIdentity"
@@ -388,16 +390,12 @@ export const targetedCompactCheckpointPlanSql = `
 			on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
 			and root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
-			and root.status = 'verified'
+			-- A periodic root refresh does not invalidate its successful snapshot.
 			and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
 		where cursor."nextHistoricalCheckpointLedger" =
 				completed."firstCheckpointLedger" + 64
-			and completed."checkpointLedger" + 64 <= greatest(
-				cursor."latestCheckpointLedger",
-				(
-					floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1
-				)::integer
-			)
+			and completed."checkpointLedger" + 64 <=
+				(floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1)::integer
 		order by cursor."archiveUrlIdentity"
 		for update of cursor
 	), object_candidate as materialized (
@@ -406,14 +404,15 @@ export const targetedCompactCheckpointPlanSql = `
 		union
 		select candidate."archiveUrlIdentity",
 			candidate."latestCheckpointLedger",
+			candidate."authorizedCheckpointLedger",
 			candidate."lastForwardCheckpointLedger",
 			least(
-				candidate."latestCheckpointLedger",
+				candidate."authorizedCheckpointLedger",
 				candidate.checkpoint_ledger + (($2::integer - 1) * 64)
 			)::integer as checkpoint_ledger,
 			candidate."archiveUrl", candidate."hostIdentity"
 		from candidate
-		where candidate.checkpoint_ledger < candidate."latestCheckpointLedger"
+		where candidate.checkpoint_ledger < candidate."authorizedCheckpointLedger"
 	), source as materialized (
 		select object_candidate.*,
 			lpad(to_hex(object_candidate.checkpoint_ledger), 8, '0')
@@ -497,7 +496,7 @@ const compactCheckpointPlanSql = `
 			on root."archiveUrlIdentity" = state."archiveUrlIdentity"
 			and root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
-			and root.status = 'verified'
+			-- Keep root refresh status separate from durable snapshot range.
                         and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
 		where state.status = 'available'
 			and state."currentLedger" >= 63
@@ -568,6 +567,7 @@ const compactCheckpointPlanSql = `
                                 cursor."latestCheckpointLedger",
                                 root.latest_checkpoint
                         ) as "latestCheckpointLedger",
+                        root.latest_checkpoint as "authorizedCheckpointLedger",
                         cursor."lastForwardCheckpointLedger",
                         cursor."nextHistoricalCheckpointLedger"
                 from "history_archive_checkpoint_scan_cursor" cursor
@@ -578,10 +578,7 @@ const compactCheckpointPlanSql = `
 					$3::text[] is null
 					or cursor."archiveUrlIdentity" = any($3::text[])
 				)
-                        and cursor."nextHistoricalCheckpointLedger" <= greatest(
-                                cursor."latestCheckpointLedger",
-                                root.latest_checkpoint
-                        )
+                        and cursor."nextHistoricalCheckpointLedger" <= root.latest_checkpoint
                         and (
                                 cursor."nextHistoricalCheckpointLedger" = 63
                                 or exists (
@@ -619,7 +616,7 @@ const compactCheckpointPlanSql = `
 			from generate_series(
 				candidate."nextHistoricalCheckpointLedger",
 				least(
-					candidate."latestCheckpointLedger",
+					candidate."authorizedCheckpointLedger",
 					candidate."nextHistoricalCheckpointLedger" +
 						(($2::integer - 1) * 64)
 				),
@@ -636,7 +633,7 @@ const compactCheckpointPlanSql = `
 		join available_roots root
 			on root."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 		where candidate.checkpoint_ledger between 63
-			and candidate."latestCheckpointLedger"
+			and candidate."authorizedCheckpointLedger"
 	), inserted as (
 		insert into "history_archive_object_queue" (
 			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",

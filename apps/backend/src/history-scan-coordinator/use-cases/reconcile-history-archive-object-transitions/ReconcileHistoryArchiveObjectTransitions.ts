@@ -104,7 +104,8 @@ export class ReconcileHistoryArchiveObjectTransitions {
 				app: 'history-scan-coordinator',
 				claimed: result.claimed,
 				completed: result.completed,
-				failed: result.failed
+				failed: result.failed,
+				...(result.failures === undefined ? {} : { failures: result.failures })
 			});
 		}
 		return result.completed;
