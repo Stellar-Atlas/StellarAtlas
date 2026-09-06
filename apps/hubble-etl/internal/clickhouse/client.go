@@ -107,15 +107,32 @@ func (c *Client) Initialize(ctx context.Context) error {
 }
 
 func (c *Client) Insert(ctx context.Context, table, token string, rows []byte) error {
-	if _, ok := schema.Lookup(table); !ok {
+	dataset, ok := schema.Lookup(table)
+	if !ok {
 		return fmt.Errorf("unknown Hubble table %q", table)
 	}
 	if !tokenPattern.MatchString(token) {
 		return fmt.Errorf("invalid insertion token")
 	}
+	columns, err := schema.Columns(dataset)
+	if err != nil {
+		return err
+	}
+	format := "JSONEachRow"
+	if hasDynamicColumns(columns) {
+		rows, err = encodeNativeRows(columns, rows)
+		if err != nil {
+			return fmt.Errorf("encode %s: %w", table, err)
+		}
+		format = "Native"
+		token += ":native-v1"
+		if !tokenPattern.MatchString(token) {
+			return fmt.Errorf("versioned insertion token too long")
+		}
+	}
 	query := "INSERT INTO " + quoted(c.database) + "." + quoted(table) +
 		" SETTINGS async_insert=0, insert_deduplication_token={token:String}," +
-		" date_time_input_format='best_effort' FORMAT JSONEachRow"
+		" date_time_input_format='best_effort' FORMAT " + format
 	params := url.Values{"param_token": []string{token}}
 	if _, err := c.execute(ctx, query, params, rows); err != nil {
 		return fmt.Errorf("insert %s: %w", table, err)
