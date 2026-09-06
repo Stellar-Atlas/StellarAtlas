@@ -194,3 +194,113 @@ is marked complete until its corresponding adversarial test passes.
   Candidate 3dca0dce-5e01-4620-a95b-e95ce4a58323 remains an explicit follow-up.
 - Shared immutable canonical checkpoint manifests, full analytics catch-up,
   state views/Horizon unification, and witness/BLS publication remain open.
+
+## Resumed implementation — 2026-09-06 UTC
+
+- Deployed and pushed d6444de0: one source-failure continuation predicate handles
+  first terminal remote failures and reused buckets referenced by later
+  checkpoints. Same-network verified replacement evidence permits continuation;
+  the failed source proof and object remain failed, with explicit substitution
+  provenance. No mass retry or backlog rewrite was performed.
+- Exact live acceptance: GALOU advanced 139 additional checkpoints and MoneyGram
+  v3 advanced 54 after initial admission. Their original errors/attempt counts
+  remained unchanged. A periodic root-refresh admission issue was then isolated
+  separately; it is not evidence that the original source failure was cleared.
+- Shared dependency writes now skip root-scoped duplication only after validating
+  that source's complete shared artifact. Existing legacy fallback remains for
+  incomplete/malformed historical artifacts; no historical evidence was deleted.
+  This is not yet the shared canonical evaluation-artifact acceptance gate in B.
+- Public summary scope now matches its case-sensitive source inventory. The four
+  invalid lowercase BDTrust aliases remain available to forensic reads but no
+  longer inflate public coverage. At 03:52 UTC: 82 sources, 8,413,602 durable
+  root-checkpoint attestations; canonical cursor reports 1,004,609 checkpoint
+  positions through ledger 64,294,975. These are distinct measurements and do
+  not imply that all source archives are complete or that F is implemented.
+- Deployed and pushed 5cffdcf6: typed transaction REST/GraphQL returns parsed
+  transaction, operations, effects and classified events with independent keyset
+  cursors. Exact operation amounts are derived from retained hash-checked XDR,
+  not rounded ETL floats. Legacy responses remain compatible.
+- Live browser acceptance: Swagger returned HTTP 200 for the documented typed
+  transaction request. GraphQL returned real results and independent operations
+  and effects pages (722/658 ms subsequent pages); phone-width layout verified.
+  Initial cold lookup took 8.5 seconds. Hash-only query projection/budget work
+  remains open; the ledger hint is optional, not fabricated completeness.
+- API IPC disconnect races now use callback-based handling. Eighteen supervisor
+  tests and the actual backend build passed. The API primary was restarted once
+  to load the fix; all four workers became ready. The scanner retained its PID
+  and zero restarts throughout.
+- The modern Hubble trial exposed lossy heterogeneous JSON inference. The fix
+  uses the pinned official ClickHouse Native encoder over the existing HTTP
+  client, with explicit nested Dynamic values and versioned deduplication tokens.
+  Exact scalar/container/XDR round-trip tests and Go race tests passed.
+- Only six partition-60 sets proven to contain exclusively the failed priority
+  batch were recoverably detached (1,032,343,150 bytes). Original LCM, all other
+  batches and historical partitions were preserved. Detached rows must not be
+  reattached alongside repaired public data. The corrected importer is running
+  with the existing two workers and I/O pressure guard. The modern batch completed
+  at 04:01:55 UTC: 1,024 ledgers, original source digest, no error. Its 4,078,156
+  event rows and 183,519 contract-data changes are now published. The one-time
+  priority was removed without restarting; ordinary ascending work continues.
+  Public Swagger returned the real successful InvokeHostFunction at ledger
+  63,490,364, decoded plant parameters, original event XDR and correct fee versus
+  Soroban diagnostic execution classifications. This is supplemental coverage.
+- Remaining product gates are still explicit: full raw/parsed gap closure,
+  complete semantic API/state-view parity, shared canonical evaluation artifacts,
+  partial-state witness/BLS publication, and sustained performance acceptance.
+  A successful vertical slice is not completion of the whole system.
+
+## Final acceptance checks — 2026-09-06 UTC
+
+- Snapshot admission is deployed: a pending/failed root refresh no longer blocks
+  historical work within that same source's last validated advertised head.
+  Exact-key live checks at 04:26:56 UTC: GALOU next checkpoint 637,567 and
+  MoneyGram v3 3,538,495, both advancing automatically. Original failures remain.
+- Public browser verification on the Lightsail C source page showed 154,624
+  unresolved remote checks, exact HTTP 404 and checkpoint/path attribution,
+  verified alternate-source links, Retry once, and proof-bound repair manifests
+  with the expected logical digest. No retry or operator archive write was made.
+  Counts visibly advanced without reloading; the header timezone inconsistency
+  was isolated for correction.
+- The optional ledger-hinted typed transaction and GraphQL examples returned a
+  genuine successful Soroban invocation at ledger 63,490,364. The GraphQL docs
+  example completed in 775 ms and exposed a next-events cursor. A public contract
+  state-change query returned decoded key/value state plus original XDR in
+  167 ms. These are actual published supplemental data, not full-range coverage.
+- Commit 49c8f871 removes toString() around native String equality/IN predicates,
+  allowing existing transaction-hash indexes to participate. Missing historical
+  index coverage still prevents claiming fast unhinted full-history lookups.
+- One existing hash index was materialized only in transaction partition 2
+  (4,351 rows). The same lookup pruned 3 to 1 granule and read 4 rows / 328 bytes
+  in 45 ms. Original/new compact data-file SHA-256 values match exactly, but
+  2,842,496 bytes were physically copied (not hardlinked). Do not extrapolate
+  this into a free full-history index build. At 04:28:25 UTC the mutation remained
+  open because its remaining bookkeeping parts belonged to a pre-existing
+  partition-25 merge; target index work was complete and no error was reported.
+  No additional partition or global index materialization was launched.
+
+- Final batch fix 822735d3 is deployed: stale lease/generation claims are counted
+  as superseded, never completed or failed, and cannot roll back active siblings.
+  Only SQL-locked/handled identities reach acknowledgement and next planning.
+  Six focused suites / 35 tests pass, including eight real PostgreSQL regressions;
+  the complete backend build, alias rewrite and post-build steps passed.
+- Four API workers were replaced one at a time with HTTP-200 readiness checks;
+  primary PID 390289 was preserved. The dispatcher restarted on the built code.
+  Scanner PID 3256571 and Hubble PID 1751618 remained active with zero restarts.
+  No matching batch-count, connection-pool, IPC or deadlock errors appeared in
+  the checked post-rollout API logs through 04:45 UTC; dispatcher checks also
+  found no recurrence of the batch-count error. This is a bounded live check.
+- Frontend local-time fix 49344191 passed 22 focused tests and a production build.
+  Staging archive/docs routes returned HTTP 200 before promotion. One promotion
+  invocation omitted appDirectory and was rejected without changing aliases;
+  the unchanged frontend was immediately restarted and checked. The corrected
+  invocation promoted slot A successfully with slot B retained for rollback.
+  Live browser screenshot then confirmed the header uses 12:45 AM EDT rather
+  than 4:45 AM UTC; exact errors, alternate sources and Retry once remain shown.
+- At 04:45:11 UTC: 8,498,704 durable root-checkpoint attestations across 82 sources;
+  canonical tracker 1,004,618 / 1,004,620 positions (two newly advertised positions
+  pending). Source attestations increased 8,677 over the previous 305.196 seconds,
+  approximately 1,706/minute. This is not a unique canonical-checkpoint rate or
+  proof that full cross-root catch-up is complete.
+- Parsed warehouse coverage at 04:45 UTC: continuous ledgers 2-27,319,426 plus
+  1,024 supplemental modern ledgers, across 20 datasets. Full history ingestion,
+  the complete shared evaluation cutover and BLS/state witness gates remain open.
