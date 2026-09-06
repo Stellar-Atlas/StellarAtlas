@@ -127,7 +127,7 @@ export const hubbleTransactionParameters: readonly OpenApiRecord[] = [
 		in: 'query',
 		name: 'view',
 		required: false,
-		schema: { type: 'string', enum: ['typed'] },
+		schema: { type: 'string', enum: ['typed'], example: 'typed' },
 		description:
 			'Omit for the unchanged legacy object with array relationships. typed opts into the parsed, cursor-paginated representation.'
 	},
@@ -135,7 +135,7 @@ export const hubbleTransactionParameters: readonly OpenApiRecord[] = [
 		in: 'query',
 		name: 'ledger_sequence',
 		required: false,
-		schema: { type: 'integer', minimum: 1, maximum: 2147483647 },
+		schema: { type: 'integer', minimum: 1, maximum: 2147483647, example: 63490364 },
 		description:
 			'Optional known ledger hint for typed view; constrains native primary key and partition. Hash-only lookup remains supported but can be slower.'
 	},
@@ -143,7 +143,7 @@ export const hubbleTransactionParameters: readonly OpenApiRecord[] = [
 		in: 'query',
 		name: 'limit',
 		required: false,
-		schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 },
+		schema: { type: 'integer', minimum: 1, maximum: 200, default: 25, example: 10 },
 		description:
 			'Maximum items per typed relationship page. Larger limits are rejected, not silently truncated.'
 	},
@@ -185,7 +185,7 @@ export const hubbleTransactionResponse: OpenApiRecord = {
 							}
 						}
 					},
-					hubbleTypedTransactionSchema
+					{ $ref: '#/components/schemas/HubbleTypedTransaction' }
 				]
 			}
 		}

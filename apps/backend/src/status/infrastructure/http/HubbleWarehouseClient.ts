@@ -270,6 +270,7 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 		);
 		const sql = [
 			'SELECT ' +
+				(input.distinct === true ? 'DISTINCT ' : '') +
 				selected
 					.map((field) => selectExpression(requireColumn(columns, field)))
 					.join(', '),

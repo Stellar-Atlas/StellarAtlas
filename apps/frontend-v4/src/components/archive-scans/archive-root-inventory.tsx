@@ -12,6 +12,7 @@ import { LocalDateTime } from '../local-date-time';
 import { ArchiveRootRow } from './archive-root-row';
 import {
 	type ArchiveInventorySort,
+	defaultArchiveInventorySort,
 	calculateCoveragePercent,
 	formatCoveragePercent,
 	formatNullableInteger,
@@ -39,7 +40,9 @@ export function ArchiveRootInventory({
 	organizations,
 	summary
 }: ArchiveRootInventoryProps): React.JSX.Element {
-	const [sortMode, setSortMode] = useState<ArchiveInventorySort>('failures');
+	const [sortMode, setSortMode] = useState<ArchiveInventorySort>(
+		defaultArchiveInventorySort
+	);
 	const [query, setQuery] = useState('');
 	const [failuresOnly, setFailuresOnly] = useState(false);
 	const [page, setPage] = useState(0);
@@ -60,18 +63,11 @@ export function ArchiveRootInventory({
 			summary.sources.toSorted((left, right) =>
 				compareSources(left, right, {
 					advertisers,
-					canonicalArchiveUrlIdentity: canonical.archiveUrlIdentity,
 					organizationNames,
 					sortMode
 				})
 			),
-		[
-			summary.sources,
-			advertisers,
-			canonical.archiveUrlIdentity,
-			organizationNames,
-			sortMode
-		]
+		[summary.sources, advertisers, organizationNames, sortMode]
 	);
 	const filtered = sources.filter(
 		(source) =>
@@ -184,8 +180,10 @@ export function ArchiveRootInventory({
 							}}
 							value={sortMode}
 						>
-							<option value="failures">Remote failures</option>
-							<option value="organization">Organization A–Z</option>
+							<option value="organization">
+								Organization → validator → root A–Z
+							</option>
+							<option value="failures">Remote failures high to low</option>
 							<option value="validator">Validator / listener A–Z</option>
 							<option value="coverage-desc">Coverage high to low</option>
 							<option value="coverage-asc">Coverage low to high</option>

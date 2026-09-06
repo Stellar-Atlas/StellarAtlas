@@ -33,3 +33,18 @@ describe('rewriteSwaggerHtml', () => {
 		);
 	});
 });
+
+describe('embedded Swagger reference', () => {
+	it('keeps all Swagger assets and omits duplicate site navigation inside /docs', () => {
+		const html = rewriteSwaggerHtml('<body><div id="swagger-ui"></div><script src="./swagger-ui-init.js"></script></body>', 'release', { embedded: true });
+		expect(html).toContain('id="swagger-ui"');
+		expect(html).toContain('/api-docs/swagger-ui-init.js?v=release');
+		expect(html).not.toContain('sa-docs-header');
+	});
+	it('adapts only styles to the light site theme, not response data', () => {
+		const html = rewriteSwaggerHtml('<body><style>body { background: #101417; color: #e8f0ef; }</style><code>#101417</code></body>', 'release', { embedded: true, theme: 'light' });
+		expect(html).toContain('background: #f4f7fa');
+		expect(html).toContain('color: #172231');
+		expect(html).toContain('<code>#101417</code>');
+	});
+});

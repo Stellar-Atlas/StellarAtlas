@@ -1,0 +1,66 @@
+import type { OpenApiRecord } from './OpenApiDocumentProjection.js';
+import { array, exactInteger, integer, jsonResponse, nullableText, object, ref, text } from './HubbleOpenApiSchemas.js';
+
+// Legacy semantic routes expose parsed ETL columns, not the stricter typed DTOs.
+// Additional ETL fields are retained; the live dataset catalog documents every column.
+const sourceInteger: OpenApiRecord = { oneOf: [exactInteger, integer] };
+const sourceNumber: OpenApiRecord = { oneOf: [text, { type: 'number' }] };
+const sourceTime: OpenApiRecord = { type: 'string', description: 'ETL UTC timestamp; legacy rows can use a space separator without a timezone suffix.' };
+const record = (properties: OpenApiRecord): OpenApiRecord => ({ type: 'object', additionalProperties: true, properties });
+const page = (row: string, dataset?: string): OpenApiRecord => object({
+	...(dataset ? { columns: array(text), dataset: { type: 'string', enum: [dataset] } } : {}),
+	elapsedMilliseconds: { type: 'number', minimum: 0 },
+	limit: { type: 'integer', minimum: 1, maximum: 200 },
+	offset: { type: 'integer', minimum: 0 },
+	nextOffset: { type: 'integer', nullable: true, description: 'Use this offset with unchanged filters; null ends the result. Offset pages can change during backfill.' },
+	rows: array(ref(row))
+});
+const classification = object({
+	transactionKind: { type: 'string', enum: ['classic', 'soroban', 'unknown'] },
+	eventKind: { type: 'string', enum: ['fee', 'operation', 'contract', 'diagnostic', 'unknown'] },
+	sorobanExecutionEvidence: { type: 'boolean' },
+	provenance: { type: 'string', enum: ['complete', 'missing', 'incomplete', 'mismatch'] }
+});
+export const hubbleSemanticSchemas: Record<string, OpenApiRecord> = {
+	HubbleLedgerRecord: record({ sequence: sourceInteger, ledger_hash: text, previous_ledger_hash: text, closed_at: sourceTime, transaction_count: sourceInteger, operation_count: sourceInteger }),
+	HubbleTransactionRecord: record({ id: sourceInteger, transaction_hash: text, ledger_sequence: integer, account: text, account_sequence: sourceInteger, successful: { type: 'boolean' }, operation_count: integer, closed_at: sourceTime }),
+	HubbleOperationRecord: record({ id: sourceInteger, transaction_id: sourceInteger, ledger_sequence: integer, source_account: text, type: integer, type_string: text, details: {}, closed_at: sourceTime }),
+	HubbleEffectRecord: record({ id: text, operation_id: sourceInteger, ledger_sequence: integer, index: integer, address: text, type: integer, type_string: text, details: {}, closed_at: sourceTime }),
+	HubbleTransferRecord: record({ transaction_hash: text, ledger_sequence: integer, from: nullableText, to: nullableText, asset: text, asset_type: text, amount_raw: exactInteger, event_topic: text, closed_at: sourceTime }),
+	HubbleTradeRecord: record({ history_operation_id: sourceInteger, order: integer, selling_account_address: nullableText, buying_account_address: nullableText, selling_amount: { ...sourceNumber, description: 'Legacy Float64 amount; not an exact atomic-unit value.' }, buying_amount: sourceNumber, price_n: sourceInteger, price_d: sourceInteger, ledger_closed_at: sourceTime }),
+	HubbleContractEventRecord: record({ transaction_hash: text, transaction_id: sourceInteger, ledger_sequence: integer, contract_id: text, type: integer, topics_decoded: array({}), data_decoded: {}, event_xdr: text, classification }),
+	HubbleContractStateRecord: record({ contract_id: text, ledger_sequence: integer, ledger_key_hash: text, contract_durability: text, deleted: { type: 'boolean' }, key_decoded: {}, val_decoded: {}, closed_at: sourceTime }),
+	HubbleHolder: record({ account_id: text, balance: sourceNumber, buying_liabilities: sourceNumber, selling_liabilities: sourceNumber, last_modified_ledger: sourceInteger, ledger_sequence: sourceInteger, asset_code: text, asset_issuer: text, trust_line_limit: sourceNumber, flags: sourceInteger }),
+	HubbleLedgerDetail: object({ ledger: ref('HubbleLedgerRecord') }),
+	HubbleOperationDetail: object({ operation: ref('HubbleOperationRecord'), transaction: { ...ref('HubbleTransactionRecord'), nullable: true }, effects: array(ref('HubbleEffectRecord')) }),
+	HubbleLedgerTransactionPage: page('HubbleTransactionRecord', 'history_transactions'),
+	HubbleEffectPage: page('HubbleEffectRecord', 'history_effects'),
+	HubbleLegacyTransferPage: page('HubbleTransferRecord', 'token_transfers'),
+	HubbleLegacyTradePage: page('HubbleTradeRecord', 'history_trades'),
+	HubbleContractEventPage: page('HubbleContractEventRecord', 'history_contract_events'),
+	HubbleContractStatePage: page('HubbleContractStateRecord', 'contract_data'),
+	HubbleAccountTransaction: record({ transaction_id: exactInteger, transaction_hash: text, relationship: { type: 'string', enum: ['source', 'effect'] }, ledger_sequence: integer, account: text, successful: { type: 'boolean' }, closed_at: sourceTime }),
+	HubbleAccountTransactionPage: page('HubbleAccountTransaction'),
+	HubbleHolderPage: object({ asset: text, elapsedMilliseconds: { type: 'number' }, holders: array(ref('HubbleHolder')), limit: integer, nextCursor: { ...nullableText, description: 'Last account ID on this page. Pass as after; null ends the result.' } }),
+	HubbleHolderDetail: object({ asset: text, holder: ref('HubbleHolder') })
+};
+const responseSchemas: Readonly<Record<string, string>> = {
+	getAnalyticsLedger: 'HubbleLedgerDetail',
+	listAnalyticsLedgerTransactions: 'HubbleLedgerTransactionPage',
+	getAnalyticsOperation: 'HubbleOperationDetail',
+	listAnalyticsOperationEffects: 'HubbleEffectPage',
+	listAnalyticsAccountEffects: 'HubbleEffectPage',
+	searchAnalyticsTrades: 'HubbleLegacyTradePage',
+	listAnalyticsContractState: 'HubbleContractStatePage',
+	listAnalyticsAssetTransfers: 'HubbleLegacyTransferPage',
+	listAnalyticsAccountTransactions: 'HubbleAccountTransactionPage',
+	searchAnalyticsTransfers: 'HubbleLegacyTransferPage',
+	listAnalyticsContractEvents: 'HubbleContractEventPage',
+	listAnalyticsAssetHolders: 'HubbleHolderPage',
+	getAnalyticsAssetHolder: 'HubbleHolderDetail'
+};
+export function semanticResponse(operationId: string): OpenApiRecord {
+	const name = responseSchemas[operationId];
+	if (!name) throw new Error('Missing semantic response schema: ' + operationId);
+	return jsonResponse(ref(name), 'Parsed ETL response from completed batches. IDs remain lossless strings where returned by the warehouse; legacy numeric fields are not upgraded to exact values.');
+}

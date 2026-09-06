@@ -1,273 +1,118 @@
 'use client';
-
 import { useCallback, useEffect, useState } from 'react';
-import { TransferActivityPanel } from '../analytics/transfer-activity-panel';
-import {
-	getExplorerRecentTransactions,
-	getExplorerInitialData,
-	getExplorerTransactionOperations,
-	searchExplorer,
-	type ExplorerSearchResult
-} from '../../app/actions/network-data';
-import type { PublicExplorerSearchType } from '@api/types';
-import {
-	OperationsView,
-	RecentTransactionsView,
-	SearchResultView
-} from './blockchain-explorer-results';
-import {
-	explorerSearchTypes,
-	initialExplorerOperations,
-	initialExplorerReadModel,
-	initialExplorerSearch,
-	initialExplorerTransactions
-} from './blockchain-explorer-state';
-import {
-	ExplorerAssetsPanel,
-	ExplorerContractsPanel,
-	ExplorerOperationsPanel
-} from './explorer-browse-panels';
-import {
-	ExplorerBrowseNavigation,
-	ExplorerRequestNotice,
-	type ExplorerBrowseSection
-} from './explorer-browse-ui';
+import { useRouter } from 'next/navigation';
+import { getExplorerRecentTransactions } from '../../app/actions/network-data';
+import { RecentTransactionsView } from './blockchain-explorer-results';
+import { initialExplorerTransactions } from './blockchain-explorer-state';
+import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { useExplorerRequest } from './use-explorer-request';
-
-const initialData = {
-	readModel: initialExplorerReadModel,
-	transactions: initialExplorerTransactions
-};
+import { ExplorerEntityNavigation } from './explorer-entity-navigation';
+import { resolveExplorerSearch } from '../../api/explorer-search-route';
+import { buildEntityHref } from '../../api/explorer-analytics';
 
 export function BlockchainExplorer(): React.JSX.Element {
-	const [section, setSection] = useState<ExplorerBrowseSection>('Transactions');
-	const [searchQuery, setSearchQuery] = useState('');
-	const [searchType, setSearchType] =
-		useState<PublicExplorerSearchType>('auto');
-	const search = useExplorerRequest(
-		initialExplorerSearch,
-		'Search could not be completed. Please try again.'
-	);
+	const router = useRouter(),
+		[query, setQuery] = useState(''),
+		[type, setType] = useState('auto'),
+		[error, setError] = useState<string | null>(null);
 	const feed = useExplorerRequest(
 		initialExplorerTransactions,
 		'Transaction data could not be refreshed.'
 	);
-	const linked = useExplorerRequest(
-		initialExplorerOperations,
-		'Transaction operations could not be loaded.'
+	const refresh = useCallback(
+		() => feed.run(() => getExplorerRecentTransactions(20)),
+		[feed.run]
 	);
-	const bootstrap = useExplorerRequest(
-		initialData,
-		'Explorer availability could not be checked.'
-	);
-	const readiness = bootstrap.result.readModel.readModel?.indexes;
-	const operationIndexReady = Boolean(readiness?.operationIndexReady);
-	const availableSearchTypes = explorerSearchTypes.filter(
-		(type) =>
-			(type !== 'asset' || readiness?.assetIndexReady) &&
-			(type !== 'contract' || readiness?.contractIndexReady)
-	);
-	const loadInitial = useCallback(async () => {
-		const data = await bootstrap.run(() => getExplorerInitialData(20));
-		if (data !== null) feed.accept(data.transactions);
-	}, [bootstrap.run, feed.accept]);
 	useEffect(() => {
-		void loadInitial();
-	}, [loadInitial]);
-
-	const runSearch = async (
-		query: string,
-		type: PublicExplorerSearchType
-	): Promise<void> => {
-		const result = await search.run(() => searchExplorer(query, type));
-		if (result === null) return;
-		const hash = getTransactionHashFromSearch(result);
-		linked.accept(initialExplorerOperations);
-		if (hash !== null && operationIndexReady) {
-			void linked.run(() => getExplorerTransactionOperations(hash));
-		}
-	};
-	const inspectTransaction = (hash: string): void => {
-		setSearchQuery(hash);
-		setSearchType('transaction');
-		void runSearch(hash, 'transaction');
-	};
-	const readinessError =
-		bootstrap.error ??
-		(bootstrap.result.readModel.status === 'unavailable'
-			? bootstrap.result.readModel.message
-			: null);
-
+		void refresh();
+	}, [refresh]);
 	return (
 		<section className="blockchain-explorer-workspace">
+			<ExplorerEntityNavigation active="transactions" />
 			<section
 				className="explorer-panel explorer-primary"
 				aria-label="Search blockchain"
-				aria-busy={search.loading}
 			>
-				<div className="panel-heading">
-					<div>
-						<h2>Search the blockchain</h2>
-						<span>
-							Find a transaction, account, or ledger by its identifier
-						</span>
-					</div>
-				</div>
+				<h2>Search the blockchain</h2>
+				<p>
+					Open a transaction, account, ledger, operation, asset, or contract.
+					Browse the parsed history using the sections above.
+				</p>
 				<form
 					className="explorer-search-form"
 					onSubmit={(event) => {
 						event.preventDefault();
-						void runSearch(searchQuery.trim(), searchType);
+						const route = resolveExplorerSearch(query, type);
+						if (route) {
+							setError(null);
+							router.push(route);
+						} else
+							setError(
+								'Enter a transaction hash, account or contract address, ledger or operation ID, or CODE:ISSUER asset.'
+							);
 					}}
 				>
 					<input
 						aria-label="Explorer search"
-						onChange={(event) => setSearchQuery(event.currentTarget.value)}
-						placeholder="Transaction hash, account address, or ledger number"
-						value={searchQuery}
+						placeholder="Hash, address, ledger, operation ID, or CODE:ISSUER"
+						value={query}
+						onChange={(event) => setQuery(event.currentTarget.value)}
 					/>
 					<select
 						aria-label="Search type"
-						onChange={(event) =>
-							setSearchType(
-								event.currentTarget.value as PublicExplorerSearchType
-							)
-						}
-						value={searchType}
+						value={type}
+						onChange={(event) => setType(event.currentTarget.value)}
 					>
-						{availableSearchTypes.map((type) => (
-							<option key={type} value={type}>
-								{type === 'auto' ? 'Detect automatically' : type}
+						{[
+							'auto',
+							'transaction',
+							'account',
+							'ledger',
+							'operation',
+							'asset',
+							'contract'
+						].map((value) => (
+							<option key={value} value={value}>
+								{value === 'auto' ? 'Detect automatically' : value}
 							</option>
 						))}
 					</select>
-					<button
-						disabled={search.loading || !searchQuery.trim()}
-						type="submit"
-					>
-						{search.loading ? 'Searching' : 'Search'}
+					<button type="submit" disabled={!query.trim()}>
+						Search
 					</button>
 				</form>
-				<ExplorerRequestNotice
-					error={search.error}
-					loading={search.loading}
-					onRetry={() => {
-						void runSearch(searchQuery.trim(), searchType);
-					}}
-				/>
-				<SearchResultView result={search.result} />
-				{linked.result.status !== 'invalid' ||
-				linked.loading ||
-				linked.error !== null ? (
-					<div
-						className="explorer-linked-operations"
-						aria-busy={linked.loading}
-					>
-						<h3>Transaction operations</h3>
-						<ExplorerRequestNotice
-							error={linked.error}
-							loading={linked.loading}
-							onRetry={linked.retry}
-						/>
-						<OperationsView result={linked.result} />
+				{error && <p role="alert">{error}</p>}
+			</section>
+			<section
+				className="explorer-panel explorer-feed-panel"
+				aria-label="Browse transactions"
+				aria-busy={feed.loading}
+			>
+				<div className="panel-heading explorer-feed-heading">
+					<div>
+						<h2>Recent transactions</h2>
+						<span>Freshness and the supplying source are reported below.</span>
 					</div>
+					<button disabled={feed.loading} onClick={() => void refresh()}>
+						Refresh
+					</button>
+				</div>
+				<ExplorerRequestNotice
+					error={feed.error}
+					loading={feed.loading}
+					onRetry={() => void refresh()}
+				/>
+				{feed.result.transactions !== null ? (
+					<RecentTransactionsView
+						onInspect={(hash) =>
+							router.push(buildEntityHref('transactions', hash))
+						}
+						result={feed.result}
+					/>
+				) : !feed.loading && !feed.error ? (
+					<p>No transaction records returned.</p>
 				) : null}
 			</section>
-			<ExplorerBrowseNavigation active={section} onChange={setSection} />
-			<ExplorerRequestNotice
-				error={readinessError}
-				loading={false}
-				onRetry={() => {
-					void loadInitial();
-				}}
-			/>
-			<div hidden={section !== 'Transactions'}>
-				<section
-					className="explorer-panel explorer-feed-panel"
-					aria-label="Browse transactions"
-					aria-busy={feed.loading || bootstrap.loading}
-				>
-					<div className="panel-heading explorer-feed-heading">
-						<div>
-							<h2>Recent transactions</h2>
-							<span>
-								Available records; freshness and source are reported below
-							</span>
-						</div>
-						<button
-							disabled={feed.loading || bootstrap.loading}
-							onClick={() => {
-								void feed.run(() => getExplorerRecentTransactions(20));
-							}}
-							type="button"
-						>
-							Refresh
-						</button>
-					</div>
-					<ExplorerRequestNotice
-						error={feed.error}
-						loading={feed.loading || bootstrap.loading}
-						onRetry={() => {
-							void feed.run(() => getExplorerRecentTransactions(20));
-						}}
-					/>
-					{feed.result.transactions !== null ? (
-						<RecentTransactionsView
-							onInspect={inspectTransaction}
-							result={feed.result}
-						/>
-					) : !feed.loading && !bootstrap.loading && feed.error === null ? (
-						<p className="explorer-state neutral">
-							No transaction data loaded. Refresh to try again.
-						</p>
-					) : null}
-				</section>
-			</div>
-			<div hidden={section !== 'Transfers'}>
-				<TransferActivityPanel />
-			</div>
-			<div hidden={section !== 'Operations'}>
-				<ExplorerOperationsPanel
-					ready={operationIndexReady}
-					checking={bootstrap.loading}
-					onCheck={() => {
-						void loadInitial();
-					}}
-				/>
-			</div>
-			<div hidden={section !== 'Assets'}>
-				<ExplorerAssetsPanel
-					ready={Boolean(readiness?.assetIndexReady)}
-					checking={bootstrap.loading}
-					onCheck={() => {
-						void loadInitial();
-					}}
-				/>
-			</div>
-			<div hidden={section !== 'Contracts'}>
-				<ExplorerContractsPanel
-					ready={Boolean(readiness?.contractIndexReady)}
-					checking={bootstrap.loading}
-					onCheck={() => {
-						void loadInitial();
-					}}
-				/>
-			</div>
 		</section>
 	);
-}
-
-function getTransactionHashFromSearch(
-	result: ExplorerSearchResult
-): string | null {
-	const value = result.search?.result;
-	if (
-		result.search?.resultType !== 'transaction' ||
-		typeof value !== 'object' ||
-		value === null ||
-		!('hash' in value) ||
-		typeof value.hash !== 'string'
-	)
-		return null;
-	return value.hash;
 }

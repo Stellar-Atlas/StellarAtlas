@@ -1,4 +1,8 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { PublicHistoryArchiveStatusSummary } from '@api/types';
 import {
+	ArchiveRootInventory,
 	calculateCoveragePercent,
 	formatCoveragePercent,
 	getExpectedArchiveCheckpointCount
@@ -28,5 +32,74 @@ describe('archive root checkpoint coverage', () => {
 		expect(formatCoveragePercent(calculateCoveragePercent(50, 1_004_026))).toBe(
 			'<0.01%'
 		);
+	});
+
+	it('renders the organization-first default in an accessible sort control', () => {
+		const summary: PublicHistoryArchiveStatusSummary = {
+			activeObjectChecks: 0,
+			generatedAt: '2026-09-06T09:00:00Z',
+			sourceCount: 0,
+			sourceLimit: 256,
+			archiveEvidenceFailures: 0,
+			scannerIssueFailures: 0,
+			sources: [],
+			sourcesTruncated: false,
+			unclassifiedFailures: 0,
+			transitionReconciliation: {
+				oldestPendingAgeMs: null,
+				oldestPendingAt: null,
+				pendingTerminalEffects: 0,
+				status: 'caught-up'
+			},
+			checkpointCoverage: {
+				activeArchiveCheckpoints: 0,
+				archiveRootsWithState: 0,
+				categoryConsistencyFailedCheckpoints: 0,
+				categoryConsistencyNotEvaluatedCheckpoints: 0,
+				categoryConsistencyPendingCheckpoints: 0,
+				categoryConsistentArchiveCheckpoints: 0,
+				completeArchiveCheckpoints: 0,
+				durableVerifiedArchiveCheckpoints: 0,
+				discoveryCompleteArchiveRoots: 0,
+				expectedArchiveCheckpoints: 0,
+				failedArchiveCheckpoints: 0,
+				latestCheckpointLedger: null,
+				missingArchiveCheckpoints: 0,
+				objectCompleteArchiveCheckpoints: 0,
+				oldestCheckpointLedger: null,
+				partialArchiveCheckpoints: 0,
+				totalArchiveCheckpoints: 0
+			},
+			canonicalProofProgress: {
+				archiveUrl: null,
+				archiveUrlIdentity: null,
+				verifiedCheckpoints: 0,
+				totalCheckpoints: 0,
+				latestVerifiedCheckpointLedger: null,
+				nextCheckpointLedger: null,
+				targetCheckpointLedger: null,
+				remainingCheckpoints: 0
+			}
+		};
+		const html = renderToStaticMarkup(
+			createElement(ArchiveRootInventory, {
+				nodes: [],
+				organizations: [],
+				summary
+			})
+		);
+		expect(html).toContain('aria-label="Sort archive roots"');
+		expect(html).toContain(
+			'<option value="organization" selected="">Organization → validator → root A–Z</option>'
+		);
+		for (const option of [
+			'failures',
+			'validator',
+			'coverage-desc',
+			'coverage-asc',
+			'url'
+		]) {
+			expect(html).toContain('<option value="' + option + '">');
+		}
 	});
 });

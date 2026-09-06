@@ -5,7 +5,7 @@ export default function ExplorerPage(): React.JSX.Element {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Search Stellar network activity by transaction hash, account, or ledger."
+				description="Explore Stellar transactions, accounts, assets, contracts, operations, trades and offers."
 				eyebrow="Blockchain Explorer"
 				title="Explorer"
 			/>

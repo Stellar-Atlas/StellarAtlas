@@ -1,245 +1,27 @@
-import { TransferActivityPanel } from '../../components/analytics/transfer-activity-panel';
-import { PageHeading } from '../../components/layout/page-heading';
+import type { Metadata } from 'next';
 import { PublicOpenApiReference } from '../../components/docs/public-openapi-reference';
-import { GraphqlPlayground } from '../../components/docs/graphql-playground';
+import styles from '../../components/docs/api-reference.module.css';
 
-interface EndpointGroup {
-	description: string;
-	endpoints: string[];
-	title: string;
-}
-
-const endpointGroups: EndpointGroup[] = [
-	{
-		description:
-			'Current network snapshot, ledger state, aggregate history, and SCP observations.',
-		endpoints: [
-			'/v1',
-			'/v1/statistics?from=:iso&to=:iso',
-			'/v1/day-statistics?from=:iso&to=:iso',
-			'/v1/month-statistics?from=:iso&to=:iso',
-			'/v1/scp-statements?limit=:limit',
-			'/v1/scp-statements?nodeId=:publicKey',
-			'/v1/scp-statements?slotIndex=:slot',
-			'/v1/scp/slots/:slotIndex/transactions'
-		],
-		title: 'Inspect the current network'
-	},
-	{
-		description:
-			'Validator, node, and organization inventory with snapshots and time-window metrics.',
-		endpoints: [
-			'/v1/nodes',
-			'/v1/nodes/:publicKey',
-			'/v1/nodes/:publicKey/snapshots',
-			'/v1/known/nodes?scope=:scope&limit=:limit&offset=:offset',
-			'/v1/known/nodes/:publicKey',
-			'/v1/node-snapshots',
-			'/v1/nodes/:publicKey/statistics?from=:iso&to=:iso',
-			'/v1/nodes/:publicKey/day-statistics?from=:iso&to=:iso',
-			'/v1/organizations',
-			'/v1/organizations/:organizationId',
-			'/v1/organizations/:organizationId/snapshots',
-			'/v1/known/organizations?scope=:scope&limit=:limit&offset=:offset',
-			'/v1/known/organizations/:organizationId',
-			'/v1/organization-snapshots',
-			'/v1/organizations/:organizationId/statistics?from=:iso&to=:iso',
-			'/v1/organizations/:organizationId/day-statistics?from=:iso&to=:iso'
-		],
-		title: 'Find a node or organization'
-	},
-	{
-		description:
-			'Current archive state, validator-owned evidence, object failures, and generated repair plans for exact history archive roots.',
-		endpoints: [
-			'/v1/known/nodes/:publicKey/archive-evidence',
-			'/v1/known/organizations/:organizationId/archive-evidence',
-			'/v1/archive-scans/objects/status-summary',
-			'/v1/archive-scans/objects?status=:status&page=:page',
-			'/v1/archive-scans/objects/buckets/:bucketHash/coverage',
-			'/v1/archive-scans/:encodedUrl/state',
-			'/v1/archive-scans/:encodedUrl/objects',
-			'/v2/archive-scans/:encodedUrl/object-evidence',
-			'/v1/archive-scans/:encodedUrl/repair-plan'
-		],
-		title: 'Verify a history archive'
-	},
-	{
-		description:
-			'Read-only status, freshness, continuity, and ingestion evidence.',
-		endpoints: [
-			'/v1/status',
-			'/v1/status/api',
-			'/v1/status/data-quality',
-			'/v1/status/data-freshness',
-			'/v1/status/scans',
-			'/v1/status/rollups',
-			'/v1/status/full-history',
-			'/v1/status/ingestion'
-		],
-		title: 'Check data and service status'
-	},
-	{
-		description:
-			'Read-only access to the owned Horizon API, Stellar RPC, raw SEP-54 Galexie objects, and immutable decoded-history batches. These are service/raw-data surfaces, not the parsed Hubble analytics warehouse.',
-		endpoints: [
-			'/horizon/',
-			'POST /rpc',
-			'/galexie/.config.json',
-			'/galexie/:sep54ObjectPath',
-			'/v1/history-data/catalog',
-			'/v1/history-data/batches?dataset=:dataset&limit=:limit&beforeLedger=:ledger',
-			'/v1/history-data/batches/:batchId/:dataset'
-		],
-		title: 'Access network services and raw history'
-	},
-	{
-		description:
-			'Query the self-hosted Stellar ETL/Hubble schema in ClickHouse. List responses expose limit and offset; semantic list routes may also return nextOffset, and holder lists return nextCursor. Supply supported ledger-range filters for partition-pruned queries. The catalog separates the contiguous ingested range from supplemental ranges and reports remaining gaps. Typed transaction detail uses independent operation, effect, and event cursors.',
-		endpoints: [
-			'/v1/analytics/activity/transfers?asset=:asset&event_topic=transfer&min_ledger=:first&max_ledger=:last',
-			'/v1/analytics/accounts/:account/activity/transfers?min_amount_raw=:integer&after=:cursor',
-			'/v1/analytics/assets/:asset/activity/transfers?from=:account&to=:account&after=:cursor',
-			'/v1/analytics/datasets',
-			'/v1/analytics/datasets/:dataset',
-			'/v1/analytics/transactions/:transactionHash?view=typed&ledger_sequence=:optionalLedger&limit=:limit',
-			'/v1/analytics/ledgers/:sequence',
-			'/v1/analytics/ledgers/:sequence/transactions?limit=:limit&offset=:offset',
-			'/v1/analytics/operations/:operationId',
-			'/v1/analytics/operations/:operationId/effects?limit=:limit&offset=:offset',
-			'/v1/analytics/accounts/:account/transactions?limit=:limit&offset=:offset',
-			'/v1/analytics/accounts/:account/effects?min_ledger=:ledger&max_ledger=:ledger',
-			'/v1/analytics/transfers?from=:account&to=:account&min_ledger=:ledger',
-			'/v1/analytics/assets/:asset/transfers?limit=:limit&offset=:offset',
-			'/v1/analytics/trades?seller=:account&buyer=:account&min_ledger=:ledger',
-			'/v1/analytics/contracts/:contractId/events?min_ledger=:ledger',
-			'/v1/analytics/contracts/:contractId/state?deleted=false',
-			'/v1/analytics/assets/:asset/holders?after=:cursor&limit=:limit',
-			'/v1/analytics/assets/:asset/holders/:account',
-			'/v1/analytics/:dataset?select=:columns&order=:columns&limit=:limit&offset=:offset',
-			'/v1/analytics/:dataset?ledger_sequence__gte=:ledger',
-			'POST /v1/analytics/query',
-			'POST /graphql'
-		],
-		title: 'Query decoded Hubble analytics'
-	},
-	{
-		description:
-			'Faceted lookup with bounded offset pagination and explicit totalIsExact metadata. archiveStatus=issue includes confirmed remote archive errors and current unreachable roots; scanner-issue remains a separate infrastructure status.',
-		endpoints: [
-			'/v1/search',
-			'/v1/search/nodes?scope=current-validator&validator=true&archiveStatus=issue&limit=25&offset=0',
-			'/v1/search/nodes?scope=current-validator&validator=true&archiveStatus=error',
-			'/v1/search/organizations'
-		],
-		title: 'Search known network entities'
-	},
-	{
-		description: 'Explorer lookup and current full-history read-model state.',
-		endpoints: [
-			'/v1/ledger/latest',
-			'/v1/transactions/:hash',
-			'/v1/explorer/search',
-			'/v1/explorer/transactions',
-			'/v1/explorer/transactions/:hash',
-			'/v1/explorer/transactions/:hash/operations',
-			'/v1/explorer/ledgers/:sequence',
-			'/v1/explorer/accounts/:accountId',
-			'/v1/explorer/assets',
-			'/v1/explorer/operations',
-			'/v1/explorer/contracts/:contractId',
-			'/v1/status/full-history'
-		],
-		title: 'Explore ledger history'
-	},
-	{
-		description:
-			'Persisted quorum-set, top-tier, blocking-set, and splitting-set evidence.',
-		endpoints: [
-			'/v1/fbas/latest',
-			'/v1/fbas/analyses/:scanId',
-			'/v1/fbas/analyses/:scanId/proof',
-			'/v1/fbas/top-tier/history?from=:date&to=:date',
-			'/v1/fbas/blocking-sets/latest',
-			'/v1/fbas/splitting-sets/latest'
-		],
-		title: 'Inspect quorum evidence'
-	},
-	{
-		description:
-			'Notification subscription management for network, node, and organization events.',
-		endpoints: [
-			'POST /v1/subscription',
-			'POST /v1/subscription/request-unsubscribe',
-			'POST /v1/subscription/:pendingSubscriptionId/confirm',
-			'POST /v1/subscription/:subscriberRef/unmute',
-			'DELETE /v1/subscription/:subscriberRef'
-		],
-		title: 'Manage notifications'
-	}
-];
+export const metadata: Metadata = {
+	title: 'API reference | StellarAtlas',
+	description: 'Explore the public OpenAPI specification, schemas, examples, and send real API requests.'
+};
 
 export default function DocsPage(): React.JSX.Element {
 	return (
-		<main className="shell">
-			<PageHeading
-				description="Stable public endpoints grouped by the task they perform."
-				eyebrow="API"
-				title="Developer reference"
-			/>
-			<section className="panel docs-panel">
-				<h2>Send a real API request</h2>
-				<p>
-					REST: open an operation, choose Try it out, enter path parameters and
-					filters, then Execute. Swagger shows the exact URL, HTTP status,
-					headers, and response body.
-				</p>
-				<div className="endpoint-paths">
-					<a
-						className="primary-button"
-						href="/api-docs?view=swagger#/Analytics/getAnalyticsTransaction"
-					>
-						Try a transaction REST request
-					</a>
-					<a href="/api-docs?view=swagger#/Analytics/listHubbleDatasets">
-						Inspect datasets and current coverage
-					</a>
-					<a href="/api-docs?view=swagger">
-						All REST operations and parameters
-					</a>
-					<a href="#graphql">Run a read-only GraphQL query</a>
+		<main className={styles.page}>
+			<header className={styles.heading}>
+				<div>
+					<h1>API reference</h1>
+					<p>Search an operation, inspect its schema, and select Try it out and Execute to call the public API.</p>
 				</div>
-				<p>
-					Dynamic routes accept the identifier in the path:{' '}
-					<code>/v1/analytics/ledgers/3</code>,{' '}
-					<code>/v1/analytics/transactions/:transactionHash</code>, or{' '}
-					<code>/v1/analytics/assets/:asset/holders/:account</code>. Replace
-					placeholders with real identifiers; use the operation’s documented
-					filters and pagination parameters.
-				</p>
-				<TransferActivityPanel />
-				<GraphqlPlayground />
-				<p className="muted-inline">
-					This page and Swagger list public read surfaces. Authenticated
-					coordinator, worker, and backfill routes are intentionally excluded.
-				</p>
-				<div className="endpoint-grid">
-					{endpointGroups.map((group) => (
-						<section className="endpoint-group" key={group.title}>
-							<div>
-								<h2>{group.title}</h2>
-								<p>{group.description}</p>
-							</div>
-							<div className="endpoint-paths">
-								{group.endpoints.map((endpoint) => (
-									<code key={endpoint}>{endpoint}</code>
-								))}
-							</div>
-						</section>
-					))}
-				</div>
-				<PublicOpenApiReference />
-			</section>
+				<nav aria-label="Documentation tools" className={styles.links}>
+					<a href="/docs/graphql">GraphQL query runner</a>
+					<a href="/api-docs?view=swagger">Swagger UI</a>
+					<a href="/api-docs/openapi.json">OpenAPI JSON</a>
+				</nav>
+			</header>
+			<PublicOpenApiReference />
 		</main>
 	);
 }

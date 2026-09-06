@@ -1,65 +1,31 @@
-import {
-	fetchPublicOpenApiCatalog,
-	publicOperationTryItUrl
-} from '@api/public-openapi-catalog';
-import { formatInteger } from '@format/formatters';
+'use client';
 
-const openApiFetchOptions = {
-	cache: 'no-store',
-	timeoutMs: 10_000
-} as const;
+import { useEffect, useState } from 'react';
+import { swaggerReferenceUrl } from './swagger-reference-configuration';
+import styles from './api-reference.module.css';
 
-export async function PublicOpenApiReference(): Promise<React.JSX.Element> {
-	const catalog = await fetchPublicOpenApiCatalog(openApiFetchOptions);
-
+export function PublicOpenApiReference(): React.JSX.Element {
+	const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+	const [hash, setHash] = useState('');
+	useEffect(() => {
+		if (window.location.hash === '#graphql') {
+			window.location.replace('/docs/graphql');
+			return;
+		}
+		setHash(window.location.hash);
+		const updateTheme = (): void => {
+			setTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+		};
+		updateTheme();
+		const observer = new MutationObserver(updateTheme);
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+		return () => observer.disconnect();
+	}, []);
 	return (
-		<section className="generated-api-reference">
-			<div className="generated-api-heading">
-				<div>
-					<h2>Complete generated route index</h2>
-					<p>
-						Generated from the backend OpenAPI document. Select a route to open
-						its parameters, examples, and Try it out controls in Swagger.
-					</p>
-				</div>
-				<strong>
-					{formatInteger(catalog.operationCount)} operations across{' '}
-					{formatInteger(catalog.pathCount)} paths
-				</strong>
-			</div>
-			<div className="endpoint-grid">
-				{catalog.groups.map((group) => (
-					<section className="endpoint-group" key={group.tag}>
-						<div>
-							<h2>{group.tag}</h2>
-							<p>{formatInteger(group.operations.length)} public operations</p>
-						</div>
-						<div className="endpoint-paths">
-							{group.operations.map((operation) => (
-								<div
-									className="generated-endpoint"
-									key={operation.method + ':' + operation.path}
-								>
-									<span
-										className={
-											'endpoint-method endpoint-method-' +
-											operation.method.toLowerCase()
-										}
-									>
-										{operation.method}
-									</span>
-									<div>
-										<a href={publicOperationTryItUrl(operation, group.tag)}>
-											<code>{operation.path}</code> — Try it
-										</a>
-										<small>{operation.summary}</small>
-									</div>
-								</div>
-							))}
-						</div>
-					</section>
-				))}
-			</div>
-		</section>
+		<iframe
+			className={styles.reference}
+			src={swaggerReferenceUrl(theme, hash)}
+			title="Complete StellarAtlas OpenAPI reference with request testing"
+		/>
 	);
 }

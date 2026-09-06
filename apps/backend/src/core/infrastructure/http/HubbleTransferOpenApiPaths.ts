@@ -203,7 +203,7 @@ function operation(
 				'200': {
 					description:
 						'Typed transfer page; atomic amounts and IDs are strings.',
-					content: { 'application/json': { schema: pageSchema } }
+					content: { 'application/json': { schema: { $ref: '#/components/schemas/HubbleTransferPage' } } }
 				},
 				'400': {
 					description:
@@ -232,4 +232,9 @@ export const hubbleTransferPaths: Readonly<Record<string, OpenApiRecord>> = {
 		'List asset transfer activity',
 		'asset'
 	)
+};
+
+export const hubbleTransferSchemas: Record<string, OpenApiRecord> = {
+	HubbleTransfer: transferSchema,
+	HubbleTransferPage: { ...pageSchema, properties: { ...(pageSchema.properties as OpenApiRecord), transfers: { type: 'array', items: { $ref: '#/components/schemas/HubbleTransfer' } } } }
 };

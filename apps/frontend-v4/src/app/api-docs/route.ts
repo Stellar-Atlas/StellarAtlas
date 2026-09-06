@@ -6,12 +6,16 @@ const normalizedApiBaseUrl = apiBaseUrl.endsWith('/')
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
 	const upstream = await fetch(`${normalizedApiBaseUrl}/docs/`, {
 		cache: 'no-store'
 	});
 	const body = await upstream.text();
-	const rewrittenBody = rewriteSwaggerHtml(body, Date.now().toString(36));
+	const url = new URL(request.url);
+	const rewrittenBody = rewriteSwaggerHtml(body, Date.now().toString(36), {
+		embedded: url.searchParams.get('embedded') === '1',
+		theme: url.searchParams.get('theme') === 'light' ? 'light' : 'dark'
+	});
 
 	return new Response(rewrittenBody, {
 		headers: {

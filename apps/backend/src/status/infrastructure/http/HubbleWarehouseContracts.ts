@@ -34,6 +34,7 @@ export interface HubbleOrder {
 }
 
 export interface HubbleQuery {
+	readonly distinct?: boolean;
 	readonly dataset: string;
 	readonly filters?: readonly HubbleFilter[];
 	readonly limit?: number;

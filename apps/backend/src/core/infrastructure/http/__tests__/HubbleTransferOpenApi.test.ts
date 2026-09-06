@@ -35,11 +35,18 @@ describe('typed transfer OpenAPI contract', () => {
 			const schema = readOpenApiRecord(
 				readOpenApiRecord(content['application/json'])!.schema
 			)!;
-			const properties = readOpenApiRecord(schema.properties)!;
+			const components = readOpenApiRecord(readOpenApiRecord(document.components)!.schemas)!;
+			const pageSchema = typeof schema.$ref === 'string'
+				? readOpenApiRecord(components[schema.$ref.split('/').at(-1)!])!
+				: schema;
+			const properties = readOpenApiRecord(pageSchema.properties)!;
 			const items = readOpenApiRecord(
 				readOpenApiRecord(properties.transfers)!.items
 			)!;
-			const transferProperties = readOpenApiRecord(items.properties)!;
+			const itemSchema = typeof items.$ref === 'string'
+				? readOpenApiRecord(components[items.$ref.split('/').at(-1)!])!
+				: items;
+			const transferProperties = readOpenApiRecord(itemSchema.properties)!;
 			expect(readOpenApiRecord(transferProperties.amountRaw)!.type).toBe(
 				'string'
 			);

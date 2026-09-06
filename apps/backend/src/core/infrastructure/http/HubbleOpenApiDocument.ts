@@ -3,7 +3,13 @@ import {
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
 import { hubbleSemanticPaths } from './HubbleSemanticOpenApiPaths.js';
-import { hubbleTransferPaths } from './HubbleTransferOpenApiPaths.js';
+import { hubbleTransferPaths, hubbleTransferSchemas } from './HubbleTransferOpenApiPaths.js';
+import { withHubbleExplorerPaths } from './HubbleExplorerOpenApiPaths.js';
+import { hubbleExplorerSchemas } from './HubbleExplorerOpenApiSchemas.js';
+import { hubbleSemanticSchemas } from './HubbleSemanticOpenApiSchemas.js';
+import { hubbleGraphqlPaths, hubbleGraphqlSchemas } from './HubbleGraphqlOpenApi.js';
+import { hubbleCoverageSchema, hubbleErrorSchema } from './HubbleOpenApiSchemas.js';
+import { hubbleTypedTransactionSchema } from './HubbleTransactionOpenApi.js';
 
 const analyticsTag = ['Analytics'];
 const publicAccess: readonly OpenApiRecord[] = [];
@@ -169,9 +175,10 @@ const ledgerCoverageSchema: OpenApiRecord = {
 	}
 };
 
-const hubblePaths: Readonly<Record<string, OpenApiRecord>> = {
+const hubblePaths: Readonly<Record<string, OpenApiRecord>> = withHubbleExplorerPaths({
 	...hubbleSemanticPaths,
 	...hubbleTransferPaths,
+	...hubbleGraphqlPaths,
 	'/v1/analytics/datasets': {
 		get: {
 			description:
@@ -325,22 +332,41 @@ const hubblePaths: Readonly<Record<string, OpenApiRecord>> = {
 			tags: analyticsTag
 		}
 	}
-};
+});
 
 export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 	const source = readOpenApiRecord(document);
 	if (source === null) {
 		throw new TypeError('OpenAPI document must be an object');
 	}
-	const paths = readOpenApiRecord(source.paths);
-	if (paths === null) throw new TypeError('OpenAPI paths must be an object');
+	const sourcePaths = readOpenApiRecord(source.paths);
+	if (sourcePaths === null) throw new TypeError('OpenAPI paths must be an object');
+	// Generated legacy docs used different placeholder names for the same routes.
+	// Keep one canonical definition and operation ID for each real HTTP path.
+	const holderAliases = new Set([
+		'/v1/analytics/assets/{assetId}/holders',
+		'/v1/analytics/assets/{assetId}/holders/{address}'
+	]);
+	const paths = Object.fromEntries(Object.entries(sourcePaths).filter(([path]) => !holderAliases.has(path)));
 	for (const path of Object.keys(hubblePaths)) {
-		if (path in paths) {
+		if (path in paths && path !== '/graphql') {
 			throw new Error('OpenAPI Hubble path already exists: ' + path);
 		}
 	}
+	const components = readOpenApiRecord(source.components) ?? {};
+	const existingSchemas = readOpenApiRecord(components.schemas) ?? {};
+	const schemas = {
+		...hubbleSemanticSchemas, ...hubbleExplorerSchemas, ...hubbleGraphqlSchemas, ...hubbleTransferSchemas,
+		HubbleLedgerCoverage: hubbleCoverageSchema,
+		HubbleError: hubbleErrorSchema,
+		HubbleTypedTransaction: hubbleTypedTransactionSchema
+	};
+	for (const name of Object.keys(schemas)) {
+		if (name in existingSchemas) throw new Error('OpenAPI Hubble schema already exists: ' + name);
+	}
 	return {
 		...source,
+		components: { ...components, schemas: { ...existingSchemas, ...schemas } },
 		paths: {
 			...paths,
 			...hubblePaths

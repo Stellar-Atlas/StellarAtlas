@@ -11,6 +11,12 @@ export type ArchiveInventorySort =
 	| 'coverage-asc'
 	| 'url';
 
+export const defaultArchiveInventorySort: ArchiveInventorySort = 'organization';
+const nameCollator = new Intl.Collator('en', {
+	numeric: true,
+	sensitivity: 'base'
+});
+
 export function groupAdvertisers(
 	nodes: readonly PublicNode[]
 ): Map<string, PublicNode[]> {
@@ -83,7 +89,6 @@ export function formatCoveragePercent(value: number): string {
 
 interface ArchiveSortContext {
 	readonly advertisers: ReadonlyMap<string, readonly PublicNode[]>;
-	readonly canonicalArchiveUrlIdentity: string | null;
 	readonly organizationNames: ReadonlyMap<string, string>;
 	readonly sortMode: ArchiveInventorySort;
 }
@@ -93,28 +98,15 @@ export function compareSources(
 	right: ArchiveSource,
 	context: ArchiveSortContext
 ): number {
-	const leftIsCanonical =
-		context.canonicalArchiveUrlIdentity !== null &&
-		left.archiveUrlIdentity === context.canonicalArchiveUrlIdentity;
-	const rightIsCanonical =
-		context.canonicalArchiveUrlIdentity !== null &&
-		right.archiveUrlIdentity === context.canonicalArchiveUrlIdentity;
-	if (leftIsCanonical !== rightIsCanonical) return leftIsCanonical ? -1 : 1;
-
 	if (context.sortMode === 'organization') {
-		return compareTextKeys(
-			organizationSortKey(left, context),
-			organizationSortKey(right, context),
-			left.archiveUrl,
-			right.archiveUrl
-		);
+		return compareOrganizationThenValidator(left, right, context);
 	}
 	if (context.sortMode === 'validator') {
-		return compareTextKeys(
-			advertiserSortKey(left, context),
-			advertiserSortKey(right, context),
-			left.archiveUrl,
-			right.archiveUrl
+		return (
+			compareNames(
+				advertiserSortKey(left, context),
+				advertiserSortKey(right, context)
+			) || compareOrganizationThenValidator(left, right, context)
 		);
 	}
 	if (
@@ -127,10 +119,10 @@ export function compareSources(
 				? -coverageOrder
 				: coverageOrder;
 		}
-		return left.archiveUrl.localeCompare(right.archiveUrl);
+		return compareOrganizationThenValidator(left, right, context);
 	}
 	if (context.sortMode === 'url') {
-		return left.archiveUrl.localeCompare(right.archiveUrl);
+		return compareRootUrls(left, right);
 	}
 
 	const remoteOrder =
@@ -144,7 +136,7 @@ export function compareSources(
 		left.durableVerifiedCheckpointProofs;
 	return proofOrder !== 0
 		? proofOrder
-		: left.archiveUrl.localeCompare(right.archiveUrl);
+		: compareOrganizationThenValidator(left, right, context);
 }
 
 function sourceAdvertisers(
@@ -161,7 +153,7 @@ function organizationSortKey(
 	const names = sourceAdvertisers(source, context)
 		.map((node) => formatOrganizationName(node, context.organizationNames))
 		.filter((name) => name !== 'unaffiliated')
-		.toSorted((left, right) => left.localeCompare(right));
+		.toSorted(compareNames);
 	return names[0] ?? '\uffff';
 }
 
@@ -172,11 +164,7 @@ function advertiserSortKey(
 	const advertisers = sourceAdvertisers(source, context);
 	const validators = advertisers.filter((node) => node.isValidator);
 	const candidates = validators.length > 0 ? validators : advertisers;
-	return (
-		candidates
-			.map(formatNodeName)
-			.toSorted((left, right) => left.localeCompare(right))[0] ?? '\uffff'
-	);
+	return candidates.map(formatNodeName).toSorted(compareNames)[0] ?? '\uffff';
 }
 
 export function formatOrganizationName(
@@ -196,14 +184,41 @@ function coverageRatio(source: ArchiveSource): number {
 	return expected === 0 ? 0 : source.durableVerifiedCheckpointProofs / expected;
 }
 
-function compareTextKeys(
-	leftKey: string,
-	rightKey: string,
-	leftFallback: string,
-	rightFallback: string
+function compareOrganizationThenValidator(
+	left: ArchiveSource,
+	right: ArchiveSource,
+	context: ArchiveSortContext
 ): number {
-	const order = leftKey.localeCompare(rightKey);
-	return order === 0 ? leftFallback.localeCompare(rightFallback) : order;
+	return (
+		compareNames(
+			organizationSortKey(left, context),
+			organizationSortKey(right, context)
+		) ||
+		compareNames(
+			advertiserSortKey(left, context),
+			advertiserSortKey(right, context)
+		) ||
+		compareRootUrls(left, right)
+	);
+}
+
+function compareNames(left: string, right: string): number {
+	// Roots without organization/advertiser metadata follow named roots.
+	if (left === '\uffff' || right === '\uffff') {
+		return left === right ? 0 : left === '\uffff' ? 1 : -1;
+	}
+	return nameCollator.compare(left, right) || compareExactText(left, right);
+}
+
+function compareRootUrls(left: ArchiveSource, right: ArchiveSource): number {
+	return (
+		compareNames(left.archiveUrl, right.archiveUrl) ||
+		compareExactText(left.archiveUrlIdentity, right.archiveUrlIdentity)
+	);
+}
+
+function compareExactText(left: string, right: string): number {
+	return left === right ? 0 : left < right ? -1 : 1;
 }
 
 export function matchesArchiveSource(

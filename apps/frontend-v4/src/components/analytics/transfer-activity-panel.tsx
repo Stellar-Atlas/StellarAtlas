@@ -37,9 +37,13 @@ const sample: TransferFilters = {
 	max_ledger: '26000099'
 };
 
-export function TransferActivityPanel(): React.JSX.Element {
+export function TransferActivityPanel({
+	initialFilters = sample
+}: {
+	readonly initialFilters?: TransferFilters;
+}): React.JSX.Element {
 	const id = useId();
-	const [filters, setFilters] = useState<TransferFilters>(sample);
+	const [filters, setFilters] = useState<TransferFilters>(initialFilters);
 	const [result, setResult] = useState<TransferActivityPage | null>(null);
 	const [status, setStatus] = useState(
 		'No request sent. Edit filters and select Find transfers.'
@@ -48,7 +52,7 @@ export function TransferActivityPanel(): React.JSX.Element {
 	const [busy, setBusy] = useState(false);
 	const [cursor, setCursor] = useState<string | undefined>();
 	const [history, setHistory] = useState<(string | undefined)[]>([]);
-	const [submitted, setSubmitted] = useState<TransferFilters>(sample);
+	const [submitted, setSubmitted] = useState<TransferFilters>(initialFilters);
 	const controller = useRef<AbortController | null>(null);
 	useEffect(() => () => controller.current?.abort(), []);
 
@@ -159,11 +163,11 @@ export function TransferActivityPanel(): React.JSX.Element {
 					))}
 				</fieldset>
 				<p>
-					Sample range is historical, not current state. Leaving ledger bounds
-					empty queries the latest 100,000 published ledger positions. Explicit
-					windows support up to 1,000,000 positions; dates narrow that window.
-					Amount filters use raw integer units: native and classic issued assets
-					use 10,000,000 units per token.
+					Results describe published historical transfers, not current state.
+					Leaving ledger bounds empty queries the latest 100,000 published
+					ledger positions. Explicit windows support up to 1,000,000 positions;
+					dates narrow that window. Amount filters use raw integer units: native
+					and classic issued assets use 10,000,000 units per token.
 				</p>
 				<div className={styles.actions}>
 					<button type="submit" disabled={busy}>

@@ -5,110 +5,8 @@ import {
 } from './HubbleTransactionOpenApi.js';
 import type { OpenApiRecord } from './OpenApiDocumentProjection.js';
 
-const analyticsTag = ['Analytics'];
-const publicAccess: readonly OpenApiRecord[] = [];
-const objectResponse: OpenApiRecord = {
-	content: {
-		'application/json': {
-			schema: { additionalProperties: true, type: 'object' }
-		}
-	},
-	description: 'Analytics result.'
-};
-const errorResponse = (description: string): OpenApiRecord => ({
-	content: {
-		'application/json': {
-			schema: {
-				additionalProperties: false,
-				properties: {
-					code: { type: 'string' },
-					error: { type: 'string' }
-				},
-				required: ['code', 'error'],
-				type: 'object'
-			}
-		}
-	},
-	description
-});
-const transactionHashParameter: OpenApiRecord = {
-	description: '64-character hexadecimal Stellar transaction hash.',
-	in: 'path',
-	name: 'transactionHash',
-	required: true,
-	schema: { pattern: '^[0-9a-fA-F]{64}$', type: 'string' }
-};
-const accountParameter: OpenApiRecord = {
-	description: 'Stellar G, M, or C address.',
-	in: 'path',
-	name: 'account',
-	required: true,
-	schema: { pattern: '^[GMC][A-Z2-7]{55,68}$', type: 'string' }
-};
-const limitParameter: OpenApiRecord = {
-	description: 'Maximum rows returned.',
-	in: 'query',
-	name: 'limit',
-	required: false,
-	schema: { default: 100, maximum: 200, minimum: 1, type: 'integer' }
-};
-const offsetParameter: OpenApiRecord = {
-	description: 'Zero-based row offset. Follow nextOffset when present.',
-	in: 'query',
-	name: 'offset',
-	required: false,
-	schema: { default: 0, minimum: 0, type: 'integer' }
-};
-const minimumLedgerParameter: OpenApiRecord = {
-	description: 'Inclusive minimum ledger sequence.',
-	in: 'query',
-	name: 'min_ledger',
-	required: false,
-	schema: { minimum: 1, type: 'integer' }
-};
-const maximumLedgerParameter: OpenApiRecord = {
-	description: 'Inclusive maximum ledger sequence.',
-	in: 'query',
-	name: 'max_ledger',
-	required: false,
-	schema: { minimum: 1, type: 'integer' }
-};
-const transactionHashQueryParameter: OpenApiRecord = {
-	description: 'Restrict results to one transaction hash.',
-	in: 'query',
-	name: 'transaction_hash',
-	required: false,
-	schema: { pattern: '^[0-9a-fA-F]{64}$', type: 'string' }
-};
-
-const ledgerSequenceParameter: OpenApiRecord = {
-	description: 'Ledger sequence in the currently ingested Hubble range.',
-	in: 'path',
-	name: 'sequence',
-	required: true,
-	schema: { minimum: 1, type: 'integer' }
-};
-const operationIdParameter: OpenApiRecord = {
-	description: 'Lossless decimal Stellar operation identifier.',
-	in: 'path',
-	name: 'operationId',
-	required: true,
-	schema: { pattern: '^[0-9]{1,20}$', type: 'string' }
-};
-const contractIdParameter: OpenApiRecord = {
-	description: 'Stellar C-address for a Soroban contract.',
-	in: 'path',
-	name: 'contractId',
-	required: true,
-	schema: { pattern: '^C[A-Z2-7]{55}$', type: 'string' }
-};
-const assetParameter: OpenApiRecord = {
-	description: 'native or URL-encoded CODE:ISSUER.',
-	in: 'path',
-	name: 'asset',
-	required: true,
-	schema: { example: 'native', type: 'string' }
-};
+import { analyticsTag, publicAccess, errorResponse, transactionHashParameter, accountParameter, limitParameter, offsetParameter, minimumLedgerParameter, maximumLedgerParameter, transactionHashQueryParameter, ledgerSequenceParameter, operationIdParameter, contractIdParameter, assetParameter } from './HubbleSemanticOpenApiParameters.js';
+import { semanticResponse } from './HubbleSemanticOpenApiSchemas.js';
 
 export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/ledgers/{sequence}': {
@@ -118,7 +16,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 			operationId: 'getAnalyticsLedger',
 			parameters: [ledgerSequenceParameter],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('getAnalyticsLedger'),
 				'400': errorResponse('The ledger sequence is invalid.'),
 				'404': errorResponse('The ledger is outside the ingested range.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
@@ -135,7 +33,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 			operationId: 'listAnalyticsLedgerTransactions',
 			parameters: [ledgerSequenceParameter, limitParameter, offsetParameter],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsLedgerTransactions'),
 				'400': errorResponse('The ledger or pagination input is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -151,7 +49,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 			operationId: 'getAnalyticsOperation',
 			parameters: [operationIdParameter],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('getAnalyticsOperation'),
 				'400': errorResponse('The operation identifier is invalid.'),
 				'404': errorResponse('The operation is outside the ingested range.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
@@ -163,11 +61,11 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	},
 	'/v1/analytics/operations/{operationId}/effects': {
 		get: {
-			description: 'Returns every decoded effect emitted by one operation.',
+			description: 'Returns one page of decoded effects emitted by one operation. Follow nextOffset until null.',
 			operationId: 'listAnalyticsOperationEffects',
 			parameters: [operationIdParameter, limitParameter, offsetParameter],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsOperationEffects'),
 				'400': errorResponse('The operation or pagination input is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -189,7 +87,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				offsetParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsAccountEffects'),
 				'400': errorResponse(
 					'The account, ledger range, or pagination input is invalid.'
 				),
@@ -256,7 +154,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				offsetParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('searchAnalyticsTrades'),
 				'400': errorResponse('A trade filter is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -296,7 +194,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				offsetParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsContractState'),
 				'400': errorResponse('The contract or state filter is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -331,7 +229,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				offsetParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsAssetTransfers'),
 				'400': errorResponse('The asset or transfer filter is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -366,7 +264,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 			operationId: 'listAnalyticsAccountTransactions',
 			parameters: [accountParameter, limitParameter, offsetParameter],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsAccountTransactions'),
 				'400': errorResponse('The account or pagination input is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -430,7 +328,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				offsetParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('searchAnalyticsTransfers'),
 				'400': errorResponse('A transfer filter is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -442,7 +340,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/contracts/{contractId}/events': {
 		get: {
 			description:
-				'Returns decoded Soroban contract events for one contract, newest first.',
+				'Returns one page of source contract events, newest first. Classification separates classic, Soroban, fee and unknown provenance; a fee event alone is not Soroban execution evidence.',
 			operationId: 'listAnalyticsContractEvents',
 			parameters: [
 				{
@@ -459,7 +357,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				offsetParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsContractEvents'),
 				'400': errorResponse('The contract or filter is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -471,7 +369,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/assets/{asset}/holders': {
 		get: {
 			description:
-				'Returns current positive-balance holders as of the latest ingested ledger. Use native or URL-encoded CODE:ISSUER.',
+				'Returns positive balances from each account’s latest observed completed-batch change. This is not a complete current-chain holder set when history has gaps. Use native or URL-encoded CODE:ISSUER.',
 			operationId: 'listAnalyticsAssetHolders',
 			parameters: [
 				{
@@ -491,7 +389,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				limitParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('listAnalyticsAssetHolders'),
 				'400': errorResponse('The asset or cursor is invalid.'),
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
@@ -503,7 +401,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/assets/{asset}/holders/{account}': {
 		get: {
 			description:
-				'Returns one account current balance for an asset as of the latest ingested ledger.',
+				'Returns one account’s latest observed positive balance from completed batches, not a guarantee of current-chain state when history has gaps.',
 			operationId: 'getAnalyticsAssetHolder',
 			parameters: [
 				{
@@ -516,7 +414,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				accountParameter
 			],
 			responses: {
-				'200': objectResponse,
+				'200': semanticResponse('getAnalyticsAssetHolder'),
 				'400': errorResponse('The asset or account is invalid.'),
 				'404': errorResponse(
 					'The account has no current positive balance in the ingested range.'
