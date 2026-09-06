@@ -264,7 +264,6 @@ async function materializeCanonicalCheckpointSubstitutions(
 	completedCheckpoints: readonly CompletedHistoryArchiveCheckpoint[]
 ): Promise<number> {
 	const canonicalRoot = getHistoryArchiveCanonicalFirstRoot();
-	if (canonicalRoot === null) return 0;
 	const [result] = (await manager.query(targetedCheckpointSubstitutionSql, [
 		JSON.stringify(completedCheckpoints),
 		canonicalRoot
@@ -280,7 +279,6 @@ export const targetedCheckpointSubstitutionSql = `
 			"checkpointLedger" integer
 		)
 		where input."archiveUrlIdentity" <> ''
-			and input."archiveUrlIdentity" <> $2::text
 			and input."checkpointLedger" >= 63
 	), substitution_candidates as materialized (
 		select failed."archiveUrlIdentity", failed."checkpointLedger",
@@ -294,18 +292,27 @@ export const targetedCheckpointSubstitutionSql = `
 		join "history_archive_state_snapshot" target_state
 			on target_state."archiveUrlIdentity" = failed."archiveUrlIdentity"
 			and target_state."networkPassphrase" is not null
-		join "history_archive_checkpoint_proof" source
-			on source."archiveUrlIdentity" = $2::text
-			and source."checkpointLedger" = failed."checkpointLedger"
-			and source.status = 'verified'
-			and source."requiredObjectsComplete" = true
-			and source."proofFactsComplete" = true
-			and source."failureKind" is null
-		join "history_archive_state_snapshot" source_state
-			on source_state."archiveUrlIdentity" = source."archiveUrlIdentity"
-			and source_state.status = 'available'
-			and source_state."networkPassphrase" =
-				target_state."networkPassphrase"
+		join lateral (
+			select source_proof.id, source_proof."archiveUrlIdentity"
+			from "history_archive_checkpoint_proof" source_proof
+			join "history_archive_state_snapshot" source_state
+				on source_state."archiveUrlIdentity" =
+					source_proof."archiveUrlIdentity"
+				and source_state.status = 'available'
+				and source_state."networkPassphrase" =
+					target_state."networkPassphrase"
+			where source_proof."checkpointLedger" = failed."checkpointLedger"
+				and source_proof."archiveUrlIdentity" <> failed."archiveUrlIdentity"
+				and source_proof.status = 'verified'
+				and source_proof."requiredObjectsComplete" = true
+				and source_proof."proofFactsComplete" = true
+				and source_proof."failureKind" is null
+			order by case
+				when source_proof."archiveUrlIdentity" = $2::text then 0
+				else 1
+			end, source_proof."evaluatedAt", source_proof.id
+			limit 1
+		) source on true
 		where failed.status = 'not-evaluable'
 			and failed."failureKind" = 'object-failed'
 			and ${remoteCheckpointFailureExistsSql('failed')}

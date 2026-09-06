@@ -96,15 +96,36 @@ describe('source failures permit attributed continuation, never false verificati
 			bucket: false,
 			unverified: true,
 			eligible: false
+		},
+		{
+			name: 'source missing required objects',
+			bucket: false,
+			incompleteObjects: true,
+			eligible: false
+		},
+		{
+			name: 'source missing proof facts',
+			bucket: false,
+			incompleteFacts: true,
+			eligible: false
 		}
 	] as const;
 
-	for (const path of ['completion', 'recovery'] as const) {
+	for (const path of [
+		'completion',
+		'steady-completion',
+		'fallback-completion',
+		'recovery'
+	] as const) {
 		it.each(scenarios)(path + ': $name', async (scenario) => {
 			const target = createRoot(30);
 			const source = createRoot(31);
 			process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT =
-				source.archiveUrlIdentity;
+				path === 'steady-completion'
+					? ''
+					: path === 'fallback-completion'
+						? 'https://unavailable-preferred.example'
+						: source.archiveUrlIdentity;
 			await dataSource
 				.getRepository(HistoryArchiveObject)
 				.save([target, source]);
@@ -135,8 +156,8 @@ describe('source failures permit attributed continuation, never false verificati
 			};
 			const anchor = createBucketMissingProof(source.archiveUrlIdentity, 127);
 			anchor.status = 'unverified' in scenario ? 'not-evaluable' : 'verified';
-			anchor.requiredObjectsComplete = true;
-			anchor.proofFactsComplete = true;
+			anchor.requiredObjectsComplete = !('incompleteObjects' in scenario);
+			anchor.proofFactsComplete = !('incompleteFacts' in scenario);
 			anchor.bucketsVerified = true;
 			anchor.verifiedBucketCount = 1;
 			anchor.missingBucketCount = 0;
@@ -164,8 +185,17 @@ describe('source failures permit attributed continuation, never false verificati
 					[target.archiveUrlIdentity, hash]
 				);
 
+			const unrelated = createCheckpoint(32, 127);
+			await dataSource.getRepository(HistoryArchiveObject).save(unrelated);
+			await dataSource.query(
+				`insert into "history_archive_object_ready"
+				 ("objectRemoteId", "archiveUrlIdentity", priority, "availableAt")
+				 values ($1, $2, 2, now())`,
+				[unrelated.remoteId, unrelated.archiveUrlIdentity]
+			);
+
 			const plan = async () =>
-				path === 'completion'
+				path !== 'recovery'
 					? materializeNextCompactCheckpointPlans(dataSource.manager, [
 							{
 								archiveUrlIdentity: target.archiveUrlIdentity,
@@ -175,8 +205,26 @@ describe('source failures permit attributed continuation, never false verificati
 					: materializeCompactCheckpointPlans(dataSource.manager, [
 							target.archiveUrlIdentity
 						]);
+			const firstPass = await plan();
+			if (path !== 'recovery') {
+				expect(firstPass > 0).toBe(scenario.eligible);
+				const firstReady = await dataSource.query(
+					`select object."checkpointLedger" from "history_archive_object_ready" ready
+					 join "history_archive_object_queue" object on object."remoteId" = ready."objectRemoteId"
+					 where object."archiveUrlIdentity" = $1`,
+					[target.archiveUrlIdentity]
+				);
+				expect(firstReady).toEqual(
+					scenario.eligible ? [{ checkpointLedger: 191 }] : []
+				);
+			}
 			await plan();
-			await plan();
+			const [unrelatedReady] = await dataSource.query(
+				`select "objectRemoteId" from "history_archive_object_ready"
+				 where "objectRemoteId" = $1`,
+				[unrelated.remoteId]
+			);
+			expect(unrelatedReady.objectRemoteId).toBe(unrelated.remoteId);
 
 			const substitutions = await dataSource.query(
 				`select "failedCheckpointProofId", "sourceCheckpointProofId", reason
