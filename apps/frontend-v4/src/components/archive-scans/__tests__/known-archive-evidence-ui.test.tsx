@@ -21,6 +21,25 @@ import {
 	formatObjectStatusDetail
 } from '../known-archive-evidence-table-parts';
 describe('known archive evidence UI', () => {
+	it('uses the shared local timestamp for the archive source health update', () => {
+		const timestamp = '2026-09-06T04:31:00.000Z';
+		const markup = renderToStaticMarkup(
+			createElement(KnownArchiveEvidence, {
+				evidence: { ...createEvidence(), generatedAt: timestamp },
+				subject: {
+					id: 'https://core-live-c-history.lightsail.network',
+					kind: 'archive'
+				},
+				title: 'Archive source health'
+			})
+		);
+
+		expect(markup).toContain(
+			'Updated <time dateTime="2026-09-06T04:31:00.000Z" title="2026-09-06T04:31:00.000Z">2026-09-06 04:31 UTC</time>'
+		);
+		expect(markup).not.toContain('Updated Sep 6, 2026, 4:31 AM');
+	});
+
 	it('keeps raw evidence secondary to the accessible operational tabs', () => {
 		const markup = renderToStaticMarkup(
 			createElement(KnownArchiveEvidence, {

@@ -10,7 +10,8 @@ import {
 	type PublicKnownArchiveEvidence
 } from '@domain/known-archive-evidence';
 import type { ArchiveEvidenceSubject } from '@domain/known-archive-evidence-request';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatInteger } from '@format/formatters';
+import { LocalDateTime } from '../local-date-time';
 import { KnownArchiveEvidenceTabContent } from './known-archive-evidence-views';
 import { KnownArchiveRawEvidence } from './known-archive-raw-evidence';
 import { useKnownArchiveEvidence } from './use-known-archive-evidence';
@@ -73,7 +74,7 @@ export function KnownArchiveEvidence({
 				<div>
 					<h2>{title}</h2>
 					<span className="muted-inline">
-						Updated {formatDateTime(liveEvidence.generatedAt)};{' '}
+						Updated <LocalDateTime dateTime={liveEvidence.generatedAt} />;{' '}
 						{formatEvidenceScope(liveEvidence)}
 					</span>
 				</div>
