@@ -151,6 +151,25 @@
 	font-size: 0.6875rem;
 	font-weight: 600;
 }
+.archive-root-inventory-table .archive-sort-heading {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+.archive-sort-heading span {
+	font-size: 0.875rem;
+}
+.archive-sort-heading:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 4px;
+}
 .archive-root-inventory-table strong {
 	font-weight: 600;
 }

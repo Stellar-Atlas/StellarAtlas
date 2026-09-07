@@ -34,7 +34,7 @@ describe('archive root checkpoint coverage', () => {
 		);
 	});
 
-	it('renders the organization-first default in an accessible sort control', () => {
+	it('renders highest verified coverage first and accessible sortable headers', () => {
 		const summary: PublicHistoryArchiveStatusSummary = {
 			activeObjectChecks: 0,
 			generatedAt: '2026-09-06T09:00:00Z',
@@ -90,12 +90,16 @@ describe('archive root checkpoint coverage', () => {
 		);
 		expect(html).toContain('aria-label="Sort archive roots"');
 		expect(html).toContain(
-			'<option value="organization" selected="">Organization → validator → root A–Z</option>'
+			'<option value="coverage-desc" selected="">Verified coverage high to low</option>'
 		);
+		expect(html).toContain('aria-sort="descending"');
+		expect(html).toContain('title="Sort verified coverage ascending"');
+		expect(html).toContain('title="Sort archive source ascending"');
+		expect(html).toContain('title="Sort archive findings descending"');
 		for (const option of [
 			'failures',
 			'validator',
-			'coverage-desc',
+			'organization',
 			'coverage-asc',
 			'url'
 		]) {

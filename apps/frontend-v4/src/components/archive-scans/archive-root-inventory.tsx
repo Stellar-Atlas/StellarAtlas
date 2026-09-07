@@ -10,6 +10,7 @@ import { formatInteger } from '@format/formatters';
 import { LocalDateTime } from '../local-date-time';
 
 import { ArchiveRootRow } from './archive-root-row';
+import { ArchiveSortHeading } from './archive-sort-heading';
 import {
 	type ArchiveInventorySort,
 	defaultArchiveInventorySort,
@@ -47,6 +48,10 @@ export function ArchiveRootInventory({
 	const [query, setQuery] = useState('');
 	const [failuresOnly, setFailuresOnly] = useState(false);
 	const [page, setPage] = useState(0);
+	const changeSort = (value: ArchiveInventorySort): void => {
+		setSortMode(value);
+		setPage(0);
+	};
 	const advertisers = useMemo(() => groupAdvertisers(nodes), [nodes]);
 	const organizationNames = useMemo(
 		() =>
@@ -174,8 +179,7 @@ export function ArchiveRootInventory({
 						<select
 							aria-label="Sort archive roots"
 							onChange={(event) => {
-								setSortMode(event.currentTarget.value as ArchiveInventorySort);
-								setPage(0);
+								changeSort(event.currentTarget.value as ArchiveInventorySort);
 							}}
 							value={sortMode}
 						>
@@ -184,9 +188,19 @@ export function ArchiveRootInventory({
 							</option>
 							<option value="failures">Remote failures high to low</option>
 							<option value="validator">Validator / listener A–Z</option>
-							<option value="coverage-desc">Coverage high to low</option>
-							<option value="coverage-asc">Coverage low to high</option>
+							<option value="coverage-desc">
+								Verified coverage high to low
+							</option>
+							<option value="coverage-asc">
+								Verified coverage low to high
+							</option>
 							<option value="url">Archive root URL A–Z</option>
+							<option value="url-desc">Archive root URL Z–A</option>
+							<option value="organization-desc">
+								Organization → validator → root Z–A
+							</option>
+							<option value="validator-desc">Validator / listener Z–A</option>
+							<option value="failures-asc">Remote failures low to high</option>
 						</select>
 						<label className="archive-failure-filter">
 							<input
@@ -209,15 +223,30 @@ export function ArchiveRootInventory({
 					>
 						<thead role="rowgroup">
 							<tr role="row">
-								<th role="columnheader" scope="col">
-									Archive source
-								</th>
-								<th role="columnheader" scope="col">
-									Verified coverage
-								</th>
-								<th role="columnheader" scope="col">
-									Archive findings
-								</th>
+								<ArchiveSortHeading
+									label="Archive source"
+									ascending="url"
+									descending="url-desc"
+									initial="ascending"
+									value={sortMode}
+									onChange={changeSort}
+								/>
+								<ArchiveSortHeading
+									label="Verified coverage"
+									ascending="coverage-asc"
+									descending="coverage-desc"
+									initial="descending"
+									value={sortMode}
+									onChange={changeSort}
+								/>
+								<ArchiveSortHeading
+									label="Archive findings"
+									ascending="failures-asc"
+									descending="failures"
+									initial="descending"
+									value={sortMode}
+									onChange={changeSort}
+								/>
 								<th role="columnheader" scope="col">
 									Details
 								</th>

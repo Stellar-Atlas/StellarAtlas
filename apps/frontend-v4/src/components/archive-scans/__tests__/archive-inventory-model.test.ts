@@ -153,14 +153,14 @@ describe('archive inventory ordering', () => {
 			})
 		);
 
-	it('defaults to organization then validator then root, not failures or coverage', () => {
-		expect(defaultArchiveInventorySort).toBe('organization');
+	it('defaults to highest verified percentage with deterministic organization ties', () => {
+		expect(defaultArchiveInventorySort).toBe('coverage-desc');
 		const expected = [
+			beta,
 			alphaOne,
 			alphaOneOtherRoot,
-			alphaTwo,
 			listener,
-			beta,
+			alphaTwo,
 			unknown
 		];
 		expect(ordered(defaultArchiveInventorySort)).toEqual(expected);
@@ -175,6 +175,14 @@ describe('archive inventory ordering', () => {
 		expect(ordered('coverage-asc')[0]).toBe(unknown);
 		expect(ordered('url')[0]).toBe(alphaTwo);
 		expect(ordered('validator')[0]).toBe(listener);
+		for (const [descending, ascending] of [
+			['url-desc', 'url'],
+			['organization-desc', 'organization'],
+			['validator-desc', 'validator'],
+			['failures-asc', 'failures']
+		] as const) {
+			expect(ordered(descending)).toEqual(ordered(ascending).toReversed());
+		}
 		for (const mode of [
 			'failures',
 			'coverage-desc',

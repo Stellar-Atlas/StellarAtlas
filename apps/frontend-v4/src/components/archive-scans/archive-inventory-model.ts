@@ -5,13 +5,18 @@ export type ArchiveSource =
 	PublicHistoryArchiveStatusSummary['sources'][number];
 export type ArchiveInventorySort =
 	| 'failures'
+	| 'failures-asc'
 	| 'organization'
+	| 'organization-desc'
 	| 'validator'
+	| 'validator-desc'
 	| 'coverage-desc'
 	| 'coverage-asc'
-	| 'url';
+	| 'url'
+	| 'url-desc';
 
-export const defaultArchiveInventorySort: ArchiveInventorySort = 'organization';
+export const defaultArchiveInventorySort: ArchiveInventorySort =
+	'coverage-desc';
 
 export function hasArchiveSourceFindings(
 	source: Pick<
@@ -112,6 +117,16 @@ export function compareSources(
 	right: ArchiveSource,
 	context: ArchiveSortContext
 ): number {
+	const reverseMode = {
+		'organization-desc': 'organization',
+		'validator-desc': 'validator',
+		'url-desc': 'url',
+		'failures-asc': 'failures'
+	} as const;
+	if (context.sortMode in reverseMode) {
+		const sortMode = reverseMode[context.sortMode as keyof typeof reverseMode];
+		return -compareSources(left, right, { ...context, sortMode });
+	}
 	if (context.sortMode === 'organization') {
 		return compareOrganizationThenValidator(left, right, context);
 	}
