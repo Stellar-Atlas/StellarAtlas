@@ -21,7 +21,7 @@
 	min-inline-size: 0;
 }
 .archive-inventory-explainer {
-	padding: 12px 16px;
+	padding: 4px 14px;
 	font-size: 0.875rem;
 }
 .archive-inventory-explainer summary {
@@ -90,6 +90,7 @@
 }
 .archive-root-inventory-panel > .panel-heading {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 12px;
 	padding: 14px;
 }
@@ -152,6 +153,12 @@
 }
 .archive-root-inventory-table strong {
 	font-weight: 600;
+}
+.archive-root-inventory-table strong,
+.archive-root-inventory-table small {
+	white-space: normal;
+	overflow: visible;
+	text-overflow: clip;
 }
 .archive-root-inventory-table th:nth-child(1) {
 	inline-size: 36%;
