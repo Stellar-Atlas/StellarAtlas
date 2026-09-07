@@ -4,11 +4,11 @@ import {
 	type KnownArchiveFailureSummaryV1
 } from 'shared';
 import Ajv from 'ajv';
-import addFormats from 'ajv-formats';
+import validator from 'validator';
 import { sanitizePublicInfrastructureText } from '../../mappers/PublicScanErrorMapper.js';
 
 const ajv = new Ajv();
-addFormats(ajv);
+ajv.addFormat('date-time', { type: 'string', validate: validator.isRFC3339 });
 const validate = ajv.compile(KnownArchiveFailureSummaryV1Schema);
 
 export async function queryKnownArchiveFailureSummary(
