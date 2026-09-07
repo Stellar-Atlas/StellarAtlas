@@ -27,6 +27,7 @@ function fixture() {
 		classifyEventRows: jest.fn(),
 		accountTransactions: jest.fn(),
 		assetHolders: jest.fn(),
+		accountBalances: jest.fn(),
 		catalog: jest.fn(),
 		query: jest.fn()
 	};

@@ -16,6 +16,7 @@ export function withHubbleTransactionLedgerHints(
 		classifyEventRows: (rows) => warehouse.classifyEventRows(rows),
 		accountTransactions: (input) => warehouse.accountTransactions(input),
 		assetHolders: (input) => warehouse.assetHolders(input),
+		accountBalances: (input) => warehouse.accountBalances(input),
 		async transactionDetail(request) {
 			const input = normalizeTransactionInput(request);
 			if (input.ledgerSequence === undefined) {

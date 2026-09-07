@@ -1,3 +1,4 @@
+import { hubbleAccountBalancePaths, hubbleAccountBalanceSchemas } from './HubbleAccountBalanceOpenApi.js';
 import { withHubbleContractEventPath, hubbleContractEventSchemas } from './HubbleContractEventOpenApi.js';
 import {
 	readOpenApiRecord,
@@ -191,6 +192,7 @@ const ledgerCoverageSchema: OpenApiRecord = hubbleCoverageSchema;
 const hubblePaths: Readonly<Record<string, OpenApiRecord>> = withHubbleExplorerPaths({
 	...withHubbleContractEventPath(hubbleSemanticPaths),
 	...hubbleTransferPaths,
+	...hubbleAccountBalancePaths,
 	...hubbleGraphqlPaths,
 	'/v1/analytics/datasets': {
 		get: {
@@ -369,6 +371,7 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 	const components = readOpenApiRecord(source.components) ?? {};
 	const existingSchemas = readOpenApiRecord(components.schemas) ?? {};
 	const schemas = {
+		...hubbleAccountBalanceSchemas,
 		...hubbleContractEventSchemas, ...hubbleSemanticSchemas, ...hubbleExplorerSchemas, ...hubbleGraphqlSchemas, ...hubbleTransferSchemas,
 		HubbleLedgerCoverage: hubbleCoverageSchema,
 		HubbleError: hubbleErrorSchema,

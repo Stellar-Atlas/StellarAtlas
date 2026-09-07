@@ -1,3 +1,4 @@
+import { registerHubbleAccountBalanceRoutes } from './HubbleAccountBalanceRoutes.js';
 import { registerHubbleTransactionRoutes } from './HubbleTransactionRoutes.js';
 import type { Router } from 'express';
 import type {
@@ -33,6 +34,7 @@ export function registerHubbleSemanticRoutes(
 	warehouse: HubbleWarehouse
 ): void {
 	registerHubbleTransactionRoutes(router, warehouse);
+	registerHubbleAccountBalanceRoutes(router, warehouse);
 	router.get('/transactions/:transactionHash', async (request, response) => {
 		await semanticSend(response, async () => {
 			const transactionHash = requireTransactionHash(

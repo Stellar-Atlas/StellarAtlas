@@ -24,6 +24,7 @@ async function fixture() {
 		classifyEventRows: jest.fn().mockResolvedValue([]),
 		accountTransactions: jest.fn(),
 		assetHolders: jest.fn(),
+		accountBalances: jest.fn(),
 		catalog: jest.fn(),
 		query: jest.fn().mockImplementation(async (input) => ({
 			dataset: input.dataset,
