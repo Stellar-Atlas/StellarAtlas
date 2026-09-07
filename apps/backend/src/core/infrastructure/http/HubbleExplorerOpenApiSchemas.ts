@@ -123,7 +123,7 @@ const metadata = (entity: string): OpenApiRecord => ({
 		enum: ['complete', 'partial_or_unknown'],
 		example: 'partial_or_unknown',
 		description:
-			'Complete only when the window is inside the contiguous parsed prefix. Supplemental windows remain conservatively partial_or_unknown.'
+			'Complete only when every ledger in the selected window lies inside a completed manifest interval, including supplemental intervals. The global coverage can still contain gaps outside that window.'
 	},
 	source: { type: 'string', enum: ['stellar_hubble'] },
 	semantics: {

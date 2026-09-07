@@ -1,3 +1,4 @@
+import { queryHubbleAggregate } from './HubbleAggregateQuery.js';
 import { queryHubbleAccountBalances } from './HubbleAccountBalanceQuery.js';
 import { UnavailableHubbleWarehouse } from './HubbleUnavailableWarehouse.js';
 import type {
@@ -252,6 +253,19 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 		if (dataset === undefined) {
 			throw new HubbleWarehouseInputError(
 				'Unknown Hubble dataset: ' + input.dataset
+			);
+		}
+		if (
+			input.aggregations !== undefined ||
+			input.groupBy !== undefined ||
+			input.minLedger !== undefined ||
+			input.maxLedger !== undefined
+		) {
+			return queryHubbleAggregate(
+				this.semanticExecutor(),
+				catalog,
+				dataset,
+				input
 			);
 		}
 		const columns = new Map(

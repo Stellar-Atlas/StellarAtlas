@@ -1,4 +1,8 @@
 import type {
+	HubbleAggregateFields,
+	HubbleAggregateColumn
+} from './HubbleAggregateContracts.js';
+import type {
 	HubbleAccountBalanceInput,
 	HubbleAccountBalancePage
 } from './HubbleAccountBalanceContracts.js';
@@ -41,7 +45,7 @@ export interface HubbleOrder {
 	readonly field: string;
 }
 
-export interface HubbleQuery {
+export interface HubbleQuery extends HubbleAggregateFields {
 	readonly distinct?: boolean;
 	readonly dataset: string;
 	readonly filters?: readonly HubbleFilter[];
@@ -82,6 +86,12 @@ export interface HubbleCatalog {
 }
 
 export interface HubbleQueryResult {
+	readonly nextOffset?: number | null;
+	readonly coverage?: HubbleLedgerCoverage;
+	readonly coverageStatus?: 'complete' | 'partial_or_unknown';
+	readonly window?: { readonly minLedger: number; readonly maxLedger: number };
+	readonly aggregates?: readonly HubbleAggregateColumn[];
+	readonly semantics?: string;
 	readonly columns: readonly string[];
 	readonly dataset: string;
 	readonly elapsedMilliseconds: number;
