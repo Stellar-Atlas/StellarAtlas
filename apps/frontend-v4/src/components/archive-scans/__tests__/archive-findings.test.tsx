@@ -90,6 +90,15 @@ describe('archive findings attribution', () => {
 			'refreshing'
 		);
 	});
+	it('does not use a stale positive fault count as the current count', () => {
+		expect(
+			getArchiveFaultCount({
+				...source,
+				archiveEvidenceFailures: 2,
+				failureSummary: summary
+			})
+		).toBeNull();
+	});
 	it('does not invent a count before classification is ready', () => {
 		expect(getArchiveFaultCount(source)).toBeNull();
 		expect(

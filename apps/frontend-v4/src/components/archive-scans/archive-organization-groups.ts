@@ -20,7 +20,7 @@ export interface ArchiveOrganizationGroup {
 	readonly expectedPositions: number;
 	readonly verifiedPercent: number | null;
 	readonly scannedPositions: number;
-	readonly remoteFailures: number;
+	readonly remoteFailures: number | null;
 }
 
 const collator = new Intl.Collator('en', {
@@ -93,10 +93,12 @@ export function groupArchiveSources(
 					(total, row) => total + getKnownScannedPositions(row),
 					0
 				),
-				remoteFailures: rows.reduce(
-					(total, row) => total + (getArchiveFaultCount(row) ?? 0),
-					0
-				)
+				remoteFailures: rows.some((row) => getArchiveFaultCount(row) === null)
+					? null
+					: rows.reduce(
+							(total, row) => total + (getArchiveFaultCount(row) ?? 0),
+							0
+						)
 			};
 		})
 		.toSorted((a, b) => compareGroups(a, b, context));
@@ -155,6 +157,13 @@ function compareGroups(
 		order =
 			compareText(a.name, b.name) * (mode === 'organization-desc' ? -1 : 1);
 	} else if (mode === 'failures' || mode === 'failures-asc') {
+		if (a.remoteFailures === null || b.remoteFailures === null) {
+			return a.remoteFailures === b.remoteFailures
+				? compareText(a.name, b.name)
+				: a.remoteFailures === null
+					? 1
+					: -1;
+		}
 		order =
 			(a.remoteFailures - b.remoteFailures) * (mode === 'failures' ? -1 : 1);
 	} else {

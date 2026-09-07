@@ -30,7 +30,7 @@ describe('separate scan coverage', () => {
 		expect(html).toContain('7 positions');
 		expect(html).toContain('width:40%');
 		expect(html).toContain('width:30%');
-		expect(html).toContain('4 positions absent from listings');
+		expect(html).toContain('4 positions covered by listing evidence');
 		expect(html).not.toContain('5 checked');
 		expect(html).not.toContain('90.00%');
 	});

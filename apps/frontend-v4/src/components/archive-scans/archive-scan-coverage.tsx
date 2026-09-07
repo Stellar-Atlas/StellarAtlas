@@ -89,10 +89,10 @@ export function ArchiveScanCoverage({
 			{listing > 0 && (
 				<small
 					className="archive-listing-coverage"
-					title="Positions absent from a complete filename listing. May overlap prior file checks; not added twice."
+					title="Historical positions covered by complete listing evidence. Later successful checks may overlap; positions are never added twice."
 				>
 					<span className="archive-evidence-dot archive-evidence-dot-listing" />
-					{formatInteger(listing)} positions absent from listings
+					{formatInteger(listing)} positions covered by listing evidence
 				</small>
 			)}
 		</>

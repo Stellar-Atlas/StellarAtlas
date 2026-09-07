@@ -15,7 +15,7 @@ export function getArchiveFaultCount(source: Source): number | null {
 	const value = summary.archiveFaultCount;
 	if (
 		value != null &&
-		(value > 0 || summary.remoteFailureCount === source.archiveEvidenceFailures)
+		summary.remoteFailureCount === source.archiveEvidenceFailures
 	)
 		return value;
 	// Older uncapped snapshots can be classified without inventing missing groups.

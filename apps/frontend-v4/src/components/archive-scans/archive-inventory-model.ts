@@ -131,6 +131,19 @@ export function compareSources(
 	right: ArchiveSource,
 	context: ArchiveSortContext
 ): number {
+	if (
+		context.sortMode.startsWith('coverage-') ||
+		context.sortMode.startsWith('scan-coverage-')
+	) {
+		const leftUnknown = getExpectedArchiveCheckpointCount(left) === 0;
+		const rightUnknown = getExpectedArchiveCheckpointCount(right) === 0;
+		if (leftUnknown !== rightUnknown) return leftUnknown ? 1 : -1;
+	}
+	if (context.sortMode === 'failures' || context.sortMode === 'failures-asc') {
+		const leftUnknown = getArchiveFaultCount(left) === null;
+		const rightUnknown = getArchiveFaultCount(right) === null;
+		if (leftUnknown !== rightUnknown) return leftUnknown ? 1 : -1;
+	}
 	const reverseMode = {
 		'organization-desc': 'organization',
 		'validator-desc': 'validator',

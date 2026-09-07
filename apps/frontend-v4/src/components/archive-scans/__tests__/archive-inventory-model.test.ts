@@ -87,6 +87,12 @@ describe('archive inventory ordering', () => {
 			archiveUrl: url,
 			archiveUrlIdentity: url,
 			archiveEvidenceFailures: failures,
+			failureSummary: {
+				status: 'current',
+				archiveFaultCount: failures,
+				remoteFailureCount: failures,
+				groups: []
+			},
 			mismatchCheckpointProofs: 0,
 			durableVerifiedCheckpointProofs: verified,
 			currentLedger: 639,
@@ -206,6 +212,24 @@ describe('archive inventory ordering', () => {
 		]);
 	});
 
+	it('sorts unknown coverage and fault counts last in both directions', () => {
+		const unknownRange = {
+			...beta,
+			currentLedger: null,
+			latestCheckpointLedger: null,
+			latestDiscoveredCheckpointLedger: null
+		};
+		for (const mode of [
+			'coverage-asc',
+			'coverage-desc',
+			'scan-coverage-asc',
+			'scan-coverage-desc'
+		] as const)
+			expect(ordered(mode, [unknownRange, listener]).at(-1)).toBe(unknownRange);
+		const unknownFault = { ...beta, failureSummary: undefined };
+		for (const mode of ['failures', 'failures-asc'] as const)
+			expect(ordered(mode, [unknownFault, listener]).at(-1)).toBe(unknownFault);
+	});
 	it('does not mutate source order or completed/failed counts while sorting', () => {
 		const before = structuredClone(sources);
 		ordered('organization');

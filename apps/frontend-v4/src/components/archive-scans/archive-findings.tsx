@@ -56,7 +56,8 @@ export function ArchiveFindings({
 	const summary = source.failureSummary;
 	const faults = getArchiveFaultCount(source);
 	const reasons = getArchiveFaultGroups(source);
-	const hasClassifiedCount = summary?.archiveFaultCount != null;
+	const hasClassifiedCount =
+		faults !== null && summary?.archiveFaultCount != null;
 	const count =
 		hasClassifiedCount && (summary?.knownAffectedCheckpointCount ?? 0) > 0
 			? summary?.knownAffectedCheckpointCount
