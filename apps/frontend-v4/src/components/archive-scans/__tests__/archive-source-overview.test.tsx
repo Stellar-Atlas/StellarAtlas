@@ -92,7 +92,8 @@ describe('archive source summary', () => {
 		expect(html).toContain(
 			'Missing or unchecked positions are not counted as verified'
 		);
-		expect(html).toContain('Ledger 63');
+		expect(html).toContain('Ledger 127');
+		expect(html).not.toContain('Unbroken verified history');
 	});
 	it('does not invent a percentage for absent or inconsistent head metadata', () => {
 		const source = root();

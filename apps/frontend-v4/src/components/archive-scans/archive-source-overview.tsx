@@ -28,8 +28,6 @@ export function ArchiveSourceOverview({
 	readonly root: PublicKnownArchiveRootEvidence;
 }): React.JSX.Element {
 	const { expected, verified, percent } = sourceCheckpointCoverage(root);
-	const continuous =
-		root.sequentialCoverage.lastContinuouslyVerifiedCheckpointLedger;
 	const next = root.sequentialCoverage.nextCheckpointLedger;
 	return (
 		<section
@@ -74,14 +72,6 @@ export function ArchiveSourceOverview({
 							: formatInteger(
 									root.sequentialCoverage.advertisedLatestCheckpointLedger
 								)}
-					</dd>
-				</div>
-				<div>
-					<dt>Unbroken verified history through</dt>
-					<dd>
-						{continuous === null
-							? 'Not established'
-							: `Ledger ${formatInteger(continuous)}`}
 					</dd>
 				</div>
 				<div>
