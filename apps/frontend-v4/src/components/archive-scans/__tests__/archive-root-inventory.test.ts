@@ -90,7 +90,7 @@ describe('archive root checkpoint coverage', () => {
 		);
 		expect(html).toContain('aria-label="Sort archive roots"');
 		expect(html).toContain(
-			'<option value="coverage-desc" selected="">Verified coverage high to low</option>'
+			'<option value="coverage-desc" selected="">Organization verified coverage high to low</option>'
 		);
 		expect(html).toContain('aria-sort="descending"');
 		expect(html).toContain('title="Sort verified coverage ascending"');

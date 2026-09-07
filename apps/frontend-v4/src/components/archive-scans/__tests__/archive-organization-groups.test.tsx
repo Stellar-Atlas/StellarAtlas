@@ -159,7 +159,16 @@ describe('organization archive hierarchy', () => {
 		expect(
 			groupArchiveSources([small, scanned, beta], context())[0]!.name
 		).toBe('Beta');
-		const failed = { ...small, archiveEvidenceFailures: 5 };
+		const failed = {
+			...small,
+			archiveEvidenceFailures: 5,
+			failureSummary: {
+				status: 'current',
+				remoteFailureCount: 5,
+				archiveFaultCount: 5,
+				groups: []
+			} as ArchiveSource['failureSummary']
+		};
 		expect(
 			groupArchiveSources([failed, beta], context('failures'))[0]!
 				.remoteFailures

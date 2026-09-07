@@ -130,7 +130,7 @@ export function ArchiveRootInventory({
 					<Metric label="validator advertisers" value={validatorCount} />
 					<Metric label="listener advertisers" value={listenerCount} />
 					<Metric
-						label="remote archive failures"
+						label="unresolved file checks"
 						value={summary.archiveEvidenceFailures}
 					/>
 					<Metric
@@ -198,7 +198,7 @@ export function ArchiveRootInventory({
 							<option value="organization">
 								Organization → validator → root A–Z
 							</option>
-							<option value="failures">Remote failures high to low</option>
+							<option value="failures">Archive faults high to low</option>
 							<option value="validator">Validator / listener A–Z</option>
 							<option value="scan-coverage-desc">
 								Scan coverage high to low
@@ -207,10 +207,10 @@ export function ArchiveRootInventory({
 								Scan coverage low to high
 							</option>
 							<option value="coverage-desc">
-								Verified coverage high to low
+								Organization verified coverage high to low
 							</option>
 							<option value="coverage-asc">
-								Verified coverage low to high
+								Organization verified coverage low to high
 							</option>
 							<option value="url">Archive root URL A–Z</option>
 							<option value="url-desc">Archive root URL Z–A</option>
@@ -218,7 +218,7 @@ export function ArchiveRootInventory({
 								Organization → validator → root Z–A
 							</option>
 							<option value="validator-desc">Validator / listener Z–A</option>
-							<option value="failures-asc">Remote failures low to high</option>
+							<option value="failures-asc">Archive faults low to high</option>
 						</select>
 						<label className="archive-failure-filter">
 							<input
@@ -235,8 +235,9 @@ export function ArchiveRootInventory({
 				</div>
 				<p className="archive-coverage-definition">
 					Scanned counts each checkpoint once after a file-check result or a
-					confirmed listing gap. Verified means its proof passed. Checked and
-					listing-covered counts can overlap; pending jobs are not coverage.
+					confirmed listing gap. Verified totals include all retained passed
+					proofs. Additional scan coverage is shown where available; ≥ denotes a
+					known minimum.
 				</p>
 				<p className="archive-coverage-definition" id={`${groupId}-sort`}>
 					Grouped by organization; shared roots appear once with all

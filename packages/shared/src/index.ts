@@ -1,4 +1,11 @@
 export { Network, type PublicKey, type OrganizationId } from './network.js';
+export {
+	isHistoryArchiveInconclusiveTransportFailure,
+	historyArchiveContentFailurePattern,
+	historyArchiveTransportFailurePattern,
+	historyArchiveInterruptedMessagePattern,
+	type HistoryArchiveFailureAttributionInput
+} from './history-archive-failure-attribution.js';
 export { Node } from './node.js';
 export { default as QuorumService } from './quorum-service-old.js';
 export { QuorumSlicesGenerator } from './quorum-slices-generator.js';

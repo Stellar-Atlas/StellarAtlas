@@ -21,22 +21,20 @@ const coverage = {
 	updatedAt: null
 };
 describe('separate scan coverage', () => {
-	it('renders the distinct union rather than summing categories or listing overlap', () => {
+	it('shows full verified total and distinct scan union without summing overlap', () => {
 		const html = renderToStaticMarkup(
 			<ArchiveScanCoverage source={{ ...root, scanCoverage: coverage }} />
 		);
-		expect(html).toContain('70.00%');
-		expect(html).toContain('7 / 10 positions');
-		expect(html).toContain('30.00% verified');
-		expect(html).toContain('5 checked');
-		expect(html).toContain('archive-scan-meter-listing');
+		expect(html).toContain('3 / 10 checkpoint positions verified');
+		expect(html).toContain('70.00% scanned');
+		expect(html).toContain('7 positions');
 		expect(html).toContain('width:40%');
 		expect(html).toContain('width:30%');
-		expect(html).toContain('4 listing-covered');
-		expect(html).not.toContain('≥');
+		expect(html).toContain('4 positions absent from listings');
+		expect(html).not.toContain('5 checked');
 		expect(html).not.toContain('90.00%');
 	});
-	it('colors known listing exclusions during partial reconciliation', () => {
+	it('keeps confirmed listing ranges visible during partial reconciliation', () => {
 		const html = renderToStaticMarkup(
 			<ArchiveScanCoverage
 				source={{
@@ -45,32 +43,40 @@ describe('separate scan coverage', () => {
 				}}
 			/>
 		);
-		expect(html).toContain('≥70.00%');
+		expect(html).toContain('≥70.00% scanned');
 		expect(html).toContain('width:40%');
 	});
-	it('labels an incomplete historic seed as a minimum and never adds unseeded verified counts', () => {
+	it('does not replace 94,965 verified positions with a partially seeded 208 checks', () => {
 		const source = {
 			...root,
-			durableVerifiedCheckpointProofs: 6,
+			currentLedger: 6399999,
+			latestCheckpointLedger: 6399999,
+			latestDiscoveredCheckpointLedger: 6399999,
+			durableVerifiedCheckpointProofs: 94965,
 			scanCoverage: {
 				...coverage,
-				scannedCheckpointPositions: 5,
+				checkedCheckpointPositions: 208,
+				scannedCheckpointPositions: 208,
+				listingCoveredCheckpointPositions: 0,
 				status: 'reconciling' as const
 			}
 		};
-		expect(getKnownScannedPositions(source)).toBe(6);
+		expect(getKnownScannedPositions(source)).toBe(94965);
 		const html = renderToStaticMarkup(<ArchiveScanCoverage source={source} />);
-		expect(html).toContain('≥60.00%');
-		expect(html).toContain('At least 6 / 10 positions');
-		expect(html).toContain('Historical count reconciling');
+		expect(html).toContain('94,965 / 100,000 checkpoint positions verified');
+		expect(html).not.toContain('208');
+		expect(html).not.toContain('listing');
+		expect(html).not.toContain('Historical count reconciling');
+		expect(html).not.toContain('≥');
 	});
-	it('does not count untouched proof queue rows as scans during rolling deployment', () => {
-		const source = {
-			...root,
-			totalCheckpointProofs: 10,
-			pendingCheckpointProofs: 7
-		} as ArchiveSource;
-		expect(getKnownScannedPositions(source)).toBe(3);
+	it('does not count untouched proof queue rows as scans', () => {
+		expect(
+			getKnownScannedPositions({
+				...root,
+				totalCheckpointProofs: 10,
+				pendingCheckpointProofs: 7
+			} as ArchiveSource)
+		).toBe(3);
 	});
 	it('sorts examined coverage independently of passed proofs', () => {
 		const checked = { ...root, scanCoverage: coverage };

@@ -16,69 +16,83 @@ export function ArchiveScanCoverage({
 	const expected = getExpectedArchiveCheckpointCount(source);
 	const scanned = getKnownScannedPositions(source);
 	const verified = source.durableVerifiedCheckpointProofs;
+	const verifiedPercent = calculateCoveragePercent(verified, expected);
+	const additionalScanEvidence = scanned > verified;
 	const reconciling = coverage?.status !== 'complete';
-	const percent = calculateCoveragePercent(scanned, expected);
+	const scanPercent = calculateCoveragePercent(scanned, expected);
+	const listing = coverage?.listingCoveredCheckpointPositions ?? 0;
 	const listingPercent =
 		coverage && coverage.scannedCheckpointPositions >= verified
-			? calculateCoveragePercent(
-					coverage.listingCoveredCheckpointPositions,
-					expected
-				)
+			? calculateCoveragePercent(listing, expected)
 			: 0;
-	const checkedOnlyPercent = Math.max(0, percent - listingPercent);
+	const meterPercent = additionalScanEvidence ? scanPercent : verifiedPercent;
 	return (
 		<>
 			<strong className="archive-coverage-value">
 				{expected > 0
-					? (reconciling ? '≥' : '') + formatCoveragePercent(percent)
+					? formatCoveragePercent(verifiedPercent)
 					: 'Range unknown'}{' '}
-				<span className="archive-coverage-kind">scanned</span>
+				<span className="archive-coverage-kind">verified</span>
 			</strong>
+			<small>
+				{formatInteger(verified)} / {formatInteger(expected)} checkpoint
+				positions verified
+			</small>
 			<div
 				className="archive-scan-meter"
 				role="progressbar"
-				aria-label={'Checkpoint scan coverage for ' + source.archiveUrl}
+				aria-label={
+					(additionalScanEvidence
+						? 'Checkpoint scan coverage for '
+						: 'Verified checkpoint coverage for ') + source.archiveUrl
+				}
 				aria-valuemin={0}
 				aria-valuemax={100}
-				aria-valuenow={percent}
+				aria-valuenow={meterPercent}
 				aria-valuetext={
-					(reconciling ? 'At least ' : '') +
-					formatCoveragePercent(percent) +
-					' scanned'
+					additionalScanEvidence
+						? (reconciling ? 'At least ' : '') +
+							formatCoveragePercent(scanPercent) +
+							' scanned'
+						: formatCoveragePercent(verifiedPercent) + ' verified'
 				}
 			>
 				<span
 					className="archive-scan-meter-checked"
-					style={{ width: checkedOnlyPercent + '%' }}
+					style={{ width: Math.max(0, meterPercent - listingPercent) + '%' }}
 				/>
-				<span
-					className="archive-scan-meter-listing"
-					style={{ width: listingPercent + '%' }}
-				/>
+				{listingPercent > 0 && (
+					<span
+						className="archive-scan-meter-listing"
+						style={{ width: listingPercent + '%' }}
+					/>
+				)}
 			</div>
-			<small>
-				{reconciling ? 'At least ' : ''}
-				{formatInteger(scanned)} / {formatInteger(expected)} positions
-			</small>
-			<small className="archive-verified-subline">
-				<strong>
-					{formatCoveragePercent(calculateCoveragePercent(verified, expected))}{' '}
-					verified
-				</strong>{' '}
-				· {formatInteger(verified)} passed
-			</small>
-			{coverage && (
-				<small>
-					<span className="archive-evidence-dot archive-evidence-dot-checked" />
-					{formatInteger(coverage.checkedCheckpointPositions)} checked ·{' '}
-					<span className="archive-evidence-dot archive-evidence-dot-listing" />
-					{formatInteger(coverage.listingCoveredCheckpointPositions)}{' '}
-					listing-covered
+			{additionalScanEvidence && (
+				<small
+					className="archive-scan-additional"
+					title={
+						reconciling
+							? 'Known minimum including verified positions. Older check results are still being added without changing the verified total.'
+							: undefined
+					}
+				>
+					<strong>
+						{reconciling ? '≥' : ''}
+						{formatCoveragePercent(scanPercent)} scanned
+					</strong>
+					{' · '}
+					{reconciling ? 'at least ' : ''}
+					{formatInteger(scanned)} positions
 				</small>
 			)}
-			{reconciling && (
-				<small title="Older retained check results are being reconciled into this deduplicated counter. The percentage is a known minimum, not a completed scan.">
-					Historical count reconciling
+			{listing > 0 && (
+				<small
+					className="archive-listing-coverage"
+					title="Positions absent from a complete filename listing. May overlap prior file checks; not added twice."
+				>
+					<span className="archive-evidence-dot archive-evidence-dot-listing" />
+					{formatInteger(listing)} positions absent from listings
 				</small>
 			)}
 		</>

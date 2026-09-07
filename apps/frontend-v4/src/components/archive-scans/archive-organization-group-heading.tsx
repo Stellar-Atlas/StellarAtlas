@@ -10,7 +10,7 @@ export function ArchiveOrganizationGroupHeading({
 	readonly id: string;
 }): React.JSX.Element {
 	return (
-		<tr role="row">
+		<tr role="row" className="archive-organization-heading">
 			<th
 				role="rowheader"
 				scope="rowgroup"
@@ -34,7 +34,7 @@ export function ArchiveOrganizationGroupHeading({
 					}}
 				>
 					<div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-						<strong>{group.name}</strong>
+						<strong className="archive-organization-name">{group.name}</strong>
 						<small>
 							{formatInteger(group.sources.length)} distinct{' '}
 							{group.sources.length === 1 ? 'root' : 'roots'}

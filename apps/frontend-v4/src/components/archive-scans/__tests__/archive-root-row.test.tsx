@@ -66,7 +66,7 @@ describe('archive inventory source evidence', () => {
 	it('keeps listing gaps, direct failures, and infrastructure issues separate', () => {
 		const html = render({ listingGapCount: 2 });
 		expect(html).toContain(
-			'48,722 unresolved checks; reason summary is being prepared'
+			'Reason summary is refreshing. Inspect archive for individual results.'
 		);
 		expect(html).toContain('2 ranges absent from filename listings');
 		expect(html).toContain(

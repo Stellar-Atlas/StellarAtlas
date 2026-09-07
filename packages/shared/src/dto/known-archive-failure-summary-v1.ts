@@ -3,6 +3,7 @@ import type { HistoryArchiveObjectTypeV1 } from './history-archive-object-v1.js'
 import { nullable } from './helper/nullable.js';
 
 export interface KnownArchiveFailureReasonV1 {
+	readonly attribution?: 'archive_fault' | 'inconclusive';
 	readonly objectType: HistoryArchiveObjectTypeV1;
 	readonly failureChannel: 'archive_evidence' | 'archive_availability';
 	readonly errorType: string | null;
@@ -14,10 +15,15 @@ export interface KnownArchiveFailureReasonV1 {
 	readonly knownAffectedCheckpointCount?: number;
 	/** Findings without an attributable category checkpoint, including bucket/root checks. */
 	readonly unknownCheckpointFailureCount?: number;
+	readonly inconclusiveAffectedCheckpointCount?: number;
 }
 
-/** Source-detail only. Independent cached snapshot; never inferred from a failure page. */
+/** Independent cached snapshot; never inferred from a failure page. */
 export interface KnownArchiveFailureSummaryV1 {
+	readonly attributionVersion?: 1;
+	readonly archiveFaultCount?: number;
+	readonly inconclusiveFailureCount?: number;
+	readonly inconclusiveAffectedCheckpointCount?: number;
 	readonly status: 'current' | 'stale' | 'unavailable';
 	readonly computedAt: string | null;
 	readonly groups: readonly KnownArchiveFailureReasonV1[];
@@ -25,6 +31,7 @@ export interface KnownArchiveFailureSummaryV1 {
 	readonly totalGroups: number | null;
 	readonly remainingGroupCount: number | null;
 	readonly remainingFailureCount: number | null;
+	/** All unresolved remote-channel checks, including inconclusive transport exchanges. */
 	readonly remoteFailureCount: number | null;
 	/** Separate diagnostic count; worker issues never consume source reason groups. */
 	readonly workerIssueCount: number | null;
@@ -37,6 +44,10 @@ export const KnownArchiveFailureSummaryV1Schema: JSONSchemaType<KnownArchiveFail
 	{
 		type: 'object',
 		properties: {
+			attributionVersion: { type: 'integer', enum: [1], nullable: true },
+			archiveFaultCount: { ...count, nullable: true },
+			inconclusiveFailureCount: { ...count, nullable: true },
+			inconclusiveAffectedCheckpointCount: { ...count, nullable: true },
 			status: { type: 'string', enum: ['current', 'stale', 'unavailable'] },
 			computedAt: nullable({ type: 'string', format: 'date-time' }),
 			groups: {
@@ -45,6 +56,11 @@ export const KnownArchiveFailureSummaryV1Schema: JSONSchemaType<KnownArchiveFail
 				items: {
 					type: 'object',
 					properties: {
+						attribution: {
+							type: 'string',
+							enum: ['archive_fault', 'inconclusive'],
+							nullable: true
+						},
 						objectType: {
 							type: 'string',
 							enum: [
@@ -70,7 +86,8 @@ export const KnownArchiveFailureSummaryV1Schema: JSONSchemaType<KnownArchiveFail
 						}),
 						count,
 						knownAffectedCheckpointCount: { ...count, nullable: true },
-						unknownCheckpointFailureCount: { ...count, nullable: true }
+						unknownCheckpointFailureCount: { ...count, nullable: true },
+						inconclusiveAffectedCheckpointCount: { ...count, nullable: true }
 					},
 					required: [
 						'objectType',

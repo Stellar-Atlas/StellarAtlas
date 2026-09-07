@@ -1,4 +1,5 @@
 import type { PublicHistoryArchiveStatusSummary, PublicNode } from '@api/types';
+import { getArchiveFaultCount } from './archive-finding-model';
 import { formatInteger } from '@format/formatters';
 
 export type ArchiveSource =
@@ -23,11 +24,14 @@ export const defaultArchiveInventorySort: ArchiveInventorySort =
 export function hasArchiveSourceFindings(
 	source: Pick<
 		ArchiveSource,
-		'archiveEvidenceFailures' | 'mismatchCheckpointProofs' | 'listingGapCount'
+		| 'archiveEvidenceFailures'
+		| 'mismatchCheckpointProofs'
+		| 'listingGapCount'
+		| 'failureSummary'
 	>
 ): boolean {
 	return (
-		source.archiveEvidenceFailures > 0 ||
+		(getArchiveFaultCount(source) ?? 0) > 0 ||
 		source.mismatchCheckpointProofs > 0 ||
 		(source.listingGapCount ?? 0) > 0
 	);
@@ -179,7 +183,7 @@ export function compareSources(
 	}
 
 	const remoteOrder =
-		right.archiveEvidenceFailures - left.archiveEvidenceFailures;
+		(getArchiveFaultCount(right) ?? 0) - (getArchiveFaultCount(left) ?? 0);
 	if (remoteOrder !== 0) return remoteOrder;
 	const mismatchOrder =
 		right.mismatchCheckpointProofs - left.mismatchCheckpointProofs;

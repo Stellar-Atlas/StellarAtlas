@@ -16,7 +16,7 @@ export function ArchiveCoverageHeading({
 		: 'none';
 	return (
 		<th role="columnheader" scope="col" aria-sort={direction}>
-			{(['scan-coverage', 'coverage'] as const).map((mode) => {
+			{(['coverage', 'scan-coverage'] as const).map((mode) => {
 				const selected = value.startsWith(mode + '-');
 				const ascending = selected && value.endsWith('-asc');
 				const next = (

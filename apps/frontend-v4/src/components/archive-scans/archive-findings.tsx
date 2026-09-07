@@ -1,4 +1,8 @@
 import type { ArchiveSource } from './archive-inventory-model';
+import {
+	getArchiveFaultCount,
+	getArchiveFaultGroups
+} from './archive-finding-model';
 import { formatInteger } from '@format/formatters';
 import { LocalDateTime } from '../local-date-time';
 import { ArchiveListingRanges } from './archive-listing-ranges';
@@ -12,23 +16,35 @@ const categories: Record<string, string> = {
 	scp: 'SCP',
 	bucket: 'Bucket'
 };
-function ReasonRow({ reason }: { readonly reason: Reason }): React.JSX.Element {
+function ReasonRow({
+	reason,
+	expanded = false
+}: {
+	readonly reason: Reason;
+	readonly expanded?: boolean;
+}): React.JSX.Element {
+	const status = reason.httpStatus;
+	const label = status
+		? 'HTTP ' +
+			status +
+			(status >= 200 && status < 300 ? ' · content check failed' : '')
+		: (reason.errorType ?? 'Unclassified failure').replaceAll('_', ' ');
 	return (
 		<li>
-			<strong>
-				{formatInteger(reason.count)}{' '}
-				{categories[reason.objectType] ?? reason.objectType} ·{' '}
-				{reason.httpStatus
-					? 'HTTP ' +
-						reason.httpStatus +
-						(reason.httpStatus >= 200 && reason.httpStatus < 300
-							? ' · check failed'
-							: '')
-					: (reason.errorType ?? 'Unclassified failure').replaceAll('_', ' ')}
-			</strong>
-			<small>
-				{reason.errorMessage ?? 'No lower-level failure reason was recorded.'}
-			</small>
+			<span className="archive-reason-count">
+				{formatInteger(reason.count)}
+			</span>
+			<span>
+				<strong>
+					{categories[reason.objectType] ?? reason.objectType} · {label}
+				</strong>
+				{expanded && (
+					<small>
+						{reason.errorMessage ??
+							'No lower-level failure reason was recorded.'}
+					</small>
+				)}
+			</span>
 		</li>
 	);
 }
@@ -38,77 +54,74 @@ export function ArchiveFindings({
 	readonly source: ArchiveSource;
 }): React.JSX.Element {
 	const summary = source.failureSummary;
+	const faults = getArchiveFaultCount(source);
+	const reasons = getArchiveFaultGroups(source);
+	const hasClassifiedCount = summary?.archiveFaultCount != null;
 	const count =
-		summary?.status !== 'unavailable' &&
-		(summary?.knownAffectedCheckpointCount ?? 0) > 0
-			? summary.knownAffectedCheckpointCount
+		hasClassifiedCount && (summary?.knownAffectedCheckpointCount ?? 0) > 0
+			? summary?.knownAffectedCheckpointCount
 			: undefined;
-	const hasReasons = summary && summary.status !== 'unavailable';
-	const remoteCount = source.archiveEvidenceFailures;
-	const unknown = summary?.unknownCheckpointFailureCount ?? 0;
 	return (
-		<>
-			{remoteCount === 0 ? (
-				<strong>No unresolved file checks</strong>
+		<div className="archive-findings-compact">
+			{faults === 0 ? (
+				<strong className="archive-findings-clear">
+					No unresolved archive faults
+				</strong>
 			) : (
 				<>
-					<strong>
+					<strong className="archive-findings-title">
 						{count == null
-							? 'Unresolved source checks'
+							? 'Unresolved archive checks'
 							: formatInteger(count) +
 								' checkpoint' +
 								(count === 1 ? '' : 's') +
-								' with unresolved checks'}
+								' with archive findings'}
 					</strong>
-					{hasReasons ? (
+					{reasons.length > 0 ? (
 						<>
-							{count == null && (
-								<small>
-									{formatInteger(remoteCount)} unresolved file checks;
-									affected-checkpoint total refreshing.
-								</small>
-							)}
-							<ul className="archive-failure-reasons">
-								{summary.groups.slice(0, 3).map((reason, index) => (
+							<ul className="archive-failure-reasons archive-reason-preview">
+								{reasons.slice(0, 3).map((reason, index) => (
 									<ReasonRow key={index} reason={reason} />
 								))}
 							</ul>
-							{summary.groups.length > 3 && (
-								<details className="archive-extra-findings">
-									<summary>
-										{summary.groups.length - 3} more failure types
-									</summary>
-									<ul className="archive-failure-reasons">
-										{summary.groups.slice(3).map((reason, index) => (
-											<ReasonRow key={index} reason={reason} />
-										))}
-									</ul>
-								</details>
-							)}
-							{(summary.remainingFailureCount ?? 0) > 0 && (
-								<small>
-									{formatInteger(summary.remainingFailureCount!)} further checks
-									across {formatInteger(summary.remainingGroupCount ?? 0)} types
-									in archive details
-								</small>
-							)}
-							{unknown > 0 && (
-								<small>
-									{formatInteger(unknown)} failed checks without a definite
-									checkpoint attribution (such as shared buckets or root state).
-								</small>
-							)}
-							{summary.computedAt && (
-								<small className="archive-finding-asof">
-									Reasons as of <LocalDateTime dateTime={summary.computedAt} />
-									{summary.status === 'stale' ? ' · refreshing' : ''}
-								</small>
-							)}
+							<details className="archive-extra-findings">
+								<summary>
+									Exact responses
+									{reasons.length > 3
+										? ' · ' + (reasons.length - 3) + ' more types'
+										: ''}
+								</summary>
+								<ul className="archive-failure-reasons">
+									{reasons.map((reason, index) => (
+										<ReasonRow key={index} reason={reason} expanded />
+									))}
+								</ul>
+								{(summary?.remainingFailureCount ?? 0) > 0 && (
+									<small>
+										Additional recorded checks are available in archive details.
+									</small>
+								)}
+								{hasClassifiedCount &&
+									(summary?.unknownCheckpointFailureCount ?? 0) > 0 && (
+										<small>
+											{formatInteger(summary!.unknownCheckpointFailureCount!)}{' '}
+											checks without a definite checkpoint (shared buckets or
+											root state).
+										</small>
+									)}
+								{summary?.computedAt && (
+									<small className="archive-finding-asof">
+										Responses as of{' '}
+										<LocalDateTime dateTime={summary.computedAt} />
+										{summary.status === 'stale' ? ' · refreshing' : ''}
+									</small>
+								)}
+							</details>
 						</>
 					) : (
 						<small>
-							{formatInteger(remoteCount)} unresolved checks; reason summary is
-							being prepared. Inspect archive for individual results.
+							Reason summary is refreshing. Inspect archive for individual
+							results.
 						</small>
 					)}
 				</>
@@ -122,9 +135,9 @@ export function ArchiveFindings({
 			)}
 			{source.unclassifiedFailures > 0 && (
 				<small>
-					{formatInteger(source.unclassifiedFailures)} unclassified findings
+					{formatInteger(source.unclassifiedFailures)} unclassified checks
 				</small>
 			)}
-		</>
+		</div>
 	);
 }

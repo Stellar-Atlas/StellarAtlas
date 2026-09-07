@@ -590,3 +590,61 @@
 		border-top: 1px solid var(--border-color, #39484d);
 	}
 }
+
+.archive-root-inventory-table .archive-organization-heading th {
+	border-top: 3px solid var(--border-color, #39484d);
+	border-bottom: 1px solid var(--border-color, #39484d);
+	background: color-mix(in srgb, var(--text, #eee) 6%, var(--surface, #192125));
+}
+.archive-root-inventory-table .archive-organization-name {
+	display: block;
+	font-size: 1.2rem;
+	line-height: 1.4;
+	font-weight: 750;
+	letter-spacing: -0.015em;
+}
+.archive-root-inventory-table tbody + tbody .archive-organization-heading th {
+	border-top-width: 10px;
+}
+.archive-root-inventory-table .archive-organization-heading small {
+	font-size: 0.75rem;
+}
+
+.archive-findings-compact {
+	display: grid;
+	gap: 5px;
+}
+.archive-root-inventory-table .archive-findings-title,
+.archive-root-inventory-table .archive-findings-clear {
+	font-size: 0.85rem;
+	line-height: 1.35;
+}
+.archive-findings-compact .archive-failure-reasons {
+	margin: 0;
+}
+.archive-findings-compact .archive-failure-reasons li {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 8px;
+	margin: 4px 0;
+	align-items: baseline;
+}
+.archive-reason-count {
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+	background: var(--surface-subtle);
+	border: 1px solid var(--border-color, #39484d);
+	border-radius: 4px;
+	padding: 0 5px;
+	min-width: 24px;
+	text-align: center;
+	font-size: 0.75rem;
+}
+.archive-extra-findings > summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 0.76rem;
+}
+.archive-extra-findings[open] {
+	padding-top: 4px;
+}

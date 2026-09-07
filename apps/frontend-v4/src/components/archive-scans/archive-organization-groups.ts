@@ -1,3 +1,4 @@
+import { getArchiveFaultCount } from './archive-finding-model';
 import type { PublicNode } from '@api/types';
 import {
 	type ArchiveSource,
@@ -93,7 +94,7 @@ export function groupArchiveSources(
 					0
 				),
 				remoteFailures: rows.reduce(
-					(total, row) => total + row.archiveEvidenceFailures,
+					(total, row) => total + (getArchiveFaultCount(row) ?? 0),
 					0
 				)
 			};
