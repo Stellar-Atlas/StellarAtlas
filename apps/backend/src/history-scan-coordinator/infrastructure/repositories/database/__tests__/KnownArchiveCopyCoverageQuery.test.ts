@@ -89,10 +89,24 @@ describe('KnownArchiveCopyCoverageQuery', () => {
 			'candidate."objectKey" = source."objectKey"'
 		);
 		expect(knownArchiveCopyCoverageSql).toContain(
-			'candidate_copies as materialized'
+			'candidate_copies as not materialized'
 		);
 		expect(knownArchiveCopyCoverageSql).toContain('cross join lateral');
-		expect(knownArchiveCopyCoverageSql).toContain("-> 'content' ->> 'digest'");
+		expect(knownArchiveCopyCoverageSql).toContain(
+			'source_descriptors as materialized'
+		);
+		expect(knownArchiveCopyCoverageSql).toContain(
+			'copy_descriptors as materialized'
+		);
+		expect(knownArchiveCopyCoverageSql).toContain('jsonb_to_record(');
+		expect(knownArchiveCopyCoverageSql).toContain(
+			'lower(copy.digest) = lower(copy."sourceDigest")'
+		);
+		expect(knownArchiveCopyCoverageSql).toContain(
+			'copy.representation = copy."sourceRepresentation"'
+		);
+		expect(knownArchiveCopyCoverageSql).not.toContain('select source.*');
+		expect(knownArchiveCopyCoverageSql).not.toContain('select candidate.*');
 		expect(knownArchiveCopyCoverageSql).toContain(
 			'copy."sourceObjectType" in ('
 		);

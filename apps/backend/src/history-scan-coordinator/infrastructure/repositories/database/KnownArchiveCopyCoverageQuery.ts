@@ -158,8 +158,11 @@ function nullableDate(value: Date | string | null | undefined): Date | null {
 }
 
 export const knownArchiveCopyCoverageSql = `
-	with requested_failures as materialized (
-		select source.*, source_state."networkPassphrase"
+	with requested_failures as not materialized (
+		select source."remoteId", source."archiveUrlIdentity", source."objectType",
+			source."objectKey", source."bucketHash", source."checkpointLedger",
+			source."verificationFacts",
+			source_state."networkPassphrase"
 		from history_archive_object_queue source
 		join history_archive_state_snapshot source_state
 			on source_state."archiveUrlIdentity" = source."archiveUrlIdentity"
@@ -170,11 +173,11 @@ export const knownArchiveCopyCoverageSql = `
 	),
 	source_proofs as materialized (
 		select
-			source.*,
-			coalesce(
-				verified_event."verificationFacts",
-				source."verificationFacts"
-			) as "proofFacts"
+			source."remoteId", source."archiveUrlIdentity", source."objectType",
+			source."objectKey", source."bucketHash", source."checkpointLedger",
+			source."networkPassphrase",
+			coalesce(verified_event."verificationFacts", source."verificationFacts")
+				-> 'content' as content
 		from requested_failures source
 		left join lateral (
 			select event."verificationFacts"
@@ -186,27 +189,41 @@ export const knownArchiveCopyCoverageSql = `
 			limit 1
 		) verified_event on true
 	),
-	candidate_copies as materialized (
+	source_descriptors as materialized (
+		select source."remoteId", source."archiveUrlIdentity", source."objectType",
+			source."objectKey", source."bucketHash", source."checkpointLedger",
+			source."networkPassphrase",
+			source.content ->> 'algorithm' as algorithm,
+			source.content ->> 'digest' as digest,
+			source.content ->> 'representation' as representation
+		from source_proofs source
+	),
+	candidate_copies as not materialized (
 		select
 			source."remoteId" as "sourceRemoteId",
 			source."objectType" as "sourceObjectType",
 			source."bucketHash" as "sourceBucketHash",
 			source."checkpointLedger" as "sourceCheckpointLedger",
-			source."proofFacts" as "sourceProofFacts",
+			source.algorithm as "sourceAlgorithm",
+			source.digest as "sourceDigest",
+			source.representation as "sourceRepresentation",
 			copy."archiveUrl",
 			copy."archiveUrlIdentity",
 			copy."bucketHash",
 			copy."checkpointLedger",
-			copy."objectType",
 			copy."objectUrl",
 			copy."remoteId",
 			copy.status,
 			copy."updatedAt",
 			copy."verificationFacts",
 			copy."verifiedAt"
-		from source_proofs source
+		from source_descriptors source
 		cross join lateral (
-			select candidate.*
+			select candidate."archiveUrl", candidate."archiveUrlIdentity",
+				candidate."bucketHash", candidate."checkpointLedger",
+				candidate."objectUrl", candidate."remoteId", candidate.status,
+				candidate."updatedAt", candidate."verifiedAt",
+				candidate."verificationFacts"
 			from history_archive_object_queue candidate
 			where candidate."objectType" = source."objectType"
 				and candidate."objectKey" = source."objectKey"
@@ -223,13 +240,16 @@ export const knownArchiveCopyCoverageSql = `
 			and copy_state."networkPassphrase" =
 				source."networkPassphrase"
 	),
-	copy_proofs as (
+	copy_proofs as materialized (
 		select
-			candidate.*,
-			coalesce(
-				latest_event."verificationFacts",
-				candidate."verificationFacts"
-			) as "proofFacts",
+			candidate."sourceRemoteId", candidate."sourceObjectType",
+			candidate."sourceBucketHash", candidate."sourceCheckpointLedger",
+			candidate."sourceAlgorithm", candidate."sourceDigest",
+			candidate."sourceRepresentation",
+			candidate."archiveUrl", candidate."archiveUrlIdentity",
+			candidate."bucketHash", candidate."checkpointLedger",
+			candidate."objectUrl", candidate."remoteId",
+			facts.content, facts."bucketObject",
 			coalesce(latest_event."createdAt", candidate."verifiedAt") as "proofAt"
 		from candidate_copies candidate
 		left join lateral (
@@ -243,6 +263,13 @@ export const knownArchiveCopyCoverageSql = `
 			order by event."createdAt" desc, event."remoteId" desc
 			limit 1
 		) latest_event on true
+		cross join lateral jsonb_to_record(
+			case when jsonb_typeof(coalesce(
+				latest_event."verificationFacts", candidate."verificationFacts"
+			)) = 'object' then coalesce(
+				latest_event."verificationFacts", candidate."verificationFacts"
+			) else '{}'::jsonb end
+		) facts(content jsonb, "bucketObject" jsonb)
 		where (
 				latest_event."eventType" = 'verified'
 				or (
@@ -251,6 +278,19 @@ export const knownArchiveCopyCoverageSql = `
 					and candidate."updatedAt" <= $4::timestamptz
 				)
 			)
+	),
+	copy_descriptors as materialized (
+		select copy."sourceRemoteId", copy."sourceObjectType",
+			copy."sourceBucketHash", copy."sourceCheckpointLedger",
+			copy."sourceAlgorithm", copy."sourceDigest", copy."sourceRepresentation",
+			copy."archiveUrl", copy."archiveUrlIdentity", copy."bucketHash",
+			copy."checkpointLedger", copy."objectUrl", copy."remoteId", copy."proofAt",
+			copy.content ->> 'algorithm' as algorithm,
+			copy.content ->> 'digest' as digest,
+			copy.content ->> 'representation' as representation,
+			copy."bucketObject" ->> 'matched' as "bucketMatched",
+			copy."bucketObject" ->> 'expectedBucketHash' as "expectedBucketHash"
+		from copy_proofs copy
 	),
 	copy_candidates as (
 		select
@@ -265,39 +305,33 @@ export const knownArchiveCopyCoverageSql = `
 			copy."objectUrl",
 			copy."remoteId",
 			copy."proofAt" as "verifiedAt"
-		from copy_proofs copy
+		from copy_descriptors copy
 		where (
 				(
 					copy."sourceObjectType" = 'bucket'
 					and copy."sourceBucketHash" ~ '^[0-9a-fA-F]{64}$'
 					and lower(copy."bucketHash") =
 						lower(copy."sourceBucketHash")
-					and copy."proofFacts" -> 'bucketObject' ->> 'matched' = 'true'
-					and lower(
-						copy."proofFacts" -> 'bucketObject' ->> 'expectedBucketHash'
-					) = lower(copy."sourceBucketHash")
+					and copy."bucketMatched" = 'true'
+					and lower(copy."expectedBucketHash") = lower(copy."sourceBucketHash")
 				)
 				or (
 					copy."sourceObjectType" <> 'bucket'
-					and copy."proofFacts" -> 'content' ->> 'algorithm' = 'sha256'
-					and copy."proofFacts" -> 'content' ->> 'digest'
+					and copy.algorithm = 'sha256'
+					and copy.digest
 						~ '^[0-9a-fA-F]{64}$'
 					and nullif(
-						copy."proofFacts" -> 'content' ->> 'representation',
+						copy.representation,
 						''
 					) is not null
 					and (
 						(
-							copy."sourceProofFacts" -> 'content' ->> 'algorithm' =
+							copy."sourceAlgorithm" =
 								'sha256'
-							and copy."sourceProofFacts" -> 'content' ->> 'digest'
+							and copy."sourceDigest"
 								~ '^[0-9a-fA-F]{64}$'
-							and lower(copy."proofFacts" -> 'content' ->> 'digest') =
-								lower(
-									copy."sourceProofFacts" -> 'content' ->> 'digest'
-								)
-							and copy."proofFacts" -> 'content' ->> 'representation' =
-								copy."sourceProofFacts" -> 'content' ->> 'representation'
+							and lower(copy.digest) = lower(copy."sourceDigest")
+							and copy.representation = copy."sourceRepresentation"
 						)
 						or (
 							copy."sourceObjectType" in (
@@ -311,9 +345,9 @@ export const knownArchiveCopyCoverageSql = `
 							and copy."checkpointLedger" =
 								copy."sourceCheckpointLedger"
 							and not coalesce(
-								copy."sourceProofFacts" -> 'content' ->> 'algorithm' =
+								copy."sourceAlgorithm" =
 									'sha256'
-								and copy."sourceProofFacts" -> 'content' ->> 'digest'
+								and copy."sourceDigest"
 									~ '^[0-9a-fA-F]{64}$',
 								false
 							)
