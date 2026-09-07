@@ -98,7 +98,7 @@ function sanitizeSummary(value: unknown): unknown {
 }
 
 export const knownArchiveFailureSummarySql = `
-	with raw_unresolved as materialized (
+	with raw_unresolved as not materialized (
 		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", "checkpointLedger"
 		from history_archive_object_queue
 		where "archiveUrlIdentity" = $1::text and status = 'failed'
@@ -117,6 +117,13 @@ export const knownArchiveFailureSummarySql = `
 				and "checkpointLedger" >= 63 and "checkpointLedger" % 64 = 63
 				then "checkpointLedger" else null end as "checkpointLedger"
 		from raw_unresolved raw
+	), totals as materialized (
+		select count(*) filter (where not inconclusive) as "archiveFaultCount",
+			count(*) filter (where inconclusive) as "inconclusiveFailureCount",
+			count(distinct "checkpointLedger") filter (where not inconclusive) as "knownAffectedCheckpointCount",
+			count(distinct "checkpointLedger") filter (where inconclusive) as "inconclusiveAffectedCheckpointCount",
+			count(*) filter (where not inconclusive and "checkpointLedger" is null) as "unknownCheckpointFailureCount"
+		from unresolved
 	), grouped as materialized (
 		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", count(*) as count,
 			case when inconclusive then 'inconclusive' else 'archive_fault' end as attribution,
@@ -125,6 +132,9 @@ export const knownArchiveFailureSummarySql = `
 			count(*) filter (where not inconclusive and "checkpointLedger" is null) as "unknownCheckpointFailureCount"
 		from unresolved
 		group by "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", inconclusive
+	), grouped_totals as (
+		select count(*) as "totalGroups", coalesce(sum(count), 0) as "totalFailures"
+		from grouped
 	), selected as materialized (
 		select * from grouped
 		order by attribution, count desc, "objectType", "failureChannel", "errorType" nulls first,
@@ -138,17 +148,17 @@ export const knownArchiveFailureSummarySql = `
 	select jsonb_build_object(
 		'status', 'current', 'computedAt', now(), 'limit', 20,
 		'attributionVersion', 1,
-		'archiveFaultCount', (select count(*) from unresolved where not inconclusive),
-		'inconclusiveFailureCount', (select count(*) from unresolved where inconclusive),
+		'archiveFaultCount', totals."archiveFaultCount",
+		'inconclusiveFailureCount', totals."inconclusiveFailureCount",
 		'groups', coalesce((select jsonb_agg(to_jsonb(selected) order by attribution, count desc,
 			"objectType", "failureChannel", "errorType" nulls first, "httpStatus" nulls first,
 			"errorMessage" nulls first) from selected), '[]'::jsonb),
-		'totalGroups', (select count(*) from grouped),
-		'remainingGroupCount', (select count(*) from grouped) - (select count(*) from selected),
-		'remainingFailureCount', coalesce((select sum(count) from grouped), 0) - coalesce((select sum(count) from selected), 0),
+		'totalGroups', grouped_totals."totalGroups",
+		'remainingGroupCount', grouped_totals."totalGroups" - (select count(*) from selected),
+		'remainingFailureCount', grouped_totals."totalFailures" - coalesce((select sum(count) from selected), 0),
 		'remoteFailureCount', counts.remote, 'workerIssueCount', counts.worker
-		,'knownAffectedCheckpointCount', (select count(distinct "checkpointLedger") from unresolved where not inconclusive)
-		,'inconclusiveAffectedCheckpointCount', (select count(distinct "checkpointLedger") from unresolved where inconclusive)
-		,'unknownCheckpointFailureCount', (select count(*) from unresolved where not inconclusive and "checkpointLedger" is null)
-	) as summary from counts
+		,'knownAffectedCheckpointCount', totals."knownAffectedCheckpointCount"
+		,'inconclusiveAffectedCheckpointCount', totals."inconclusiveAffectedCheckpointCount"
+		,'unknownCheckpointFailureCount', totals."unknownCheckpointFailureCount"
+	) as summary from counts cross join totals cross join grouped_totals
 `;

@@ -279,6 +279,49 @@ describe('root-specific exact unresolved source reasons', () => {
 		).toBe(7);
 	});
 
+	it('keeps global checkpoint counts distinct across exact reason groups and separate attribution classes', async () => {
+		await db.query(
+			`insert into history_archive_object_queue
+			("archiveUrlIdentity","objectType",status,"failureChannel","errorType","errorMessage","httpStatus","checkpointLedger") values
+			($1,'ledger','failed','archive_availability','archive_transport_error','aborted',200,63),
+			($1,'ledger','failed','archive_availability','ECONNRESET','connection reset',null,127),
+			($1,'bucket','failed','archive_availability','archive_http_error','Bucket HTTP 404',404,63),
+			($1,'history-archive-state','failed','archive_availability','archive_http_error','Root HTTP 403',403,127),
+			($1,'ledger','failed','archive_evidence','ledger_hash_mismatch','connection aborted after a proven hash mismatch',200,127),
+			($1,'checkpoint-state','failed','archive_evidence','decode_error','Separate exact checkpoint reason',null,63)`,
+			[root]
+		);
+		await db.query(
+			'update history_archive_evidence_root_summary set "remoteFailureObjects"=71 where "archiveUrlIdentity"=$1',
+			[root]
+		);
+		const summary = await queryKnownArchiveFailureSummary(db, root);
+		expect(summary).toMatchObject({
+			remoteFailureCount: 72,
+			archiveFaultCount: 70,
+			inconclusiveFailureCount: 2,
+			workerIssueCount: 300,
+			knownAffectedCheckpointCount: 2,
+			inconclusiveAffectedCheckpointCount: 2,
+			unknownCheckpointFailureCount: 3,
+			totalGroups: 32,
+			remainingGroupCount: 12,
+			remainingFailureCount: 12
+		});
+		expect(summary.groups.reduce((sum, group) => sum + group.count, 0)).toBe(
+			60
+		);
+		// A root/bucket's incidental checkpoint is not source-file coverage;
+		// ledger63 is independently present in both attribution classes.
+		expect(
+			await db.query(
+				`select count(*)::integer as count
+			from history_archive_object_queue where "archiveUrlIdentity"=$1`,
+				[root]
+			)
+		).toEqual([{ count: 372 }]);
+	});
+
 	it('does not let numerous inconclusive checks crowd confirmed reasons out of the capped page', async () => {
 		await db.query(
 			`insert into history_archive_object_queue ("archiveUrlIdentity","objectType",status,"failureChannel","errorType","errorMessage","httpStatus")
