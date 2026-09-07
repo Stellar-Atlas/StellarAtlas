@@ -1,11 +1,13 @@
 import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '../../../database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import type { DataSource } from 'typeorm';
+import { HistoryArchiveListingGapMigration1788735600000 } from '../../../database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
 
 export async function createCanonicalFrontierTestSchema(
 	dataSource: DataSource
 ): Promise<void> {
 	const sharedRunner = dataSource.createQueryRunner();
 	try {
+		await new HistoryArchiveListingGapMigration1788735600000().up(sharedRunner);
 		await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
 			sharedRunner
 		);

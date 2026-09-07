@@ -6,6 +6,7 @@ import type {
 	HistoryArchiveObjectEventPageFiltersV1,
 	HistoryArchiveObjectPageFiltersV1,
 	KnownArchiveCheckpointCountsV1,
+	KnownArchiveListingGapV1,
 	KnownArchiveFailureFiltersV1,
 	KnownArchiveObjectCountsV1,
 	KnownArchiveRemoteFailureV1,
@@ -42,6 +43,8 @@ export interface KnownArchiveFailurePageRequest extends KnownArchiveEvidencePage
 }
 
 export interface KnownArchiveRootReadModel extends KnownArchiveRootScope {
+	readonly listingGaps?: readonly KnownArchiveListingGapV1[];
+	readonly listingGapCount?: number;
 	readonly checkpoints: KnownArchiveCheckpointCountsV1;
 	readonly latestObjectAt: Date | null;
 	readonly objects: KnownArchiveObjectCountsV1;

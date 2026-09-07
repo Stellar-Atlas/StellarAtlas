@@ -12,6 +12,19 @@ export type ArchiveInventorySort =
 	| 'url';
 
 export const defaultArchiveInventorySort: ArchiveInventorySort = 'organization';
+
+export function hasArchiveSourceFindings(
+	source: Pick<
+		ArchiveSource,
+		'archiveEvidenceFailures' | 'mismatchCheckpointProofs' | 'listingGapCount'
+	>
+): boolean {
+	return (
+		source.archiveEvidenceFailures > 0 ||
+		source.mismatchCheckpointProofs > 0 ||
+		(source.listingGapCount ?? 0) > 0
+	);
+}
 const nameCollator = new Intl.Collator('en', {
 	numeric: true,
 	sensitivity: 'base'

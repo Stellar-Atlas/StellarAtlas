@@ -11,6 +11,7 @@ import type { HistoryArchiveWorkerStageDTO } from 'history-scanner-dto';
 import { Category } from '../../domain/history-archive/Category.js';
 import { hashBucketList } from '../../domain/history-archive/hashBucketList.js';
 import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
+import { probeArchiveListingGap } from '../../domain/history-archive/ArchiveListingGapProbe.js';
 import type { CategoryVerificationData } from '../../domain/scanner/CategoryScanner.js';
 import { CategoryXDRProcessor } from '../../domain/scanner/CategoryXDRProcessor.js';
 import { HasherPool } from '../../domain/scanner/HasherPool.js';
@@ -118,7 +119,22 @@ export class ArchiveObjectCategoryVerifier {
 				socketTimeoutMs: 10_000
 			})
 			.finally(releaseDownloadPermit);
-		if (response.isErr()) return err(mapArchiveObjectHttpError(response.error));
+		if (response.isErr()) {
+			const failure = mapArchiveObjectHttpError(response.error);
+			if (failure.httpStatus !== 404 || job.checkpointLedger === null) return err(failure);
+			const releaseListingPermit = await this.downloadPermit.acquire();
+			try {
+				const listingGap = await probeArchiveListingGap({
+					archiveRoot: job.archiveUrl,
+					checkpoint: job.checkpointLedger,
+					failedObjectUrl: job.objectUrl,
+					observedHttpStatus: 404
+				});
+				return err(listingGap === null ? failure : { ...failure, listingGap });
+			} finally {
+				releaseListingPermit();
+			}
+		}
 
 		const state = response.value.data;
 		if (!isRecord(state)) {

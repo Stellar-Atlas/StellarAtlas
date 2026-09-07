@@ -1,4 +1,8 @@
-import { unresolvedRemoteFailureCount } from '@domain/known-archive-evidence';
+import {
+	unresolvedRemoteFailureCount,
+	unresolvedListingGapCount
+} from '@domain/known-archive-evidence';
+import { KnownArchiveListingGaps } from './known-archive-listing-gaps';
 import type { PublicHistoryArchiveObjectEvidenceClass } from '@api/archive-evidence-types';
 import type { PublicKnownArchiveEvidence } from '@domain/known-archive-evidence';
 import { formatInteger } from '@format/formatters';
@@ -47,12 +51,21 @@ export function KnownArchiveEvidenceTabContent({
 					onObjectTypeChange={view.failures.changeObjectType}
 					roots={evidence.roots}
 					showArchiveSource={
-						findingCount > 0 || view.failures.archiveUrl !== null
+						findingCount > 0 ||
+						unresolvedListingGapCount(evidence.roots) > 0 ||
+						view.failures.archiveUrl !== null
 					}
 					showObjectType={findingCount > 1 || view.failures.objectType !== null}
 				/>
 			) : null}
 			{view.tab === 'failures' ? <FailuresView view={view} /> : null}
+			{view.tab === 'failures' ? (
+				<KnownArchiveListingGaps
+					roots={evidence.roots}
+					archiveUrl={view.failures.archiveUrl}
+					objectType={view.failures.objectType}
+				/>
+			) : null}
 			{view.tab === 'work' || view.tab === 'verified' ? (
 				<ObjectPageView evidence={evidence} view={view} />
 			) : null}
@@ -100,7 +113,7 @@ function FailuresView({
 			) : null}
 			{!showRemote && failures.errorTarget === null ? (
 				<p className="known-evidence-empty">
-					No unresolved remote archive checks match these filters.
+					No unresolved individual file checks match these filters.
 				</p>
 			) : null}
 			{showRemote ? (

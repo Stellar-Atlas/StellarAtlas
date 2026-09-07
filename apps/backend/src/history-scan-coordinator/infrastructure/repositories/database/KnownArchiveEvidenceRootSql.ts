@@ -1,4 +1,8 @@
 import {
+	activeListingGapCountSql,
+	knownArchiveListingGapJoinSql
+} from './KnownArchiveListingGapQuery.js';
+import {
 	retainedRemoteCountSql,
 	retainedRemoteFutureCountSql
 } from './RetainedRemoteFindingQuery.js';
@@ -24,6 +28,8 @@ export const knownArchiveEvidenceRootSql = `
 	select
 		root."archiveUrl",
 		root."archiveUrlIdentity",
+		coalesce(listing_gaps."listingGaps", '[]'::jsonb) as "listingGaps",
+		${activeListingGapCountSql('root."archiveUrlIdentity"')} as "listingGapCount",
 		summary_progress."rollupComplete",
 		coalesce(summary."totalObjects", 0) as "totalObjects",
 		coalesce(summary."pendingObjects", 0) as "pendingObjects",
@@ -86,6 +92,7 @@ export const knownArchiveEvidenceRootSql = `
 	left join history_archive_checkpoint_proof frontier
 		on frontier."archiveUrlIdentity" = root."archiveUrlIdentity"
 		and frontier."checkpointLedger" = cursor."nextHistoricalCheckpointLedger" - 64
+	${knownArchiveListingGapJoinSql}
 	left join lateral (
 		select case
 			when state.status <> 'available' or state."currentLedger" < 63 then null
@@ -96,6 +103,14 @@ export const knownArchiveEvidenceRootSql = `
 		select case
 			when cursor."nextHistoricalCheckpointLedger" is null
 				or cursor."nextHistoricalCheckpointLedger" = 63 then null
+			when earliest_gap."firstCheckpointLedger" = 63 then null
+			when cursor."nextHistoricalCheckpointLedger" <= 127
+				and frontier.status is distinct from 'verified' then null
+			when earliest_gap."firstCheckpointLedger" is not null
+				then least(earliest_gap."firstCheckpointLedger" - 64,
+					case when frontier.status = 'verified' then cursor."nextHistoricalCheckpointLedger" - 64
+						when cursor."nextHistoricalCheckpointLedger" <= 127 then null
+						else cursor."nextHistoricalCheckpointLedger" - 128 end)
 			when frontier.status = 'verified'
 				then cursor."nextHistoricalCheckpointLedger" - 64
 			when cursor."nextHistoricalCheckpointLedger" <= 127 then null

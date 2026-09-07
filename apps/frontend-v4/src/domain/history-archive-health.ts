@@ -119,6 +119,8 @@ export function assessArchiveStatusHealth({
 	if (facts.checkpointMismatches > 0) {
 		return { facts, state: 'integrity_failure' };
 	}
+	if (summary.sources.some((source) => (source.listingGapCount ?? 0) > 0))
+		return { facts, state: 'remote_retry' };
 	if (facts.scannerIssues > 0) return { facts, state: 'scanner_issue' };
 	if (facts.unclassifiedFailures > 0) return { facts, state: 'unknown' };
 	if (checkpointStatusProofIsComplete(summary)) {
@@ -172,6 +174,7 @@ export function checkpointStatusProofIsComplete(
 ): boolean {
 	const checkpoints = summary.checkpointCoverage;
 	return (
+		summary.sources.every((source) => (source.listingGapCount ?? 0) === 0) &&
 		checkpoints.expectedArchiveCheckpoints > 0 &&
 		checkpoints.categoryConsistentArchiveCheckpoints ===
 			checkpoints.expectedArchiveCheckpoints &&
@@ -342,7 +345,9 @@ function getArchiveStatusHealthFacts(
 function isFailingStatusSource(
 	source: PublicHistoryArchiveStatusSummary['sources'][number]
 ): boolean {
-	return source.mismatchCheckpointProofs > 0;
+	return (
+		source.mismatchCheckpointProofs > 0 || (source.listingGapCount ?? 0) > 0
+	);
 }
 
 function isFailingArchiveSource(

@@ -1,6 +1,9 @@
 'use client';
 
-import { unresolvedRemoteFailureCount } from '@domain/known-archive-evidence';
+import {
+	unresolvedRemoteFailureCount,
+	unresolvedListingGapCount
+} from '@domain/known-archive-evidence';
 
 import { useId, useRef } from 'react';
 import { ArchiveHealthPill } from '@components/status/status-ui';
@@ -132,6 +135,13 @@ function EvidenceMetrics({
 	const objects = evidence.totals.objects;
 	return (
 		<dl className="known-evidence-metrics">
+			{unresolvedListingGapCount(evidence.roots) > 0 ? (
+				<Metric
+					label="Missing-file listing ranges"
+					tone="danger"
+					value={unresolvedListingGapCount(evidence.roots)}
+				/>
+			) : null}
 			<Metric
 				label="Unresolved remote checks"
 				tone={unresolvedRemoteFailureCount(objects) > 0 ? 'danger' : 'neutral'}
@@ -152,7 +162,8 @@ function EvidenceMetrics({
 }
 
 function formatFindingCounts(evidence: PublicKnownArchiveEvidence): string {
-	return `${formatInteger(unresolvedRemoteFailureCount(evidence.totals.objects))} remote retry`;
+	const gaps = unresolvedListingGapCount(evidence.roots);
+	return `${formatInteger(unresolvedRemoteFailureCount(evidence.totals.objects))} remote retry${gaps > 0 ? ` · ${formatInteger(gaps)} listing gaps` : ''}`;
 }
 
 function formatEvidenceScope(evidence: PublicKnownArchiveEvidence): string {
@@ -164,6 +175,8 @@ function formatEvidenceScope(evidence: PublicKnownArchiveEvidence): string {
 function formatEvidenceStatus(
 	evidence: PublicKnownArchiveEvidence
 ): string | undefined {
+	if (unresolvedListingGapCount(evidence.roots) > 0)
+		return 'Missing checkpoint files';
 	const objects = evidence.totals.objects;
 	if (unresolvedRemoteFailureCount(objects) > 0) {
 		return (

@@ -67,6 +67,7 @@ export function assessKnownArchiveEvidence(
 	if (evidence === null) return 'unknown';
 	const { checkpoints, objects } = evidence.totals;
 	if (checkpoints.mismatchedCheckpoints > 0) return 'integrity_failure';
+	if (unresolvedListingGapCount(evidence.roots) > 0) return 'remote_retry';
 	if (unresolvedRemoteFailureCount(objects) > 0) return 'remote_retry';
 	if (objects.workerIssueObjects > 0) return 'scanner_issue';
 	if (objects.activeObjects > 0) return 'checking';
@@ -156,4 +157,14 @@ export function unresolvedRemoteFailureCount(objects: {
 	readonly unresolvedRemoteFailureObjects?: number;
 }): number {
 	return objects.unresolvedRemoteFailureObjects ?? objects.remoteFailureObjects;
+}
+
+export function unresolvedListingGapCount(
+	roots: PublicKnownArchiveEvidence['roots']
+): number {
+	return roots.reduce(
+		(total, root) =>
+			total + (root.listingGapCount ?? root.listingGaps?.length ?? 0),
+		0
+	);
 }

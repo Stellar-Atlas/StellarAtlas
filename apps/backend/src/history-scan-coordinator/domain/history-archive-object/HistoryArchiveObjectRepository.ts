@@ -1,4 +1,5 @@
 import type { HistoryArchiveObject } from './HistoryArchiveObject.js';
+import type { HistoryArchiveListingGapDTO } from 'history-scanner-dto';
 import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectVerificationFacts } from './HistoryArchiveObject.js';
 import type {
@@ -101,6 +102,7 @@ export interface HistoryArchiveObjectTransitionCompletion {
 }
 
 export interface HistoryArchiveObjectFailure {
+	readonly listingGap?: HistoryArchiveListingGapDTO;
 	readonly claimAttempt: number;
 	readonly errorMessage: string;
 	readonly errorType: string;

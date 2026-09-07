@@ -210,6 +210,46 @@ describe('history archive health', () => {
 		});
 		const scanner = createStatusSummary({ scannerIssueFailures: 1 });
 		const legacy = createStatusSummary({ unclassifiedFailures: 1 });
+		const source: PublicHistoryArchiveStatusSummary['sources'][number] = {
+			archiveUrl: 'https://example.org/Case',
+			archiveUrlIdentity: 'https://example.org/Case',
+			listingGapCount: 1,
+			activeObjectChecks: 0,
+			archiveEvidenceFailures: 0,
+			currentLedger: 255,
+			durableVerifiedCheckpointProofs: 1,
+			latestCheckpointLedger: 255,
+			latestDiscoveredCheckpointLedger: 255,
+			mismatchCheckpointProofs: 0,
+			notEvaluableCheckpointProofs: 0,
+			objectCompleteCheckpointProofs: 1,
+			observedAt: '2026-09-06T23:00:00Z',
+			pendingCheckpointProofs: 0,
+			rootObjectStatus: 'verified',
+			rootFailureChannel: null,
+			scannerIssueFailures: 0,
+			source: 'history-scanner',
+			stateStatus: 'available',
+			stateUrl: 'https://example.org/Case/.well-known/stellar-history.json',
+			totalCheckpointProofs: 1,
+			unclassifiedFailures: 0,
+			verifiedCheckpointProofs: 1
+		};
+		const gapOnly = {
+			...createStatusSummary({
+				checkpointCoverage: {
+					categoryConsistentArchiveCheckpoints: 1,
+					expectedArchiveCheckpoints: 1
+				}
+			}),
+			sources: [source],
+			sourceCount: 1
+		};
+		expect(
+			assessArchiveStatusHealth({ evidenceAvailable: true, summary: gapOnly })
+				.state
+		).toBe('remote_retry');
+		expect(checkpointStatusProofIsComplete(gapOnly)).toBe(false);
 
 		expect(
 			assessArchiveStatusHealth({

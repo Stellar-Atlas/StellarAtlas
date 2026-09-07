@@ -9,6 +9,7 @@ import {
 } from 'history-scanner-dto';
 import type { HistoryArchiveObjectTypeDTO } from 'history-scanner-dto';
 import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
+import type { HistoryArchiveListingGapDTO } from 'history-scanner-dto';
 import type {
 	HistoryArchiveContentReuseRequestV1,
 	HistoryArchiveContentReuseV1,
@@ -52,6 +53,7 @@ export interface HistoryArchiveObjectCompletionDTO extends HistoryArchiveObjectP
 }
 
 export interface HistoryArchiveObjectFailureDTO {
+	readonly listingGap?: HistoryArchiveListingGapDTO;
 	readonly claimAttempt?: number;
 	readonly executionId?: string;
 	readonly errorMessage: string;

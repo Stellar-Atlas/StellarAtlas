@@ -1,3 +1,4 @@
+export { type HistoryArchiveListingGapDTO, isHistoryArchiveListingGapDTO } from './HistoryArchiveListingGapDTO.js';
 export {
 	isScanErrorTypeDTO,
 	scanErrorTypes,

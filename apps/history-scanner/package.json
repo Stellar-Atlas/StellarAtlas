@@ -31,6 +31,7 @@
 		"logger": "workspace:*",
 		"nats": "2.29.3",
 		"neverthrow": "^8.2.0",
+		"saxes": "6.0.0",
 		"shared": "workspace:*",
 		"validator": "^13.15.35",
 		"workerpool": "^10.0.2",

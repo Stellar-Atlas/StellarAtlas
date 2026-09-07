@@ -26,6 +26,7 @@ const predecessorCheckpoint = targetCheckpoint - 64;
 const forwardCheckpoint = targetCheckpoint + 64;
 const unrelatedCheckpoint = predecessorCheckpoint - 64;
 const targetRootCount = 4;
+const missingPredecessorRoot = 1;
 const bucketHash = 'ab'.repeat(32);
 const predecessorKey = checkpointKey(predecessorCheckpoint);
 jest.setTimeout(60_000);
@@ -76,7 +77,9 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 		const predecessors = await readTargetPredecessors();
 
 		expect(predecessors).toHaveLength(targetRootCount);
-		for (const row of predecessors.slice(0, 3)) {
+		for (const row of predecessors.filter((row) =>
+			parkedRemoteIds.has(row.archiveUrlIdentity)
+		)) {
 			expect(row).toMatchObject({
 				attempts: 2,
 				dependencyReady: true,
@@ -91,7 +94,9 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 			});
 		}
 
-		const inserted = predecessors[3];
+		const inserted = predecessors.find(
+			(row) => row.archiveUrlIdentity === archiveUrl(missingPredecessorRoot)
+		);
 		expect(inserted).toMatchObject({
 			attempts: 0,
 			dependencyReady: true,
@@ -105,7 +110,7 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 			status: 'pending'
 		});
 		expect(inserted?.objectUrl).toBe(
-			`${archiveUrl(3)}/history/03/c7/2c/history-03c72cff.json`
+			`${archiveUrl(missingPredecessorRoot)}/history/03/c7/2c/history-03c72cff.json`
 		);
 		expect(await countTargetPredecessorLedgers()).toBe(0);
 	});
@@ -146,7 +151,7 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 		const admittedPredecessors = await readTargetPredecessors();
 		expect(
 			admittedPredecessors
-				.slice(0, 3)
+				.filter((row) => parkedRemoteIds.has(row.archiveUrlIdentity))
 				.every(
 					(row) =>
 						row.errorType === 'http-status' &&
@@ -267,7 +272,12 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 	async function seedProductionShape(): Promise<ReadonlyMap<string, string>> {
 		const remoteIds = new Map<string, string>();
 		for (let index = 0; index < targetRootCount; index += 1) {
-			const parked = await seedArchive(index, networkPassphrase, index < 3);
+			// Missing work must belong to a selected source; materialization is capped at two roots.
+			const parked = await seedArchive(
+				index,
+				networkPassphrase,
+				index !== missingPredecessorRoot
+			);
 			if (parked !== null) remoteIds.set(archiveUrl(index), parked.remoteId);
 		}
 		await seedArchive(99, unrelatedNetworkPassphrase, true);

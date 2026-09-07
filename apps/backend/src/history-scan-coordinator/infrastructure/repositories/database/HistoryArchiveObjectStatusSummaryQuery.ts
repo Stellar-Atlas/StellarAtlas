@@ -1,3 +1,4 @@
+import { activeListingGapCountSql } from './KnownArchiveListingGapQuery.js';
 import { historyArchivePublicSourcePredicateSql } from './HistoryArchivePublicSourceScopeSql.js';
 import { retainedRemoteCountSql } from './RetainedRemoteFindingQuery.js';
 import type { EntityManager } from 'typeorm';
@@ -13,6 +14,7 @@ import { getCheckpointCoverage } from './HistoryArchiveObjectCheckpointCoverageQ
 import { getHistoryArchiveTransitionReconciliation } from './HistoryArchiveTransitionReconciliationQuery.js';
 
 type SourceRow = {
+	readonly listingGapCount?: NumericValue;
 	readonly activeObjectChecks?: NumericValue;
 	readonly activeobjectchecks?: NumericValue;
 	readonly archiveEvidenceFailures?: NumericValue;
@@ -279,6 +281,7 @@ async function getSourceCount(manager: EntityManager): Promise<number> {
 
 function mapSourceRow(row: SourceRow): HistoryArchiveStatusSourceV1 {
 	return {
+		listingGapCount: requireNumber(row.listingGapCount ?? 0, 'listingGapCount'),
 		activeObjectChecks: numberField(row, 'activeObjectChecks'),
 		archiveEvidenceFailures: numberField(row, 'archiveEvidenceFailures'),
 		archiveUrl: stringField(row.archiveUrl ?? row.archiveurl, 'archiveUrl'),
@@ -574,6 +577,7 @@ export const sourceStatusSummarySql = `
 	select
 		state."archiveUrl",
 		state."archiveUrlIdentity",
+		${activeListingGapCountSql('state."archiveUrlIdentity"')} as "listingGapCount",
 		state."stateUrl",
 		state.status as "stateStatus",
 		state."observedAt",

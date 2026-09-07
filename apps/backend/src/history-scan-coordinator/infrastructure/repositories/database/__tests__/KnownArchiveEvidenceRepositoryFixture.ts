@@ -1,4 +1,7 @@
 import { historyArchiveRetainedRemoteFindingSql } from '../HistoryArchiveRetainedRemoteFindingSql.js';
+import { HistoryArchiveListingGapMigration1788735600000 } from '../../../database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
+import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '../../../database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
+import { HistoryArchiveCompactPlanningMigration1785530000000 } from '../../../database/migrations/1785530000000-HistoryArchiveCompactPlanningMigration.js';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
@@ -48,6 +51,17 @@ export async function createKnownEvidenceDataSource(
 	const migrationRunner = dataSource.createQueryRunner();
 	await migrationRunner.connect();
 	try {
+		await new HistoryArchiveListingGapMigration1788735600000().up(
+			migrationRunner
+		);
+		await migrationRunner.startTransaction();
+		await new HistoryArchiveCheckpointProofAttestationMigration1785420000000().up(
+			migrationRunner
+		);
+		await migrationRunner.commitTransaction();
+		await new HistoryArchiveCompactPlanningMigration1785530000000().up(
+			migrationRunner
+		);
 		await new HistoryArchiveCheckpointProofRollupMigration1784830000000().up(
 			migrationRunner
 		);
@@ -61,6 +75,8 @@ export async function createKnownEvidenceDataSource(
 			migrationRunner
 		);
 	} finally {
+		if (migrationRunner.isTransactionActive)
+			await migrationRunner.rollbackTransaction();
 		await migrationRunner.release();
 	}
 	return dataSource;
@@ -69,6 +85,9 @@ export async function createKnownEvidenceDataSource(
 export async function resetKnownEvidence(
 	dataSource: DataSource
 ): Promise<void> {
+	await dataSource.query(
+		'truncate history_archive_listing_gap, history_archive_checkpoint_scan_cursor, history_archive_checkpoint_proof_attestation, history_archive_checkpoint_proof_attestation_invalidation, history_archive_checkpoint_proof_attestation_rollup, history_archive_checkpoint_proof_attested_checkpoint restart identity cascade'
+	);
 	await dataSource.query(
 		'truncate history_archive_retained_remote_finding, history_archive_retained_remote_summary, history_archive_object_event, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_state_snapshot, history_archive_object_host_throttle restart identity cascade'
 	);

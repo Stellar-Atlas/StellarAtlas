@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
-import { mock } from 'jest-mock-extended';
 import {
 	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
 	HistoryArchiveCheckpointProof
@@ -9,12 +8,13 @@ import { HistoryArchiveObject } from '../../../../domain/history-archive-object/
 import { publicNetworkPassphrase } from '../../../../domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
 import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../TypeOrmHistoryArchiveCheckpointProofRepository.js';
 import { refreshOneStaleCanonicalCheckpointProof } from '../HistoryArchiveCheckpointProofVersionRefresh.js';
+import { drainHistoryArchiveCheckpointProofRefreshes } from '../HistoryArchiveCheckpointProofRefreshQueue.js';
 import {
 	createProofDataSource,
 	createLedgerFact as ledgerFact,
 	createProofObject as proofObject,
 	deleteProofObject,
-	exerciseFlakyProofRefresh,
+	exerciseDurableProofRefresh,
 	mutateProofFacts,
 	proofArchiveUrl as archiveUrl,
 	proofBucketHash as bucketHash,
@@ -47,7 +47,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+			'truncate table history_archive_checkpoint_content, history_archive_checkpoint_proof_refresh_queue, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
 		);
 		await saveFixture(dataSource);
 	});
@@ -57,6 +57,8 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 
 		expect(proof).toMatchObject({
 			bucketsVerified: true,
+			expectedBucketCount: 1,
+			verifiedBucketCount: 1,
 			checkpointBucketListMatches: true,
 			ledgerFactCount: 64,
 			previousLedgersMatch: true,
@@ -83,7 +85,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 
 	it('advances the compact cursor in the same transaction that verifies a proof', async () => {
 		await dataSource.query(
-			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+			'truncate table history_archive_checkpoint_content, history_archive_checkpoint_proof_refresh_queue, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
 		);
 		await saveFixture(dataSource, { checkpointLedger: 63 });
 		const root = new HistoryArchiveObject({
@@ -312,7 +314,7 @@ and object."checkpointLedger" = 127`,
 
 	it('verifies the 63-ledger genesis checkpoint without ledger zero', async () => {
 		await dataSource.query(
-			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+			'truncate table history_archive_checkpoint_content, history_archive_checkpoint_proof_refresh_queue, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
 		);
 		await saveFixture(dataSource, { checkpointLedger: 63 });
 
@@ -335,7 +337,7 @@ and object."checkpointLedger" = 127`,
 
 	it('treats early public-network SCP history as optional', async () => {
 		await dataSource.query(
-			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+			'truncate table history_archive_checkpoint_content, history_archive_checkpoint_proof_refresh_queue, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
 		);
 		await saveFixture(dataSource, { checkpointLedger: 63 });
 		await deleteObject('scp');
@@ -357,7 +359,7 @@ and object."checkpointLedger" = 127`,
 
 	it('verifies a checkpoint with no declared bucket dependencies', async () => {
 		await dataSource.query(
-			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+			'truncate table history_archive_checkpoint_content, history_archive_checkpoint_proof_refresh_queue, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
 		);
 		await saveFixture(dataSource, { bucketHashes: [] });
 
@@ -516,7 +518,7 @@ and object."checkpointLedger" = 127`,
 	it('keeps optional SCP independent of network protocol facts', async () => {
 		const earlyCheckpointLedger = 127;
 		await dataSource.query(
-			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+			'truncate table history_archive_checkpoint_content, history_archive_checkpoint_proof_refresh_queue, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
 		);
 		await saveFixture(dataSource, {
 			checkpointLedger: earlyCheckpointLedger,
@@ -761,13 +763,23 @@ and object."checkpointLedger" = 127`,
 	});
 
 	it('retries durable proof refresh after the failure transaction commits', async () => {
+		const checkpointLedger = 63;
+		await dataSource.query(
+			'truncate table history_archive_checkpoint_content, history_archive_checkpoint_proof_refresh_queue, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+		);
+		await saveFixture(dataSource, { checkpointLedger });
 		const {
 			failedObject,
 			failure,
-			flakyProofRepository,
+			inlineProofRepository,
 			objectRepository,
 			useCase
-		} = await exerciseFlakyProofRefresh(dataSource, repository);
+		} = await exerciseDurableProofRefresh(dataSource, checkpointLedger);
+		// This failure precedes the first proof; verified-evidence retention is
+		// covered separately by the monotonicity integration suite.
+		expect(
+			await dataSource.getRepository(HistoryArchiveCheckpointProof).count()
+		).toBe(0);
 		expect(failedObject).toMatchObject({ attempts: 1, status: 'scanning' });
 		const firstResult = await useCase.execute(failedObject.remoteId, failure);
 		if (firstResult.isErr()) throw firstResult.error;
@@ -781,21 +793,71 @@ and object."checkpointLedger" = 127`,
 			transitionEffectsRequiredAt: expect.any(Date)
 		});
 		if (persistedFailure === null) throw new Error('Missing persisted failure');
-		await expect(useCase.reconcilePersisted(persistedFailure)).rejects.toThrow(
-			'transient proof refresh failure'
+		await useCase.reconcilePersisted(persistedFailure);
+		expect(inlineProofRepository.refreshForObject).not.toHaveBeenCalled();
+		await dataSource.query(`
+			create function fail_fixture_proof_write() returns trigger language plpgsql as $$
+			begin raise exception 'transient proof refresh failure'; end $$;
+			create trigger fail_fixture_proof_write before insert or update
+				on history_archive_checkpoint_proof
+				for each row execute function fail_fixture_proof_write();
+		`);
+		try {
+			expect(
+				await drainHistoryArchiveCheckpointProofRefreshes(dataSource, 1, 1)
+			).toMatchObject({
+				claimed: 1,
+				completed: 0,
+				failed: 1,
+				superseded: 0,
+				failures: [
+					expect.objectContaining({
+						errorMessage: 'transient proof refresh failure',
+						failureRecorded: true
+					})
+				]
+			});
+			const queued = await dataSource.query(`
+				select "archiveUrlIdentity", "checkpointLedger", attempts, "lastError", "leaseToken"
+				from history_archive_checkpoint_proof_refresh_queue
+			`);
+			expect(queued).toEqual([
+				expect.objectContaining({
+					archiveUrlIdentity: archiveUrl,
+					checkpointLedger,
+					attempts: 1,
+					lastError: 'transient proof refresh failure',
+					leaseToken: null
+				})
+			]);
+		} finally {
+			await dataSource.query(`
+				drop trigger fail_fixture_proof_write on history_archive_checkpoint_proof;
+				drop function fail_fixture_proof_write();
+			`);
+		}
+		await dataSource.query(
+			`
+			update history_archive_checkpoint_proof_refresh_queue set "nextAttemptAt" = now()
+			where "archiveUrlIdentity" = $1 and "checkpointLedger" = $2
+		`,
+			[archiveUrl, checkpointLedger]
 		);
-		const retryFailure = await objectRepository.findByRemoteId(
-			failedObject.remoteId
-		);
-		if (retryFailure === null) throw new Error('Missing retryable failure');
-		await useCase.reconcilePersisted(retryFailure);
+		expect(
+			await drainHistoryArchiveCheckpointProofRefreshes(dataSource, 1, 1)
+		).toMatchObject({ claimed: 1, completed: 1, failed: 0, superseded: 0 });
+		expect(
+			await dataSource.query(
+				'select 1 from history_archive_checkpoint_proof_refresh_queue'
+			)
+		).toEqual([]);
 		const proof = await dataSource
 			.getRepository(HistoryArchiveCheckpointProof)
 			.findOneByOrFail({ archiveUrlIdentity: archiveUrl, checkpointLedger });
 		expect(
 			await objectRepository.findByRemoteId(failedObject.remoteId)
 		).toMatchObject({ transitionEffectsCompletedAt: expect.any(Date) });
-		expect(flakyProofRepository.refreshForObject).toHaveBeenCalledTimes(2);
+		expect(inlineProofRepository.refreshForObject).not.toHaveBeenCalled();
 		expect(proof).toMatchObject({
 			failureKind: 'object-failed',
 			status: 'not-evaluable'

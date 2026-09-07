@@ -26,10 +26,18 @@ describe('checkpoint proof refresh monotonicity', () => {
 		postgres = await startDisposablePostgres();
 		({ dataSource, repository } = await createProofDataSource(postgres.url));
 		const queryRunner = dataSource.createQueryRunner();
-		await new HistoryArchiveCheckpointProofAttestationMigration1785420000000().up(
-			queryRunner
-		);
-		await queryRunner.release();
+		await queryRunner.startTransaction();
+		try {
+			await new HistoryArchiveCheckpointProofAttestationMigration1785420000000().up(
+				queryRunner
+			);
+			await queryRunner.commitTransaction();
+		} catch (error) {
+			await queryRunner.rollbackTransaction();
+			throw error;
+		} finally {
+			await queryRunner.release();
+		}
 	});
 
 	beforeEach(async () => {
@@ -222,9 +230,7 @@ describe('checkpoint proof refresh monotonicity', () => {
 			[proofArchiveUrl]
 		);
 		expect(
-			Number(
-				durableAfterMismatch[0]?.durableVerifiedCheckpointProofs ?? 0
-			)
+			Number(durableAfterMismatch[0]?.durableVerifiedCheckpointProofs ?? 0)
 		).toBe(1);
 
 		await expect(

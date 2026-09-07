@@ -61,7 +61,34 @@ describe('GetKnownArchiveEvidence', () => {
 				],
 				total: 2
 			},
-			roots: [createRoot(rootA), createRoot(rootB)],
+			roots: [
+				{
+					...createRoot(rootA),
+					listingGapCount: 1,
+					listingGaps: [
+						{
+							kind: 's3-listing-gap',
+							firstCheckpointLedger: 127,
+							lastCheckpointLedger: 255,
+							resumeCheckpointLedger: 319,
+							checkpointCount: 3,
+							observedAt: '2026-09-06T23:00:00Z',
+							sourceCheckpointProofId: '9007199254740993',
+							sourceArchiveUrlIdentity: rootB,
+							listings: (
+								['history', 'ledger', 'transactions', 'results'] as const
+							).map((category) => ({
+								category,
+								listingUrl: `https://example.org/?prefix=Case%2F${category}%2F`,
+								responseSha256: 'a'.repeat(64),
+								firstReturnedKey: `${category}-0000013f`,
+								firstReturnedCheckpoint: 319
+							}))
+						}
+					]
+				},
+				createRoot(rootB)
+			],
 			workerIssues: {
 				failures: [
 					{ evidenceClass: 'worker-infrastructure', object: workerIssue }
@@ -106,6 +133,22 @@ describe('GetKnownArchiveEvidence', () => {
 		expect(result.value.totals.nodes).toBe(2);
 		expect(result.value.totals.archiveRoots).toBe(2);
 		expect(result.value.totals.objects.totalObjects).toBe(20);
+		expect(result.value.roots[0]).toMatchObject({
+			archiveUrlIdentity: rootA,
+			listingGapCount: 1,
+			listingGaps: [
+				{
+					kind: 's3-listing-gap',
+					checkpointCount: 3,
+					sourceCheckpointProofId: '9007199254740993',
+					sourceArchiveUrlIdentity: rootB
+				}
+			]
+		});
+		expect(result.value.roots[1]?.listingGaps).toEqual([]);
+		expect(
+			result.value.remoteFailures.failures[0]?.retainedFinding?.httpStatus
+		).toBe(404);
 		expect(result.value.objectPage).toMatchObject({
 			page: { hasMore: true, limit: 1, total: 9 },
 			objects: [{ remoteId: remoteFailure.remoteId }]

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
@@ -17,6 +18,7 @@ import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../
 import { HistoryArchiveReadyQueueMigration1785270000000 } from '../../../database/migrations/1785270000000-HistoryArchiveReadyQueueMigration.js';
 import { HistoryArchiveClaimLeaseMigration1785340000000 } from '../../../database/migrations/1785340000000-HistoryArchiveClaimLeaseMigration.js';
 import { HistoryArchiveRepairActionIndexMigration1785370000000 } from '../../../database/migrations/1785370000000-HistoryArchiveRepairActionIndexMigration.js';
+import { HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000 } from '../../../database/migrations/1785510000000-HistoryArchiveCheckpointProofRefreshQueueMigration.js';
 import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 
 export const proofArchiveUrl = 'https://proof.example/archive';
@@ -46,6 +48,9 @@ export async function createProofDataSource(url: string): Promise<{
 	await new HistoryArchiveReadyQueueMigration1785270000000().up(queryRunner);
 	await new HistoryArchiveClaimLeaseMigration1785340000000().up(queryRunner);
 	await new HistoryArchiveRepairActionIndexMigration1785370000000().up(
+		queryRunner
+	);
+	await new HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000().up(
 		queryRunner
 	);
 	await queryRunner.release();
@@ -108,11 +113,22 @@ export async function mutateProofFacts(
 	await objectRepository.save(object);
 }
 
-export async function exerciseFlakyProofRefresh(
+export async function exerciseDurableProofRefresh(
 	dataSource: DataSource,
-	repository: TypeOrmHistoryArchiveCheckpointProofRepository
+	targetCheckpointLedger = proofCheckpointLedger
 ) {
-	await refreshAndLoadProof(dataSource, repository);
+	await dataSource.query(
+		`
+		insert into history_archive_checkpoint_scan_cursor (
+			"archiveUrlIdentity", "latestCheckpointLedger", "lastForwardCheckpointLedger", "nextHistoricalCheckpointLedger"
+		) values ($1, $2, $2, $2 + 64)
+		on conflict ("archiveUrlIdentity") do update
+		set "latestCheckpointLedger" = excluded."latestCheckpointLedger",
+			"lastForwardCheckpointLedger" = excluded."lastForwardCheckpointLedger",
+			"nextHistoricalCheckpointLedger" = excluded."nextHistoricalCheckpointLedger"
+	`,
+		[proofArchiveUrl, targetCheckpointLedger]
+	);
 	await dataSource.query(
 		`update history_archive_object_queue
 		 set status = 'scanning', attempts = 1
@@ -128,16 +144,11 @@ export async function exerciseFlakyProofRefresh(
 	const objectRepository = new TypeOrmHistoryArchiveObjectRepository(
 		dataSource.getRepository(HistoryArchiveObject)
 	);
-	const flakyProofRepository = mock<HistoryArchiveCheckpointProofRepository>();
-	flakyProofRepository.refreshForObject
-		.mockRejectedValueOnce(new Error('transient proof refresh failure'))
-		.mockImplementation(async (object) => {
-			await repository.refreshForObject(object);
-		});
+	const inlineProofRepository = mock<HistoryArchiveCheckpointProofRepository>();
 	const useCase = new FailHistoryArchiveObject(
 		objectRepository,
 		mock<HistoryArchiveObjectEventRecorder>(),
-		flakyProofRepository,
+		inlineProofRepository,
 		mock<HistoryArchiveStateRepository>()
 	);
 	const failure = {
@@ -150,7 +161,7 @@ export async function exerciseFlakyProofRefresh(
 	return {
 		failedObject,
 		failure,
-		flakyProofRepository,
+		inlineProofRepository,
 		objectRepository,
 		useCase
 	};
@@ -245,6 +256,16 @@ export async function saveProofFixture(
 			}
 		}
 	);
+	checkpoint.verificationFacts = {
+		...checkpoint.verificationFacts,
+		content: {
+			algorithm: 'sha256',
+			digest: createHash('sha256')
+				.update(JSON.stringify(checkpoint.verificationFacts))
+				.digest('hex'),
+			representation: 'canonical-json'
+		}
+	};
 	const buckets = bucketHashes.map((bucketHash) => {
 		const bucket = new HistoryArchiveObject({
 			archiveUrl: proofArchiveUrl,

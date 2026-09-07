@@ -11,6 +11,10 @@ import {
 } from './HistoryArchiveCanonicalFirst.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 import { remoteCheckpointFailureExistsSql } from './HistoryArchiveCheckpointRemoteFailureSql.js';
+import {
+	historyArchiveListingGapAnchorSql,
+	historyArchiveListingGapResumeSql
+} from './HistoryArchiveListingGapSql.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 
 const maximumCheckpointFanoutBatch = historyArchiveCheckpointFanoutBatchSize;
@@ -383,7 +387,7 @@ export const targetedCompactCheckpointPlanSql = `
 			(floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1)::integer
 				as "authorizedCheckpointLedger",
 			cursor."lastForwardCheckpointLedger",
-			completed."checkpointLedger" + 64 as checkpoint_ledger,
+			coalesce(listed_gap."resumeCheckpointLedger", completed."checkpointLedger" + 64) as checkpoint_ledger,
 			root."archiveUrl", root."hostIdentity"
 		from contiguous_completed completed
 		join "history_archive_checkpoint_scan_cursor" cursor
@@ -399,6 +403,9 @@ export const targetedCompactCheckpointPlanSql = `
 			and root."objectKey" = 'root'
 			-- A periodic root refresh does not invalidate its successful snapshot.
 			and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
+		left join lateral (
+			${historyArchiveListingGapResumeSql('cursor."archiveUrlIdentity"', 'completed."checkpointLedger" + 64', '(floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1)::integer')}
+		) listed_gap on true
 		where cursor."nextHistoricalCheckpointLedger" =
 				completed."firstCheckpointLedger" + 64
 			and completed."checkpointLedger" + 64 <=
@@ -603,7 +610,9 @@ const compactCheckpointPlanSql = `
                                                 cursor."archiveUrlIdentity"
                                                 and substitution."checkpointLedger" =
                                                         cursor."nextHistoricalCheckpointLedger" - 64
-                                )
+                                ) or exists (
+					${historyArchiveListingGapAnchorSql('cursor."archiveUrlIdentity"', 'cursor."nextHistoricalCheckpointLedger" - 64')}
+				)
                         )
                 order by cursor."nextHistoricalCheckpointLedger",
                         cursor."updatedAt",
@@ -611,7 +620,7 @@ const compactCheckpointPlanSql = `
                 limit $1
                 for update of cursor skip locked
 	), cursor_targets as materialized (
-		select candidate.*, target.checkpoint_ledger
+		select candidate.*, coalesce(listed_gap."resumeCheckpointLedger", target.checkpoint_ledger) as checkpoint_ledger
 		from cursor_candidates candidate
 		cross join lateral (
 			select coalesce(
@@ -633,6 +642,9 @@ const compactCheckpointPlanSql = `
 				on proof."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 				and proof."checkpointLedger" = position.checkpoint_ledger
 		) target
+		left join lateral (
+			${historyArchiveListingGapResumeSql('candidate."archiveUrlIdentity"', 'target.checkpoint_ledger', 'candidate."authorizedCheckpointLedger"')}
+		) listed_gap on true
 	), source as materialized (
 		select candidate.*, root."archiveUrl", root."hostIdentity",
 			lpad(to_hex(candidate.checkpoint_ledger), 8, '0') as checkpoint_hex

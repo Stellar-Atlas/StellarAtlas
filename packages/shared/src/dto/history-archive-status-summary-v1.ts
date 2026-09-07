@@ -6,6 +6,8 @@ import {
 } from './history-archive-object-summary-v1.js';
 
 export interface HistoryArchiveStatusSourceV1 {
+	/** Separate unresolved listing ranges, not individual failed object requests. */
+	readonly listingGapCount?: number;
 	readonly activeObjectChecks: number;
 	readonly archiveEvidenceFailures: number;
 	readonly archiveUrl: string;
@@ -69,6 +71,7 @@ const HistoryArchiveStatusSourceV1Schema: JSONSchemaType<HistoryArchiveStatusSou
 	{
 		type: 'object',
 		properties: {
+			listingGapCount: { type: 'integer', nullable: true, minimum: 0 },
 			activeObjectChecks: { type: 'number' },
 			archiveEvidenceFailures: { type: 'number' },
 			archiveUrl: { type: 'string' },

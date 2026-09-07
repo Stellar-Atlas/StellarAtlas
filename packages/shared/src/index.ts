@@ -137,6 +137,7 @@ export {
 	type HistoryArchivePageMetadataV1
 } from './dto/history-archive-evidence-page-v1.js';
 export {
+	type KnownArchiveListingGapV1,
 	type KnownArchiveCheckpointCountsV1,
 	type KnownArchiveEvidenceTotalsV1,
 	type KnownArchiveEvidenceV1,

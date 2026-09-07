@@ -1,4 +1,5 @@
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveListingGapAnchorSql } from './HistoryArchiveListingGapSql.js';
 
 export function historyArchiveCheckpointProofTerminalReadySql(
 	targetAlias: string,
@@ -22,6 +23,9 @@ export function historyArchiveCheckpointProofTerminalReadySql(
                 where predecessor_substitution."archiveUrlIdentity" = ${archiveUrlIdentity}
                     and predecessor_substitution."checkpointLedger" = ${checkpointLedger} - 64
             )
+            or exists (
+				${historyArchiveListingGapAnchorSql(archiveUrlIdentity, checkpointLedger + ' - 64')}
+			)
         )`;
 
 	return `(

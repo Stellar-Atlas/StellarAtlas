@@ -7,6 +7,7 @@ import type {
 } from '../../../api/archive-evidence-types';
 import { getArchiveScanDetailPath } from '../../../domain/archive-scan-routes';
 import { KnownArchiveEvidence } from '../known-archive-evidence';
+import { KnownArchiveListingGaps } from '../known-archive-listing-gaps';
 import { ArchiveSourceFilter } from '../known-archive-evidence-controls';
 import { getInitialRepairArchiveUrl } from '../known-archive-evidence-state';
 import {
@@ -21,6 +22,75 @@ import {
 	formatObjectStatusDetail
 } from '../known-archive-evidence-table-parts';
 describe('known archive evidence UI', () => {
+	it('renders listing gaps separately from GET failures with exact source, observation and alternate proof provenance', () => {
+		const evidence = createEvidence();
+		const original = evidence.roots[0];
+		if (original === undefined) throw new Error('Expected fixture root');
+		const gap = {
+			kind: 'directory-listing-gap' as const,
+			firstCheckpointLedger: 127,
+			lastCheckpointLedger: 255,
+			resumeCheckpointLedger: 319,
+			checkpointCount: 3,
+			observedAt: '2026-09-06T23:00:00Z',
+			sourceCheckpointProofId: '9007199254740993',
+			sourceArchiveUrlIdentity: 'https://other.example/Case',
+			listings: (['history', 'ledger', 'transactions', 'results'] as const).map(
+				(category) => ({
+					category,
+					listingUrl: `https://archive.example/Case/${category}/00/00/00/`,
+					responseSha256: 'a'.repeat(64),
+					firstReturnedKey: null,
+					firstReturnedCheckpoint: null,
+					completePrefix: `Case/${category}/00/00/00/`,
+					rangeThroughCheckpoint: 255
+				})
+			)
+		};
+		const roots = [
+			{
+				...original,
+				archiveUrl: 'https://archive.example/Case',
+				archiveUrlIdentity: 'https://archive.example/Case',
+				listingGapCount: 1,
+				listingGaps: [gap]
+			}
+		];
+		const html = renderToStaticMarkup(
+			createElement(KnownArchiveListingGaps, {
+				roots,
+				archiveUrl: null,
+				objectType: null
+			})
+		);
+		expect(html).toContain('127–255: 3 checkpoints with missing files');
+		expect(html).toContain('archive.example/Case');
+		expect(html).toContain('dateTime="2026-09-06T23:00:00.000Z"');
+		expect(html).toContain('9007199254740993');
+		expect(html).toContain('other.example/Case');
+		expect(html).toContain('not individual HTTP failures');
+		expect(html).toContain('bucket contents are not covered');
+		expect(html).toContain('complete directory listing through checkpoint 255');
+		expect(html).not.toContain('first returned checkpoint 0');
+		expect(
+			renderToStaticMarkup(
+				createElement(KnownArchiveListingGaps, {
+					roots,
+					archiveUrl: 'https://archive.example/case',
+					objectType: null
+				})
+			)
+		).toBe('');
+		expect(
+			renderToStaticMarkup(
+				createElement(KnownArchiveListingGaps, {
+					roots,
+					archiveUrl: null,
+					objectType: 'bucket'
+				})
+			)
+		).toBe('');
+	});
 	it('uses the shared local timestamp for the archive source health update', () => {
 		const timestamp = '2026-09-06T04:31:00.000Z';
 		const markup = renderToStaticMarkup(

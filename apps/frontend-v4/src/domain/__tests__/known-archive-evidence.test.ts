@@ -13,6 +13,39 @@ import {
 } from '../known-archive-evidence';
 
 describe('known archive evidence', () => {
+	it('never marks a listing-gap-only root verified or as pending worker work', () => {
+		const evidence = createEvidence({
+			checkpoints: { totalCheckpoints: 3, verifiedCheckpoints: 3 }
+		});
+		const root = {
+			archiveUrl: 'https://archive.example/Case',
+			archiveUrlIdentity: 'https://archive.example/Case',
+			checkpoints: evidence.totals.checkpoints,
+			latestObjectAt: null,
+			nodePublicKeys: [],
+			objects: evidence.totals.objects,
+			scannerOwnedState: null,
+			sequentialCoverage: {
+				advertisedLatestCheckpointLedger: 255,
+				blockedCheckpointLedger: null,
+				blocker: null,
+				lastContinuouslyVerifiedCheckpointLedger: 63,
+				nextCheckpointLedger: 319,
+				status: 'advancing' as const
+			},
+			listingGapCount: 1,
+			listingGaps: []
+		};
+		expect(assessKnownArchiveEvidence({ ...evidence, roots: [root] })).toBe(
+			'remote_retry'
+		);
+		expect(
+			assessKnownArchiveEvidence({
+				...evidence,
+				roots: [{ ...root, listingGapCount: 0 }]
+			})
+		).toBe('verified');
+	});
 	it('prioritizes a remote archive failure over simultaneous worker issues', () => {
 		const evidence = createEvidence({
 			objects: { remoteFailureObjects: 1, workerIssueObjects: 2 }

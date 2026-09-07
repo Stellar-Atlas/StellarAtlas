@@ -3,6 +3,12 @@ import type { DataSource } from 'typeorm';
 export async function createEvidenceSummarySchema(
 	dataSource: DataSource
 ): Promise<void> {
+	// Summary queries only need the root-keyed unresolved range projection.
+	await dataSource.query(`create table history_archive_listing_gap (
+		"archiveUrlIdentity" text not null, "firstCheckpointLedger" integer not null,
+		"lastCheckpointLedger" integer not null, "resolvedAt" timestamptz,
+		primary key ("archiveUrlIdentity", "firstCheckpointLedger", "lastCheckpointLedger")
+	)`);
 	await dataSource.query(`
 		create table history_archive_retained_remote_summary (
 			"archiveUrlIdentity" text not null, "objectType" text not null,

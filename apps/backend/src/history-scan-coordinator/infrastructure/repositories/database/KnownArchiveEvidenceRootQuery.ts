@@ -1,3 +1,4 @@
+import { mapKnownArchiveListingGaps } from './KnownArchiveListingGapQuery.js';
 import type { EntityManager } from 'typeorm';
 import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import type {
@@ -27,6 +28,8 @@ export {
 } from './KnownArchiveEvidenceRootSql.js';
 
 type RootRow = {
+	readonly listingGaps?: unknown;
+	readonly listingGapCount?: NumericValue;
 	readonly archiveUrl?: string;
 	readonly archiveurl?: string;
 	readonly archiveUrlIdentity?: string;
@@ -169,6 +172,8 @@ function mapRootRow(
 	return {
 		archiveUrl: requireString(row.archiveUrl ?? row.archiveurl, 'archiveUrl'),
 		archiveUrlIdentity: rootIdentity(row),
+		listingGaps: mapKnownArchiveListingGaps(row.listingGaps, rootIdentity(row)),
+		listingGapCount: requireNumber(row.listingGapCount ?? 0, 'listingGapCount'),
 		checkpoints: mapCheckpointCounts(row, futureCheckpoints),
 		latestObjectAt: nullableDate(
 			latestObject?.latestObjectAt ?? latestObject?.latestobjectat

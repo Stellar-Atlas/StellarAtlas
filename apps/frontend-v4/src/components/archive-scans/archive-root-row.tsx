@@ -81,6 +81,12 @@ export function ArchiveRootRow({
 				)}
 			</td>
 			<td role="cell" data-label="File failures">
+				{(source.listingGapCount ?? 0) > 0 ? (
+					<strong>
+						{formatInteger(source.listingGapCount ?? 0)} missing-file ranges
+						(listing evidence)
+					</strong>
+				) : null}
 				<strong>
 					{formatInteger(source.archiveEvidenceFailures)} unresolved archive
 					file failures

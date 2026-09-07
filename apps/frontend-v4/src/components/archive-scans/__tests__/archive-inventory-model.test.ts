@@ -1,6 +1,7 @@
 import type { PublicNode } from '@api/types';
 import {
 	groupAdvertisers,
+	hasArchiveSourceFindings,
 	compareSources,
 	defaultArchiveInventorySort,
 	type ArchiveInventorySort,
@@ -22,6 +23,21 @@ const source = { archiveUrl: 'https://history.example/GAYYW' } as ArchiveSource;
 const organizations = new Map([['org', 'Example Foundation']]);
 
 describe('archive inventory search and identity', () => {
+	it('keeps gap-only roots in the failure filter without inventing failed files', () => {
+		expect(
+			hasArchiveSourceFindings({
+				archiveEvidenceFailures: 0,
+				mismatchCheckpointProofs: 0,
+				listingGapCount: 1
+			})
+		).toBe(true);
+		expect(
+			hasArchiveSourceFindings({
+				archiveEvidenceFailures: 0,
+				mismatchCheckpointProofs: 0
+			})
+		).toBe(false);
+	});
 	it('matches URL, organization, validator name and key without requests', () => {
 		for (const query of [
 			'history.example',

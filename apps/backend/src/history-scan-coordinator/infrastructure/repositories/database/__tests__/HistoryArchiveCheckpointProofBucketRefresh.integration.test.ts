@@ -89,6 +89,14 @@ describe('bounded bucket checkpoint proof refresh', () => {
 			[publicNetworkPassphrase, canonicalCheckpointLedger]
 		);
 
+		await dataSource.query(
+			`
+			insert into history_archive_checkpoint_scan_cursor (
+				"archiveUrlIdentity", "latestCheckpointLedger", "lastForwardCheckpointLedger", "nextHistoricalCheckpointLedger"
+			) values ($1, $2, $2, $2 + 64)
+		`,
+			[proofArchiveUrl, proofCheckpointLedger]
+		);
 		const before = new Date();
 		const bucket = await checkpointRepository.findOneByOrFail({
 			archiveUrlIdentity: proofArchiveUrl,

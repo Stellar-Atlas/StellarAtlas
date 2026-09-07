@@ -89,6 +89,18 @@ export class GetKnownArchiveEvidence {
 				input.roots.map((root) => [root.archiveUrlIdentity, root])
 			);
 			const roots = readModel.roots.map((root) => ({
+				listingGapCount: root.listingGapCount ?? 0,
+				listingGaps: (root.listingGaps ?? []).map((gap) => ({
+					...gap,
+					sourceArchiveUrlIdentity:
+						gap.sourceArchiveUrlIdentity === null
+							? null
+							: requirePublicObjectUrl(gap.sourceArchiveUrlIdentity),
+					listings: gap.listings.map((listing) => ({
+						...listing,
+						listingUrl: requirePublicObjectUrl(listing.listingUrl)
+					}))
+				})),
 				archiveUrl: mapPublicArchiveUrl(root.archiveUrl),
 				archiveUrlIdentity: mapPublicArchiveUrl(root.archiveUrlIdentity),
 				checkpoints: root.checkpoints,

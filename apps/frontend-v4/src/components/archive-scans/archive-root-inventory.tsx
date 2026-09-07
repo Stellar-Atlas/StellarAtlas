@@ -17,6 +17,7 @@ import {
 	formatCoveragePercent,
 	formatNullableInteger,
 	groupAdvertisers,
+	hasArchiveSourceFindings,
 	normalizeRoot,
 	compareSources,
 	matchesArchiveSource
@@ -71,9 +72,7 @@ export function ArchiveRootInventory({
 	);
 	const filtered = sources.filter(
 		(source) =>
-			(!failuresOnly ||
-				source.archiveEvidenceFailures > 0 ||
-				source.mismatchCheckpointProofs > 0) &&
+			(!failuresOnly || hasArchiveSourceFindings(source)) &&
 			matchesArchiveSource(
 				source,
 				query,

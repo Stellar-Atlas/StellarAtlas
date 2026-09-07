@@ -10,6 +10,7 @@ import {
 	toHistoryArchiveObjectHostFailureSqlParams
 } from './HistoryArchiveObjectHostThrottleSql.js';
 import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
+import { persistHistoryArchiveListingGap } from './HistoryArchiveListingGapWrite.js';
 
 export async function markHistoryArchiveObjectFailed(
 	repository: Repository<HistoryArchiveObject>,
@@ -67,6 +68,13 @@ export async function markHistoryArchiveObjectFailed(
 		}
 		const result = await query.execute();
 		if ((result.affected ?? 0) === 0) return false;
+		if (failure.listingGap !== undefined) {
+			await persistHistoryArchiveListingGap(
+				manager,
+				remoteId,
+				failure.listingGap
+			);
+		}
 		if (failure.scheduler !== 'broker') {
 			await manager.query(
 				`update "history_archive_object_claim_slot"

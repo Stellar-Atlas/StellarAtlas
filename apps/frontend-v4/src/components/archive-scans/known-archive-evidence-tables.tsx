@@ -293,6 +293,15 @@ export function ArchiveRootSummaryTable({
 									}
 								>
 									{formatInteger(unresolvedRemoteFailureCount(root.objects))}
+									{(root.listingGapCount ?? root.listingGaps?.length ?? 0) >
+									0 ? (
+										<small className="known-evidence-error">
+											{formatInteger(
+												root.listingGapCount ?? root.listingGaps?.length ?? 0
+											)}{' '}
+											missing-file listing ranges (separate)
+										</small>
+									) : null}
 								</td>
 								<td data-label="Continuous history">
 									<SequentialCoverageSummary root={root} />
