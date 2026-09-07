@@ -42,7 +42,7 @@ export async function verifyAnalyticsTransaction({
 		'/v1/analytics/transactions/' + hash + '?view=typed&limit=2'
 	);
 	validateDetail(rest, hash, ledger);
-	const graphql = await request('/v1/analytics/graphql', {
+	const graphql = await request('/graphql', {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({

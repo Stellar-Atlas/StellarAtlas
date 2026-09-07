@@ -48,6 +48,7 @@ test('release smoke makes exactly two sequential hash-only requests and validate
 		}
 	});
 	assert.equal(result.checks.length, 2);
+	assert.equal(requests[1].url.pathname, '/graphql');
 	assert.equal(requests[0].url.searchParams.has('ledger_sequence'), false);
 	const graphql = JSON.parse(requests[1].options.body);
 	assert.deepEqual(graphql.variables, { hash });
