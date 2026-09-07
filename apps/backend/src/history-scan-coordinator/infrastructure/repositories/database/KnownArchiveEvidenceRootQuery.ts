@@ -96,7 +96,7 @@ export async function findKnownArchiveEvidenceRoots(
 	const archiveUrls = roots.map((root) => root.archiveUrl);
 	const archiveUrlIdentities = roots.map((root) => root.archiveUrlIdentity);
 
-	return manager.transaction('REPEATABLE READ', async (transactionManager) => {
+	const readRoots = async (transactionManager: EntityManager) => {
 		const rootValue: unknown = await transactionManager.query(
 			knownArchiveEvidenceRootSql,
 			[archiveUrls, archiveUrlIdentities]
@@ -133,7 +133,10 @@ export async function findKnownArchiveEvidenceRoots(
 				latestObjects.get(identity)
 			);
 		});
-	});
+	};
+	return manager.queryRunner?.isTransactionActive === true
+		? await readRoots(manager)
+		: await manager.transaction('REPEATABLE READ', readRoots);
 }
 
 function indexRowsByIdentity(value: unknown): ReadonlyMap<string, RootRow> {

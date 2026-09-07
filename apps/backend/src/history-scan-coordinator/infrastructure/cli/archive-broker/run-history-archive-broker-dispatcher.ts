@@ -5,6 +5,7 @@ import { AppDataSource } from '@core/infrastructure/database/AppDataSource.js';
 import { HistoryArchiveBrokerFrontierRepository } from '../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
 import { HistoryArchiveBrokerDispatcher } from './HistoryArchiveBrokerDispatcher.js';
 import { getHistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
+import { createArchiveMaintenanceReporter } from './ArchiveMaintenanceReporter.js';
 
 const options = AppDataSource.options;
 if (options.type !== 'postgres')
@@ -21,7 +22,10 @@ await dataSource.initialize();
 
 const logger = new PinoLogger(process.env.LOG_LEVEL ?? 'info');
 const dispatcher = new HistoryArchiveBrokerDispatcher(
-	new HistoryArchiveBrokerFrontierRepository(dataSource),
+	new HistoryArchiveBrokerFrontierRepository(
+		dataSource,
+		createArchiveMaintenanceReporter(logger)
+	),
 	getHistoryArchiveBrokerConfig(),
 	logger
 );

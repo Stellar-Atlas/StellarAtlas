@@ -1,5 +1,6 @@
 import type { DataSource, EntityManager } from 'typeorm';
 import { recoverMissingFrontierReady } from './HistoryArchiveMissingFrontierReady.js';
+import { withBoundedArchiveBrokerMaintenance } from './BoundedArchiveBrokerMaintenance.js';
 import {
 	defaultHistoryArchiveBrokerMaximumPriority,
 	type HistoryArchiveBrokerPriority
@@ -327,7 +328,10 @@ function mapAndOrderBrokerJobs(
 }
 
 export class HistoryArchiveBrokerFrontierRepository {
-	constructor(private readonly dataSource: DataSource) {}
+	constructor(
+		private readonly dataSource: DataSource,
+		private readonly onMaintenanceDeferred?: (code: string) => void
+	) {}
 
 	async recoverMissingFrontierReady(limit: number): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {
@@ -341,29 +345,44 @@ export class HistoryArchiveBrokerFrontierRepository {
 	async ensurePrefetch(
 		archiveUrlIdentity: string | null = null
 	): Promise<number> {
-		return await this.dataSource.transaction(async (manager) => {
-			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
-			return await this.materializeFrontier(manager, archiveUrlIdentity);
-		});
+		return await withBoundedArchiveBrokerMaintenance(
+			this.dataSource,
+			async (manager) => {
+				if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
+				return await this.materializeFrontier(manager, archiveUrlIdentity);
+			},
+			0,
+			this.onMaintenanceDeferred
+		);
 	}
 
 	async ensureFrontier(
 		archiveUrlIdentity: string | null = null
 	): Promise<number> {
-		const materialized = await this.dataSource.transaction(async (manager) => {
-			if (!(await this.tryTakeExecutionReconciliationLock(manager)))
-				return false;
-			await this.materializeFrontier(manager, archiveUrlIdentity);
-			return true;
-		});
+		const materialized = await withBoundedArchiveBrokerMaintenance(
+			this.dataSource,
+			async (manager) => {
+				if (!(await this.tryTakeExecutionReconciliationLock(manager)))
+					return false;
+				await this.materializeFrontier(manager, archiveUrlIdentity);
+				return true;
+			},
+			false,
+			this.onMaintenanceDeferred
+		);
 		if (!materialized) return 0;
-		const readyObjects = await this.dataSource.transaction(async (manager) => {
-			const result = await synchronizeHistoryArchiveReadyQueue(
-				manager,
-				maximumArchiveSourceFrontierRows
-			);
-			return result.readyObjects;
-		});
+		const readyObjects = await withBoundedArchiveBrokerMaintenance(
+			this.dataSource,
+			async (manager) => {
+				const result = await synchronizeHistoryArchiveReadyQueue(
+					manager,
+					maximumArchiveSourceFrontierRows
+				);
+				return result.readyObjects;
+			},
+			0,
+			this.onMaintenanceDeferred
+		);
 		return readyObjects;
 	}
 

@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { mock } from 'jest-mock-extended';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
@@ -92,7 +92,8 @@ describe('TypeOrmKnownArchiveEvidenceRepository', () => {
 	});
 
 	it('keeps live status pages duplicate-safe and recounts each request', async () => {
-		const querySpy = jest.spyOn(dataSource.manager, 'query');
+		// Include transaction-local page managers as well as root-summary reads.
+		const querySpy = jest.spyOn(EntityManager.prototype, 'query');
 		const newest = createObject(rootA, 'ledger:000000bf', 'ledger', 'pending');
 		const middle = createObject(rootA, 'ledger:0000007f', 'ledger', 'pending');
 		const oldest = createObject(rootA, 'ledger:0000003f', 'ledger', 'pending');

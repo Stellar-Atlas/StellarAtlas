@@ -14,6 +14,10 @@ import {
 } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
+import {
+	historyArchiveReadyCohortCandidatesSql,
+	historyArchiveReadyMutableEligibilitySql
+} from './HistoryArchiveReadyCandidatesSql.js';
 
 export const historyArchiveExecutionReconciliationLockName =
 	'history_archive_execution_reconciliation';
@@ -45,20 +49,7 @@ export function historyArchiveSchedulableObjectSql(
 	objectAlias: string
 ): string {
 	return `
-	${objectAlias}."executionDisposition" = 'executable'
-	and ${objectAlias}."dependencyReady" = true
-	and (
-		${objectAlias}."transitionEffectsRequiredAt" is null
-		or ${objectAlias}."transitionEffectsCompletedAt" is not null
-	)
-	and (
-		${objectAlias}.status = 'pending'
-		or (
-			${objectAlias}.status = 'failed'
-			and ${objectAlias}."nextAttemptAt" is not null
-			and ${objectAlias}."nextAttemptAt" <= now()
-		)
-	)
+	${historyArchiveReadyMutableEligibilitySql(objectAlias)}
         and ${historyArchiveObjectOpenSequentialCohortSql(objectAlias)}
 `;
 }
@@ -109,7 +100,7 @@ const cleanupReadyObjectsSql = `
         select count(*)::integer as count from removed
 `;
 
-const refillReadyObjectsSql = `
+export const refillReadyObjectsSql = `
 	with ${canonicalRuntimePriorityCtesSql}, roots as materialized (
 		select root.id, root."archiveUrlIdentity", root."lastClaimedAt"
 		from "history_archive_object_queue" root
@@ -136,9 +127,9 @@ const refillReadyObjectsSql = `
 				candidate."objectKey", candidate."objectType",
 				candidate."bucketHash", candidate."archiveUrlIdentity",
 				candidate.id
-			from "history_archive_object_queue" candidate
-			where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
-				and ${schedulableObjectSql}
+			from lateral (
+				${historyArchiveReadyCohortCandidatesSql('root."archiveUrlIdentity"')}
+			) candidate
 			order by
 				(${readyAtSql}) > now(),
 				${historyArchiveEffectivePrioritySql('candidate')},

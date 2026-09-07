@@ -257,14 +257,27 @@ describe('sequential history archive proof chain', () => {
 			'completed."firstCheckpointLedger" + 64'
 		);
 		expect(targetedCompactCheckpointPlanSql).toContain(
-			'completed."checkpointLedger" + 64 as checkpoint_ledger'
+			'coalesce(listed_gap."resumeCheckpointLedger", completed."checkpointLedger" + 64) as checkpoint_ledger'
 		);
 		expect(targetedCompactCheckpointPlanSql).toContain(
 			'order by source."archiveUrlIdentity", source.checkpoint_ledger'
 		);
-		expect(targetedCheckpointSubstitutionSql).toContain(
-			'source."archiveUrlIdentity" = $2::text'
+		const substitutionSql = targetedCheckpointSubstitutionSql.replace(
+			/\s+/g,
+			' '
 		);
+		expect(substitutionSql).toContain(
+			'order by case when source_proof."archiveUrlIdentity" = $2::text then 0 else 1 end, source_proof."evaluatedAt", source_proof.id'
+		);
+		for (const requiredSourceCheck of [
+			"source_proof.status = 'verified'",
+			'source_proof."requiredObjectsComplete" = true',
+			'source_proof."proofFactsComplete" = true',
+			'source_proof."failureKind" is null',
+			'source_state."networkPassphrase" = target_state."networkPassphrase"'
+		]) {
+			expect(substitutionSql).toContain(requiredSourceCheck);
+		}
 		expect(targetedCheckpointSubstitutionSql).toContain(
 			'failed."failureKind" = \'object-failed\''
 		);
@@ -275,7 +288,9 @@ describe('sequential history archive proof chain', () => {
 			'failed_bucket."httpStatus" in ('
 		);
 		for (const alias of ['failed_object', 'failed_bucket']) {
-			expect(targetedCheckpointSubstitutionSql).not.toContain(`${alias}.attempts`);
+			expect(targetedCheckpointSubstitutionSql).not.toContain(
+				`${alias}.attempts`
+			);
 			expect(targetedCheckpointSubstitutionSql).toContain(
 				`${alias}.status = 'failed' and (`
 			);
@@ -293,7 +308,9 @@ describe('sequential history archive proof chain', () => {
 		expect(targetedCheckpointSubstitutionSql).toContain(
 			'insert into "history_archive_checkpoint_substitution"'
 		);
-		expect(targetedCheckpointSubstitutionSql).not.toContain('order by case');
+		expect(substitutionSql).toContain(
+			'end, source_proof."evaluatedAt", source_proof.id limit 1'
+		);
 		expect(historyArchiveCheckpointProofBatchTargetCtesSql).toContain(
 			'queue."leaseToken" = target."leaseToken"'
 		);

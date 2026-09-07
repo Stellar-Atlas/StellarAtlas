@@ -139,7 +139,11 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		} as unknown as DataSource);
 
 		await expect(repository.ensureFrontier()).resolves.toBe(0);
-		expect(query).toHaveBeenCalledTimes(1);
+		expect(query).toHaveBeenCalledTimes(2);
+		expect(query).toHaveBeenNthCalledWith(
+			1,
+			"set local statement_timeout = '2s'; set local lock_timeout = '250ms'; set local jit = off"
+		);
 		expect(query).toHaveBeenCalledWith(
 			expect.stringContaining('pg_try_advisory_xact_lock'),
 			[historyArchiveExecutionReconciliationLockName]
@@ -149,6 +153,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 	it('advances the durable compact cursor before activating frontier dependencies', async () => {
 		const query = jest
 			.fn()
+			.mockResolvedValueOnce(undefined)
 			.mockResolvedValueOnce([{ locked: true }])
 			.mockResolvedValueOnce([{ advanced: 1, planned: 1, ready: 1 }])
 			.mockResolvedValueOnce(undefined)
