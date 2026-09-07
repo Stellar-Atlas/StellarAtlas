@@ -96,32 +96,35 @@ function nativeHolderSql(
 	published: string
 ): string {
 	return `
-SELECT account_id, balance, buying_liabilities, selling_liabilities,
-	last_modified_ledger, ledger_sequence
+SELECT account_id, _latest_balance AS balance,
+	_latest_buying_liabilities AS buying_liabilities,
+	_latest_selling_liabilities AS selling_liabilities,
+	_latest_last_modified_ledger AS last_modified_ledger,
+	_latest_ledger_sequence AS ledger_sequence
 FROM (
 	SELECT account_id,
 		argMax(balance, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS balance,
+			AS _latest_balance,
 		argMax(buying_liabilities,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS buying_liabilities,
+			AS _latest_buying_liabilities,
 		argMax(selling_liabilities,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS selling_liabilities,
+			AS _latest_selling_liabilities,
 		argMax(last_modified_ledger,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS last_modified_ledger,
+			AS _latest_last_modified_ledger,
 		argMax(ledger_sequence,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS ledger_sequence,
+			AS _latest_ledger_sequence,
 		argMax(deleted, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS deleted
+			AS _latest_deleted
 	FROM ${database}.accounts
 	WHERE ${published}
 		${accountPredicate}
 	GROUP BY account_id
 )
-WHERE deleted = false AND balance > 0
+WHERE _latest_deleted = false AND _latest_balance > 0
 ORDER BY account_id ASC
 LIMIT {row_limit:UInt32}
 FORMAT JSON`;
@@ -142,38 +145,42 @@ function issuedHolderSql(
 		{ name: 'asset_issuer', type: 'String', value: input.asset.issuer }
 	);
 	return `
-SELECT account_id, asset_code, asset_issuer, asset_type, balance,
-	trust_line_limit, buying_liabilities, selling_liabilities, flags,
-	last_modified_ledger, ledger_sequence
+SELECT account_id, _latest_asset_code AS asset_code,
+	_latest_asset_issuer AS asset_issuer, _latest_asset_type AS asset_type,
+	_latest_balance AS balance, _latest_trust_line_limit AS trust_line_limit,
+	_latest_buying_liabilities AS buying_liabilities,
+	_latest_selling_liabilities AS selling_liabilities, _latest_flags AS flags,
+	_latest_last_modified_ledger AS last_modified_ledger,
+	_latest_ledger_sequence AS ledger_sequence
 FROM (
 	SELECT account_id,
 		argMax(asset_code, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS asset_code,
+			AS _latest_asset_code,
 		argMax(asset_issuer, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS asset_issuer,
+			AS _latest_asset_issuer,
 		argMax(asset_type, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS asset_type,
+			AS _latest_asset_type,
 		argMax(balance, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS balance,
+			AS _latest_balance,
 		argMax(trust_line_limit,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS trust_line_limit,
+			AS _latest_trust_line_limit,
 		argMax(buying_liabilities,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS buying_liabilities,
+			AS _latest_buying_liabilities,
 		argMax(selling_liabilities,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS selling_liabilities,
+			AS _latest_selling_liabilities,
 		argMax(flags, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS flags,
+			AS _latest_flags,
 		argMax(last_modified_ledger,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS last_modified_ledger,
+			AS _latest_last_modified_ledger,
 		argMax(ledger_sequence,
 			tuple(ledger_sequence, _row_number, _ingested_at))
-			AS ledger_sequence,
+			AS _latest_ledger_sequence,
 		argMax(deleted, tuple(ledger_sequence, _row_number, _ingested_at))
-			AS deleted
+			AS _latest_deleted
 	FROM ${database}.trustlines
 	WHERE asset_code = {asset_code:String}
 		AND asset_issuer = {asset_issuer:String}
@@ -181,7 +188,7 @@ FROM (
 		${accountPredicate}
 	GROUP BY account_id
 )
-WHERE deleted = false AND balance > 0
+WHERE _latest_deleted = false AND _latest_balance > 0
 ORDER BY account_id ASC
 LIMIT {row_limit:UInt32}
 FORMAT JSON`;
