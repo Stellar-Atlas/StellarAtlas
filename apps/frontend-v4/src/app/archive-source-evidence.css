@@ -1,4 +1,20 @@
 /* Keep request outcomes and listing evidence distinct without affecting other routes. */
+.archive-source-page .archive-source-overview p {
+	padding: 0;
+}
+
+.archive-source-page .archive-source-overview > .archive-source-work-note {
+	grid-column: 1 / -1;
+	margin: 0;
+	background: none;
+}
+
+.archive-source-page .archive-source-error-count {
+	flex-shrink: 0;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+
 .archive-source-page .archive-source-runtime {
 	border: 1px solid var(--border);
 	border-radius: 6px;

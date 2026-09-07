@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { parseStatusLiveMessage } from '@api/status-live-stream';
 import { createStatusLivePayload } from '@api/__tests__/support/status-live-contract-fixtures';
 import type { ArchiveWorkerStatusRowDTO, PublicWorkerStatus } from '@api/types';
+import { formatObjectStatus } from '../known-archive-evidence-table-parts';
 import {
 	ArchiveSourceRuntime,
 	ArchiveSourceRuntimeView
@@ -85,6 +86,9 @@ function model(
 }
 
 describe('source worker runtime', () => {
+	it('labels durable pending rows as queued, not worker activity', () => {
+		expect(formatObjectStatus({ status: 'pending' })).toBe('Queued');
+	});
 	it('uses live slots even when durable scanning count is zero, preserving path case and exact root', () => {
 		const result = model([
 			worker(),

@@ -181,9 +181,11 @@ export function formatObjectError(object: PublicHistoryArchiveObject): string {
 	);
 }
 
-export function formatObjectStatus(object: PublicHistoryArchiveObject): string {
+export function formatObjectStatus(
+	object: Pick<PublicHistoryArchiveObject, 'status'>
+): string {
 	if (object.status === 'scanning') return 'Checking';
-	if (object.status === 'pending') return 'Waiting';
+	if (object.status === 'pending') return 'Queued';
 	return object.status.charAt(0).toUpperCase() + object.status.slice(1);
 }
 

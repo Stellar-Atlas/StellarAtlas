@@ -58,9 +58,7 @@ export function ArchiveSourceOverview({
 					checkpoint positions verified for this source.
 				</p>
 				<p className="muted-copy">
-					The total covers the full history through its advertised head, not
-					just queued files. Missing or unchecked positions are not counted as
-					verified.
+					Missing or unchecked positions are not counted as verified.
 				</p>
 			</div>
 			<dl className="archive-source-chain-details">
@@ -82,8 +80,8 @@ export function ArchiveSourceOverview({
 				</div>
 			</dl>
 			<p className="archive-source-work-note">
-				Historical catch-up follows checkpoint files, 64 ledgers apart. This
-				position is not the live network ledger or a count of completed checks.
+				Checkpoint files span 64 ledgers. This cursor tracks historical
+				catch-up, not the live network head.
 			</p>
 		</section>
 	);
