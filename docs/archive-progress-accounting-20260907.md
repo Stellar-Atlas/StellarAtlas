@@ -151,6 +151,19 @@ This entry point is not scheduled automatically; choose an explicit bounded
 invocation after observing existing storage pressure. No seed was run on live
 data while implementing or testing it.
 
+An explicitly supervised continuation is available after the finite checks:
+
+    node lib/history-scan-coordinator/infrastructure/cli/archive-scan-seed/run-history-archive-checkpoint-scan-seed.js --run --until-complete --rows=1000
+
+This mode keeps one connection and executes one bounded, atomic chunk at a time.
+It retains only the current result, logs phase changes/every 100 chunks/completion,
+and rejects `--chunks` or `--duration-ms` rather than ignoring those flags.
+Database errors exit nonzero; a supervisor may restart with a 30-second backoff.
+No claimable source or an unmet durable-proof floor also exits nonzero as
+`SEED_READINESS_PENDING`, so it cannot busy-loop or falsely declare completion.
+Successful completion exits zero. Use exactly one low-priority supervised job;
+do not start parallel seeders or change the API/scanner services to run it.
+
 Implementation files (repository-relative):
 
 - apps/backend/src/history-scan-coordinator/infrastructure/repositories/database/HistoryArchiveCheckpointScanSeed.ts
@@ -218,3 +231,31 @@ reported 45,800,577 retained ledger records, contiguous 2-45,713,538 plus 87,040
 supplemental records whose exact ranges were not read. These are separate from
 archive verification coverage. No fact-table counts or production mutations
 were performed for this audit.
+
+## Planned, not implemented: three-miss boundary probes
+
+This follow-up is not implemented or deployed in this release. No binary probes
+are being launched by the current changes.
+
+At the existing batched terminal-result boundary, use indexed exact-key lookups
+to recognize three adjacent failed checkpoints for the same archive root and
+file category. Require actual 404 observations or a consistent 403 access-denial
+run; timeouts, 429s, and 5xx responses do not establish this gate. A 403 permits
+investigation but never proves that the requested file is absent.
+
+Keep one compact resumable probe state per root/category run, with bounds,
+remaining request budget, and deferred interior work. Admit one midpoint check
+at a time through the existing broker, leases, and shared network limits rather
+than creating another downloader. Persist results as source observations at the
+positions actually fetched; do not infer arbitrary interior absence or a unique
+availability boundary from binary samples, because available islands can exist.
+
+Only a complete validated public listing can use the existing certified-range
+exclusion path. Without that evidence, any interior work postponed by probing
+remains explicitly untested and must later return to normal checking. It earns
+neither scanned/missing coverage nor proof credit, and cannot support a 100%
+completion claim. Restart/replay must preserve both probe budget and this debt.
+
+Before implementation, add focused tests for exactly three adjacent misses,
+root/category isolation, transient-error exclusion, non-monotonic availability
+islands, exhausted budgets, normal admission constraints, and restart dedup.

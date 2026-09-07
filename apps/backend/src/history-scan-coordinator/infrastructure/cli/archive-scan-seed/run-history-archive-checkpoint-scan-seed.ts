@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { AppDataSource } from '@core/infrastructure/database/AppDataSource.js';
 import { seedHistoryArchiveCheckpointScanChunk } from '../../repositories/database/HistoryArchiveCheckpointScanSeed.js';
 import { parseCheckpointScanSeedCliOptions } from './CheckpointScanSeedCliOptions.js';
+import { runCheckpointScanSeedLoop } from './CheckpointScanSeedLoop.js';
 
 async function run(): Promise<void> {
 	const options = parseCheckpointScanSeedCliOptions(process.argv.slice(2));
@@ -23,18 +24,14 @@ async function run(): Promise<void> {
 	});
 	try {
 		await database.initialize();
-		const deadline = Date.now() + options.durationMs;
-		for (
-			let chunk = 0;
-			chunk < options.chunks && Date.now() < deadline;
-			chunk++
-		) {
-			const progress = await seedHistoryArchiveCheckpointScanChunk(database, {
-				rowLimit: options.rowLimit
-			});
-			process.stdout.write(JSON.stringify(progress) + '\n');
-			if (progress.complete || progress.source === null) break;
-		}
+		await runCheckpointScanSeedLoop(
+			options,
+			() =>
+				seedHistoryArchiveCheckpointScanChunk(database, {
+					rowLimit: options.rowLimit
+				}),
+			(progress) => process.stdout.write(JSON.stringify(progress) + '\n')
+		);
 	} finally {
 		if (database.isInitialized) await database.destroy();
 	}

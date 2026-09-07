@@ -2,9 +2,10 @@ export interface CheckpointScanSeedCliOptions {
 	readonly rowLimit: number;
 	readonly chunks: number;
 	readonly durationMs: number;
+	readonly untilComplete: boolean;
 }
 
-/** Deliberately finite; no service/daemon mode or implicit invocation. */
+/** Finite by default; supervised continuation requires an explicit opt-in. */
 export function parseCheckpointScanSeedCliOptions(
 	args: readonly string[]
 ): CheckpointScanSeedCliOptions {
@@ -12,13 +13,22 @@ export function parseCheckpointScanSeedCliOptions(
 		throw new Error(
 			'Explicit --run required for bounded scan coverage reconciliation'
 		);
-	const options = { rowLimit: 1_000, chunks: 1, durationMs: 10_000 };
+	const options = {
+		rowLimit: 1_000,
+		chunks: 1,
+		durationMs: 10_000,
+		untilComplete: false
+	};
 	const seen = new Set<string>();
 	for (const arg of args) {
 		const [key, value, extra] = arg.split('=');
 		if (seen.has(key)) throw new Error('Duplicate scan seed option');
 		seen.add(key);
 		if (key === '--run' && value === undefined) continue;
+		if (key === '--until-complete' && value === undefined) {
+			options.untilComplete = true;
+			continue;
+		}
 		if (
 			extra !== undefined ||
 			value === undefined ||
@@ -40,5 +50,12 @@ export function parseCheckpointScanSeedCliOptions(
 		else if (key === '--chunks') options.chunks = parsed;
 		else options.durationMs = parsed;
 	}
+	if (
+		options.untilComplete &&
+		(seen.has('--chunks') || seen.has('--duration-ms'))
+	)
+		throw new Error(
+			'--until-complete cannot be combined with finite run limits'
+		);
 	return options;
 }
