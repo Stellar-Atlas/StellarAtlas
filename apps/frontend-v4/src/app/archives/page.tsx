@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { fetchArchiveInventorySnapshot } from '@api/archive-inventory-server';
 import { ArchiveInventoryLive } from '@components/archive-scans/archive-inventory-live';
 import { PageHeading } from '@components/layout/page-heading';
+import './archive-verification-explainer.css';
 
 export const revalidate = 30;
 
@@ -15,17 +16,34 @@ export default function ArchiveInventoryPage(): React.JSX.Element {
 			/>
 			<details className="archive-inventory-explainer">
 				<summary>What is being verified?</summary>
-				<p>
-					Canonical checkpoint proofs verify shared content once. Source
-					coverage records whether each archive served that content. A canonical
-					replacement does not erase a missing-file finding against the original
-					archive. File counts, checkpoint coverage, and analytics ingestion
-					measure different work. These checks validate file hashes and
-					cross-file commitments; they are not BLS proofs, consensus-signature
-					verification, or transaction execution replay. Missing SCP files
-					remain archive findings even though SCP is optional in the current
-					checkpoint check.
-				</p>
+				<div className="archive-verification-explainer-grid">
+					<section aria-labelledby="archive-explainer-canonical">
+						<h2 id="archive-explainer-canonical">
+							Canonical checkpoint checks
+						</h2>
+						<p>
+							File hashes and cross-file commitments form shared checkpoint
+							evidence. Matching content can reuse verified facts. These are not
+							BLS proofs, SCP signature checks, or transaction execution replay.
+						</p>
+					</section>
+					<section aria-labelledby="archive-explainer-source">
+						<h2 id="archive-explainer-source">Each archive’s files</h2>
+						<p>
+							Source checks record the files and bytes each archive serves.
+							Missing or mismatching files remain that source’s findings, even
+							when a replacement lets scanning continue. Missing SCP files are
+							still reported, although SCP is optional for checkpoint checks.
+						</p>
+					</section>
+					<section aria-labelledby="archive-explainer-analytics">
+						<h2 id="archive-explainer-analytics">Analytics ingestion</h2>
+						<p>
+							Decoding history into queryable datasets is separate work. Archive
+							coverage does not mean the analytics dataset is fully ingested.
+						</p>
+					</section>
+				</div>
 			</details>
 			<Suspense
 				fallback={

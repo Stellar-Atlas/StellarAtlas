@@ -24,8 +24,6 @@ export function ArchiveRootRow({
 	readonly organizationNames: ReadonlyMap<string, string>;
 	readonly source: ArchiveSource;
 }): React.JSX.Element {
-	const validators = advertisers.filter((node) => node.isValidator);
-	const listeners = advertisers.filter((node) => !node.isValidator);
 	const expectedCheckpointProofs = getExpectedArchiveCheckpointCount(source);
 	const proofPercent = calculateCoveragePercent(
 		source.durableVerifiedCheckpointProofs,
@@ -37,32 +35,17 @@ export function ArchiveRootRow({
 
 	return (
 		<tr role="row">
-			<td role="cell" data-label="Archive root">
+			<td role="cell" data-label="Archive source">
 				<div className="archive-root-heading">
-					<a className="archive-root-url" href={source.stateUrl}>
+					<a className="archive-root-url" href={source.archiveUrl}>
 						{source.archiveUrl}
 					</a>
 					{isCanonical ? (
 						<span className="archive-canonical-label">Canonical source</span>
 					) : null}
 				</div>
-				<small>
-					{source.stateStatus}; root object{' '}
-					{source.rootObjectStatus ?? 'not recorded'}
-				</small>
-				<small>
-					Latest advertised ledger {formatNullableInteger(source.currentLedger)}
-					; latest discovered checkpoint{' '}
-					{formatNullableInteger(source.latestDiscoveredCheckpointLedger)}
-				</small>
-			</td>
-			<td role="cell" data-label="Advertised by">
-				<strong>
-					{formatInteger(validators.length)} validators;{' '}
-					{formatInteger(listeners.length)} listeners
-				</strong>
 				{advertisers.length === 0 ? (
-					<small>No current node advertises this captured root.</small>
+					<small>No current advertiser</small>
 				) : (
 					<ul className="archive-advertiser-list">
 						{advertisers.map((node) => (
@@ -71,89 +54,108 @@ export function ArchiveRootRow({
 									{formatNodeName(node)}
 								</Link>
 								<small title={node.publicKey}>
-									{node.isValidator ? 'validator' : 'listener'} ·{' '}
 									{formatOrganizationName(node, organizationNames)} ·{' '}
-									{node.publicKey.slice(0, 8)}…{node.publicKey.slice(-6)}
+									{node.isValidator ? 'validator' : 'listener'}
 								</small>
 							</li>
 						))}
 					</ul>
 				)}
 			</td>
-			<td role="cell" data-label="File failures">
-				{(source.listingGapCount ?? 0) > 0 ? (
-					<strong>
-						{formatInteger(source.listingGapCount ?? 0)} missing-file ranges
-						(listing evidence)
-					</strong>
-				) : null}
-				<strong>
-					{formatInteger(source.archiveEvidenceFailures)} unresolved archive
-					file failures
+			<td role="cell" data-label="Verified coverage">
+				<strong className="archive-coverage-value">
+					{formatCoveragePercent(proofPercent)}
 				</strong>
-				<small>
-					{formatInteger(source.mismatchCheckpointProofs)} confirmed checkpoint
-					mismatches
-				</small>
-				<small>
-					{formatInteger(source.scannerIssueFailures)} scanner issues (not
-					archive faults); {formatInteger(source.unclassifiedFailures)}{' '}
-					unclassified
-				</small>
-			</td>
-			<td role="cell" data-label="Checkpoint coverage">
-				<strong>{formatCoveragePercent(proofPercent)} verified</strong>
 				<progress
 					aria-label={'Durable checkpoint coverage for ' + source.archiveUrl}
 					max={100}
 					value={proofPercent}
 				/>
 				<small>
-					{formatInteger(source.durableVerifiedCheckpointProofs)} of{' '}
-					{formatInteger(expectedCheckpointProofs)} checkpoint positions
-					verified
+					{formatInteger(source.durableVerifiedCheckpointProofs)} /{' '}
+					{formatInteger(expectedCheckpointProofs)} positions verified
 				</small>
-				<details className="archive-check-details">
-					<summary>Verification details</summary>
-					<small>
-						{formatInteger(source.verifiedCheckpointProofs)} current
-						proof-version attestations;{' '}
-						{formatInteger(source.totalCheckpointProofs)} materialized proof
-						rows
-					</small>
-					<small>
-						Highest attested checkpoint{' '}
-						{formatNullableInteger(source.latestCheckpointLedger)}
-					</small>
-				</details>
+				<small>
+					Advertised ledger {formatNullableInteger(source.currentLedger)}
+				</small>
 			</td>
-			<td role="cell" data-label="Work queue">
+			<td role="cell" data-label="Archive findings">
 				<strong>
-					{formatInteger(source.activeObjectChecks)} active checks
+					{formatInteger(source.archiveEvidenceFailures)} file failures
 				</strong>
-				<small>
-					{formatInteger(source.pendingCheckpointProofs)} waiting for required
-					files
-				</small>
-				<small>
-					{formatInteger(source.notEvaluableCheckpointProofs)} incomplete under
-					the current proof
-				</small>
-				<small>
-					{formatInteger(source.objectCompleteCheckpointProofs)} file sets
-					complete
-				</small>
+				<small>Unresolved request or content-check failures</small>
+				{(source.listingGapCount ?? 0) > 0 ? (
+					<small className="archive-listing-finding">
+						{formatInteger(source.listingGapCount ?? 0)} ranges absent from
+						filename listings
+					</small>
+				) : null}
+				{source.mismatchCheckpointProofs > 0 ? (
+					<small>
+						{formatInteger(source.mismatchCheckpointProofs)} checkpoint
+						mismatches
+					</small>
+				) : null}
+				{source.unclassifiedFailures > 0 ? (
+					<small>
+						{formatInteger(source.unclassifiedFailures)} unclassified findings
+					</small>
+				) : null}
 			</td>
-			<td role="cell" data-label="Inspect / repair">
+			<td role="cell" data-label="Details">
 				<Link
 					className="primary-button"
 					href={getArchiveScanDetailPath(source.archiveUrl)}
 				>
-					Failures and repair
+					Inspect archive
 				</Link>
-				<small>
-					Observed <LocalDateTime dateTime={source.observedAt} />
-				</small>
+				<details className="archive-check-details">
+					<summary>Record details</summary>
+					<dl>
+						<div>
+							<dt>Current-version verified proofs</dt>
+							<dd>{formatInteger(source.verifiedCheckpointProofs)}</dd>
+						</div>
+						<div>
+							<dt>Tracked checkpoint records</dt>
+							<dd>{formatInteger(source.totalCheckpointProofs)}</dd>
+						</div>
+						<div>
+							<dt>Awaiting required files</dt>
+							<dd>{formatInteger(source.pendingCheckpointProofs)}</dd>
+						</div>
+						<div>
+							<dt>Incomplete or older proof version</dt>
+							<dd>{formatInteger(source.notEvaluableCheckpointProofs)}</dd>
+						</div>
+						<div>
+							<dt>Required file sets complete</dt>
+							<dd>{formatInteger(source.objectCompleteCheckpointProofs)}</dd>
+						</div>
+						<div>
+							<dt>Highest tracked checkpoint ledger (not verified coverage)</dt>
+							<dd>
+								{formatNullableInteger(source.latestDiscoveredCheckpointLedger)}
+							</dd>
+						</div>
+						<div>
+							<dt>Scanner issues (not archive faults)</dt>
+							<dd>{formatInteger(source.scannerIssueFailures)}</dd>
+						</div>
+					</dl>
+					<p>
+						Retained verified positions include earlier proof versions. Queue
+						records are not live worker activity; inspect the archive for live
+						checks and repair evidence.
+					</p>
+					<small>
+						Root metadata: {source.stateStatus}; object{' '}
+						{source.rootObjectStatus ?? 'not recorded'}.
+					</small>
+					<small>
+						Observed <LocalDateTime dateTime={source.observedAt} />
+					</small>
+				</details>
 			</td>
 		</tr>
 	);

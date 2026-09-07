@@ -1,0 +1,48 @@
+.archive-inventory-route .archive-inventory-explainer summary {
+	box-sizing: border-box;
+	min-height: 44px;
+	padding-block: 10px;
+	line-height: 1.5;
+}
+
+.archive-inventory-route .archive-inventory-explainer summary:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 4px;
+	border-radius: 3px;
+}
+
+.archive-inventory-route
+	.archive-inventory-explainer
+	.archive-verification-explainer-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	padding-block: 2px 8px;
+}
+
+.archive-inventory-route .archive-inventory-explainer section {
+	min-width: 0;
+}
+
+.archive-inventory-route .archive-inventory-explainer h2 {
+	margin: 0 0 6px;
+	font-size: 0.875rem;
+	line-height: 1.4;
+}
+
+.archive-inventory-route .archive-inventory-explainer p {
+	margin: 0;
+	padding: 0;
+	font-size: 0.8125rem;
+	line-height: 1.55;
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+	.archive-inventory-route
+		.archive-inventory-explainer
+		.archive-verification-explainer-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 14px;
+	}
+}

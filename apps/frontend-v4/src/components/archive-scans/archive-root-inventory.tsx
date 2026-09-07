@@ -210,22 +210,16 @@ export function ArchiveRootInventory({
 						<thead role="rowgroup">
 							<tr role="row">
 								<th role="columnheader" scope="col">
-									Archive root
+									Archive source
 								</th>
 								<th role="columnheader" scope="col">
-									Current advertisers
+									Verified coverage
 								</th>
 								<th role="columnheader" scope="col">
-									Remote archive evidence
+									Archive findings
 								</th>
 								<th role="columnheader" scope="col">
-									Durable checkpoint coverage
-								</th>
-								<th role="columnheader" scope="col">
-									Current work
-								</th>
-								<th role="columnheader" scope="col">
-									Inspect / repair
+									Details
 								</th>
 							</tr>
 						</thead>
