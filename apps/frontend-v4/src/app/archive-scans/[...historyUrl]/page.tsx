@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import '../../archive-source-detail.css';
+import '../../archive-source-evidence.css';
 import { connection } from 'next/server';
 import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
 import { ArchiveEvidenceErrorBoundary } from '@components/archive-scans/archive-evidence-error-boundary';

@@ -8,6 +8,7 @@ import {
 import { useId, useRef, useState } from 'react';
 import { ArchiveSourceOverview } from './archive-source-overview';
 import { ArchiveSourceErrorSummary } from './archive-source-error-summary';
+import { ArchiveSourceListingSummary } from './archive-source-listing-summary';
 import { ArchiveHealthPill } from '@components/status/status-ui';
 import {
 	assessKnownArchiveEvidence,
@@ -92,16 +93,22 @@ export function KnownArchiveEvidence({
 				/>
 			</div>
 			{sourceRoot ? <ArchiveSourceOverview root={sourceRoot} /> : null}
-			<EvidenceMetrics evidence={liveEvidence} />
+			<EvidenceMetrics
+				evidence={liveEvidence}
+				sourceDetail={sourceRoot !== undefined}
+			/>
 			{sourceRoot ? (
-				<ArchiveSourceErrorSummary
-					root={sourceRoot}
-					onInspect={(objectType) => {
-						view.selectTab('failures');
-						view.failures.changeObjectType(objectType);
-						setShowFileDetails(true);
-					}}
-				/>
+				<div className="archive-source-findings">
+					<ArchiveSourceErrorSummary
+						root={sourceRoot}
+						onInspect={(objectType) => {
+							view.selectTab('failures');
+							view.failures.changeObjectType(objectType);
+							setShowFileDetails(true);
+						}}
+					/>
+					<ArchiveSourceListingSummary root={sourceRoot} />
+				</div>
 			) : null}
 			<div
 				aria-label="Archive health view"
@@ -147,9 +154,11 @@ export function KnownArchiveEvidence({
 }
 
 function EvidenceMetrics({
-	evidence
+	evidence,
+	sourceDetail
 }: {
 	readonly evidence: PublicKnownArchiveEvidence;
+	readonly sourceDetail: boolean;
 }): React.JSX.Element {
 	const objects = evidence.totals.objects;
 	return (
@@ -167,9 +176,17 @@ function EvidenceMetrics({
 				value={unresolvedRemoteFailureCount(objects)}
 			/>
 			<Metric
-				label="Checking / waiting"
+				label={
+					sourceDetail
+						? 'Queued file records'
+						: 'Recorded scanning / queued files'
+				}
 				tone="neutral"
-				value={`${formatInteger(objects.activeObjects)} / ${formatInteger(objects.pendingObjects)}`}
+				value={
+					sourceDetail
+						? objects.pendingObjects
+						: `${formatInteger(objects.activeObjects)} / ${formatInteger(objects.pendingObjects)}`
+				}
 			/>
 			<Metric
 				label="Verified / recorded files"

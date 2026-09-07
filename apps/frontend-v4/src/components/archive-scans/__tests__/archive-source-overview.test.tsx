@@ -11,6 +11,7 @@ import {
 	describeArchiveFailure
 } from '../archive-source-error-summary';
 import { formatCoveragePercent } from '../archive-inventory-model';
+import { ArchiveSourceListingSummary } from '../archive-source-listing-summary';
 
 function root(): PublicKnownArchiveRootEvidence {
 	return {
@@ -77,6 +78,55 @@ function root(): PublicKnownArchiveRootEvidence {
 }
 
 describe('archive source summary', () => {
+	it('keeps filename-list absence and positive listed entries distinct from fetch results', () => {
+		const source: PublicKnownArchiveRootEvidence = {
+			...root(),
+			listingGaps: [
+				{
+					kind: 'gcs-listing-gap',
+					firstCheckpointLedger: 127,
+					lastCheckpointLedger: 255,
+					resumeCheckpointLedger: 319,
+					checkpointCount: 3,
+					observedAt: '2026-09-06T23:00:00Z',
+					sourceCheckpointProofId: '42',
+					sourceArchiveUrlIdentity: 'https://canonical.example',
+					listings: (
+						['history', 'ledger', 'transactions', 'results'] as const
+					).map((category) => ({
+						category,
+						listingUrl: `https://archive.example/${category}?list=true`,
+						responseSha256: 'a'.repeat(64),
+						firstReturnedKey: `${category}/0000013f`,
+						firstReturnedCheckpoint: 319
+					}))
+				}
+			]
+		};
+		const html = renderToStaticMarkup(
+			createElement(ArchiveSourceListingSummary, { root: source })
+		);
+		expect(html).toContain('Absent from listing');
+		expect(html).toContain('Filename listed · not a successful fetch');
+		expect(html).toContain('3 checkpoint positions');
+		expect(html).toContain('not individually fetched 404s');
+		expect(html).toContain(
+			'does not prove its bytes are downloadable or correct'
+		);
+		expect(html).toContain('319');
+		expect(html).not.toContain('650 unresolved');
+	});
+	it('does not infer listing capability or absent files when listing evidence is unavailable', () => {
+		const source = { ...root(), listingGapCount: 0, listingGaps: [] };
+		const html = renderToStaticMarkup(
+			createElement(ArchiveSourceListingSummary, { root: source })
+		);
+		expect(html).toContain('No complete listing evidence is recorded here');
+		expect(html).toContain(
+			'does not establish whether this source offers listings'
+		);
+		expect(html).not.toContain('Absent from listing');
+	});
 	it('uses every advertised checkpoint, not just materialized rows, for percentage', () => {
 		const source = root();
 		expect(sourceCheckpointCoverage(source)).toEqual({
@@ -131,7 +181,8 @@ describe('archive source summary', () => {
 		expect(html).toContain('HTTP 404 — file not found at the requested URL');
 		expect(html).toContain('Request failed with status code 404');
 		expect(html).toContain('AccessDenied');
-		expect(html).toContain('1 missing-file ranges');
+		expect(html).toContain('Direct file checks');
+		expect(html).not.toContain('missing-file ranges');
 		expect(html).not.toContain('84');
 	});
 	it('does not call a 403 proof of absence or a 404 rate limiting', () => {

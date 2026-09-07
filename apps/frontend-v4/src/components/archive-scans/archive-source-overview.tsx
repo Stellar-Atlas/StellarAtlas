@@ -75,12 +75,16 @@ export function ArchiveSourceOverview({
 					</dd>
 				</div>
 				<div>
-					<dt>Next scan position</dt>
+					<dt>Historical catch-up · next checkpoint ledger</dt>
 					<dd>
 						{next === null ? 'Not reported' : `Ledger ${formatInteger(next)}`}
 					</dd>
 				</div>
 			</dl>
+			<p className="archive-source-work-note">
+				Historical catch-up follows checkpoint files, 64 ledgers apart. This
+				position is not the live network ledger or a count of completed checks.
+			</p>
 		</section>
 	);
 }

@@ -8,6 +8,20 @@ import {
 } from '../known-archive-evidence-tab-query';
 
 describe('known archive evidence tab queries', () => {
+	it('prefers active work on entry even when queued rows also exist', () => {
+		expect(
+			getObjectQueryForTab('work', createQuery('failed'), {
+				activeObjects: 3,
+				pendingObjects: 10
+			})
+		).toEqual({ ...createQuery('failed'), status: 'scanning' });
+		expect(
+			getObjectQueryForTab('work', createQuery('pending'), {
+				activeObjects: 3,
+				pendingObjects: 10
+			})
+		).toBeNull();
+	});
 	it('loads pending work when entering Current work directly from Failures', () => {
 		const failureQuery = createQuery('failed');
 

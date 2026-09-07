@@ -56,11 +56,14 @@ export function ArchiveSourceErrorSummary({
 			aria-label="Archive error summary"
 		>
 			<div className="archive-source-coverage-heading">
-				<h3>Error summary</h3>
+				<h3>Direct file checks</h3>
 				<button type="button" onClick={() => onInspect(null)}>
 					{formatInteger(total)} unresolved file checks
 				</button>
 			</div>
+			<span className="archive-evidence-kind" data-kind="request">
+				Request or content-check failure
+			</span>
 			<p className="muted-copy">
 				Grouped by file type and recorded failure. Scanner infrastructure issues
 				are excluded; failures remain unresolved until a successful recheck
@@ -114,15 +117,6 @@ export function ArchiveSourceErrorSummary({
 					{formatInteger(summary?.remainingFailureCount ?? 0)} more failures in{' '}
 					{formatInteger(summary?.remainingGroupCount ?? 0)} additional reason
 					groups. Use the file details to inspect them.
-				</p>
-			) : null}
-			{(root.listingGapCount ?? 0) > 0 ? (
-				<p>
-					<strong>
-						{formatInteger(root.listingGapCount ?? 0)} missing-file ranges
-					</strong>{' '}
-					are recorded separately below from directory listings. They are not
-					added to the individual HTTP-failure count.
 				</p>
 			) : null}
 		</section>

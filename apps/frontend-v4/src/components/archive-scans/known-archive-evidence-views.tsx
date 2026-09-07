@@ -3,6 +3,7 @@ import {
 	unresolvedListingGapCount
 } from '@domain/known-archive-evidence';
 import { KnownArchiveListingGaps } from './known-archive-listing-gaps';
+import { ArchiveSourceRuntime } from './archive-source-runtime';
 import type { PublicHistoryArchiveObjectEvidenceClass } from '@api/archive-evidence-types';
 import type { PublicKnownArchiveEvidence } from '@domain/known-archive-evidence';
 import { formatInteger } from '@format/formatters';
@@ -67,7 +68,7 @@ export function KnownArchiveEvidenceTabContent({
 			role="tabpanel"
 			tabIndex={0}
 		>
-			{view.tab === 'failures' ? (
+			{view.tab === 'failures' && !compactSource ? (
 				<KnownArchiveListingGaps
 					roots={evidence.roots}
 					archiveUrl={view.failures.archiveUrl}
@@ -93,7 +94,21 @@ export function KnownArchiveEvidenceTabContent({
 				)
 			) : null}
 			{view.tab === 'work' || view.tab === 'verified' ? (
-				<ObjectPageView evidence={evidence} view={view} />
+				<>
+					{view.tab === 'work' && compactSource && evidence.roots[0] ? (
+						<>
+							<ArchiveSourceRuntime
+								archiveUrl={evidence.roots[0].archiveUrlIdentity}
+							/>
+							<p className="archive-source-work-note">
+								Recorded file queue below. Queued rows can already be assigned
+								to workers; live execution is shown above, independently of
+								these database states.
+							</p>
+						</>
+					) : null}
+					<ObjectPageView evidence={evidence} view={view} />
+				</>
 			) : null}
 			{view.tab === 'repair' ? (
 				<RepairView repair={view.repair} roots={evidence.roots} />
@@ -200,7 +215,7 @@ function ObjectPageView({
 						onClick={() => objects.changeStatus('pending')}
 						type="button"
 					>
-						Waiting {formatInteger(counts.pendingObjects)}
+						Queued {formatInteger(counts.pendingObjects)}
 					</button>
 					<button
 						aria-pressed={objects.status === 'scanning'}
@@ -208,7 +223,7 @@ function ObjectPageView({
 						onClick={() => objects.changeStatus('scanning')}
 						type="button"
 					>
-						Checking {formatInteger(counts.activeObjects)}
+						Recorded scanning {formatInteger(counts.activeObjects)}
 					</button>
 				</div>
 			) : null}

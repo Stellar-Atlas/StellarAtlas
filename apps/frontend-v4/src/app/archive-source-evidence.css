@@ -1,0 +1,209 @@
+/* Keep request outcomes and listing evidence distinct without affecting other routes. */
+.archive-source-page .archive-source-runtime {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	margin: 12px;
+	padding: 12px;
+}
+
+.archive-source-page .archive-source-runtime :is(h3, p) {
+	font-size: 0.85rem;
+	line-height: 1.45;
+	margin: 0 0 8px;
+	padding: 0;
+}
+
+.archive-source-page .archive-source-runtime-slots {
+	display: grid;
+	gap: 6px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	font-size: 0.8rem;
+	overflow-wrap: anywhere;
+}
+
+.archive-source-page .archive-source-findings {
+	align-items: start;
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	padding: 12px;
+}
+
+.archive-source-page .archive-source-findings > * {
+	max-inline-size: 100%;
+	min-inline-size: 0;
+}
+
+.archive-source-page .archive-source-findings > .archive-source-error-summary,
+.archive-source-page .archive-listing-summary {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	padding: 12px;
+}
+
+.archive-source-page .archive-source-findings p {
+	font-size: 0.85rem;
+	line-height: 1.45;
+	margin: 0;
+	overflow-wrap: anywhere;
+	padding: 0;
+}
+
+.archive-source-page .archive-source-findings :is(h3, h4) {
+	font-size: 0.9rem;
+	font-weight: 650;
+	line-height: 1.35;
+	margin: 0;
+	padding: 0;
+}
+
+.archive-source-page .archive-source-findings :is(small, time) {
+	font-size: 0.75rem;
+	line-height: 1.4;
+}
+
+.archive-source-page .archive-source-findings details {
+	min-inline-size: 0;
+}
+
+.archive-source-page .archive-source-findings summary {
+	align-content: center;
+	cursor: pointer;
+	font-size: 0.8rem;
+	line-height: 1.4;
+	min-block-size: 44px;
+	overflow-wrap: anywhere;
+	padding-block: 8px;
+}
+
+.archive-source-page .archive-source-findings :is(a, code, strong) {
+	overflow-wrap: anywhere;
+}
+
+.archive-source-page .archive-source-findings strong {
+	font-weight: 650;
+}
+
+.archive-source-page .archive-listing-facts {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+}
+
+.archive-source-page .archive-listing-facts > div {
+	border-block-start: 1px solid var(--border);
+	display: grid;
+	gap: 4px 10px;
+	grid-template-columns: minmax(78px, 0.35fr) minmax(0, 1fr);
+	min-inline-size: 0;
+	padding-block-start: 8px;
+}
+
+.archive-source-page .archive-listing-facts dt {
+	color: var(--muted);
+	font-size: 0.74rem;
+	font-weight: 650;
+	overflow-wrap: anywhere;
+}
+
+.archive-source-page .archive-listing-facts dd {
+	font-size: 0.81rem;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.4;
+	margin: 0;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.archive-source-page .archive-listing-summary :is(ul, ol) {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	padding-inline-start: 18px;
+}
+
+.archive-source-page .archive-listing-summary li {
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.archive-source-page .archive-evidence-kind {
+	align-items: center;
+	background: var(--surface-subtle);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	color: var(--ink);
+	display: inline-flex;
+	font-size: 0.68rem;
+	font-weight: 650;
+	justify-self: start;
+	line-height: 1.35;
+	max-inline-size: 100%;
+	overflow-wrap: anywhere;
+	padding: 3px 6px;
+	white-space: normal;
+}
+
+.archive-source-page .archive-evidence-kind[data-kind='request'] {
+	border-inline-start: 3px solid var(--red);
+}
+
+.archive-source-page .archive-evidence-kind[data-kind='listing-absence'] {
+	background: var(--state-warning-bg);
+	border-color: var(--state-warning-border);
+	color: var(--state-warning-ink);
+}
+
+.archive-source-page .archive-evidence-kind[data-kind='listed-entry'] {
+	border-inline-start: 3px solid var(--blue);
+}
+
+.archive-source-page .archive-source-work-note {
+	background: var(--surface-subtle);
+	color: var(--muted);
+	font-size: 0.81rem;
+	line-height: 1.45;
+	margin: 0 12px 10px;
+	overflow-wrap: anywhere;
+	padding: 8px 10px;
+}
+
+.archive-source-page .known-work-toggle {
+	display: flex;
+	flex-wrap: wrap;
+	inline-size: fit-content;
+	margin-inline: 12px;
+	max-inline-size: calc(100% - 24px);
+}
+
+.archive-source-page .known-work-toggle button {
+	font-size: 0.8rem;
+	font-weight: 650;
+	min-block-size: 44px;
+	white-space: normal;
+}
+
+@media (max-width: 960px) {
+	.archive-source-page .archive-source-findings {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 480px) {
+	.archive-source-page .archive-source-findings {
+		gap: 10px;
+		padding: 10px;
+	}
+
+	.archive-source-page .archive-source-findings > .archive-source-error-summary,
+	.archive-source-page .archive-listing-summary {
+		padding: 10px;
+	}
+}

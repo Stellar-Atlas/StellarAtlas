@@ -50,6 +50,12 @@ function getPreferredWorkStatus(
 	if (counts?.activeObjects === 0 && counts.pendingObjects > 0) {
 		return 'pending';
 	}
+	if (
+		status !== 'pending' &&
+		status !== 'scanning' &&
+		(counts?.activeObjects ?? 0) > 0
+	)
+		return 'scanning';
 	return status === 'scanning' ? 'scanning' : 'pending';
 }
 
