@@ -149,32 +149,7 @@ const queryBodySchema: OpenApiRecord = {
 	type: 'object'
 };
 
-const ledgerCoverageSchema: OpenApiRecord = {
-	type: 'object',
-	additionalProperties: false,
-	required: [
-		'contiguousFirstLedger',
-		'contiguousLastLedger',
-		'contiguousLedgerCount',
-		'supplementalLedgerCount',
-		'totalLedgerCount',
-		'nextLedger',
-		'minimumLedger',
-		'maximumLedger',
-		'gapCount'
-	],
-	properties: {
-		contiguousFirstLedger: { type: 'string', nullable: true },
-		contiguousLastLedger: { type: 'string', nullable: true },
-		contiguousLedgerCount: { type: 'string' },
-		supplementalLedgerCount: { type: 'string' },
-		totalLedgerCount: { type: 'string' },
-		nextLedger: { type: 'string' },
-		minimumLedger: { type: 'string', nullable: true },
-		maximumLedger: { type: 'string', nullable: true },
-		gapCount: { type: 'integer' }
-	}
-};
+const ledgerCoverageSchema: OpenApiRecord = hubbleCoverageSchema;
 
 const hubblePaths: Readonly<Record<string, OpenApiRecord>> = withHubbleExplorerPaths({
 	...withHubbleContractEventPath(hubbleSemanticPaths),

@@ -21,10 +21,17 @@ export function jsonResponse(schema: OpenApiRecord, description: string, example
 export function queryParameter(name: string, description: string, schema: OpenApiRecord = text): OpenApiRecord {
 	return { in: 'query', name, description, required: false, schema };
 }
-export const hubbleCoverageSchema = object({
+const coverageProperties = {
 	contiguousFirstLedger: nullableText, contiguousLastLedger: nullableText,
 	contiguousLedgerCount: exactInteger, supplementalLedgerCount: exactInteger,
 	totalLedgerCount: exactInteger, nextLedger: exactInteger,
 	minimumLedger: nullableText, maximumLedger: nullableText, gapCount: integer
-});
+};
+export const hubbleCoverageSchema = object({
+	...coverageProperties,
+	completedRanges: {
+		...array(object({ firstLedger: exactInteger, lastLedger: exactInteger })),
+		description: 'Disjoint merged completed manifest intervals, including supplemental imports. An interval does not imply the earlier historical gap is ingested.'
+	}
+}, Object.keys(coverageProperties));
 export const hubbleErrorSchema = object({ code: text, error: text });

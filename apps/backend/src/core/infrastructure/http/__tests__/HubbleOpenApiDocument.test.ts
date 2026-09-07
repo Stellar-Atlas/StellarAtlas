@@ -1,4 +1,5 @@
 import { withHubbleOpenApiPaths } from '../HubbleOpenApiDocument.js';
+import { hubbleCoverageSchema } from '../HubbleOpenApiSchemas.js';
 
 describe('Hubble OpenAPI paths', () => {
 	const document = withHubbleOpenApiPaths({
@@ -10,6 +11,22 @@ describe('Hubble OpenAPI paths', () => {
 		string,
 		Record<string, Record<string, unknown>>
 	>;
+	it('documents optional merged completed intervals without changing legacy required fields', () => {
+		expect(hubbleCoverageSchema.required).not.toContain('completedRanges');
+		expect(hubbleCoverageSchema.properties).toMatchObject({
+			completedRanges: {
+				type: 'array',
+				items: {
+					type: 'object',
+					required: ['firstLedger', 'lastLedger'],
+					properties: {
+						firstLedger: { type: 'string' },
+						lastLedger: { type: 'string' }
+					}
+				}
+			}
+		});
+	});
 
 	it('documents the semantic history and Soroban query surface', () => {
 		expect(

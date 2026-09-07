@@ -10,6 +10,11 @@ export interface HubbleCompletedLedgerRange {
 }
 
 export interface HubbleLedgerCoverage {
+	/** Disjoint completed intervals at this manifest snapshot, including supplemental imports. */
+	readonly completedRanges?: readonly {
+		readonly firstLedger: string;
+		readonly lastLedger: string;
+	}[];
 	readonly contiguousFirstLedger: string | null;
 	readonly contiguousLastLedger: string | null;
 	readonly contiguousLedgerCount: string;
@@ -64,6 +69,10 @@ export function summarizeHubbleLedgerCoverage(
 		0
 	);
 	return {
+		completedRanges: merged.map(({ start, end }) => ({
+			firstLedger: String(start),
+			lastLedger: String(end)
+		})),
 		contiguousFirstLedger: contiguousEnd === null ? null : String(first),
 		contiguousLastLedger: contiguousEnd === null ? null : String(contiguousEnd),
 		contiguousLedgerCount: String(contiguous),
@@ -74,6 +83,33 @@ export function summarizeHubbleLedgerCoverage(
 		maximumLedger: merged.length === 0 ? null : String(merged.at(-1)!.end),
 		gapCount: Math.max(0, merged.length - (contiguousEnd === null ? 0 : 1))
 	};
+}
+
+export function isHubbleLedgerWindowComplete(
+	coverage: HubbleLedgerCoverage,
+	firstLedger: number,
+	lastLedger: number
+): boolean {
+	const first = ledger(firstLedger),
+		last = ledger(lastLedger);
+	if (last < first) return false;
+	// Older callers may have only the contiguous summary. Never infer coverage
+	// from the overall min/max bounds: they can span unimported gaps.
+	const ranges =
+		coverage.completedRanges ??
+		(coverage.contiguousFirstLedger !== null &&
+		coverage.contiguousLastLedger !== null
+			? [
+					{
+						firstLedger: coverage.contiguousFirstLedger,
+						lastLedger: coverage.contiguousLastLedger
+					}
+				]
+			: []);
+	return ranges.some(
+		(range) =>
+			first >= ledger(range.firstLedger) && last <= ledger(range.lastLedger)
+	);
 }
 
 export async function queryHubbleLedgerCoverage(

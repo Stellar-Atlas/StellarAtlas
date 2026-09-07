@@ -111,7 +111,9 @@ describe('bounded parsed explorer', () => {
 			'446670351d9f2af449eda3bfa0e36c3e128e2720443293dd5b585b3bbadeb485'
 		);
 		expect(w.query).toHaveBeenCalledTimes(2);
-		expect(r.body.coverageStatus).toBe('partial_or_unknown');
+		expect(r.body.coverageStatus).toBe('complete');
+		expect(r.body.coverage.contiguousLastLedger).toBe('27830402');
+		expect(r.body.coverage.gapCount).toBe(1);
 		expect(w.query).toHaveBeenCalledWith(
 			expect.objectContaining({
 				filters: expect.arrayContaining([
@@ -167,6 +169,11 @@ describe('bounded parsed explorer', () => {
 		await request(app(w))
 			.get('/v1/analytics/offers/1?min_ledger=3&max_ledger=3')
 			.expect(404);
+		const supplemental = await request(app(w))
+			.get('/v1/analytics/offers/1?min_ledger=63490360&max_ledger=63490365')
+			.expect(404);
+		expect(supplemental.body.code).toBe('hubble_record_not_found');
+		expect(supplemental.body.coverageStatus).toBe('complete');
 		const r = await request(app(w))
 			.get('/v1/analytics/offers/1?min_ledger=40000000&max_ledger=40000000')
 			.expect(409);

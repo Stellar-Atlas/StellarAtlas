@@ -1,4 +1,5 @@
 import { attachExplorerTransactionHashes } from './HubbleExplorerRelationships.js';
+import { isHubbleLedgerWindowComplete } from './HubbleLedgerCoverage.js';
 import type {
 	HubbleFilter,
 	HubbleQuery,
@@ -137,10 +138,7 @@ export async function queryExplorer(
 		});
 	}
 	const coverage = catalog.coverage;
-	const complete =
-		coverage.contiguousFirstLedger !== null &&
-		minLedger >= Number(coverage.contiguousFirstLedger) &&
-		maxLedger <= Number(coverage.contiguousLastLedger);
+	const complete = isHubbleLedgerWindowComplete(coverage, minLedger, maxLedger);
 	const metadata = {
 		entity: input.entity,
 		window: { minLedger, maxLedger },

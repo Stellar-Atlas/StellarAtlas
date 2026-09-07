@@ -57,6 +57,7 @@ const schema = buildSchema(
 	}
 
 	type HubbleLedgerCoverage {
+		completedRanges: [HubbleCompletedLedgerInterval!]
 		contiguousFirstLedger: String
 		contiguousLastLedger: String
 		contiguousLedgerCount: String!
@@ -66,6 +67,10 @@ const schema = buildSchema(
 		minimumLedger: String
 		maximumLedger: String
 		gapCount: Int!
+	}
+	type HubbleCompletedLedgerInterval {
+		firstLedger: String!
+		lastLedger: String!
 	}
 
 	type HubbleDataset {

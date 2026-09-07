@@ -56,7 +56,8 @@ describe('existing-service GraphQL trades and offers', () => {
 			const w = mock<HubbleWarehouse>();
 			w.catalog.mockResolvedValue({
 				coverage: summarizeHubbleLedgerCoverage([
-					{ start_ledger: 2, end_ledger: ledger }
+					{ start_ledger: 2, end_ledger: 10 },
+					{ start_ledger: ledger - 1, end_ledger: ledger + 1 }
 				])
 			} as never);
 			w.query.mockImplementation(async (input) => ({
@@ -97,10 +98,21 @@ describe('existing-service GraphQL trades and offers', () => {
 						ledger +
 						',limit:1,offset:2,sellingAsset:"native"}) { rows { ' +
 						selection +
-						' amountPrecision price { numerator denominator } sourceRecord { rowNumber } } nextOffset coverageStatus } }'
+						' amountPrecision price { numerator denominator } sourceRecord { rowNumber } } nextOffset coverageStatus coverage { contiguousLastLedger gapCount completedRanges { firstLedger lastLedger } } } }'
 				})
 				.expect(200);
 			expect(gql.body.errors).toBeUndefined();
+			expect(gql.body.data[field]).toMatchObject({
+				coverageStatus: 'complete',
+				coverage: {
+					contiguousLastLedger: '10',
+					gapCount: 1,
+					completedRanges: [
+						{ firstLedger: '2', lastLedger: '10' },
+						{ firstLedger: String(ledger - 1), lastLedger: String(ledger + 1) }
+					]
+				}
+			});
 			expect(w.query.mock.calls[1]![0]).toEqual(restQuery);
 			expect(gql.body.data[field].rows[0]).toMatchObject({
 				id: rest.body.rows[0].id,

@@ -34,7 +34,8 @@ live('published modern explorer acceptance', () => {
 					limit: 1
 				});
 				expect(result.window).toEqual({ minLedger: ledger, maxLedger: ledger });
-				expect(result.coverageStatus).toBe('partial_or_unknown');
+				expect(result.coverageStatus).toBe('complete');
+				expect(result.coverage).toMatchObject({ gapCount: 1 });
 				expect(Array.isArray(result.rows)).toBe(true);
 				const rows = result.rows as Record<string, unknown>[];
 				expect(rows).toHaveLength(1);

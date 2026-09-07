@@ -1,6 +1,7 @@
 import { mock } from 'jest-mock-extended';
 import {
 	queryHubbleLedgerCoverage,
+	isHubbleLedgerWindowComplete,
 	summarizeHubbleLedgerCoverage
 } from '../HubbleLedgerCoverage.js';
 import type { HubbleSemanticQueryExecutor } from '../HubbleSemanticWarehouse.js';
@@ -14,6 +15,10 @@ describe('completed Hubble manifest coverage', () => {
 				{ start_ledger: 63_490_179, end_ledger: 63_491_202 }
 			])
 		).toEqual({
+			completedRanges: [
+				{ firstLedger: '2', lastLedger: '2049' },
+				{ firstLedger: '63490179', lastLedger: '63491202' }
+			],
 			contiguousFirstLedger: '2',
 			contiguousLastLedger: '2049',
 			contiguousLedgerCount: '2048',
@@ -24,6 +29,38 @@ describe('completed Hubble manifest coverage', () => {
 			maximumLedger: '63491202',
 			gapCount: 1
 		});
+	});
+	it('recognizes a completed supplemental window without filling historical gaps', () => {
+		const coverage = summarizeHubbleLedgerCoverage([
+			{ start_ledger: 2, end_ledger: 10 },
+			{ start_ledger: 100, end_ledger: 110 },
+			{ start_ledger: 109, end_ledger: 120 },
+			{ start_ledger: 121, end_ledger: 125 }
+		]);
+		expect(isHubbleLedgerWindowComplete(coverage, 100, 125)).toBe(true);
+		expect(isHubbleLedgerWindowComplete(coverage, 3, 8)).toBe(true);
+		for (const [first, last] of [
+			[99, 100],
+			[120, 126],
+			[10, 100],
+			[11, 12]
+		])
+			expect(isHubbleLedgerWindowComplete(coverage, first!, last!)).toBe(false);
+		expect(coverage.contiguousLastLedger).toBe('10');
+		expect(coverage.gapCount).toBe(1);
+		expect(coverage.completedRanges).toHaveLength(2);
+	});
+	it('uses only known continuous bounds when optional intervals are absent', () => {
+		const { completedRanges: _ranges, ...legacy } =
+			summarizeHubbleLedgerCoverage([
+				{ start_ledger: 2, end_ledger: 10 },
+				{ start_ledger: 100, end_ledger: 120 }
+			]);
+		expect(isHubbleLedgerWindowComplete(legacy, 2, 10)).toBe(true);
+		expect(isHubbleLedgerWindowComplete(legacy, 100, 120)).toBe(false);
+		expect(
+			isHubbleLedgerWindowComplete(summarizeHubbleLedgerCoverage([]), 2, 2)
+		).toBe(false);
 	});
 
 	it('unions duplicate, overlapping and out-of-order ranges without counting ledgers twice', () => {
