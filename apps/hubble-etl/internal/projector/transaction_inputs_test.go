@@ -1,7 +1,9 @@
 package projector
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"path/filepath"
 	"reflect"
@@ -66,6 +68,28 @@ func TestSharedTransactionInputsMatchOfficialReadersAndRows(t *testing.T) {
 	if len(transactions) != 163 || len(wantTrades) == 0 {
 		t.Fatalf("fixture does not exercise transactions/trades: %d/%d", len(transactions), len(wantTrades))
 	}
+	feeBumps := 0
+	for _, item := range transactions {
+		if item.Transaction.Envelope.IsFeeBump() {
+			feeBumps++
+		}
+	}
+	if feeBumps == 0 {
+		t.Fatal("fixture must exercise fee-bump input sharing")
+	}
+	before := transactionDigest(t, transactions)
+	transactionProjector, err := New(fixtureNetwork, transactionRows{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := transactionProjector.projectTransactions(context.Background(), meta, transactions); err != nil {
+		t.Fatal(err)
+	}
+	after := transactionDigest(t, transactions)
+	if !bytes.Equal(before, after) {
+		t.Fatal("transaction/effect/event transforms mutated shared input")
+	}
+	t.Logf("shared input remained unchanged across transaction/effect/event transforms, including %d fee-bump transactions", feeBumps)
 	want := transactionRows{}
 	for _, item := range wantOperations {
 		row, err := transform.TransformOperation(item.Operation, item.OperationIndex, item.Transaction, item.LedgerSeqNum, item.LedgerCloseMeta, fixtureNetwork)
@@ -101,6 +125,26 @@ func TestSharedTransactionInputsMatchOfficialReadersAndRows(t *testing.T) {
 		}
 	}
 	t.Logf("identical official inputs and JSON row order: %d operations, %d trade inputs, %d trades", len(wantOperations), len(wantTrades), len(want["history_trades"]))
+}
+
+func transactionDigest(t testing.TB, transactions []input.LedgerTransformInput) []byte {
+	t.Helper()
+	hash := sha256.New()
+	encoder := json.NewEncoder(hash)
+	if len(transactions) > 0 {
+		if err := encoder.Encode(transactions[0].LedgerCloseMeta); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, item := range transactions {
+		// Snapshot each transaction once, not its repeated enclosing whole ledger.
+		transaction := item.Transaction
+		transaction.Ledger = xdr.LedgerCloseMeta{}
+		if err := encoder.Encode(transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return hash.Sum(nil)
 }
 
 func BenchmarkTransactionInputReaders(b *testing.B) {
