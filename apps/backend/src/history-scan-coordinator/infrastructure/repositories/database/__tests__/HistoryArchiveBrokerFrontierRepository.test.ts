@@ -14,9 +14,18 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		);
 		expect(reserveBrokerJobsSql).not.toContain('frozen_lane');
 		expect(reserveBrokerJobsSql).toContain(
-			'ranked."checkpointLedger" asc nulls first'
+			'candidate."checkpointLedger" asc nulls first'
 		);
 		expect(reserveBrokerJobsSql).toContain('ranked."objectOrder"');
+		expect(reserveBrokerJobsSql).toContain(
+			'partition by candidate.priority, candidate."archiveUrlIdentity"'
+		);
+		expect(reserveBrokerJobsSql).toContain(
+			'order by ranked.priority, ranked.root_round'
+		);
+		expect(reserveBrokerJobsSql).toContain(
+			'order by selected."selectedOrdinal"'
+		);
 		expect(reserveBrokerJobsSql).not.toContain('deduplicated as materialized');
 		expect(reserveBrokerJobsSql).not.toContain('displaced as');
 		expect(reserveBrokerJobsSql).not.toContain('displacement_fence');
