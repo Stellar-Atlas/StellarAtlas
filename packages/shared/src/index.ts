@@ -237,3 +237,8 @@ export {
 	frontendCacheTags,
 	type FrontendCacheTag
 } from './frontend-cache-tags.js';
+export {
+	KnownArchiveFailureSummaryV1Schema,
+	type KnownArchiveFailureSummaryV1,
+	type KnownArchiveFailureReasonV1
+} from './dto/known-archive-failure-summary-v1.js';

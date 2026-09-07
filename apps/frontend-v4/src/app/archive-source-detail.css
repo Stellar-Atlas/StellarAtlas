@@ -1,0 +1,490 @@
+/* Route-scoped: Next retains imported stylesheets after client navigation. */
+.archive-source-page {
+	font-size: 0.9rem;
+	line-height: 1.45;
+	min-inline-size: 0;
+	padding-block: 20px 36px;
+}
+
+.archive-source-page
+	:is(
+		.page-heading > div,
+		.panel,
+		.known-archive-evidence > *,
+		.known-evidence-tab-panel,
+		.known-evidence-tab-panel > *,
+		.archive-source-overview > *,
+		.archive-source-error-group > *
+	) {
+	min-inline-size: 0;
+	max-inline-size: 100%;
+}
+
+.archive-source-page :is(h1, h2, h3, h4, p, dd, a, code, summary) {
+	overflow-wrap: anywhere;
+}
+
+.archive-source-page .page-heading {
+	gap: 12px;
+	margin-block-end: 16px;
+}
+
+.archive-source-page .page-heading h1 {
+	font-size: clamp(1.2rem, 2.1vw, 1.65rem);
+	font-weight: 750;
+	line-height: 1.25;
+	margin: 0;
+}
+
+.archive-source-page .page-heading .eyebrow {
+	font-size: 0.7rem;
+	margin-block-end: 4px;
+}
+
+.archive-source-page .page-heading .lede {
+	font-size: 0.85rem;
+	line-height: 1.4;
+	margin: 5px 0 0;
+	max-inline-size: none;
+}
+
+.archive-source-page .panel-heading {
+	align-items: flex-start;
+	gap: 10px;
+	padding: 12px;
+}
+
+.archive-source-page .panel-heading > div {
+	min-inline-size: 0;
+}
+
+.archive-source-page
+	:is(.panel-heading h2, .known-evidence-section-heading h3) {
+	font-size: 0.95rem;
+	font-weight: 700;
+	line-height: 1.35;
+}
+
+.archive-source-page .status-pill {
+	flex-shrink: 0;
+	font-size: 0.68rem;
+	line-height: 1.35;
+	max-inline-size: 100%;
+	white-space: normal;
+}
+
+.archive-source-page .known-evidence-heading .muted-inline {
+	font-size: 0.75rem;
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+.archive-source-page .known-evidence-metrics {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.archive-source-page .known-evidence-metrics > div {
+	gap: 3px;
+	min-inline-size: 0;
+	padding: 10px 12px;
+}
+
+.archive-source-page .known-evidence-metrics > div:nth-child(4n) {
+	border-inline-end: 0;
+}
+
+.archive-source-page .known-evidence-metrics dt {
+	font-size: 0.68rem;
+	font-weight: 650;
+	line-height: 1.35;
+}
+
+.archive-source-page .known-evidence-metrics dd {
+	font-size: clamp(0.9rem, 1.2vw, 1.05rem);
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	line-height: 1.35;
+}
+
+.archive-source-page .archive-source-overview {
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 12px;
+	grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+	padding: 12px;
+}
+
+.archive-source-page
+	:is(.archive-source-coverage, .archive-source-error-summary) {
+	display: grid;
+	align-content: start;
+	gap: 7px;
+	min-inline-size: 0;
+}
+
+.archive-source-page
+	:is(.archive-source-overview, .archive-source-error-summary)
+	:is(h3, h4, p) {
+	margin: 0;
+}
+
+.archive-source-page
+	:is(.archive-source-overview, .archive-source-error-summary)
+	:is(h3, h4) {
+	font-size: 0.88rem;
+	font-weight: 700;
+}
+
+.archive-source-page
+	:is(.archive-source-overview, .archive-source-error-summary)
+	p {
+	font-size: 0.81rem;
+	line-height: 1.45;
+}
+
+.archive-source-page .archive-source-coverage progress {
+	accent-color: var(--green);
+	block-size: 10px;
+	border: 0;
+	border-radius: 999px;
+	display: block;
+	inline-size: 100%;
+	overflow: hidden;
+}
+
+.archive-source-page .archive-source-coverage-heading {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: space-between;
+}
+
+.archive-source-page .archive-source-coverage-heading > strong {
+	font-size: 0.85rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 650;
+}
+
+.archive-source-page .archive-source-chain-details {
+	align-content: start;
+	display: grid;
+	gap: 8px;
+	margin: 0;
+}
+
+.archive-source-page .archive-source-chain-details > div {
+	display: grid;
+	gap: 4px 12px;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.archive-source-page .archive-source-chain-details dt {
+	color: var(--muted);
+	font-size: 0.76rem;
+}
+
+.archive-source-page .archive-source-chain-details dd {
+	font-size: 0.82rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 650;
+	margin: 0;
+}
+
+.archive-source-page .archive-source-error-summary {
+	border-block-end: 1px solid var(--border);
+	padding: 12px;
+}
+
+.archive-source-page .archive-source-error-summary button {
+	background: var(--button-secondary);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.8rem;
+	font-weight: 650;
+	line-height: 1.35;
+	padding: 8px 10px;
+	text-align: start;
+}
+
+.archive-source-page .archive-source-error-groups {
+	display: grid;
+	gap: 0;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.archive-source-page .archive-source-error-group {
+	align-items: start;
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 8px;
+	grid-template-columns: minmax(140px, 0.35fr) minmax(0, 1fr);
+	padding-block: 7px;
+}
+
+.archive-source-page .archive-source-error-group:last-child {
+	border-block-end: 0;
+}
+
+.archive-source-page .archive-source-error-count {
+	font-size: 0.84rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+}
+
+.archive-source-page .archive-source-error-group > button {
+	align-items: center;
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+}
+
+.archive-source-page .archive-source-error-reason {
+	font-size: 0.8rem;
+	line-height: 1.4;
+}
+
+.archive-source-page .known-evidence-tabs {
+	margin: 10px 12px 0;
+}
+
+.archive-source-page .known-evidence-tabs button {
+	font-size: 0.8rem;
+	font-weight: 650;
+	padding: 8px;
+}
+
+.archive-source-page :is(button, select, summary, .primary-button) {
+	min-block-size: 44px;
+}
+
+.archive-source-page :is(button, .primary-button) {
+	max-inline-size: 100%;
+	white-space: normal;
+}
+
+.archive-source-page :is(button, select, summary, a):focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+
+.archive-source-page .known-evidence-tab-panel {
+	min-block-size: 100px;
+	padding-block-start: 10px;
+}
+
+.archive-source-page
+	:is(
+		.known-evidence-filters,
+		.known-evidence-section-heading,
+		.known-evidence-request-state,
+		.known-evidence-pagination
+	) {
+	gap: 8px;
+	padding-inline: 12px;
+}
+
+.archive-source-page .known-evidence-filters {
+	grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+}
+
+.archive-source-page .known-evidence-section-heading {
+	flex-wrap: wrap;
+	padding-block: 8px;
+}
+
+.archive-source-page .known-evidence-table-wrap {
+	max-inline-size: 100%;
+	min-inline-size: 0;
+}
+
+.archive-source-page .known-evidence-table {
+	font-size: 0.8rem;
+	inline-size: 100%;
+	min-inline-size: 0;
+}
+
+.archive-source-page .known-evidence-table :is(th, td) {
+	line-height: 1.4;
+	padding: 9px 10px;
+	vertical-align: top;
+}
+
+.archive-source-page .known-evidence-table th {
+	font-size: 0.67rem;
+	font-weight: 650;
+}
+
+.archive-source-page .known-evidence-table :is(td, td strong, td small) {
+	font-weight: 400;
+	overflow-wrap: anywhere;
+}
+
+.archive-source-page
+	.known-evidence-table
+	:is(td strong, .known-evidence-error) {
+	font-weight: 650;
+}
+
+.archive-source-page .archive-object-retry {
+	min-inline-size: 0;
+}
+
+.archive-source-page .known-evidence-tab-panel > section > p,
+.archive-source-page .known-evidence-tab-panel > section > div > h4 {
+	margin: 8px 12px;
+	font-size: 0.82rem;
+}
+
+.archive-source-page .archive-check-details {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	font-size: 0.81rem;
+	margin: 8px 12px;
+	padding: 0 10px;
+}
+
+.archive-source-page .archive-check-details summary {
+	align-content: center;
+	cursor: pointer;
+	font-size: 0.82rem;
+	line-height: 1.4;
+	padding-block: 10px;
+}
+
+.archive-source-page .archive-check-details :is(p, ul) {
+	margin-block: 7px 10px;
+}
+
+.archive-source-page .archive-check-details ul {
+	padding-inline-start: 20px;
+}
+
+.archive-source-page .known-evidence-raw {
+	margin: 10px 12px 12px;
+}
+
+.archive-source-page .archive-source-file-details {
+	border-block-start: 1px solid var(--border);
+	min-inline-size: 0;
+}
+
+.archive-source-page .archive-source-file-details > summary {
+	align-content: center;
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-weight: 650;
+	padding: 10px 12px;
+}
+
+.archive-source-page .known-evidence-raw pre {
+	font-size: 0.75rem;
+	max-inline-size: 100%;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+@media (max-width: 960px) {
+	.archive-source-page .archive-source-overview {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 760px) {
+	.archive-source-page {
+		font-size: 0.875rem;
+		padding-block: 14px 28px;
+	}
+
+	.archive-source-page .known-evidence-heading {
+		flex-wrap: wrap;
+	}
+
+	.archive-source-page .archive-source-error-group {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.archive-source-page .known-evidence-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.archive-source-page .known-evidence-metrics > div:nth-child(2n) {
+		border-inline-end: 0;
+	}
+
+	.archive-source-page .known-evidence-tabs {
+		display: flex;
+		gap: 1px;
+		overflow-x: auto;
+		overscroll-behavior-inline: contain;
+		padding-block: 2px;
+		scroll-padding-inline: 4px;
+	}
+
+	.archive-source-page .known-evidence-tabs button {
+		flex: 0 0 auto;
+		min-inline-size: 82px;
+		padding-inline: 12px;
+	}
+
+	.archive-source-page .known-evidence-table-wrap {
+		overflow: visible;
+		scrollbar-gutter: auto;
+	}
+
+	.archive-source-page .known-evidence-table thead {
+		/* Keep column headers in the accessibility tree. */
+		block-size: 1px;
+		clip-path: inset(50%);
+		display: table-header-group;
+		inline-size: 1px;
+		overflow: hidden;
+		position: absolute;
+	}
+
+	.archive-source-page :is(.known-evidence-table, .known-evidence-table tbody) {
+		display: block;
+		inline-size: 100%;
+		min-inline-size: 0;
+	}
+
+	.archive-source-page .known-evidence-table tr {
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		display: block;
+		margin: 8px 12px;
+		padding: 6px 10px;
+	}
+
+	.archive-source-page .known-evidence-table td {
+		border: 0;
+		display: grid;
+		gap: 4px 10px;
+		grid-template-columns: minmax(78px, 0.3fr) minmax(0, 1fr);
+		padding: 6px 0;
+	}
+
+	.archive-source-page .known-evidence-table td::before {
+		color: var(--muted);
+		content: attr(data-label);
+		font-size: 0.66rem;
+		font-weight: 650;
+		grid-column: 1;
+		grid-row: 1;
+		text-transform: uppercase;
+	}
+
+	.archive-source-page .known-evidence-table td > * {
+		grid-column: 2;
+		min-inline-size: 0;
+	}
+
+	.archive-source-page
+		:is(.known-evidence-pagination, .known-evidence-request-state) {
+		flex-wrap: wrap;
+	}
+}

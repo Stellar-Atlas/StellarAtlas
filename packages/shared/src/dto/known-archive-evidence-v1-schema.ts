@@ -1,4 +1,5 @@
 import { KnownArchiveListingGapV1Schema } from './known-archive-listing-gap-v1.js';
+import { KnownArchiveFailureSummaryV1Schema } from './known-archive-failure-summary-v1.js';
 import type { JSONSchemaType } from 'ajv';
 import { HistoryArchiveObjectV1Schema } from './history-archive-object-v1.js';
 import { HistoryArchiveStateSnapshotV1Schema } from './history-archive-state-v1.js';
@@ -136,6 +137,7 @@ export const KnownArchiveRootEvidenceV1Schema: JSONSchemaType<KnownArchiveRootEv
 	{
 		type: 'object',
 		properties: {
+			failureSummary: { ...KnownArchiveFailureSummaryV1Schema, nullable: true },
 			listingGaps: {
 				type: 'array',
 				nullable: true,

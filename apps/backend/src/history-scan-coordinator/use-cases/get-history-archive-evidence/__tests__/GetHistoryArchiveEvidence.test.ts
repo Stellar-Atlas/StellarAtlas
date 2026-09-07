@@ -40,6 +40,7 @@ describe('GetHistoryArchiveEvidence', () => {
 			'https://history.example.com'
 		);
 		expect(getKnownArchiveEvidence.execute).toHaveBeenCalledWith({
+			includeFailureSummary: true,
 			fixedArchiveUrlIdentity: 'https://history.example.com',
 			nodePublicKeys: [publicKey],
 			options: { objectLimit: 10 },

@@ -46,6 +46,7 @@ export class GetHistoryArchiveEvidence {
 			nodePublicKeys: []
 		};
 		const evidenceResult = await this.getKnownArchiveEvidence.execute({
+			includeFailureSummary: true,
 			fixedArchiveUrlIdentity: archiveUrlIdentity,
 			nodePublicKeys: ownedRoot.nodePublicKeys,
 			options,

@@ -7,6 +7,7 @@ import type {
 	KnownArchiveEvidenceRepository
 } from '../../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
 import { findKnownArchiveEvidenceRoots } from './KnownArchiveEvidenceRootQuery.js';
+import { getKnownArchiveFailureSummary } from './KnownArchiveFailureSummaryCache.js';
 import { findKnownArchiveFailurePage } from './KnownArchiveFailurePageQuery.js';
 import { findKnownArchiveCopyCoverage } from './KnownArchiveCopyCoverageQuery.js';
 import { findKnownArchiveObjectPage } from './KnownArchiveObjectPageQuery.js';
@@ -97,6 +98,14 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 		const statesByIdentity = new Map(
 			states.map((state) => [state.archiveUrlIdentity, state])
 		);
+		const onlyRoot = query.roots.length === 1 ? query.roots[0] : undefined;
+		const failureSummary =
+			query.includeFailureSummary === true && onlyRoot !== undefined
+				? await getKnownArchiveFailureSummary(
+						this.dataSource,
+						onlyRoot.archiveUrlIdentity
+					)
+				: undefined;
 
 		return {
 			copyCoverage,
@@ -105,6 +114,7 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 			remoteFailures,
 			roots: rootRows.map((root) => ({
 				...root,
+				...(failureSummary === undefined ? {} : { failureSummary }),
 				scannerOwnedState: statesByIdentity.get(root.archiveUrlIdentity) ?? null
 			})),
 			workerIssues

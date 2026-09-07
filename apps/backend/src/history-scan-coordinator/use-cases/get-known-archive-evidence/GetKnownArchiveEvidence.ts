@@ -39,6 +39,7 @@ export interface OwnedKnownArchiveRoot extends KnownArchiveRootScope {
 }
 
 export interface GetKnownArchiveEvidenceInput {
+	readonly includeFailureSummary?: boolean;
 	readonly fixedArchiveUrlIdentity?: string | null;
 	readonly nodePublicKeys: readonly string[];
 	readonly options: ArchiveEvidencePageOptions;
@@ -73,6 +74,9 @@ export class GetKnownArchiveEvidence {
 				input
 			);
 			const readModel = await this.repository.findEvidence({
+				...(input.includeFailureSummary === true
+					? { includeFailureSummary: true }
+					: {}),
 				copyLimit: pages.copyLimit,
 				eventPage: pages.eventPage,
 				objectPage: pages.objectPage,
@@ -89,6 +93,9 @@ export class GetKnownArchiveEvidence {
 				input.roots.map((root) => [root.archiveUrlIdentity, root])
 			);
 			const roots = readModel.roots.map((root) => ({
+				...(root.failureSummary === undefined
+					? {}
+					: { failureSummary: root.failureSummary }),
 				listingGapCount: root.listingGapCount ?? 0,
 				listingGaps: (root.listingGaps ?? []).map((gap) => ({
 					...gap,

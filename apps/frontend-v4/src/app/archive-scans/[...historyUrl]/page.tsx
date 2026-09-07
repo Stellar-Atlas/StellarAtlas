@@ -1,4 +1,6 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
+import '../../archive-source-detail.css';
 import { connection } from 'next/server';
 import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
 import { ArchiveEvidenceErrorBoundary } from '@components/archive-scans/archive-evidence-error-boundary';
@@ -55,8 +57,9 @@ export default async function ArchiveScanDetailPage({
 	const decodedHistoryUrl = decodeArchiveScanRouteParam(historyUrl);
 
 	return (
-		<main className="shell">
+		<main className="shell archive-source-page">
 			<PageHeading
+				aside={<Link href="/archives">← All archives</Link>}
 				description={decodedHistoryUrl}
 				eyebrow="Archive source"
 				title={formatArchiveTitle(decodedHistoryUrl)}
@@ -80,8 +83,7 @@ export default async function ArchiveScanDetailPage({
 function formatArchiveTitle(historyUrl: string): string {
 	try {
 		const url = new URL(historyUrl);
-		const path = url.pathname.replace(/\/+$/, '');
-		return path.length > 0 ? `${url.hostname}${path}` : url.hostname;
+		return url.hostname;
 	} catch {
 		return 'Archive scan detail';
 	}

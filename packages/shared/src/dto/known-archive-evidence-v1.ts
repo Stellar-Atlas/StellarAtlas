@@ -1,4 +1,5 @@
 import type { KnownArchiveListingGapV1 } from './known-archive-listing-gap-v1.js';
+import type { KnownArchiveFailureSummaryV1 } from './known-archive-failure-summary-v1.js';
 export type { KnownArchiveListingGapV1 } from './known-archive-listing-gap-v1.js';
 import type {
 	HistoryArchiveObjectTypeV1,
@@ -56,6 +57,7 @@ export interface KnownArchiveSequentialCoverageV1 {
 }
 
 export interface KnownArchiveRootEvidenceV1 {
+	readonly failureSummary?: KnownArchiveFailureSummaryV1;
 	/** Earliest active listing ranges, bounded to 20; absent in older API responses. */
 	readonly listingGaps?: readonly KnownArchiveListingGapV1[];
 	readonly listingGapCount?: number;

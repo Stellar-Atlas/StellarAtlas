@@ -5,7 +5,9 @@ import {
 	unresolvedListingGapCount
 } from '@domain/known-archive-evidence';
 
-import { useId, useRef } from 'react';
+import { useId, useRef, useState } from 'react';
+import { ArchiveSourceOverview } from './archive-source-overview';
+import { ArchiveSourceErrorSummary } from './archive-source-error-summary';
 import { ArchiveHealthPill } from '@components/status/status-ui';
 import {
 	assessKnownArchiveEvidence,
@@ -32,6 +34,9 @@ export function KnownArchiveEvidence({
 }: KnownArchiveEvidenceProps): React.JSX.Element {
 	const view = useKnownArchiveEvidence(evidence, subject);
 	const liveEvidence = view.evidence;
+	const sourceRoot =
+		subject.kind === 'archive' ? liveEvidence.roots[0] : undefined;
+	const [showFileDetails, setShowFileDetails] = useState(false);
 	const id = useId();
 	const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const activeTabId = `${id}-${view.tab}-tab`;
@@ -86,7 +91,18 @@ export function KnownArchiveEvidence({
 					text={formatEvidenceStatus(liveEvidence)}
 				/>
 			</div>
+			{sourceRoot ? <ArchiveSourceOverview root={sourceRoot} /> : null}
 			<EvidenceMetrics evidence={liveEvidence} />
+			{sourceRoot ? (
+				<ArchiveSourceErrorSummary
+					root={sourceRoot}
+					onInspect={(objectType) => {
+						view.selectTab('failures');
+						view.failures.changeObjectType(objectType);
+						setShowFileDetails(true);
+					}}
+				/>
+			) : null}
 			<div
 				aria-label="Archive health view"
 				aria-orientation="horizontal"
@@ -121,6 +137,9 @@ export function KnownArchiveEvidence({
 				panelId={panelId}
 				tabId={activeTabId}
 				view={view}
+				compactSource={sourceRoot !== undefined}
+				showFileDetails={showFileDetails}
+				onFileDetailsToggle={setShowFileDetails}
 			/>
 			<KnownArchiveRawEvidence evidence={evidence} />
 		</article>
@@ -153,7 +172,7 @@ function EvidenceMetrics({
 				value={`${formatInteger(objects.activeObjects)} / ${formatInteger(objects.pendingObjects)}`}
 			/>
 			<Metric
-				label="Verified / total"
+				label="Verified / recorded files"
 				tone="good"
 				value={`${formatInteger(objects.verifiedObjects)} / ${formatInteger(objects.totalObjects)}`}
 			/>
@@ -163,7 +182,7 @@ function EvidenceMetrics({
 
 function formatFindingCounts(evidence: PublicKnownArchiveEvidence): string {
 	const gaps = unresolvedListingGapCount(evidence.roots);
-	return `${formatInteger(unresolvedRemoteFailureCount(evidence.totals.objects))} remote retry${gaps > 0 ? ` · ${formatInteger(gaps)} listing gaps` : ''}`;
+	return `${formatInteger(unresolvedRemoteFailureCount(evidence.totals.objects))}${gaps > 0 ? ` · ${formatInteger(gaps)} gaps` : ''}`;
 }
 
 function formatEvidenceScope(evidence: PublicKnownArchiveEvidence): string {

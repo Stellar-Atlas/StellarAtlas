@@ -95,6 +95,7 @@ export function calculateCoveragePercent(
 
 export function formatCoveragePercent(value: number): string {
 	if (value >= 100) return '100%';
+	if (value > 99.999) return '>99.999%';
 	if (value > 0 && value < 0.01) return '<0.01%';
 	if (value >= 99.9) return value.toFixed(3) + '%';
 	return value.toFixed(2) + '%';

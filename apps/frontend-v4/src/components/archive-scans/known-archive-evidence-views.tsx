@@ -25,15 +25,40 @@ interface KnownArchiveEvidenceTabContentProps {
 	readonly panelId: string;
 	readonly tabId: string;
 	readonly view: KnownArchiveEvidenceViewState;
+	readonly compactSource?: boolean;
+	readonly showFileDetails?: boolean;
+	readonly onFileDetailsToggle?: (open: boolean) => void;
 }
 
 export function KnownArchiveEvidenceTabContent({
 	evidence,
 	panelId,
 	tabId,
-	view
+	view,
+	compactSource = false,
+	showFileDetails = false,
+	onFileDetailsToggle
 }: KnownArchiveEvidenceTabContentProps): React.JSX.Element {
 	const findingCount = unresolvedRemoteFailureCount(evidence.totals.objects);
+	const fileChecks = (
+		<>
+			<EvidenceFilters
+				archiveUrl={view.failures.archiveUrl}
+				disabled={view.failures.isLoading}
+				objectType={view.failures.objectType}
+				onArchiveUrlChange={view.failures.changeArchiveUrl}
+				onObjectTypeChange={view.failures.changeObjectType}
+				roots={evidence.roots}
+				showArchiveSource={
+					findingCount > 0 ||
+					unresolvedListingGapCount(evidence.roots) > 0 ||
+					view.failures.archiveUrl !== null
+				}
+				showObjectType={findingCount > 1 || view.failures.objectType !== null}
+			/>
+			<FailuresView view={view} />
+		</>
+	);
 	return (
 		<div
 			aria-labelledby={tabId}
@@ -43,28 +68,29 @@ export function KnownArchiveEvidenceTabContent({
 			tabIndex={0}
 		>
 			{view.tab === 'failures' ? (
-				<EvidenceFilters
-					archiveUrl={view.failures.archiveUrl}
-					disabled={view.failures.isLoading}
-					objectType={view.failures.objectType}
-					onArchiveUrlChange={view.failures.changeArchiveUrl}
-					onObjectTypeChange={view.failures.changeObjectType}
-					roots={evidence.roots}
-					showArchiveSource={
-						findingCount > 0 ||
-						unresolvedListingGapCount(evidence.roots) > 0 ||
-						view.failures.archiveUrl !== null
-					}
-					showObjectType={findingCount > 1 || view.failures.objectType !== null}
-				/>
-			) : null}
-			{view.tab === 'failures' ? <FailuresView view={view} /> : null}
-			{view.tab === 'failures' ? (
 				<KnownArchiveListingGaps
 					roots={evidence.roots}
 					archiveUrl={view.failures.archiveUrl}
 					objectType={view.failures.objectType}
 				/>
+			) : null}
+			{view.tab === 'failures' ? (
+				compactSource ? (
+					<details
+						className="archive-source-file-details"
+						open={showFileDetails}
+						onToggle={(event) =>
+							onFileDetailsToggle?.(event.currentTarget.open)
+						}
+					>
+						<summary>
+							Individual file failures · messages, copies and retry
+						</summary>
+						{fileChecks}
+					</details>
+				) : (
+					fileChecks
+				)
 			) : null}
 			{view.tab === 'work' || view.tab === 'verified' ? (
 				<ObjectPageView evidence={evidence} view={view} />
