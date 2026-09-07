@@ -14,6 +14,7 @@ import {
 } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
+import { historyArchiveRetainedInconclusiveRetrySql } from './HistoryArchiveInconclusiveRetrySql.js';
 import {
 	historyArchiveReadyCohortCandidatesSql,
 	historyArchiveReadyMutableEligibilitySql
@@ -64,7 +65,7 @@ const readyAtSql = `case
 	else coalesce(candidate."nextAttemptAt", candidate."updatedAt")
 end`;
 
-const cleanupReadyObjectsSql = `
+export const cleanupReadyObjectsSql = `
         with candidates as materialized (
                 select ready.ctid
                 from "history_archive_object_ready" ready
@@ -76,7 +77,8 @@ const cleanupReadyObjectsSql = `
                                         select 1
                                         from "history_archive_object_queue" candidate
                                         where candidate."remoteId" = ready."objectRemoteId"
-                                                and ${schedulableObjectSql}
+                                                and (${schedulableObjectSql}
+                                                    or ${historyArchiveRetainedInconclusiveRetrySql('candidate')})
                                 )
                         )
                         or exists (
@@ -310,7 +312,9 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 				queued."availableAt" <= now()
 				and (
 					${historyArchiveCheckpointNotFoundCooldownSql('object')}
-					and ${historyArchiveSchedulableObjectSql('object')}
+					and (${historyArchiveSchedulableObjectSql('object')}
+						or (${historyArchiveReadyMutableEligibilitySql('object')}
+							and ${historyArchiveRetainedInconclusiveRetrySql('object')}))
 					and ${historyArchiveEffectivePrioritySql('object')} <=
 						${maximumPriority}::smallint
 					and not exists (

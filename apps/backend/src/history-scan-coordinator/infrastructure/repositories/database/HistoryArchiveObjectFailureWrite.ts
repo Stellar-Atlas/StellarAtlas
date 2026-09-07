@@ -9,7 +9,12 @@ import {
 	historyArchiveObjectHostFailureUpsertSql,
 	toHistoryArchiveObjectHostFailureSqlParams
 } from './HistoryArchiveObjectHostThrottleSql.js';
-import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
+import {
+	removeCompletedHistoryArchiveBrokerReadyRow,
+	requeueFailedHistoryArchiveBrokerReadyRow
+} from './HistoryArchiveObjectReadyQueue.js';
+import { isHistoryArchiveInconclusiveTransportFailure } from 'shared';
+import { historyArchiveInconclusiveMaximumAttempts } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
 import { persistHistoryArchiveListingGap } from './HistoryArchiveListingGapWrite.js';
 import {
 	recordAcceptedHistoryArchiveCheckpointScans,
@@ -103,12 +108,25 @@ export async function markHistoryArchiveObjectFailed(
 			]);
 		}
 		if (failure.scheduler === 'broker') {
-			await removeCompletedHistoryArchiveBrokerReadyRow(
-				manager,
-				remoteId,
-				failure.executionId!,
-				failure.claimAttempt
-			);
+			if (
+				failure.nextAttemptAt != null &&
+				failure.claimAttempt < historyArchiveInconclusiveMaximumAttempts &&
+				isHistoryArchiveInconclusiveTransportFailure(failure)
+			) {
+				await requeueFailedHistoryArchiveBrokerReadyRow(
+					manager,
+					remoteId,
+					failure.executionId!,
+					failure.claimAttempt,
+					failure.nextAttemptAt
+				);
+			} else
+				await removeCompletedHistoryArchiveBrokerReadyRow(
+					manager,
+					remoteId,
+					failure.executionId!,
+					failure.claimAttempt
+				);
 		}
 
 		return true;

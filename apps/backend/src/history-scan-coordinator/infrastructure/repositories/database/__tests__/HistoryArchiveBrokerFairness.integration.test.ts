@@ -84,6 +84,74 @@ describe('broker per-root reservation rounds', () => {
 		expect(jobs.map((job) => job.selectedOrdinal)).toEqual([1, 2, 3]);
 	});
 
+	it('prioritizes interrupted rechecks but reserves at least half a mixed batch for new proofs', async () => {
+		const retries = await seed(rootA, [63, 127, 191, 255], 2);
+		await db.query(
+			`update history_archive_object_queue set status = 'failed',
+			"errorType" = 'ERR_CANCELED', "errorMessage" = 'aborted', "httpStatus" = 200,
+			"failureChannel" = 'archive_evidence', "nextAttemptAt" = '2000-01-01Z'
+			where "remoteId" = any($1::uuid[])`,
+			[retries.map((o) => o.remoteId)]
+		);
+		await seed(rootB, [6_400_063, 6_400_127, 6_400_191, 6_400_255], 0);
+		const jobs = await repository.reserveJobs(4, 10);
+		expect(jobs.map(({ job }) => job.archiveUrl)).toEqual([
+			rootB,
+			rootB,
+			rootA,
+			rootA
+		]);
+		expect(jobs.filter(({ job }) => job.archiveUrl === rootA)).toHaveLength(2);
+	});
+
+	it('alternates single-slot mixed reservations without starving either lane', async () => {
+		const retries = await seed(rootA, [63, 127, 191, 255]);
+		await db.query(
+			`update history_archive_object_queue set status = 'failed',
+			"errorType" = 'ERR_CANCELED', "nextAttemptAt" = '2000-01-01Z'
+			where "remoteId" = any($1::uuid[])`,
+			[retries.map((o) => o.remoteId)]
+		);
+		await seed(rootB, [639, 703, 767, 831]);
+		const roots: string[] = [];
+		for (let index = 0; index < 4; index++) {
+			const jobs = await repository.reserveJobs(1, 10);
+			roots.push(jobs[0]!.job.archiveUrl);
+		}
+		expect(roots.filter((root) => root === rootA)).toHaveLength(2);
+		expect(roots.filter((root) => root === rootB)).toHaveLength(2);
+	});
+
+	it('applies root rounds before the retry share budget', async () => {
+		const a = await seed(rootA, [63, 127, 191, 255]);
+		const b = await seed(rootB, [639, 703, 767, 831]);
+		await db.query(
+			`update history_archive_object_queue set status = 'failed',
+			"errorType" = 'ECONNRESET', "nextAttemptAt" = '2000-01-01Z'
+			where "remoteId" = any($1::uuid[])`,
+			[[...a, ...b].map((o) => o.remoteId)]
+		);
+		await seed(rootC, [1279, 1343, 1407, 1471]);
+		const jobs = await repository.reserveJobs(4, 10);
+		expect(jobs.map(({ job }) => job.archiveUrl)).toEqual([
+			rootA,
+			rootB,
+			rootC,
+			rootC
+		]);
+	});
+
+	it('can use otherwise idle capacity for rechecks without a second worker pool', async () => {
+		const retries = await seed(rootA, [63, 127, 191, 255]);
+		await db.query(
+			`update history_archive_object_queue set status = 'failed',
+			"errorType" = 'ECONNRESET', "httpStatus" = null,
+			"nextAttemptAt" = '2000-01-01Z' where "remoteId" = any($1::uuid[])`,
+			[retries.map((o) => o.remoteId)]
+		);
+		expect(await repository.reserveJobs(4, 10)).toHaveLength(4);
+	});
+
 	it('keeps each root oldest-first while interleaving later rounds', async () => {
 		await seed(rootA, [191, 63, 127]);
 		await seed(rootB, [6_400_127, 6_400_063]);

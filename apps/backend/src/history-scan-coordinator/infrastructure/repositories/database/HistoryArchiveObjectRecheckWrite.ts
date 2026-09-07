@@ -1,5 +1,8 @@
 import type { EntityManager, Repository } from 'typeorm';
-import type { HistoryArchiveObjectRecheckBlockedReasonV1 } from 'shared';
+import {
+	isHistoryArchiveInconclusiveTransportFailure,
+	type HistoryArchiveObjectRecheckBlockedReasonV1
+} from 'shared';
 import type { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRecheckDecision } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import {
@@ -164,6 +167,7 @@ function getIneligibleReason(
 	if (target.status !== 'failed') return 'object-not-failed';
 	const failureChannel = target.failureChannel ?? 'archive_evidence';
 	const repairCandidateLane =
+		isHistoryArchiveInconclusiveTransportFailure(target) ||
 		((failureChannel === 'archive_availability' ||
 			failureChannel === 'archive_evidence') &&
 			isHistoryArchiveProofGatedMissingFailure(target)) ||

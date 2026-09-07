@@ -1,5 +1,7 @@
 import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
+import { isHistoryArchiveInconclusiveTransportFailure } from 'shared';
+import { historyArchiveInconclusiveMaximumAttempts } from './HistoryArchiveInconclusiveRetry.js';
 
 export type HistoryArchiveObjectFailureClass =
 	| 'http'
@@ -21,6 +23,7 @@ export interface HistoryArchiveObjectRetryPolicyInput {
 	readonly objectType: HistoryArchiveObjectType;
 	readonly httpStatus?: number | null;
 	readonly errorType?: string | null;
+	readonly errorMessage?: string | null;
 	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
 	readonly retryAfterSeconds?: number | null;
 }
@@ -76,10 +79,16 @@ export function getHistoryArchiveObjectRetryPolicy(
 	input: HistoryArchiveObjectRetryPolicyInput
 ): HistoryArchiveObjectRetryPolicyResult {
 	const retryCount = normalizeRetryCount(input.currentRetryCount) + 1;
-	const failureClass = classifyHistoryArchiveObjectFailure({
+	const inconclusive = isHistoryArchiveInconclusiveTransportFailure(input);
+	const classified = classifyHistoryArchiveObjectFailure({
 		errorType: input.errorType,
 		httpStatus: input.httpStatus
 	});
+	const failureClass = inconclusive
+		? classified === 'timeout'
+			? 'timeout'
+			: 'transport'
+		: classified;
 	const evidenceClass = getHistoryArchiveObjectEvidenceClass(
 		failureClass,
 		input.failureChannel
@@ -95,10 +104,12 @@ export function getHistoryArchiveObjectRetryPolicy(
 	);
 
 	return {
-		automaticRetry: shouldAutomaticallyRetryHistoryArchiveObject({
-			failureChannel: input.failureChannel,
-			failureClass
-		}),
+		automaticRetry: inconclusive
+			? retryCount < historyArchiveInconclusiveMaximumAttempts
+			: shouldAutomaticallyRetryHistoryArchiveObject({
+					failureChannel: input.failureChannel,
+					failureClass
+				}),
 		delayMs,
 		evidenceClass,
 		failureClass,

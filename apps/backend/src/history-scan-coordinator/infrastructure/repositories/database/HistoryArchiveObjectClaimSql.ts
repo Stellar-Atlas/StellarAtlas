@@ -1,5 +1,7 @@
 import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObjectReadyQueue.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
+import { historyArchiveRetryLaneDivisor } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
+import { historyArchiveRetainedInconclusiveRetrySql } from './HistoryArchiveInconclusiveRetrySql.js';
 
 const claimGateKeySql =
 	"hashtextextended('history_archive_object_claim_gate', 104729)";
@@ -118,6 +120,8 @@ export function historyArchiveAutomaticFailedRetrySql(
 	return `${objectAlias}."nextAttemptAt" is not null
 	and ${objectAlias}."nextAttemptAt" <= now()
 	and (
+		${historyArchiveRetainedInconclusiveRetrySql(objectAlias)}
+		or
 		${objectAlias}."failureChannel" = 'scanner_issue'
 		or (
 			${objectAlias}."failureChannel" = 'archive_availability'
@@ -188,7 +192,7 @@ export const historyArchiveObjectClaimSql = `
 			and candidate."objectType" = any($1)
 			and (
 				${pendingReadySql}
-				or (free_slot.slot % 2 = 0 and ${failedReadySql})
+				or (free_slot.slot % ${historyArchiveRetryLaneDivisor} = 0 and ${failedReadySql})
 			)
 			and candidate."executionDisposition" = 'executable'
 			and candidate."dependencyReady" = true
@@ -205,10 +209,11 @@ export const historyArchiveObjectClaimSql = `
 					and throttle."blockedUntil" > now()
 			)
 			and ${historyArchiveCheckpointNotFoundCooldownSql('candidate')}
-                        and ${historyArchiveObjectOpenSequentialCohortSql('candidate')}
+                        and (${historyArchiveObjectOpenSequentialCohortSql('candidate')}
+                            or ${historyArchiveRetainedInconclusiveRetrySql('candidate')})
 		order by
 			case
-				when free_slot.slot % 2 = 0 and candidate.status = 'failed' then 0
+				when free_slot.slot % ${historyArchiveRetryLaneDivisor} = 0 and candidate.status = 'failed' then 0
 				else 1
 			end,
 			ready.priority,

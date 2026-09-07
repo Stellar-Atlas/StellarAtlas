@@ -38,8 +38,9 @@ export class FailHistoryArchiveObject {
 
 			const now = new Date();
 			const retryPolicy = getHistoryArchiveObjectRetryPolicy({
-				currentRetryCount: Math.max(0, object.attempts - 1),
+				currentRetryCount: Math.max(0, failure.claimAttempt - 1),
 				errorType: failure.errorType,
+				errorMessage: failure.errorMessage,
 				failureChannel: failure.failureChannel,
 				httpStatus: failure.httpStatus,
 				now,

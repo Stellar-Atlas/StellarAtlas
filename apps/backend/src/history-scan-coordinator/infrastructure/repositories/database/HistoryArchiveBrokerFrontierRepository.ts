@@ -10,7 +10,10 @@ import {
 	notifyHistoryArchiveReadyWork,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
-import { reserveBrokerJobsSql } from './HistoryArchiveBrokerReservationSql.js';
+import {
+	reserveBrokerJobsSql,
+	reserveBrokerSingleSlotRetrySql
+} from './HistoryArchiveBrokerReservationSql.js';
 export { reserveBrokerJobsSql } from './HistoryArchiveBrokerReservationSql.js';
 import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpointPrefetch.js';
 import { materializeCompactCheckpointPlanResult } from './HistoryArchiveCompactPlanning.js';
@@ -181,6 +184,7 @@ function mapAndOrderBrokerJobs(
 }
 
 export class HistoryArchiveBrokerFrontierRepository {
+	private preferRetryOnSingleSlot = false;
 	constructor(
 		private readonly dataSource: DataSource,
 		private readonly onMaintenanceDeferred?: (code: string) => void
@@ -248,7 +252,16 @@ export class HistoryArchiveBrokerFrontierRepository {
 		if (limit < 1) return [];
 		return await this.dataSource.transaction(async (manager) => {
 			await this.takeDispatcherLock(manager);
-			const rows = (await manager.query(reserveBrokerJobsSql, [
+			// Ephemeral fairness only: no sequence/table write per dispatch. The
+			// existing dispatcher mutex serializes reservations in this process.
+			const singleSlot = Math.floor(limit) === 1;
+			const sql =
+				singleSlot && this.preferRetryOnSingleSlot
+					? reserveBrokerSingleSlotRetrySql
+					: reserveBrokerJobsSql;
+			if (singleSlot)
+				this.preferRetryOnSingleSlot = !this.preferRetryOnSingleSlot;
+			const rows = (await manager.query(sql, [
 				Math.floor(limit),
 				Math.max(1, Math.floor(maximumPerHost)),
 				requirePriority(maximumPriority),

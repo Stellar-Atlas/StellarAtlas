@@ -11,6 +11,41 @@ import type { HistoryArchiveObjectType } from '../HistoryArchiveObject.js';
 
 describe('HistoryArchiveObjectRetryPolicy', () => {
 	it.each([
+		'ERR_CANCELED',
+		'ECONNRESET',
+		'ETIMEDOUT',
+		'archive_transport_error'
+	])(
+		'prioritizes bounded inconclusive %s rechecks even for a legacy evidence channel',
+		(errorType) => {
+			const input = {
+				currentRetryCount: 0,
+				errorType,
+				errorMessage: 'aborted',
+				failureChannel: 'archive_evidence' as const,
+				httpStatus: 200,
+				now: new Date('2026-09-07T00:00:00Z'),
+				objectType: 'scp' as const
+			};
+			expect(getHistoryArchiveObjectRetryPolicy(input)).toMatchObject({
+				automaticRetry: true,
+				delayMs: 1000
+			});
+			expect(
+				getHistoryArchiveObjectRetryPolicy({ ...input, currentRetryCount: 3 })
+			).toMatchObject({ automaticRetry: true, delayMs: 8000 });
+			expect(
+				getHistoryArchiveObjectRetryPolicy({ ...input, currentRetryCount: 4 })
+			).toMatchObject({ automaticRetry: false });
+			for (const httpStatus of [403, 404, 500]) {
+				expect(
+					getHistoryArchiveObjectRetryPolicy({ ...input, httpStatus })
+						.automaticRetry
+				).toBe(false);
+			}
+		}
+	);
+	it.each([
 		[401, 'auth'],
 		[403, 'auth'],
 		[404, 'not-found'],

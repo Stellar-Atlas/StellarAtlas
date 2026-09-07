@@ -18,10 +18,10 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		);
 		expect(reserveBrokerJobsSql).toContain('ranked."objectOrder"');
 		expect(reserveBrokerJobsSql).toContain(
-			'partition by candidate.priority, candidate."archiveUrlIdentity"'
+			'partition by candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"'
 		);
 		expect(reserveBrokerJobsSql).toContain(
-			'order by ranked.priority, ranked.root_round'
+			'order by ranked.is_retry desc, ranked.priority, ranked.root_round'
 		);
 		expect(reserveBrokerJobsSql).toContain(
 			'order by selected."selectedOrdinal"'

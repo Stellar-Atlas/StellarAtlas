@@ -1,4 +1,7 @@
 import { DataSource } from 'typeorm';
+import { randomUUID } from 'node:crypto';
+import { cleanupReadyObjectsSql } from '../HistoryArchiveObjectReadyQueue.js';
+import { historyArchiveReadyMutableEligibilitySql } from '../HistoryArchiveReadyCandidatesSql.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import {
 	startDisposablePostgres,
@@ -7,6 +10,7 @@ import {
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
 	checkpointObject,
+	categoryObject,
 	createObjectRepositoryDataSource,
 	insertHistoryArchiveHostThrottle,
 	resetHistoryArchiveObjectQueue,
@@ -25,6 +29,8 @@ describe('history archive object recheck persistence', () => {
 		({ dataSource, repository } = await createObjectRepositoryDataSource(
 			postgres.url
 		));
+		await dataSource.query(`create table history_archive_checkpoint_scan_cursor (
+			"archiveUrlIdentity" text primary key, "nextHistoricalCheckpointLedger" integer)`);
 	});
 
 	afterAll(async () => {
@@ -34,6 +40,93 @@ describe('history archive object recheck persistence', () => {
 
 	beforeEach(async () => {
 		await resetHistoryArchiveObjectQueue(dataSource);
+		await dataSource.query('truncate history_archive_checkpoint_scan_cursor');
+	});
+
+	it('retains a fenced interrupted retry outside the current cohort without erasing evidence or bypassing transitions', async () => {
+		const object = categoryObject(
+			'https://interrupted.example/archive',
+			127,
+			'ledger'
+		);
+		object.executionDisposition = 'executable';
+		object.dependencyReady = true;
+		const unrelated = rootObject('https://new-work.example/archive');
+		unrelated.executionDisposition = 'executable';
+		unrelated.dependencyReady = true;
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([object, unrelated]);
+		await dataSource.query(
+			'insert into history_archive_checkpoint_scan_cursor values ($1, 63999)',
+			[object.archiveUrlIdentity]
+		);
+		const executionId = randomUUID();
+		await dataSource.query(
+			`insert into history_archive_object_ready (
+			"objectRemoteId", "archiveUrlIdentity", priority, "availableAt",
+			"dispatchToken", "claimAttempt", "publishedAt", "createdAt", "updatedAt"
+		) values ($1,$2,2,now(),$3,1,now(),now(),now()),
+			($4,$5,0,now(),null,null,null,now(),now())`,
+			[
+				object.remoteId,
+				object.archiveUrlIdentity,
+				executionId,
+				unrelated.remoteId,
+				unrelated.archiveUrlIdentity
+			]
+		);
+		const failure = {
+			claimAttempt: 1,
+			executionId,
+			scheduler: 'broker' as const,
+			errorType: 'ERR_CANCELED',
+			errorMessage: 'aborted',
+			httpStatus: 200,
+			failureChannel: 'archive_evidence' as const,
+			nextAttemptAt: new Date(Date.now() + 60_000)
+		};
+		await expect(
+			repository.markObjectFailed(object.remoteId, {
+				...failure,
+				executionId: randomUUID()
+			})
+		).resolves.toBe(false);
+		await expect(
+			repository.markObjectFailed(object.remoteId, failure)
+		).resolves.toBe(true);
+		await expect(
+			repository.markObjectFailed(object.remoteId, failure)
+		).resolves.toBe(false);
+		await dataSource.query(cleanupReadyObjectsSql);
+		expect(await readyRemoteIds()).toEqual(
+			[object.remoteId, unrelated.remoteId].sort()
+		);
+		expect(await repository.findByRemoteId(object.remoteId)).toMatchObject({
+			status: 'failed',
+			attempts: 1,
+			errorType: 'ERR_CANCELED',
+			errorMessage: 'aborted',
+			httpStatus: 200,
+			failureChannel: 'archive_evidence'
+		});
+		const eligibleSql = `select candidate."remoteId" from history_archive_object_queue candidate
+			where candidate."remoteId" = $1 and ${historyArchiveReadyMutableEligibilitySql('candidate')}`;
+		expect(await dataSource.query(eligibleSql, [object.remoteId])).toEqual([]);
+		await dataSource.query(
+			`update history_archive_object_queue set "nextAttemptAt" = now() - interval '1 second',
+			"transitionEffectsCompletedAt" = now() where "remoteId" = $1`,
+			[object.remoteId]
+		);
+		await dataSource.query(
+			`update history_archive_object_ready set "availableAt" = now() - interval '1 second'
+			where "objectRemoteId" = $1`,
+			[object.remoteId]
+		);
+		await dataSource.query(cleanupReadyObjectsSql);
+		expect(await dataSource.query(eligibleSql, [object.remoteId])).toEqual([
+			{ remoteId: object.remoteId }
+		]);
 	});
 
 	it('queues the exact eligible failure once without resetting its evidence', async () => {
@@ -86,30 +179,36 @@ describe('history archive object recheck persistence', () => {
 		await expect(readyRemoteIds()).resolves.toEqual([object.remoteId]);
 	});
 
-	it('queues one explicit transport retry without changing its evidence', async () => {
-		const object = remoteFailure('https://transport.example/archive');
-		object.errorType = 'archive_transport_error';
-		object.errorMessage = 'aborted';
-		object.httpStatus = 200;
-		await save(object);
+	it.each(['archive_evidence', 'scanner_issue'] as const)(
+		'queues one explicit %s transport retry without changing its evidence',
+		async (failureChannel) => {
+			const object = remoteFailure('https://transport.example/archive');
+			object.errorType = 'archive_transport_error';
+			object.errorMessage = 'aborted';
+			object.httpStatus = 200;
+			object.failureChannel = failureChannel;
+			object.attempts = 12;
+			await save(object);
 
-		await expect(
-			repository.requestObjectRecheck(object.remoteId)
-		).resolves.toMatchObject({
-			reason: 'eligible-remote-failure',
-			remoteId: object.remoteId,
-			state: 'queued'
-		});
+			await expect(
+				repository.requestObjectRecheck(object.remoteId)
+			).resolves.toMatchObject({
+				reason: 'eligible-remote-failure',
+				remoteId: object.remoteId,
+				state: 'queued'
+			});
 
-		expect(await repository.findByRemoteId(object.remoteId)).toMatchObject({
-			errorMessage: 'aborted',
-			errorType: 'archive_transport_error',
-			failureChannel: 'archive_evidence',
-			httpStatus: 200,
-			status: 'failed'
-		});
-		await expect(readyRemoteIds()).resolves.toEqual([object.remoteId]);
-	});
+			expect(await repository.findByRemoteId(object.remoteId)).toMatchObject({
+				attempts: 12,
+				errorMessage: 'aborted',
+				errorType: 'archive_transport_error',
+				failureChannel,
+				httpStatus: 200,
+				status: 'failed'
+			});
+			await expect(readyRemoteIds()).resolves.toEqual([object.remoteId]);
+		}
+	);
 
 	it('queues explicit retries independently for the same archive root', async () => {
 		const archiveUrl = 'https://same-root.example/archive';
@@ -169,6 +268,8 @@ describe('history archive object recheck persistence', () => {
 			'https://scanner-failure.example/archive'
 		);
 		scannerFailure.failureChannel = 'scanner_issue';
+		scannerFailure.errorType = 'SCANNER_CONFIGURATION_ERROR';
+		scannerFailure.errorMessage = 'Missing scanner configuration';
 		const verified = rootObject('https://verified.example/archive', 'verified');
 		verified.verifiedAt = new Date();
 		await save(scannerFailure, verified);
