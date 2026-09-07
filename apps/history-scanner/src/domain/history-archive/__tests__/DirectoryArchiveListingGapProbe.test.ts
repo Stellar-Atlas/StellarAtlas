@@ -62,23 +62,29 @@ it('parses the exact complete PublicNode autoindex shape without treating it as 
 	).toEqual(links);
 });
 
-it('records a common missing range only after complete leaf indexes in all four categories', async () => {
-	const h = harness();
-	const gap = await probeDirectoryArchiveListingGap(input(), h.deps);
-	expect(gap).toMatchObject({
-		kind: 'directory-listing-gap',
-		missingFromCheckpoint: START,
-		missingThroughCheckpoint: 1279
-	});
-	expect(gap?.listings[0]).toMatchObject({
-		completePrefix: 'history/00/00/04/',
-		rangeThroughCheckpoint: 1279,
-		firstReturnedKey: null,
-		firstReturnedCheckpoint: null
-	});
-	expect(h.fetcher).toHaveBeenCalledTimes(8);
-	expect(isHistoryArchiveListingGapDTO(gap)).toBe(true);
-});
+it.each([403, 404])(
+	'records a common range after object HTTP %s only with complete four-category indexes',
+	async (observedHttpStatus) => {
+		const h = harness();
+		const gap = await probeDirectoryArchiveListingGap(
+			{ ...input(), observedHttpStatus },
+			h.deps
+		);
+		expect(gap).toMatchObject({
+			kind: 'directory-listing-gap',
+			missingFromCheckpoint: START,
+			missingThroughCheckpoint: 1279
+		});
+		expect(gap?.listings[0]).toMatchObject({
+			completePrefix: 'history/00/00/04/',
+			rangeThroughCheckpoint: 1279,
+			firstReturnedKey: null,
+			firstReturnedCheckpoint: null
+		});
+		expect(h.fetcher).toHaveBeenCalledTimes(8);
+		expect(isHistoryArchiveListingGapDTO(gap)).toBe(true);
+	}
+);
 
 it('preserves case-sensitive archive root prefixes in directory evidence', async () => {
 	const h = harness();
@@ -213,12 +219,25 @@ it('does not treat a listed child that returns 404 as a proven empty subtree', a
 	expect(await probeDirectoryArchiveListingGap(input(), h.deps)).toBeNull();
 });
 
-it('caches directory access denial and never substitutes it for missing-file evidence', async () => {
-	const h = harness(() => new Response('Access denied', { status: 403 }));
-	expect(await probeDirectoryArchiveListingGap(input(), h.deps)).toBeNull();
-	expect(await probeDirectoryArchiveListingGap(input(), h.deps)).toBeNull();
-	expect(h.fetcher).toHaveBeenCalledTimes(1);
-});
+it.each([403, 404])(
+	'never substitutes directory access denial for missing-file evidence after object HTTP %s',
+	async (observedHttpStatus) => {
+		const h = harness(() => new Response('Access denied', { status: 403 }));
+		expect(
+			await probeDirectoryArchiveListingGap(
+				{ ...input(), observedHttpStatus },
+				h.deps
+			)
+		).toBeNull();
+		expect(
+			await probeDirectoryArchiveListingGap(
+				{ ...input(), observedHttpStatus },
+				h.deps
+			)
+		).toBeNull();
+		expect(h.fetcher).toHaveBeenCalledTimes(1);
+	}
+);
 
 it('bounds the whole provider-detection pass to twelve requests and falls back safely', async () => {
 	const h = harness((url) =>

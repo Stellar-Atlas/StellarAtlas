@@ -9,6 +9,7 @@ import type {
 } from '../../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
 import { findKnownArchiveEvidenceRoots } from './KnownArchiveEvidenceRootQuery.js';
 import { getKnownArchiveFailureSummary } from './KnownArchiveFailureSummaryCache.js';
+import { emptyArchiveFailureSummary } from './KnownArchiveFailureSummaryValue.js';
 import { findKnownArchiveFailurePage } from './KnownArchiveFailurePageQuery.js';
 import { findKnownArchiveCopyCoverage } from './KnownArchiveCopyCoverageQuery.js';
 import { findKnownArchiveObjectPage } from './KnownArchiveObjectPageQuery.js';
@@ -43,18 +44,37 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 		// This cache may acquire its own connection. Never hold the request
 		// transaction across refresh, including when the pool has only one slot.
 		const onlyRoot = query.roots.length === 1 ? query.roots[0] : undefined;
+		const rootCounts = evidence.roots[0]?.objects;
+		const unresolved =
+			rootCounts?.unresolvedRemoteFailureObjects ??
+			(rootCounts === undefined
+				? undefined
+				: rootCounts.remoteFailureObjects +
+					(rootCounts.retainedRemoteFailureObjects ?? 0));
 		const failureSummary =
 			query.includeFailureSummary === true && onlyRoot !== undefined
-				? await getKnownArchiveFailureSummary(
-						this.dataSource,
-						onlyRoot.archiveUrlIdentity
-					)
+				? unresolved === 0
+					? emptyArchiveFailureSummary(
+							new Date(),
+							rootCounts?.workerIssueObjects ?? 0
+						)
+					: await getKnownArchiveFailureSummary(
+							this.dataSource,
+							onlyRoot.archiveUrlIdentity
+						)
 				: undefined;
 		return failureSummary === undefined
 			? evidence
 			: {
 					...evidence,
-					roots: evidence.roots.map((root) => ({ ...root, failureSummary }))
+					roots: evidence.roots.map((root) => ({
+						...root,
+						failureSummary:
+							failureSummary.computedAt !== null &&
+							failureSummary.remoteFailureCount !== unresolved
+								? { ...failureSummary, status: 'stale' as const }
+								: failureSummary
+					}))
 				};
 	}
 }

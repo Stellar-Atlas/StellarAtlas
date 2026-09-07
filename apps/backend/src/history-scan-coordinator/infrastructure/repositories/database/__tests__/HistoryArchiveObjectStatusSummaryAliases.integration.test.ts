@@ -4,6 +4,7 @@ import {
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import { getHistoryArchiveObjectStatusSummary } from '../HistoryArchiveObjectStatusSummaryQuery.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import {
 	createEvidenceSummarySchema,
 	populateEvidenceSummary
@@ -28,7 +29,7 @@ describe('history archive status summary aliases', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('collapses exact root aliases without collapsing distinct roots or failures', async () => {
+	it('excludes poisoned legacy identities without merging current case-distinct roots or failures', async () => {
 		const summary = await getHistoryArchiveObjectStatusSummary(
 			dataSource.manager,
 			new Date('2026-07-12T19:00:00.000Z')
@@ -36,6 +37,9 @@ describe('history archive status summary aliases', () => {
 
 		expect(summary.sourceCount).toBe(4);
 		expect(summary.sources).toHaveLength(4);
+		expect(
+			summary.sources.map((source) => source.archiveUrlIdentity)
+		).not.toContain(legacyIdentity);
 		expect(summary.sources.map((source) => source.archiveUrl)).toEqual(
 			expect.arrayContaining([
 				duplicateRoot,
@@ -55,6 +59,8 @@ describe('history archive status summary aliases', () => {
 			latestDiscoveredCheckpointLedger: 255,
 			observedAt: '2026-07-12T18:00:00.000Z',
 			pendingCheckpointProofs: 2,
+			verifiedCheckpointProofs: 1,
+			durableVerifiedCheckpointProofs: 1,
 			scannerIssueFailures: 1,
 			totalCheckpointProofs: 4
 		});
@@ -66,6 +72,10 @@ describe('history archive status summary aliases', () => {
 		expect(summary.archiveEvidenceFailures).toBe(2);
 		expect(summary.scannerIssueFailures).toBe(1);
 		expect(summary.unclassifiedFailures).toBe(1);
+		expect(summary.checkpointCoverage.totalArchiveCheckpoints).toBe(4);
+		expect(
+			summary.checkpointCoverage.categoryConsistentArchiveCheckpoints
+		).toBe(1);
 	});
 
 	it('rejects an incomplete evidence rollup instead of returning partial totals', async () => {
@@ -77,7 +87,7 @@ describe('history archive status summary aliases', () => {
 		try {
 			await expect(
 				getHistoryArchiveObjectStatusSummary(dataSource.manager)
-			).rejects.toThrow('Archive evidence root summary is not ready');
+			).rejects.toThrow('Archive evidence summaries are not ready');
 		} finally {
 			await dataSource.query(`
 				update history_archive_evidence_root_summary_progress
@@ -114,6 +124,8 @@ async function createSchema(dataSource: DataSource): Promise<void> {
 			status text not null,
 			"checkpointLedger" integer,
 			"failureChannel" text,
+			"transitionEffectsRequiredAt" timestamptz,
+			"transitionEffectsCompletedAt" timestamptz,
 			"updatedAt" timestamptz not null
 		)
 	`);
@@ -131,6 +143,32 @@ async function createSchema(dataSource: DataSource): Promise<void> {
 		)
 	`);
 	await createEvidenceSummarySchema(dataSource);
+	await dataSource.query(`
+		alter table history_archive_evidence_root_summary_progress
+			add column "lastObjectId" bigint not null default 0,
+			add column "cutoffObjectId" bigint not null default 0;
+		create table history_archive_checkpoint_proof_rollup_progress (
+			id smallint primary key, "complete" boolean not null,
+			"lastProofId" bigint not null, "cutoffProofId" bigint not null
+		)
+	`);
+	await dataSource.query(`
+		create table history_archive_checkpoint_proof_version_rollup (
+			"archiveUrlIdentity" text not null,
+			"proofVersion" integer not null,
+			"totalCheckpointProofs" bigint not null,
+			"pendingCheckpointProofs" bigint not null,
+			"verifiedCheckpointProofs" bigint not null,
+			"mismatchCheckpointProofs" bigint not null,
+			"notEvaluableCheckpointProofs" bigint not null,
+			"objectCompleteCheckpointProofs" bigint not null,
+			primary key ("archiveUrlIdentity", "proofVersion")
+		);
+		create table history_archive_checkpoint_proof_attestation_rollup (
+			"archiveUrlIdentity" text primary key,
+			"durableVerifiedCheckpointProofs" bigint not null
+		)
+	`);
 }
 
 async function createFixture(dataSource: DataSource): Promise<void> {
@@ -181,9 +219,10 @@ async function createFixture(dataSource: DataSource): Promise<void> {
 				($3, 'history-archive-state', 'verified', null, null, $7),
 				($4, 'history-archive-state', 'verified', null, null, $7),
 				($5, 'history-archive-state', 'verified', null, null, $7),
-				($1, 'ledger', 'scanning', 63, null, $7),
+				($2, 'ledger', 'scanning', 63, null, $7),
 				($2, 'ledger', 'scanning', 127, null, $7),
-				($1, 'ledger', 'failed', 63, 'archive_evidence', $7),
+				($2, 'ledger', 'failed', 63, 'archive_evidence', $7),
+				($1, 'ledger', 'failed', 63, 'archive_evidence', $6),
 				($2, 'transactions', 'failed', 127, 'archive_evidence', $7),
 				($2, 'results', 'failed', 127, 'scanner_issue', $7),
 				($4, 'ledger', 'failed', 63, null, $7)
@@ -207,12 +246,39 @@ async function createFixture(dataSource: DataSource): Promise<void> {
 				"objectCompleteCheckpointProofs", "oldestCheckpointLedger",
 				"latestCheckpointLedger"
 			) values
-				($1, 4, 2, 1, 0, 1, 1, 63, 255),
-				($2, 1, 1, 0, 0, 0, 0, 63, 63)
+				($1, 1, 1, 0, 0, 0, 0, 63, 63),
+				($2, 4, 2, 1, 0, 1, 1, 63, 255)
 		`,
 		[legacyIdentity, duplicateRoot]
 	);
+	// Current counters belong to the exact advertised identity; the historical
+	// lowercase row and its old-version proof remain deliberately present but excluded.
+	await dataSource.query(
+		`
+		insert into history_archive_checkpoint_proof_version_rollup
+		select "archiveUrlIdentity", case when "archiveUrlIdentity" = $1 then $2::integer else $2::integer - 1 end,
+			"totalCheckpointProofs", "pendingCheckpointProofs", "verifiedCheckpointProofs",
+			"mismatchCheckpointProofs", "notEvaluableCheckpointProofs", "objectCompleteCheckpointProofs"
+		from history_archive_checkpoint_proof_rollup
+	`,
+		[duplicateRoot, CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION]
+	);
+	await dataSource.query(
+		`
+		insert into history_archive_checkpoint_proof_attestation_rollup values ($1, 1)
+	`,
+		[duplicateRoot]
+	);
 	await populateEvidenceSummary(dataSource);
+	await dataSource.query(`
+		update history_archive_evidence_root_summary_progress
+		set "lastObjectId" = (select max(id) from history_archive_object_queue),
+			"cutoffObjectId" = (select max(id) from history_archive_object_queue)
+		where id = 1;
+		insert into history_archive_checkpoint_proof_rollup_progress
+		select 1, true, sum("totalCheckpointProofs"), sum("totalCheckpointProofs")
+		from history_archive_checkpoint_proof_rollup
+	`);
 }
 
 async function insertState(

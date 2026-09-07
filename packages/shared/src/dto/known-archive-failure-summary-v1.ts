@@ -10,6 +10,10 @@ export interface KnownArchiveFailureReasonV1 {
 	readonly errorMessage: string | null;
 	readonly httpStatus: number | null;
 	readonly count: number;
+	/** Distinct category checkpoints with retained metadata; not a sum across groups. */
+	readonly knownAffectedCheckpointCount?: number;
+	/** Findings without an attributable category checkpoint, including bucket/root checks. */
+	readonly unknownCheckpointFailureCount?: number;
 }
 
 /** Source-detail only. Independent cached snapshot; never inferred from a failure page. */
@@ -24,6 +28,8 @@ export interface KnownArchiveFailureSummaryV1 {
 	readonly remoteFailureCount: number | null;
 	/** Separate diagnostic count; worker issues never consume source reason groups. */
 	readonly workerIssueCount: number | null;
+	readonly knownAffectedCheckpointCount?: number;
+	readonly unknownCheckpointFailureCount?: number;
 }
 
 const count = { type: 'integer', minimum: 0 } as const;
@@ -62,7 +68,9 @@ export const KnownArchiveFailureSummaryV1Schema: JSONSchemaType<KnownArchiveFail
 							minimum: 100,
 							maximum: 599
 						}),
-						count
+						count,
+						knownAffectedCheckpointCount: { ...count, nullable: true },
+						unknownCheckpointFailureCount: { ...count, nullable: true }
 					},
 					required: [
 						'objectType',
@@ -80,7 +88,9 @@ export const KnownArchiveFailureSummaryV1Schema: JSONSchemaType<KnownArchiveFail
 			remainingGroupCount: nullable(count),
 			remainingFailureCount: nullable(count),
 			remoteFailureCount: nullable(count),
-			workerIssueCount: nullable(count)
+			workerIssueCount: nullable(count),
+			knownAffectedCheckpointCount: { ...count, nullable: true },
+			unknownCheckpointFailureCount: { ...count, nullable: true }
 		},
 		required: [
 			'status',

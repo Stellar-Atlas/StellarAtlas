@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { HistoryArchiveCheckpointScanCoverageMigration1788831000000 } from '../../../database/migrations/1788831000000-HistoryArchiveCheckpointScanCoverageMigration.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
@@ -26,6 +27,9 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 	});
 	await dataSource.initialize();
 	const queryRunner = dataSource.createQueryRunner();
+	await new HistoryArchiveCheckpointScanCoverageMigration1788831000000().up(
+		queryRunner
+	);
 	await new HistoryArchiveObjectEventMigration1784370000000().up(queryRunner);
 	await new HistoryArchiveObjectHostThrottleMigration1784410000000().up(
 		queryRunner
@@ -170,6 +174,9 @@ export function bucketObject(
 export async function resetHistoryArchiveObjectQueue(
 	dataSource: DataSource
 ): Promise<void> {
+	await dataSource.query(
+		'truncate history_archive_checkpoint_scan_bitmap, history_archive_checkpoint_scan_summary, history_archive_checkpoint_scan_seed_state'
+	);
 	await dataSource.query(
 		'truncate table history_archive_checkpoint_content_conflict'
 	);

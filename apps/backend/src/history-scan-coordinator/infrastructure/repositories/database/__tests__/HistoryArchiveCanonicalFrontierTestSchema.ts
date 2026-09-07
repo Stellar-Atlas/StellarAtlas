@@ -1,5 +1,6 @@
 import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '../../../database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import type { DataSource } from 'typeorm';
+import { HistoryArchiveCheckpointScanCoverageMigration1788831000000 } from '../../../database/migrations/1788831000000-HistoryArchiveCheckpointScanCoverageMigration.js';
 import { HistoryArchiveListingGapMigration1788735600000 } from '../../../database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
 
 export async function createCanonicalFrontierTestSchema(
@@ -7,6 +8,9 @@ export async function createCanonicalFrontierTestSchema(
 ): Promise<void> {
 	const sharedRunner = dataSource.createQueryRunner();
 	try {
+		await new HistoryArchiveCheckpointScanCoverageMigration1788831000000().up(
+			sharedRunner
+		);
 		await new HistoryArchiveListingGapMigration1788735600000().up(sharedRunner);
 		await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
 			sharedRunner

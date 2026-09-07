@@ -10,6 +10,8 @@ export type ArchiveInventorySort =
 	| 'organization-desc'
 	| 'validator'
 	| 'validator-desc'
+	| 'scan-coverage-desc'
+	| 'scan-coverage-asc'
 	| 'coverage-desc'
 	| 'coverage-asc'
 	| 'url'
@@ -90,6 +92,14 @@ export function getExpectedArchiveCheckpointCount(
 	return latestKnownLedger < 63 ? 0 : Math.floor((latestKnownLedger + 1) / 64);
 }
 
+export function getKnownScannedPositions(source: ArchiveSource): number {
+	// The unseeded verified and scanned subsets may overlap: use max, never sum.
+	return Math.max(
+		source.durableVerifiedCheckpointProofs,
+		source.scanCoverage?.scannedCheckpointPositions ?? 0
+	);
+}
+
 export function calculateCoveragePercent(
 	verified: number,
 	total: number
@@ -137,6 +147,20 @@ export function compareSources(
 				advertiserSortKey(right, context)
 			) || compareOrganizationThenValidator(left, right, context)
 		);
+	}
+	if (
+		context.sortMode === 'scan-coverage-desc' ||
+		context.sortMode === 'scan-coverage-asc'
+	) {
+		const ratio = (source: ArchiveSource): number => {
+			const expected = getExpectedArchiveCheckpointCount(source);
+			const known = getKnownScannedPositions(source);
+			return expected === 0 ? 0 : known / expected;
+		};
+		const order = ratio(left) - ratio(right);
+		if (order !== 0)
+			return context.sortMode === 'scan-coverage-desc' ? -order : order;
+		return compareOrganizationThenValidator(left, right, context);
 	}
 	if (
 		context.sortMode === 'coverage-desc' ||

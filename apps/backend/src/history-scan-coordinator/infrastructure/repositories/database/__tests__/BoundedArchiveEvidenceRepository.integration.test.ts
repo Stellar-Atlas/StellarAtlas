@@ -192,6 +192,16 @@ describe('one bounded transaction per rooted evidence snapshot', () => {
 	});
 
 	it('releases the only pooled connection before the independent summary cache refresh', async () => {
+		const failure = createEvidenceObject(
+			root,
+			'ledger:0000003f',
+			'ledger',
+			'failed'
+		);
+		failure.failureChannel = 'archive_availability';
+		failure.errorType = 'archive_http_error';
+		failure.httpStatus = 404;
+		await db.getRepository(HistoryArchiveObject).save(failure);
 		const queries = traceQueries();
 		const evidence = await new TypeOrmKnownArchiveEvidenceRepository(
 			db
@@ -205,5 +215,18 @@ describe('one bounded transaction per rooted evidence snapshot', () => {
 			statements.indexOf(knownArchiveFailureSummarySql)
 		);
 		expectNoPageQueries(statements);
+	});
+	it('returns current zero without loading stale detail summaries or regrouping failures', async () => {
+		const queries = traceQueries();
+		const evidence = await new TypeOrmKnownArchiveEvidenceRepository(
+			db
+		).findEvidence({ ...request(), includeFailureSummary: true });
+		expect(evidence.roots[0]?.failureSummary).toMatchObject({
+			status: 'current',
+			remoteFailureCount: 0,
+			groups: []
+		});
+		expectOneTransaction(queries());
+		expect(queries()).not.toContain(knownArchiveFailureSummarySql);
 	});
 });

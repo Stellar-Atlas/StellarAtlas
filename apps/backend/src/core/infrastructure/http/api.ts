@@ -71,11 +71,7 @@ import { GetKnownArchiveEvidence } from '@history-scan-coordinator/use-cases/get
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
-import {
-	parseHistoryArchiveMaintenanceIntervalMs,
-	startHistoryArchiveMaintenanceLoop
-} from '@history-scan-coordinator/use-cases/reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceLoop.js';
-import { ReconcileHistoryArchiveObjectTransitions } from '@history-scan-coordinator/use-cases/reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
+import { startArchiveBackgroundTasks } from './ArchiveBackgroundTasks.js';
 import { statusRouter } from '@status/infrastructure/http/StatusRouter.js';
 import { attachStatusLiveWebSocket } from '@status/infrastructure/http/StatusLiveWebSocket.js';
 import { fullHistoryRouter } from '@status/infrastructure/http/FullHistoryRouter.js';
@@ -159,17 +155,7 @@ const listen = async () => {
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
 	const hubbleWarehouse = hubbleWarehouseFromEnvironment();
-	const stopHistoryArchiveMaintenance =
-		process.env.API_HISTORY_MAINTENANCE_WRITER === 'true' &&
-		process.env.API_HISTORY_MAINTENANCE_ENABLED !== 'false'
-			? startHistoryArchiveMaintenanceLoop(
-					kernel.container.get(ReconcileHistoryArchiveObjectTransitions),
-					kernel.container.get<Logger>('Logger'),
-					parseHistoryArchiveMaintenanceIntervalMs(
-						process.env.API_HISTORY_MAINTENANCE_INTERVAL_MS
-					)
-				)
-			: () => undefined;
+	const stopArchiveBackgroundTasks = startArchiveBackgroundTasks(kernel);
 
 	api.use(
 		'/horizon',
@@ -468,7 +454,7 @@ const listen = async () => {
 	const shutdown = (signal: NodeJS.Signals): void => {
 		if (shutdownStarted) return;
 		shutdownStarted = true;
-		stopHistoryArchiveMaintenance();
+		stopArchiveBackgroundTasks();
 		networkRoutes.stopNetworkSearchProjection();
 		console.log(`${signal} signal received: closing HTTP server`);
 		void stop(kernel.container.get(DataSource)).catch((error: unknown) => {

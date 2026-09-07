@@ -23,12 +23,14 @@ describe('root-specific exact unresolved source reasons', () => {
 		await db.query(`
 			create table history_archive_object_queue (
 				"archiveUrlIdentity" text, "objectType" text, status text,
-				"failureChannel" text, "errorType" text, "errorMessage" text, "httpStatus" integer
+				"failureChannel" text, "errorType" text, "errorMessage" text, "httpStatus" integer,
+				"remoteId" uuid default gen_random_uuid() unique, "checkpointLedger" integer default 63
 			);
 			create index fixture_root_status on history_archive_object_queue ("archiveUrlIdentity", status);
 			create table history_archive_retained_remote_finding (
 				"archiveUrlIdentity" text, "objectType" text, "failureChannel" text,
-				"errorType" text, "errorMessage" text, "httpStatus" integer, "retainedOnly" boolean
+				"errorType" text, "errorMessage" text, "httpStatus" integer, "retainedOnly" boolean,
+				"objectRemoteId" uuid
 			);
 			create index fixture_retained_root on history_archive_retained_remote_finding ("archiveUrlIdentity") where "retainedOnly";
 			create table history_archive_evidence_root_summary (
@@ -49,29 +51,29 @@ describe('root-specific exact unresolved source reasons', () => {
 		);
 		await db.query(
 			`
-			insert into history_archive_object_queue
+			insert into history_archive_object_queue ("archiveUrlIdentity","objectType",status,"failureChannel","errorType","errorMessage","httpStatus")
 			select $1, 'checkpoint-state', 'failed', 'archive_availability', 'archive_http_error', 'HTTP 404 Not Found', 404 from generate_series(1,40);
 		`,
 			[root]
 		);
 		await db.query(
-			`insert into history_archive_object_queue
+			`insert into history_archive_object_queue ("archiveUrlIdentity","objectType",status,"failureChannel","errorType","errorMessage","httpStatus")
 			select $1, 'ledger', 'failed', 'archive_evidence', 'decode_error', 'Exact reason ' || i, null from generate_series(1,25) i`,
 			[root]
 		);
 		await db.query(
-			`insert into history_archive_object_queue
+			`insert into history_archive_object_queue ("archiveUrlIdentity","objectType",status,"failureChannel","errorType","errorMessage","httpStatus")
 			select $1, 'bucket', 'failed', 'scanner_issue', 'local_error', 'Current local failure ' || i, null from generate_series(1,300) i`,
 			[root]
 		);
 		await db.query(
-			`insert into history_archive_object_queue values
+			`insert into history_archive_object_queue ("archiveUrlIdentity","objectType",status,"failureChannel","errorType","errorMessage","httpStatus") values
 			($1, 'ledger', 'verified', 'archive_evidence', 'old_error', 'Resolved', 404),
 			($2, 'ledger', 'failed', 'archive_evidence', 'other_root', 'Other root', 403)`,
 			[root, root.toLowerCase()]
 		);
 		await db.query(
-			`insert into history_archive_retained_remote_finding values
+			`insert into history_archive_retained_remote_finding ("archiveUrlIdentity","objectType","failureChannel","errorType","errorMessage","httpStatus","retainedOnly") values
 			($1, 'checkpoint-state', 'archive_availability', 'archive_http_error', 'HTTP 404 Not Found', 404, true),
 			($1, 'checkpoint-state', 'archive_availability', 'archive_http_error', 'HTTP 404 Not Found', 404, false)`,
 			[root]
@@ -104,7 +106,9 @@ describe('root-specific exact unresolved source reasons', () => {
 			errorType: 'archive_http_error',
 			errorMessage: 'HTTP 404 Not Found',
 			httpStatus: 404,
-			count: 41
+			count: 41,
+			knownAffectedCheckpointCount: 1,
+			unknownCheckpointFailureCount: 1
 		});
 		expect(
 			summary.groups.every(
@@ -153,5 +157,26 @@ describe('root-specific exact unresolved source reasons', () => {
 		);
 		const summary = await queryKnownArchiveFailureSummary(db, root);
 		expect(summary.groups[0]?.errorMessage).toBe('Failed [internal path]');
+	});
+	it('deduplicates checkpoint positions across categories and resolves retained metadata by its exact object key', async () => {
+		await db.query(`update history_archive_object_queue set "checkpointLedger"=127 where "errorType"='decode_error';
+			update history_archive_object_queue set "checkpointLedger"=191 where status='verified';
+			update history_archive_retained_remote_finding set "objectRemoteId"=(select "remoteId" from history_archive_object_queue where status='verified') where "retainedOnly"`);
+		const summary = await queryKnownArchiveFailureSummary(db, root);
+		expect(summary.knownAffectedCheckpointCount).toBe(3);
+		expect(summary.unknownCheckpointFailureCount).toBe(0);
+		expect(summary.groups[0]).toMatchObject({
+			count: 41,
+			knownAffectedCheckpointCount: 2,
+			unknownCheckpointFailureCount: 0
+		});
+	});
+	it('does not treat a bucket origin checkpoint as complete attribution or invent pruned metadata', async () => {
+		await db.query(
+			`update history_archive_object_queue set "objectType"='bucket' where "errorType"='archive_http_error'`
+		);
+		const summary = await queryKnownArchiveFailureSummary(db, root);
+		expect(summary.knownAffectedCheckpointCount).toBe(1);
+		expect(summary.unknownCheckpointFailureCount).toBe(41);
 	});
 });

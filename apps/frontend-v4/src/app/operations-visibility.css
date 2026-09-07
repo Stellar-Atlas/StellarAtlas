@@ -163,6 +163,28 @@
 	text-align: start;
 	cursor: pointer;
 }
+.archive-root-inventory-table th .archive-sort-heading + .archive-sort-heading {
+	margin-inline-start: 10px;
+}
+.archive-coverage-definition {
+	margin: 0;
+	padding: 0 14px 12px;
+	color: var(--muted);
+	font-size: 0.75rem;
+	line-height: 1.45;
+}
+.archive-coverage-kind {
+	font-size: 0.75rem;
+	font-weight: 400;
+}
+.archive-verified-subline {
+	display: block;
+	font-size: 0.75rem;
+	margin-block-start: 5px;
+}
+.archive-verified-subline strong {
+	display: inline;
+}
 .archive-sort-heading span {
 	font-size: 0.875rem;
 }
@@ -492,4 +514,65 @@
 	.generated-api-heading {
 		display: grid;
 	}
+}
+
+.archive-scan-meter {
+	display: flex;
+	width: 100%;
+	height: 5px;
+	margin-block: 9px;
+	border-radius: 3px;
+	background: var(--border-color, #39484d);
+	overflow: hidden;
+}
+.archive-scan-meter-checked {
+	background: #84b7b3;
+}
+.archive-scan-meter-listing {
+	background: #e7bb66;
+}
+.archive-evidence-dot {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	margin-inline-end: 5px;
+	vertical-align: middle;
+}
+.archive-evidence-dot-checked {
+	background: #84b7b3;
+}
+.archive-evidence-dot-listing {
+	background: #e7bb66;
+}
+.archive-listing-ranges {
+	margin-top: 8px;
+	font-size: 0.82rem;
+}
+.archive-listing-ranges summary {
+	cursor: pointer;
+	color: #e7bb66;
+}
+.archive-listing-ranges ul,
+.archive-failure-reasons {
+	margin: 6px 0;
+	padding: 0;
+	list-style: none;
+}
+.archive-listing-ranges li,
+.archive-failure-reasons li {
+	margin-top: 6px;
+	overflow-wrap: anywhere;
+}
+.archive-root-inventory-table .archive-failure-reasons strong {
+	font-size: 0.82rem;
+	font-weight: 600;
+}
+.archive-root-inventory-table .archive-failure-reasons small,
+.archive-root-inventory-table .archive-finding-asof {
+	font-size: 0.76rem;
+	line-height: 1.4;
+}
+.archive-extra-findings {
+	font-size: 0.8rem;
 }

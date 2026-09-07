@@ -39,24 +39,30 @@ function harness(
 	return { fetcher, deps };
 }
 
-it('uses the advertised Blockdaemon origin and validates all four StartAfter listings', async () => {
-	const h = harness();
-	const gap = await probeS3ArchiveListingGap(input, h.deps);
-	expect(gap).toMatchObject({
-		kind: 's3-listing-gap',
-		missingFromCheckpoint: 1087,
-		missingThroughCheckpoint: 1279
-	});
-	expect(isHistoryArchiveListingGapDTO(gap)).toBe(true);
-	expect(h.fetcher).toHaveBeenCalledTimes(4);
-	const url = new URL(String(h.fetcher.mock.calls[0][0]));
-	expect(url.origin).toBe(root);
-	expect(url.pathname).toBe('/');
-	expect(url.searchParams.get('start-after')).toBe(
-		checkpointKey('', 'history', 1023)
-	);
-	expect(h.fetcher.mock.calls[0][1]?.redirect).toBe('error');
-});
+it.each([403, 404])(
+	'validates all four advertised-origin StartAfter listings after object HTTP %s',
+	async (observedHttpStatus) => {
+		const h = harness();
+		const gap = await probeS3ArchiveListingGap(
+			{ ...input, observedHttpStatus },
+			h.deps
+		);
+		expect(gap).toMatchObject({
+			kind: 's3-listing-gap',
+			missingFromCheckpoint: 1087,
+			missingThroughCheckpoint: 1279
+		});
+		expect(isHistoryArchiveListingGapDTO(gap)).toBe(true);
+		expect(h.fetcher).toHaveBeenCalledTimes(4);
+		const url = new URL(String(h.fetcher.mock.calls[0][0]));
+		expect(url.origin).toBe(root);
+		expect(url.pathname).toBe('/');
+		expect(url.searchParams.get('start-after')).toBe(
+			checkpointKey('', 'history', 1023)
+		);
+		expect(h.fetcher.mock.calls[0][1]?.redirect).toBe('error');
+	}
+);
 
 it('intersects required categories instead of skipping a present ledger file', async () => {
 	const h = harness(undefined, { ledger: 1279 });
@@ -101,13 +107,20 @@ it.each([
 	expect(await probeS3ArchiveListingGap(input, h.deps)).toBeNull();
 });
 
-it('caches denied listing capability without changing the original object failure', async () => {
-	const h = harness();
-	h.fetcher.mockResolvedValue(new Response('AccessDenied', { status: 403 }));
-	expect(await probeS3ArchiveListingGap(input, h.deps)).toBeNull();
-	expect(await probeS3ArchiveListingGap(input, h.deps)).toBeNull();
-	expect(h.fetcher).toHaveBeenCalledTimes(1);
-});
+it.each([403, 404])(
+	'never turns a denied listing into a missing range after object HTTP %s',
+	async (observedHttpStatus) => {
+		const h = harness();
+		h.fetcher.mockResolvedValue(new Response('AccessDenied', { status: 403 }));
+		expect(
+			await probeS3ArchiveListingGap({ ...input, observedHttpStatus }, h.deps)
+		).toBeNull();
+		expect(
+			await probeS3ArchiveListingGap({ ...input, observedHttpStatus }, h.deps)
+		).toBeNull();
+		expect(h.fetcher).toHaveBeenCalledTimes(1);
+	}
+);
 
 it('never treats an empty truncated listing as an unbounded missing tail', async () => {
 	const h = harness((xml) =>

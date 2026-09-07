@@ -1,24 +1,15 @@
 import type { DataSource } from 'typeorm';
 import type { KnownArchiveFailureSummaryV1 } from 'shared';
 import { queryKnownArchiveFailureSummary } from './KnownArchiveFailureSummaryQuery.js';
+import { readKnownArchiveFailureSummarySnapshots } from './KnownArchiveFailureSummarySnapshot.js';
+import { unavailableArchiveFailureSummary } from './KnownArchiveFailureSummaryValue.js';
+export { unavailableArchiveFailureSummary } from './KnownArchiveFailureSummaryValue.js';
 
 interface Entry {
 	value?: KnownArchiveFailureSummaryV1;
 	inFlight?: Promise<KnownArchiveFailureSummaryV1>;
 	expiresAt: number;
 }
-
-export const unavailableArchiveFailureSummary: KnownArchiveFailureSummaryV1 = {
-	status: 'unavailable',
-	computedAt: null,
-	groups: [],
-	limit: 20,
-	totalGroups: null,
-	remainingGroupCount: null,
-	remainingFailureCount: null,
-	remoteFailureCount: null,
-	workerIssueCount: null
-};
 
 export class KnownArchiveFailureSummaryCache {
 	private readonly entries = new Map<string, Entry>();
@@ -81,9 +72,19 @@ export function getKnownArchiveFailureSummary(
 ): Promise<KnownArchiveFailureSummaryV1> {
 	let cache = caches.get(dataSource);
 	if (cache === undefined) {
-		cache = new KnownArchiveFailureSummaryCache((identity) =>
-			queryKnownArchiveFailureSummary(dataSource, identity)
-		);
+		cache = new KnownArchiveFailureSummaryCache(async (identity) => {
+			try {
+				const snapshot = (
+					await readKnownArchiveFailureSummarySnapshots(dataSource.manager, [
+						identity
+					])
+				).get(identity);
+				if (snapshot?.computedAt != null) return snapshot;
+			} catch {
+				/* Keep the existing bounded detail fallback during rollout. */
+			}
+			return queryKnownArchiveFailureSummary(dataSource, identity);
+		});
 		caches.set(dataSource, cache);
 	}
 	return cache.get(root);

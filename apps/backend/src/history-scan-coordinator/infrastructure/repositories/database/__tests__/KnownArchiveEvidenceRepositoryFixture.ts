@@ -1,4 +1,5 @@
 import { historyArchiveRetainedRemoteFindingSql } from '../HistoryArchiveRetainedRemoteFindingSql.js';
+import { HistoryArchiveCheckpointScanCoverageMigration1788831000000 } from '../../../database/migrations/1788831000000-HistoryArchiveCheckpointScanCoverageMigration.js';
 import { HistoryArchiveListingGapMigration1788735600000 } from '../../../database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
 import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '../../../database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
 import { HistoryArchiveCompactPlanningMigration1785530000000 } from '../../../database/migrations/1785530000000-HistoryArchiveCompactPlanningMigration.js';
@@ -51,6 +52,9 @@ export async function createKnownEvidenceDataSource(
 	const migrationRunner = dataSource.createQueryRunner();
 	await migrationRunner.connect();
 	try {
+		await new HistoryArchiveCheckpointScanCoverageMigration1788831000000().up(
+			migrationRunner
+		);
 		await new HistoryArchiveListingGapMigration1788735600000().up(
 			migrationRunner
 		);
@@ -85,6 +89,9 @@ export async function createKnownEvidenceDataSource(
 export async function resetKnownEvidence(
 	dataSource: DataSource
 ): Promise<void> {
+	await dataSource.query(
+		'truncate history_archive_checkpoint_scan_bitmap, history_archive_checkpoint_scan_summary, history_archive_checkpoint_scan_seed_state'
+	);
 	await dataSource.query(
 		'truncate history_archive_listing_gap, history_archive_checkpoint_scan_cursor, history_archive_checkpoint_proof_attestation, history_archive_checkpoint_proof_attestation_invalidation, history_archive_checkpoint_proof_attestation_rollup, history_archive_checkpoint_proof_attested_checkpoint restart identity cascade'
 	);

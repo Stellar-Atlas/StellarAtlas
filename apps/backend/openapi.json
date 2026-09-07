@@ -13129,9 +13129,17 @@
 					"verifiedCheckpointProofs"
 				],
 				"properties": {
-					"activeObjectChecks": { "type": "integer", "minimum": 0 },
-					"archiveUrl": { "type": "string", "format": "uri" },
-					"archiveUrlIdentity": { "type": "string" },
+					"activeObjectChecks": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"archiveUrl": {
+						"type": "string",
+						"format": "uri"
+					},
+					"archiveUrlIdentity": {
+						"type": "string"
+					},
 					"currentLedger": {
 						"type": "integer",
 						"minimum": 0,
@@ -13151,54 +13159,239 @@
 						"minimum": 0,
 						"nullable": true
 					},
-					"mismatchCheckpointProofs": { "type": "integer", "minimum": 0 },
-					"notEvaluableCheckpointProofs": { "type": "integer", "minimum": 0 },
-					"objectCompleteCheckpointProofs": { "type": "integer", "minimum": 0 },
-					"observedAt": { "type": "string", "format": "date-time" },
-					"pendingCheckpointProofs": { "type": "integer", "minimum": 0 },
+					"mismatchCheckpointProofs": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"notEvaluableCheckpointProofs": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"objectCompleteCheckpointProofs": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"observedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"pendingCheckpointProofs": {
+						"type": "integer",
+						"minimum": 0
+					},
 					"rootObjectStatus": {
 						"type": "string",
-						"enum": ["pending", "scanning", "verified", "failed"],
+						"enum": [
+							"pending",
+							"scanning",
+							"verified",
+							"failed"
+						],
 						"nullable": true
 					},
 					"source": {
 						"type": "string",
-						"enum": ["backfill", "history-scanner", "network-scan"]
+						"enum": [
+							"backfill",
+							"history-scanner",
+							"network-scan"
+						]
 					},
 					"stateStatus": {
 						"type": "string",
-						"enum": ["available", "invalid", "unreachable"]
+						"enum": [
+							"available",
+							"invalid",
+							"unreachable"
+						]
 					},
-					"stateUrl": { "type": "string", "format": "uri" },
-					"totalCheckpointProofs": { "type": "integer", "minimum": 0 },
-					"verifiedCheckpointProofs": { "type": "integer", "minimum": 0 }
-				}
-			},
-			"HistoryArchiveTransitionReconciliationV1": {
-				"type": "object",
-				"additionalProperties": false,
-				"description": "Durable terminal-effect reconciliation state. Transient byte and stage progress remains in memory and is not written as heartbeat telemetry.",
-				"required": [
-					"oldestPendingAgeMs",
-					"oldestPendingAt",
-					"pendingTerminalEffects",
-					"status"
-				],
-				"properties": {
-					"oldestPendingAgeMs": {
+					"stateUrl": {
+						"type": "string",
+						"format": "uri"
+					},
+					"totalCheckpointProofs": {
 						"type": "integer",
-						"minimum": 0,
-						"nullable": true
+						"minimum": 0
 					},
-					"oldestPendingAt": {
-						"type": "string",
-						"format": "date-time",
-						"nullable": true
+					"verifiedCheckpointProofs": {
+						"type": "integer",
+						"minimum": 0
 					},
-					"pendingTerminalEffects": { "type": "integer", "minimum": 0 },
-					"status": {
-						"type": "string",
-						"enum": ["caught-up", "reconciling", "stalled"]
+					"scanCoverage": {
+						"type": "object",
+						"description": "Distinct checkpoint scan positions. Checks include recorded failures. Complete listing gaps are separate evidence; the scanned count is their union, not their sum. While reconciling, counts are lower bounds. This is not verified proof coverage.",
+						"properties": {
+							"checkedCheckpointPositions": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"listingCoveredCheckpointPositions": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"scannedCheckpointPositions": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"status": {
+								"type": "string",
+								"enum": [
+									"reconciling",
+									"complete"
+								]
+							},
+							"updatedAt": {
+								"type": "string",
+								"format": "date-time",
+								"nullable": true
+							}
+						},
+						"required": [
+							"checkedCheckpointPositions",
+							"listingCoveredCheckpointPositions",
+							"scannedCheckpointPositions",
+							"status",
+							"updatedAt"
+						],
+						"additionalProperties": false
+					},
+					"failureSummary": {
+						"type": "object",
+						"properties": {
+							"status": {
+								"type": "string",
+								"enum": [
+									"current",
+									"stale",
+									"unavailable"
+								]
+							},
+							"computedAt": {
+								"type": "string",
+								"format": "date-time",
+								"nullable": true
+							},
+							"groups": {
+								"type": "array",
+								"maxItems": 20,
+								"items": {
+									"type": "object",
+									"properties": {
+										"objectType": {
+											"type": "string",
+											"enum": [
+												"history-archive-state",
+												"checkpoint-state",
+												"ledger",
+												"transactions",
+												"results",
+												"scp",
+												"bucket"
+											]
+										},
+										"failureChannel": {
+											"type": "string",
+											"enum": [
+												"archive_evidence",
+												"archive_availability"
+											]
+										},
+										"errorType": {
+											"type": "string",
+											"maxLength": 4096,
+											"nullable": true
+										},
+										"errorMessage": {
+											"type": "string",
+											"maxLength": 4096,
+											"nullable": true
+										},
+										"httpStatus": {
+											"type": "integer",
+											"minimum": 100,
+											"maximum": 599,
+											"nullable": true
+										},
+										"count": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"knownAffectedCheckpointCount": {
+											"type": "integer",
+											"minimum": 0,
+											"nullable": true
+										},
+										"unknownCheckpointFailureCount": {
+											"type": "integer",
+											"minimum": 0,
+											"nullable": true
+										}
+									},
+									"required": [
+										"objectType",
+										"failureChannel",
+										"errorType",
+										"errorMessage",
+										"httpStatus",
+										"count"
+									],
+									"additionalProperties": false
+								}
+							},
+							"limit": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 20
+							},
+							"totalGroups": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
+							"remainingGroupCount": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
+							"remainingFailureCount": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
+							"remoteFailureCount": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
+							"workerIssueCount": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
+							"knownAffectedCheckpointCount": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
+							"unknownCheckpointFailureCount": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							}
+						},
+						"required": [
+							"status",
+							"computedAt",
+							"groups",
+							"limit",
+							"totalGroups",
+							"remainingGroupCount",
+							"remainingFailureCount",
+							"remoteFailureCount",
+							"workerIssueCount"
+						],
+						"additionalProperties": false,
+						"nullable": true
 					}
 				}
 			},

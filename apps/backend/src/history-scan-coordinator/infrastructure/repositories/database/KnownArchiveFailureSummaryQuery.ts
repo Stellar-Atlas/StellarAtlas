@@ -27,24 +27,28 @@ export async function queryKnownArchiveFailureSummary(
 		const row: unknown = rows[0];
 		const candidate =
 			typeof row === 'object' && row !== null && 'summary' in row
-				? sanitizeSummary(row.summary)
+				? row.summary
 				: null;
-		if (!validate(candidate)) {
-			throw new Error('Invalid archive reason summary');
-		}
-		const summary = candidate;
-		const displayed = summary.groups.reduce(
-			(sum, group) => sum + group.count,
-			0
-		);
-		if (
-			displayed + (summary.remainingFailureCount ?? 0) !==
-			summary.remoteFailureCount
-		) {
-			throw new Error('Archive reason summary rollup is inconsistent');
-		}
-		return summary;
+		return parseKnownArchiveFailureSummary(candidate);
 	});
+}
+
+export function parseKnownArchiveFailureSummary(
+	value: unknown
+): KnownArchiveFailureSummaryV1 {
+	const candidate = sanitizeSummary(value);
+	if (!validate(candidate)) {
+		throw new Error('Invalid archive reason summary');
+	}
+	const summary = candidate;
+	const displayed = summary.groups.reduce((sum, group) => sum + group.count, 0);
+	if (
+		displayed + (summary.remainingFailureCount ?? 0) !==
+		summary.remoteFailureCount
+	) {
+		throw new Error('Archive reason summary rollup is inconsistent');
+	}
+	return summary;
 }
 
 function sanitizeSummary(value: unknown): unknown {
@@ -75,17 +79,28 @@ function sanitizeSummary(value: unknown): unknown {
 }
 
 export const knownArchiveFailureSummarySql = `
-	with unresolved as materialized (
-		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus"
+	with raw_unresolved as materialized (
+		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", "checkpointLedger"
 		from history_archive_object_queue
 		where "archiveUrlIdentity" = $1::text and status = 'failed'
 			and "failureChannel" in ('archive_evidence', 'archive_availability')
 		union all
-		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus"
-		from history_archive_retained_remote_finding
-		where "archiveUrlIdentity" = $1::text and "retainedOnly"
+		select retained."objectType", retained."failureChannel", retained."errorType", retained."errorMessage", retained."httpStatus", object."checkpointLedger"
+		from history_archive_retained_remote_finding retained
+		left join lateral (select "checkpointLedger" from history_archive_object_queue metadata
+			where metadata."remoteId" = retained."objectRemoteId"
+				and metadata."archiveUrlIdentity" = retained."archiveUrlIdentity" limit 1) object on true
+		where retained."archiveUrlIdentity" = $1::text and retained."retainedOnly"
+	), unresolved as materialized (
+		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus",
+			case when "objectType" in ('checkpoint-state','ledger','transactions','results','scp')
+				and "checkpointLedger" >= 63 and "checkpointLedger" % 64 = 63
+				then "checkpointLedger" else null end as "checkpointLedger"
+		from raw_unresolved
 	), grouped as materialized (
-		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", count(*) as count
+		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", count(*) as count,
+			count(distinct "checkpointLedger") as "knownAffectedCheckpointCount",
+			count(*) filter (where "checkpointLedger" is null) as "unknownCheckpointFailureCount"
 		from unresolved
 		group by "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus"
 	), selected as materialized (
@@ -107,5 +122,7 @@ export const knownArchiveFailureSummarySql = `
 		'remainingGroupCount', (select count(*) from grouped) - (select count(*) from selected),
 		'remainingFailureCount', coalesce((select sum(count) from grouped), 0) - coalesce((select sum(count) from selected), 0),
 		'remoteFailureCount', counts.remote, 'workerIssueCount', counts.worker
+		,'knownAffectedCheckpointCount', (select count(distinct "checkpointLedger") from unresolved)
+		,'unknownCheckpointFailureCount', (select count(*) from unresolved where "checkpointLedger" is null)
 	) as summary from counts
 `;

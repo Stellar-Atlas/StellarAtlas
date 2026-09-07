@@ -80,35 +80,41 @@ function harness(
 	};
 }
 
-it('records the common four-category YLDS gap using four sequential bounded listing requests', async () => {
-	const h = harness();
-	const gap = await probeGcsArchiveListingGap(input(), h.deps);
-	expect(gap).toMatchObject({
-		kind: 'gcs-listing-gap',
-		archiveRoot: ROOT,
-		missingFromCheckpoint: CHECKPOINT,
-		missingThroughCheckpoint: NEXT - 64,
-		observedAt: NOW.toISOString()
-	});
-	expect(gap?.listings.map((listing) => listing.category)).toEqual([
-		'history',
-		'ledger',
-		'transactions',
-		'results'
-	]);
-	expect(
-		gap?.listings.every((listing) =>
-			/^[a-f0-9]{64}$/.test(listing.responseSha256)
-		)
-	).toBe(true);
-	expect(h.requests).toHaveLength(4);
-	expect(h.maxActive()).toBe(1);
-	expect(h.requests[0].searchParams.get('marker')).toBe(key('history', 1023));
-	expect(h.fetcher.mock.calls[0][1]).toMatchObject({
-		redirect: 'error',
-		signal: expect.any(AbortSignal)
-	});
-});
+it.each([403, 404])(
+	'records a four-category gap after object HTTP %s only from complete bounded listings',
+	async (observedHttpStatus) => {
+		const h = harness();
+		const gap = await probeGcsArchiveListingGap(
+			{ ...input(), observedHttpStatus },
+			h.deps
+		);
+		expect(gap).toMatchObject({
+			kind: 'gcs-listing-gap',
+			archiveRoot: ROOT,
+			missingFromCheckpoint: CHECKPOINT,
+			missingThroughCheckpoint: NEXT - 64,
+			observedAt: NOW.toISOString()
+		});
+		expect(gap?.listings.map((listing) => listing.category)).toEqual([
+			'history',
+			'ledger',
+			'transactions',
+			'results'
+		]);
+		expect(
+			gap?.listings.every((listing) =>
+				/^[a-f0-9]{64}$/.test(listing.responseSha256)
+			)
+		).toBe(true);
+		expect(h.requests).toHaveLength(4);
+		expect(h.maxActive()).toBe(1);
+		expect(h.requests[0].searchParams.get('marker')).toBe(key('history', 1023));
+		expect(h.fetcher.mock.calls[0][1]).toMatchObject({
+			redirect: 'error',
+			signal: expect.any(AbortSignal)
+		});
+	}
+);
 
 it('intersects gaps rather than skipping files available in any required category', async () => {
 	const h = harness(undefined, { ledger: 1279, transactions: 1343 });
@@ -255,7 +261,7 @@ it('requires the failed URL to match the declared archive root and exact checkpo
 	expect(h.resolver).not.toHaveBeenCalled();
 });
 
-it.each([403, 200, 500])(
+it.each([401, 200, 410, 429, 500])(
 	'does not probe listing capability for original HTTP %s',
 	async (observedHttpStatus) => {
 		const h = harness();
@@ -268,6 +274,24 @@ it.each([403, 200, 500])(
 		expect(h.fetcher).not.toHaveBeenCalled();
 	}
 );
+
+it('does not infer absence from an original 403 when the public listing is denied or incomplete', async () => {
+	for (const response of [
+		new Response('AccessDenied', { status: 403 }),
+		new Response(
+			'<ListBucketResult><IsTruncated>true</IsTruncated></ListBucketResult>'
+		)
+	]) {
+		const h = harness();
+		h.fetcher.mockResolvedValue(response);
+		expect(
+			await probeGcsArchiveListingGap(
+				{ ...input(), observedHttpStatus: 403 },
+				h.deps
+			)
+		).toBeNull();
+	}
+});
 
 it('abandons an oversized listing body', async () => {
 	const h = harness(() => 'x'.repeat(65_537));

@@ -1,11 +1,38 @@
 import type { JSONSchemaType } from 'ajv';
+import {
+	KnownArchiveFailureSummaryV1Schema,
+	type KnownArchiveFailureSummaryV1
+} from './known-archive-failure-summary-v1.js';
 import { nullable } from './helper/nullable.js';
 import {
 	HistoryArchiveCheckpointCoverageV1Schema,
 	type HistoryArchiveCheckpointCoverageV1
 } from './history-archive-object-summary-v1.js';
 
+export interface HistoryArchiveScanCoverageV1 {
+	/** Distinct positions with a recorded terminal category result, including failed checks. */
+	readonly checkedCheckpointPositions: number;
+	/** Distinct positions absent from a complete, accepted listing; may overlap checks. */
+	readonly listingCoveredCheckpointPositions: number;
+	/** Union of checked and listing-covered positions, never their sum. */
+	readonly scannedCheckpointPositions: number;
+	readonly status: 'reconciling' | 'complete';
+	readonly updatedAt: string | null;
+}
+
+export interface HistoryArchiveListingRangePreviewV1 {
+	readonly firstCheckpointLedger: number;
+	readonly lastCheckpointLedger: number;
+	readonly checkpointCount: number;
+	readonly observedAt: string;
+	readonly kind: string;
+}
+
 export interface HistoryArchiveStatusSourceV1 {
+	readonly failureSummary?: KnownArchiveFailureSummaryV1;
+	/** At most five unresolved, complete-listing exclusions, ordered by ledger. */
+	readonly listingGapRanges?: readonly HistoryArchiveListingRangePreviewV1[];
+	readonly scanCoverage?: HistoryArchiveScanCoverageV1;
 	/** Separate unresolved listing ranges, not individual failed object requests. */
 	readonly listingGapCount?: number;
 	readonly activeObjectChecks: number;
@@ -71,7 +98,50 @@ const HistoryArchiveStatusSourceV1Schema: JSONSchemaType<HistoryArchiveStatusSou
 	{
 		type: 'object',
 		properties: {
+			failureSummary: { ...KnownArchiveFailureSummaryV1Schema, nullable: true },
 			listingGapCount: { type: 'integer', nullable: true, minimum: 0 },
+			listingGapRanges: {
+				type: 'array',
+				nullable: true,
+				maxItems: 5,
+				items: {
+					type: 'object',
+					properties: {
+						firstCheckpointLedger: { type: 'integer', minimum: 63 },
+						lastCheckpointLedger: { type: 'integer', minimum: 63 },
+						checkpointCount: { type: 'integer', minimum: 1 },
+						observedAt: { type: 'string', format: 'date-time' },
+						kind: { type: 'string' }
+					},
+					required: [
+						'firstCheckpointLedger',
+						'lastCheckpointLedger',
+						'checkpointCount',
+						'observedAt',
+						'kind'
+					],
+					additionalProperties: false
+				}
+			},
+			scanCoverage: {
+				type: 'object',
+				nullable: true,
+				properties: {
+					checkedCheckpointPositions: { type: 'integer', minimum: 0 },
+					listingCoveredCheckpointPositions: { type: 'integer', minimum: 0 },
+					scannedCheckpointPositions: { type: 'integer', minimum: 0 },
+					status: { type: 'string', enum: ['reconciling', 'complete'] },
+					updatedAt: nullable({ type: 'string', format: 'date-time' })
+				},
+				required: [
+					'checkedCheckpointPositions',
+					'listingCoveredCheckpointPositions',
+					'scannedCheckpointPositions',
+					'status',
+					'updatedAt'
+				],
+				additionalProperties: false
+			},
 			activeObjectChecks: { type: 'number' },
 			archiveEvidenceFailures: { type: 'number' },
 			archiveUrl: { type: 'string' },

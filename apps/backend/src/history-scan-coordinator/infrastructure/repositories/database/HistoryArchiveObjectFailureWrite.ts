@@ -11,6 +11,10 @@ import {
 } from './HistoryArchiveObjectHostThrottleSql.js';
 import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
 import { persistHistoryArchiveListingGap } from './HistoryArchiveListingGapWrite.js';
+import {
+	recordAcceptedHistoryArchiveCheckpointScans,
+	type HistoryArchiveCheckpointScanTerminalRow
+} from './HistoryArchiveCheckpointScanCoverageWrite.js';
 
 export async function markHistoryArchiveObjectFailed(
 	repository: Repository<HistoryArchiveObject>,
@@ -66,15 +70,23 @@ export async function markHistoryArchiveObjectFailed(
 					claimAttempt: failure.claimAttempt
 				});
 		}
-		const result = await query.execute();
+		const result = await query
+			.returning(['archiveUrlIdentity', 'objectType', 'checkpointLedger'])
+			.execute();
 		if ((result.affected ?? 0) === 0) return false;
-		if (failure.listingGap !== undefined) {
-			await persistHistoryArchiveListingGap(
-				manager,
-				remoteId,
-				failure.listingGap
-			);
-		}
+		const listingRanges =
+			failure.listingGap === undefined
+				? []
+				: await persistHistoryArchiveListingGap(
+						manager,
+						remoteId,
+						failure.listingGap
+					);
+		await recordAcceptedHistoryArchiveCheckpointScans(
+			manager,
+			result.raw as readonly HistoryArchiveCheckpointScanTerminalRow[],
+			listingRanges
+		);
 		if (failure.scheduler !== 'broker') {
 			await manager.query(
 				`update "history_archive_object_claim_slot"

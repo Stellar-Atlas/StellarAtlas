@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isArchiveListingFailureStatus } from './ArchiveListingFailureStatus.js';
 import { resolveCname } from 'node:dns/promises';
 import { SaxesParser } from 'saxes';
 import type { HistoryArchiveListingGapDTO } from 'history-scanner-dto';
@@ -288,7 +289,7 @@ export async function probeGcsArchiveListingGap(
 	dependencies: Partial<GcsArchiveListingGapDependencies> = {}
 ): Promise<HistoryArchiveListingGapDTO | null> {
 	if (
-		input.observedHttpStatus !== 404 ||
+		!isArchiveListingFailureStatus(input.observedHttpStatus) ||
 		!validCheckpoint(input.checkpoint) ||
 		input.archiveRoot.length > 2048
 	)

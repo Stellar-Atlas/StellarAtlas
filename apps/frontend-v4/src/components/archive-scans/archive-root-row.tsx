@@ -1,14 +1,13 @@
 import Link from 'next/link';
+import { ArchiveFindings } from './archive-findings';
+import { ArchiveScanCoverage } from './archive-scan-coverage';
 import type { PublicNode } from '@api/types';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import { formatInteger } from '@format/formatters';
 import { LocalDateTime } from '../local-date-time';
 import {
 	type ArchiveSource,
-	calculateCoveragePercent,
-	formatCoveragePercent,
 	formatNullableInteger,
-	getExpectedArchiveCheckpointCount,
 	formatNodeName,
 	formatOrganizationName
 } from './archive-inventory-model';
@@ -24,11 +23,6 @@ export function ArchiveRootRow({
 	readonly organizationNames: ReadonlyMap<string, string>;
 	readonly source: ArchiveSource;
 }): React.JSX.Element {
-	const expectedCheckpointProofs = getExpectedArchiveCheckpointCount(source);
-	const proofPercent = calculateCoveragePercent(
-		source.durableVerifiedCheckpointProofs,
-		expectedCheckpointProofs
-	);
 	const isCanonical =
 		canonicalArchiveUrlIdentity !== null &&
 		source.archiveUrlIdentity === canonicalArchiveUrlIdentity;
@@ -62,45 +56,14 @@ export function ArchiveRootRow({
 					</ul>
 				)}
 			</td>
-			<td role="cell" data-label="Verified coverage">
-				<strong className="archive-coverage-value">
-					{formatCoveragePercent(proofPercent)}
-				</strong>
-				<progress
-					aria-label={'Durable checkpoint coverage for ' + source.archiveUrl}
-					max={100}
-					value={proofPercent}
-				/>
-				<small>
-					{formatInteger(source.durableVerifiedCheckpointProofs)} /{' '}
-					{formatInteger(expectedCheckpointProofs)} positions verified
-				</small>
+			<td role="cell" data-label="Coverage">
+				<ArchiveScanCoverage source={source} />
 				<small>
 					Advertised ledger {formatNullableInteger(source.currentLedger)}
 				</small>
 			</td>
 			<td role="cell" data-label="Archive findings">
-				<strong>
-					{formatInteger(source.archiveEvidenceFailures)} file failures
-				</strong>
-				<small>Unresolved request or content-check failures</small>
-				{(source.listingGapCount ?? 0) > 0 ? (
-					<small className="archive-listing-finding">
-						{formatInteger(source.listingGapCount ?? 0)} ranges absent from
-						filename listings
-					</small>
-				) : null}
-				{source.mismatchCheckpointProofs > 0 ? (
-					<small>
-						{formatInteger(source.mismatchCheckpointProofs)} checkpoint
-						mismatches
-					</small>
-				) : null}
-				{source.unclassifiedFailures > 0 ? (
-					<small>
-						{formatInteger(source.unclassifiedFailures)} unclassified findings
-					</small>
-				) : null}
+				<ArchiveFindings source={source} />
 			</td>
 			<td role="cell" data-label="Details">
 				<Link

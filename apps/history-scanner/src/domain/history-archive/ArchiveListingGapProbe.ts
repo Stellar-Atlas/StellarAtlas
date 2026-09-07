@@ -20,7 +20,7 @@ export type ArchiveListingGapDependencies = Partial<
 		DirectoryArchiveListingGapDependencies
 >;
 
-/** One optional, bounded provider-capability pass after an actual checkpoint-state 404. */
+/** One bounded capability pass after checkpoint-state 403/404; only complete listings prove absence. */
 export async function probeArchiveListingGap(
 	input: GcsArchiveListingGapInput,
 	dependencies: ArchiveListingGapDependencies = {}

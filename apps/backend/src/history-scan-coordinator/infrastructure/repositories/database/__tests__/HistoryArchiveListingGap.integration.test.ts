@@ -109,6 +109,9 @@ describe('compact listing evidence and source-boundary continuation', () => {
 	beforeEach(async () => {
 		process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT = '';
 		await db.query(
+			'truncate history_archive_checkpoint_scan_bitmap, history_archive_checkpoint_scan_summary, history_archive_checkpoint_scan_seed_state'
+		);
+		await db.query(
 			'truncate history_archive_object_queue, history_archive_checkpoint_proof, history_archive_state_snapshot, history_archive_checkpoint_scan_cursor, history_archive_checkpoint_substitution cascade'
 		);
 		const target = createRoot(40),
@@ -149,16 +152,16 @@ describe('compact listing evidence and source-boundary continuation', () => {
 			.save([failureProof, prior, sourceProof]);
 	});
 
-	async function fail(claimAttempt = 1, gap = evidence()) {
+	async function fail(claimAttempt = 1, gap = evidence(), httpStatus = 404) {
 		return markHistoryArchiveObjectFailed(
 			db.getRepository(HistoryArchiveObject),
 			failed.remoteId,
 			{
 				claimAttempt,
 				errorType: 'archive_http_error',
-				errorMessage: 'HTTP 404',
+				errorMessage: `HTTP ${httpStatus}`,
 				failureChannel: 'archive_availability',
-				httpStatus: 404,
+				httpStatus,
 				listingGap: gap,
 				nextAttemptAt: null
 			}
@@ -170,6 +173,52 @@ describe('compact listing evidence and source-boundary continuation', () => {
 		expect(await db.query('select * from history_archive_listing_gap')).toEqual(
 			[]
 		);
+	});
+
+	it('counts a fully validated listing range after an actual 403 while preserving the source error', async () => {
+		expect(await fail(1, evidence(), 403)).toBe(true);
+		const expected = String((lastMissing - 127) / 64 + 1);
+		expect(
+			await db.query(
+				'select "checkedCheckpointPositions", "listingCoveredCheckpointPositions", "scannedCheckpointPositions" from history_archive_checkpoint_scan_summary where "archiveUrlIdentity"=$1',
+				[targetUrl]
+			)
+		).toEqual([
+			{
+				checkedCheckpointPositions: '1',
+				listingCoveredCheckpointPositions: expected,
+				scannedCheckpointPositions: expected
+			}
+		]);
+		expect(
+			await db
+				.getRepository(HistoryArchiveObject)
+				.findOneByOrFail({ remoteId: failed.remoteId })
+		).toMatchObject({
+			status: 'failed',
+			httpStatus: 403,
+			errorMessage: 'HTTP 403'
+		});
+	});
+
+	it('does not infer a missing range from 403 when complete listing evidence is invalid', async () => {
+		const gap = evidence();
+		await fail(1, { ...gap, listings: gap.listings.slice(0, 3) }, 403);
+		expect(await db.query('select * from history_archive_listing_gap')).toEqual(
+			[]
+		);
+		expect(
+			await db.query(
+				'select "checkedCheckpointPositions", "listingCoveredCheckpointPositions", "scannedCheckpointPositions" from history_archive_checkpoint_scan_summary where "archiveUrlIdentity"=$1',
+				[targetUrl]
+			)
+		).toEqual([
+			{
+				checkedCheckpointPositions: '1',
+				listingCoveredCheckpointPositions: '0',
+				scannedCheckpointPositions: '1'
+			}
+		]);
 	});
 
 	for (const mode of ['completion', 'recovery'] as const) {

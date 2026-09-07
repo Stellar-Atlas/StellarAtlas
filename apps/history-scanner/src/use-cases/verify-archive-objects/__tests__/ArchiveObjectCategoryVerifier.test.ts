@@ -18,6 +18,61 @@ const flushProgress = async () => undefined;
 const downloadPermit = { acquire: async () => () => undefined };
 
 describe('ArchiveObjectCategoryVerifier', () => {
+	it.each([403, 404])(
+		'preserves checkpoint HTTP %s when bounded public listings do not establish a gap',
+		async (status) => {
+			const fetcher = jest
+				.spyOn(globalThis, 'fetch')
+				.mockImplementation(
+					async () => new Response('AccessDenied', { status: 403 })
+				);
+			const httpService = mock<HttpService>();
+			httpService.get.mockResolvedValue(
+				err(
+					new HttpError('Original archive failure', undefined, {
+						data: {},
+						headers: {},
+						status,
+						statusText: 'Archive unavailable'
+					})
+				)
+			);
+			const acquire = jest.fn(async () => () => undefined);
+			const verifier = new ArchiveObjectCategoryVerifier(
+				httpService,
+				mock<ScanCoordinatorService>(),
+				mock<HistoryArchiveStateValidator>(),
+				mock<ExceptionLogger>(),
+				1,
+				() => undefined,
+				flushProgress,
+				{ acquire }
+			);
+			const root = `https://storage.googleapis.com/listing-test-${status}`;
+			try {
+				const failure = (
+					await verifier.verifyCheckpointState(
+						createObjectJob({
+							archiveUrl: root,
+							objectType: 'checkpoint-state',
+							objectUrl: root + '/history/00/00/00/history-0000003f.json'
+						})
+					)
+				)._unsafeUnwrapErr();
+				expect(failure).toMatchObject({
+					httpStatus: status,
+					failureChannel: 'archive_availability'
+				});
+				expect(failure.listingGap).toBeUndefined();
+				expect(fetcher).toHaveBeenCalled();
+				expect(acquire).toHaveBeenCalledTimes(2);
+			} finally {
+				fetcher.mockRestore();
+				await verifier.close();
+			}
+		}
+	);
+
 	it('preserves HTTP status on category fetch failures', async () => {
 		const httpService = mock<HttpService>();
 		httpService.get.mockResolvedValue(

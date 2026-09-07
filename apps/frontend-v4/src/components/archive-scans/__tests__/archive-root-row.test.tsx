@@ -65,12 +65,14 @@ describe('archive inventory source evidence', () => {
 
 	it('keeps listing gaps, direct failures, and infrastructure issues separate', () => {
 		const html = render({ listingGapCount: 2 });
-		expect(html).toContain('48,722 file failures');
+		expect(html).toContain(
+			'48,722 unresolved checks; reason summary is being prepared'
+		);
 		expect(html).toContain('2 ranges absent from filename listings');
 		expect(html).toContain(
 			'Scanner issues (not archive faults)</dt><dd>1</dd>'
 		);
-		expect(html).not.toContain('48,723 file failures');
+		expect(html).not.toContain('48,723 unresolved checks');
 		expect(html).toContain('data-label="Archive findings"');
 		expect(html).toContain('href="' + source.archiveUrl + '"');
 	});

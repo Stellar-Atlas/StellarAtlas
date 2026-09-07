@@ -3,6 +3,35 @@ import * as addFormats from 'ajv-formats';
 import { HistoryArchiveStatusSummaryV1Schema } from '../../src/dto/history-archive-status-summary-v1';
 
 describe('HistoryArchiveStatusSummaryV1', () => {
+	it('validates separate checked, listing and union counts without calling failures verified', () => {
+		const validate = createValidator();
+		const summary = createSummary();
+		const scanCoverage = {
+			checkedCheckpointPositions: 5,
+			listingCoveredCheckpointPositions: 4,
+			scannedCheckpointPositions: 7,
+			status: 'reconciling',
+			updatedAt: null
+		};
+		expect(
+			validate({
+				...summary,
+				sources: [{ ...summary.sources[0], scanCoverage }]
+			})
+		).toBe(true);
+		expect(
+			validate({
+				...summary,
+				sources: [
+					{
+						...summary.sources[0],
+						scanCoverage: { ...scanCoverage, scannedCheckpointPositions: -1 }
+					}
+				]
+			})
+		).toBe(false);
+	});
+
 	it('validates explicit bounded checkpoint-proof status', () => {
 		const validate = createValidator();
 
@@ -28,6 +57,16 @@ function createValidator() {
 
 function createSummary() {
 	return {
+		canonicalProofProgress: {
+			archiveUrl: null,
+			archiveUrlIdentity: null,
+			latestVerifiedCheckpointLedger: null,
+			nextCheckpointLedger: null,
+			remainingCheckpoints: 0,
+			targetCheckpointLedger: null,
+			totalCheckpoints: 0,
+			verifiedCheckpoints: 0
+		},
 		activeObjectChecks: 1,
 		archiveEvidenceFailures: 0,
 		checkpointCoverage: {

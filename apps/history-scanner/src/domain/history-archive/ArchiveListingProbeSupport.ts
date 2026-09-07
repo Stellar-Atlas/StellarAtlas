@@ -1,5 +1,6 @@
 import type { GcsArchiveListingGapInput } from './GcsArchiveListingGapProbe.js';
 import { checkpointKey, validCheckpoint } from './GcsArchiveListingGapProbe.js';
+import { isArchiveListingFailureStatus } from './ArchiveListingFailureStatus.js';
 
 export class UnavailableListingCapabilityCache {
 	private readonly entries = new Map<string, number>();
@@ -21,7 +22,7 @@ export class UnavailableListingCapabilityCache {
 
 export function listingInputRoot(input: GcsArchiveListingGapInput): URL | null {
 	if (
-		input.observedHttpStatus !== 404 ||
+		!isArchiveListingFailureStatus(input.observedHttpStatus) ||
 		!validCheckpoint(input.checkpoint) ||
 		input.archiveRoot.length > 2048
 	)

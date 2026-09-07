@@ -18,6 +18,10 @@ import {
 	recordHistoryArchiveContentEvidenceBatch
 } from './HistoryArchiveContentReuseWrite.js';
 import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
+import {
+	recordAcceptedHistoryArchiveCheckpointScans,
+	type HistoryArchiveCheckpointScanTerminalRow
+} from './HistoryArchiveCheckpointScanCoverageWrite.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -67,8 +71,11 @@ export async function markHistoryArchiveObjectsVerified(
 		);
 		const rows = (await manager.query(historyArchiveObjectVerifiedBatchSql, [
 			payload
-		])) as readonly { readonly remoteId: string }[];
+		])) as readonly (HistoryArchiveCheckpointScanTerminalRow & {
+			readonly remoteId: string;
+		})[];
 		const verified = new Set(rows.map((row) => row.remoteId));
+		await recordAcceptedHistoryArchiveCheckpointScans(manager, rows);
 		// Only IDs returned by the fenced same-source completion may resolve findings.
 		// A separate command sees row-trigger captures from the completion statement.
 		if (verified.size > 0) {
@@ -376,6 +383,7 @@ export const historyArchiveObjectVerifiedBatchSql = `
                         on lockable."remoteId" = eligible."remoteId"
                 where object."remoteId" = eligible."remoteId"
                 returning object."remoteId",
+                        object."archiveUrlIdentity", object."objectType", object."checkpointLedger",
                         eligible."claimAttempt",
                         eligible."executionId",
                         eligible.scheduler
@@ -396,7 +404,7 @@ export const historyArchiveObjectVerifiedBatchSql = `
                 where ready."objectRemoteId" = lockable."objectRemoteId"
                 returning ready."objectRemoteId"
         )
-        select updated."remoteId"
+        select updated."remoteId", updated."archiveUrlIdentity", updated."objectType", updated."checkpointLedger"
         from updated
 `;
 

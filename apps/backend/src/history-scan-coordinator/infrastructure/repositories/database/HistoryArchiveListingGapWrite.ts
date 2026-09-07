@@ -1,18 +1,19 @@
 import type { EntityManager } from 'typeorm';
+import type { HistoryArchiveCheckpointScanRange } from './HistoryArchiveCheckpointScanCoverageWrite.js';
 import {
 	isHistoryArchiveListingGapDTO,
 	type HistoryArchiveListingGapDTO
 } from 'history-scanner-dto';
 
-// Called only after the actual failed claim is accepted, in that transaction.
+// Return only newly accepted ranges; caller records them with the terminal scan in one batched OR.
 export async function persistHistoryArchiveListingGap(
 	manager: EntityManager,
 	remoteId: string,
 	gap: HistoryArchiveListingGapDTO
-): Promise<void> {
+): Promise<readonly HistoryArchiveCheckpointScanRange[]> {
 	if (!isHistoryArchiveListingGapDTO(gap) || !listingLocationsMatchRoot(gap))
-		return;
-	await manager.query(
+		return [];
+	const ranges = (await manager.query(
 		`
 		with observed as (
 			select object."archiveUrlIdentity", state."networkPassphrase"
@@ -20,7 +21,7 @@ export async function persistHistoryArchiveListingGap(
 			join history_archive_state_snapshot state
 				on state."archiveUrlIdentity" = object."archiveUrlIdentity"
 			where object."remoteId" = $1::uuid and object.status = 'failed'
-				and object."objectType" = 'checkpoint-state' and object."httpStatus" = 404
+				and object."objectType" = 'checkpoint-state' and object."httpStatus" in (403, 404)
 				and object."failureChannel" in ('archive_evidence', 'archive_availability')
 				and object."archiveUrlIdentity" = $2::text
 				and object."checkpointLedger" = $3::integer
@@ -54,6 +55,7 @@ export async function persistHistoryArchiveListingGap(
 				and existing."lastCheckpointLedger" >= $4 and existing."resolvedAt" is null
 		)
 		on conflict ("archiveUrlIdentity", "firstCheckpointLedger", "lastCheckpointLedger") do nothing
+		returning "archiveUrlIdentity", "firstCheckpointLedger", "lastCheckpointLedger"
 	`,
 		[
 			remoteId,
@@ -63,7 +65,8 @@ export async function persistHistoryArchiveListingGap(
 			gap.observedAt,
 			JSON.stringify(gap)
 		]
-	);
+	)) as readonly HistoryArchiveCheckpointScanRange[];
+	return ranges;
 }
 
 function listingLocationsMatchRoot(gap: HistoryArchiveListingGapDTO): boolean {

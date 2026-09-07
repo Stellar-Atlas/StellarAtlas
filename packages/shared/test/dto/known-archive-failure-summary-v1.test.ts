@@ -28,6 +28,25 @@ describe('source reason summary public schema', () => {
 	};
 	it('accepts complete source counts beyond the visible object page', () =>
 		expect(validate(summary)).toBe(true));
+	it('accepts distinct checkpoint attribution and explicitly unknown metadata counts', () => {
+		expect(
+			validate({
+				...summary,
+				knownAffectedCheckpointCount: 12,
+				unknownCheckpointFailureCount: 3,
+				groups: [
+					{
+						...summary.groups[0],
+						knownAffectedCheckpointCount: 12,
+						unknownCheckpointFailureCount: 3
+					}
+				]
+			})
+		).toBe(true);
+		expect(validate({ ...summary, knownAffectedCheckpointCount: -1 })).toBe(
+			false
+		);
+	});
 	it('supports explicit stale and unavailable states', () => {
 		expect(validate({ ...summary, status: 'stale' })).toBe(true);
 		expect(

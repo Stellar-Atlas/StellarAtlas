@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type {
 	PublicHistoryArchiveStatusSummary,
 	PublicNode,
@@ -10,7 +10,13 @@ import { formatInteger } from '@format/formatters';
 import { LocalDateTime } from '../local-date-time';
 
 import { ArchiveRootRow } from './archive-root-row';
+import {
+	archiveGroupPage,
+	groupArchiveSources
+} from './archive-organization-groups';
+import { ArchiveOrganizationGroupHeading } from './archive-organization-group-heading';
 import { ArchiveSortHeading } from './archive-sort-heading';
+import { ArchiveCoverageHeading } from './archive-coverage-heading';
 import {
 	type ArchiveInventorySort,
 	defaultArchiveInventorySort,
@@ -35,13 +41,12 @@ interface ArchiveRootInventoryProps {
 	readonly summary: PublicHistoryArchiveStatusSummary;
 }
 
-const PAGE_SIZE = 20;
-
 export function ArchiveRootInventory({
 	nodes,
 	organizations,
 	summary
 }: ArchiveRootInventoryProps): React.JSX.Element {
+	const groupId = useId();
 	const [sortMode, setSortMode] = useState<ArchiveInventorySort>(
 		defaultArchiveInventorySort
 	);
@@ -85,12 +90,19 @@ export function ArchiveRootInventory({
 				organizationNames
 			)
 	);
-	const currentPage = Math.min(
-		page,
-		Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1)
-	);
-	const first = currentPage * PAGE_SIZE;
-	const visibleSources = filtered.slice(first, first + PAGE_SIZE);
+	const groups = groupArchiveSources(filtered, {
+		advertisers,
+		organizationNames,
+		sortMode
+	});
+	const {
+		currentPage,
+		first,
+		visible: visibleGroups,
+		hasNext,
+		rootCount,
+		visibleRootCount
+	} = archiveGroupPage(groups, page);
 	const canonicalPercent = calculateCoveragePercent(
 		canonical.verifiedCheckpoints,
 		canonical.totalCheckpoints
@@ -188,6 +200,12 @@ export function ArchiveRootInventory({
 							</option>
 							<option value="failures">Remote failures high to low</option>
 							<option value="validator">Validator / listener A–Z</option>
+							<option value="scan-coverage-desc">
+								Scan coverage high to low
+							</option>
+							<option value="scan-coverage-asc">
+								Scan coverage low to high
+							</option>
 							<option value="coverage-desc">
 								Verified coverage high to low
 							</option>
@@ -215,11 +233,23 @@ export function ArchiveRootInventory({
 						</label>
 					</div>
 				</div>
+				<p className="archive-coverage-definition">
+					Scanned counts each checkpoint once after a file-check result or a
+					confirmed listing gap. Verified means its proof passed. Checked and
+					listing-covered counts can overlap; pending jobs are not coverage.
+				</p>
+				<p className="archive-coverage-definition" id={`${groupId}-sort`}>
+					Grouped by organization; shared roots appear once with all
+					advertisers. Group coverage weights each matching root by its expected
+					checkpoint positions. Sort controls order groups, then roots within
+					each group.
+				</p>
 				<div className="responsive-table archive-root-inventory-table-wrap">
 					<table
 						className="archive-root-inventory-table"
 						role="table"
 						aria-label="Archive source coverage and failures"
+						aria-describedby={`${groupId}-sort`}
 					>
 						<thead role="rowgroup">
 							<tr role="row">
@@ -231,11 +261,7 @@ export function ArchiveRootInventory({
 									value={sortMode}
 									onChange={changeSort}
 								/>
-								<ArchiveSortHeading
-									label="Verified coverage"
-									ascending="coverage-asc"
-									descending="coverage-desc"
-									initial="descending"
+								<ArchiveCoverageHeading
 									value={sortMode}
 									onChange={changeSort}
 								/>
@@ -252,19 +278,29 @@ export function ArchiveRootInventory({
 								</th>
 							</tr>
 						</thead>
-						<tbody role="rowgroup">
-							{visibleSources.map((source) => (
-								<ArchiveRootRow
-									advertisers={
-										advertisers.get(normalizeRoot(source.archiveUrl)) ?? []
-									}
-									canonicalArchiveUrlIdentity={canonical.archiveUrlIdentity}
-									organizationNames={organizationNames}
-									key={source.archiveUrlIdentity}
-									source={source}
+						{visibleGroups.map((group, groupIndex) => (
+							<tbody
+								role="rowgroup"
+								key={group.key}
+								aria-labelledby={`${groupId}-${groupIndex}`}
+							>
+								<ArchiveOrganizationGroupHeading
+									group={group}
+									id={`${groupId}-${groupIndex}`}
 								/>
-							))}
-						</tbody>
+								{group.sources.map((source) => (
+									<ArchiveRootRow
+										advertisers={
+											advertisers.get(normalizeRoot(source.archiveUrl)) ?? []
+										}
+										canonicalArchiveUrlIdentity={canonical.archiveUrlIdentity}
+										organizationNames={organizationNames}
+										key={source.archiveUrlIdentity}
+										source={source}
+									/>
+								))}
+							</tbody>
+						))}
 					</table>
 				</div>
 				{filtered.length === 0 ? (
@@ -284,9 +320,11 @@ export function ArchiveRootInventory({
 				) : null}
 				<nav className="pagination-bar" aria-label="Archive pages">
 					<span aria-live="polite">
-						{filtered.length === 0 ? '0' : formatInteger(first + 1)}–
-						{formatInteger(Math.min(first + PAGE_SIZE, filtered.length))} of{' '}
-						{formatInteger(filtered.length)} roots
+						{groups.length === 0 ? '0' : formatInteger(first + 1)}–
+						{formatInteger(first + visibleGroups.length)} of{' '}
+						{formatInteger(groups.length)} groups ·{' '}
+						{formatInteger(visibleRootCount)} of {formatInteger(rootCount)}{' '}
+						roots
 					</span>
 					<button
 						type="button"
@@ -297,7 +335,7 @@ export function ArchiveRootInventory({
 					</button>
 					<button
 						type="button"
-						disabled={first + PAGE_SIZE >= filtered.length}
+						disabled={!hasNext}
 						onClick={() => setPage(currentPage + 1)}
 					>
 						Next
