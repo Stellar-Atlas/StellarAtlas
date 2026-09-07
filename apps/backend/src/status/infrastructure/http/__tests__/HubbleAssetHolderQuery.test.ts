@@ -1,3 +1,4 @@
+import { summarizeHubbleLedgerCoverage } from '../HubbleLedgerCoverage.js';
 import { queryHubbleAssetHolders } from '../HubbleAssetHolderQuery.js';
 import { completedHubbleBatchPredicate } from '../HubbleBatchVisibility.js';
 import type {
@@ -32,11 +33,18 @@ describe('queryHubbleAssetHolders publication', () => {
 					};
 				}
 			};
-			const page = await queryHubbleAssetHolders(executor, {
-				asset,
-				after: 'GA',
-				limit: 1
-			});
+			const page = await queryHubbleAssetHolders(
+				executor,
+				{
+					asset,
+					after: 'GA',
+					limit: 1
+				},
+				{
+					coverage: summarizeHubbleLedgerCoverage([]),
+					generatedAt: '2026-09-07T00:00:00.000Z'
+				}
+			);
 			const predicate = completedHubbleBatchPredicate('stellar_hubble');
 			expect(capturedSql).toContain(predicate);
 			expect(capturedSql.indexOf(predicate)).toBeLessThan(

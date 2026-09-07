@@ -21,6 +21,15 @@ const classification = object({
 	sorobanExecutionEvidence: { type: 'boolean' },
 	provenance: { type: 'string', enum: ['complete', 'missing', 'incomplete', 'mismatch'] }
 });
+const holderEvidence: OpenApiRecord = {
+	coverage: ref('HubbleLedgerCoverage'),
+	watermark: object({
+		mode: { type: 'string', enum: ['latest-ingested-observations'] },
+		catalogGeneratedAt: { type: 'string', format: 'date-time' },
+		catalogMaximumLedger: { ...nullableText, description: 'Maximum parsed ledger known to the cached catalog, not a bound pinned to this query.' },
+		snapshotPinned: { type: 'boolean', enum: [false], description: 'Balances and catalog coverage are not an atomic snapshot. Pages may change during ingestion; historical as-of queries are not supported.' }
+	})
+};
 export const hubbleSemanticSchemas: Record<string, OpenApiRecord> = {
 	HubbleLedgerRecord: record({ sequence: sourceInteger, ledger_hash: text, previous_ledger_hash: text, closed_at: sourceTime, transaction_count: sourceInteger, operation_count: sourceInteger }),
 	HubbleTransactionRecord: record({ id: sourceInteger, transaction_hash: text, ledger_sequence: integer, account: text, account_sequence: sourceInteger, successful: { type: 'boolean' }, operation_count: integer, closed_at: sourceTime }),
@@ -41,8 +50,9 @@ export const hubbleSemanticSchemas: Record<string, OpenApiRecord> = {
 	HubbleContractStatePage: page('HubbleContractStateRecord', 'contract_data'),
 	HubbleAccountTransaction: record({ transaction_id: exactInteger, transaction_hash: text, relationship: { type: 'string', enum: ['source', 'effect'] }, ledger_sequence: integer, account: text, successful: { type: 'boolean' }, closed_at: sourceTime }),
 	HubbleAccountTransactionPage: page('HubbleAccountTransaction'),
-	HubbleHolderPage: object({ asset: text, elapsedMilliseconds: { type: 'number' }, holders: array(ref('HubbleHolder')), limit: integer, nextCursor: { ...nullableText, description: 'Last account ID on this page. Pass as after; null ends the result.' } }),
-	HubbleHolderDetail: object({ asset: text, holder: ref('HubbleHolder') })
+	HubbleHolderPage: object({ ...holderEvidence, asset: text, elapsedMilliseconds: { type: 'number' }, holders: array(ref('HubbleHolder')), limit: integer, nextCursor: { ...nullableText, description: 'Last account ID on this page. Pass as after; null ends the result.' } }),
+	HubbleHolderDetail: object({ ...holderEvidence, asset: text, holder: ref('HubbleHolder') }),
+	HubbleHolderNotFound: object({ ...holderEvidence, asset: text, code: { type: 'string', enum: ['hubble_record_not_found'] }, error: text })
 };
 const responseSchemas: Readonly<Record<string, string>> = {
 	getAnalyticsLedger: 'HubbleLedgerDetail',
@@ -64,3 +74,5 @@ export function semanticResponse(operationId: string): OpenApiRecord {
 	if (!name) throw new Error('Missing semantic response schema: ' + operationId);
 	return jsonResponse(ref(name), 'Parsed ETL response from completed batches. IDs remain lossless strings where returned by the warehouse; legacy numeric fields are not upgraded to exact values.');
 }
+
+export const holderNotFoundResponse = jsonResponse(ref('HubbleHolderNotFound'), 'No positive balance in the latest ingested state for this account/asset. Coverage gaps mean this does not establish absence on the current chain.');
