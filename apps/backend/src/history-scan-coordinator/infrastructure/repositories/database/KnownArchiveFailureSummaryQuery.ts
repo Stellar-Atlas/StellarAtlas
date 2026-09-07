@@ -6,6 +6,7 @@ import {
 import Ajv from 'ajv';
 import validator from 'validator';
 import { sanitizePublicInfrastructureText } from '../../mappers/PublicScanErrorMapper.js';
+import { historyArchiveInconclusiveTransportFailureSql } from './HistoryArchiveFailureAttributionSql.js';
 
 const ajv = new Ajv();
 ajv.addFormat('date-time', { type: 'string', validate: validator.isRFC3339 });
@@ -48,6 +49,24 @@ export function parseKnownArchiveFailureSummary(
 	) {
 		throw new Error('Archive reason summary rollup is inconsistent');
 	}
+	if (
+		summary.attributionVersion === 1 &&
+		(!Number.isSafeInteger(summary.archiveFaultCount) ||
+			!Number.isSafeInteger(summary.inconclusiveFailureCount) ||
+			(summary.archiveFaultCount ?? 0) +
+				(summary.inconclusiveFailureCount ?? 0) !==
+				summary.remoteFailureCount ||
+			summary.groups.some((group) => group.attribution === undefined) ||
+			summary.groups
+				.filter((group) => group.attribution === 'archive_fault')
+				.reduce((sum, group) => sum + group.count, 0) >
+				(summary.archiveFaultCount ?? 0) ||
+			summary.groups
+				.filter((group) => group.attribution === 'inconclusive')
+				.reduce((sum, group) => sum + group.count, 0) >
+				(summary.inconclusiveFailureCount ?? 0))
+	)
+		throw new Error('Archive reason attribution is inconsistent');
 	return summary;
 }
 
@@ -93,19 +112,22 @@ export const knownArchiveFailureSummarySql = `
 		where retained."archiveUrlIdentity" = $1::text and retained."retainedOnly"
 	), unresolved as materialized (
 		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus",
+			${historyArchiveInconclusiveTransportFailureSql('raw')} as inconclusive,
 			case when "objectType" in ('checkpoint-state','ledger','transactions','results','scp')
 				and "checkpointLedger" >= 63 and "checkpointLedger" % 64 = 63
 				then "checkpointLedger" else null end as "checkpointLedger"
-		from raw_unresolved
+		from raw_unresolved raw
 	), grouped as materialized (
 		select "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", count(*) as count,
-			count(distinct "checkpointLedger") as "knownAffectedCheckpointCount",
-			count(*) filter (where "checkpointLedger" is null) as "unknownCheckpointFailureCount"
+			case when inconclusive then 'inconclusive' else 'archive_fault' end as attribution,
+			count(distinct "checkpointLedger") filter (where not inconclusive) as "knownAffectedCheckpointCount",
+			count(distinct "checkpointLedger") filter (where inconclusive) as "inconclusiveAffectedCheckpointCount",
+			count(*) filter (where not inconclusive and "checkpointLedger" is null) as "unknownCheckpointFailureCount"
 		from unresolved
-		group by "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus"
+		group by "objectType", "failureChannel", "errorType", "errorMessage", "httpStatus", inconclusive
 	), selected as materialized (
 		select * from grouped
-		order by count desc, "objectType", "failureChannel", "errorType" nulls first,
+		order by attribution, count desc, "objectType", "failureChannel", "errorType" nulls first,
 			"httpStatus" nulls first, "errorMessage" nulls first
 		limit 20
 	), counts as (
@@ -115,14 +137,18 @@ export const knownArchiveFailureSummarySql = `
 	)
 	select jsonb_build_object(
 		'status', 'current', 'computedAt', now(), 'limit', 20,
-		'groups', coalesce((select jsonb_agg(to_jsonb(selected) order by count desc,
+		'attributionVersion', 1,
+		'archiveFaultCount', (select count(*) from unresolved where not inconclusive),
+		'inconclusiveFailureCount', (select count(*) from unresolved where inconclusive),
+		'groups', coalesce((select jsonb_agg(to_jsonb(selected) order by attribution, count desc,
 			"objectType", "failureChannel", "errorType" nulls first, "httpStatus" nulls first,
 			"errorMessage" nulls first) from selected), '[]'::jsonb),
 		'totalGroups', (select count(*) from grouped),
 		'remainingGroupCount', (select count(*) from grouped) - (select count(*) from selected),
 		'remainingFailureCount', coalesce((select sum(count) from grouped), 0) - coalesce((select sum(count) from selected), 0),
 		'remoteFailureCount', counts.remote, 'workerIssueCount', counts.worker
-		,'knownAffectedCheckpointCount', (select count(distinct "checkpointLedger") from unresolved)
-		,'unknownCheckpointFailureCount', (select count(*) from unresolved where "checkpointLedger" is null)
+		,'knownAffectedCheckpointCount', (select count(distinct "checkpointLedger") from unresolved where not inconclusive)
+		,'inconclusiveAffectedCheckpointCount', (select count(distinct "checkpointLedger") from unresolved where inconclusive)
+		,'unknownCheckpointFailureCount', (select count(*) from unresolved where not inconclusive and "checkpointLedger" is null)
 	) as summary from counts
 `;

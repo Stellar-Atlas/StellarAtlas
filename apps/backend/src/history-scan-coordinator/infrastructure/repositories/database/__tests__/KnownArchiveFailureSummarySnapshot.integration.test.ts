@@ -18,9 +18,11 @@ const other = 'https://z.example/history';
 const summary = () => ({
 	...emptyArchiveFailureSummary(new Date()),
 	remoteFailureCount: 5,
+	archiveFaultCount: 5,
 	knownAffectedCheckpointCount: 2,
 	groups: [
 		{
+			attribution: 'archive_fault' as const,
 			objectType: 'scp' as const,
 			failureChannel: 'archive_availability' as const,
 			errorType: 'archive_http_error',
@@ -134,5 +136,22 @@ describe('shared exact failure-summary snapshots', () => {
 		]);
 		expect(values[0].failureSummary?.status).toBe('stale');
 		expect(values[1].failureSummary?.status).toBe('unavailable');
+	});
+	it('invalidates legacy attribution snapshots and refreshes them promptly without rewriting evidence', async () => {
+		await refresh(db, async () => summary());
+		await db.query(
+			`update history_archive_failure_summary_snapshot set summary=summary-'attributionVersion'-'archiveFaultCount'-'inconclusiveFailureCount' where "archiveUrlIdentity"=$1`,
+			[root]
+		);
+		expect((await read(db.manager, [root])).get(root)?.status).toBe(
+			'unavailable'
+		);
+		const load = jest.fn(async () => summary());
+		expect(await refresh(db, load)).toEqual({ root, errorCode: null });
+		expect(load).toHaveBeenCalledTimes(1);
+		expect((await read(db.manager, [root])).get(root)).toMatchObject({
+			attributionVersion: 1,
+			archiveFaultCount: 5
+		});
 	});
 });

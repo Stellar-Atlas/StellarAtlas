@@ -17,6 +17,10 @@ export function emptyArchiveFailureSummary(
 	workerIssueCount = 0
 ): KnownArchiveFailureSummaryV1 {
 	return {
+		attributionVersion: 1,
+		archiveFaultCount: 0,
+		inconclusiveFailureCount: 0,
+		inconclusiveAffectedCheckpointCount: 0,
 		status: 'current',
 		computedAt: computedAt.toISOString(),
 		groups: [],

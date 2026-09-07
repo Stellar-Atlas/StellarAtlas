@@ -15,7 +15,9 @@ export const nextArchiveFailureSummaryRootSql = `
 		select sum("retainedObjects") from history_archive_retained_remote_summary retained
 		where retained."archiveUrlIdentity" = root."archiveUrlIdentity"),0) > 0
 		and (snapshot."lastAttemptAt" is null or snapshot."lastAttemptAt" <= now() -
-			case when snapshot."lastErrorCode" is null then interval '5 minutes' else interval '30 seconds' end)
+			case when snapshot."lastErrorCode" is not null then interval '30 seconds'
+				when snapshot.summary->>'attributionVersion' is distinct from '1' then interval '0 seconds'
+				else interval '5 minutes' end)
 	order by snapshot."lastAttemptAt" nulls first, root."archiveUrlIdentity"
 	limit 1
 `;

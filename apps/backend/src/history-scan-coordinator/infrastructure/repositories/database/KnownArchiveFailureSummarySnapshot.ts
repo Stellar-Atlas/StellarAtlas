@@ -56,6 +56,10 @@ export async function readKnownArchiveFailureSummarySnapshots(
 	for (const row of rows) {
 		try {
 			const summary = parseKnownArchiveFailureSummary(row.summary);
+			if (summary.attributionVersion !== 1) {
+				values.set(row.archiveUrlIdentity, unavailableArchiveFailureSummary);
+				continue;
+			}
 			const old =
 				summary.computedAt === null ||
 				now.getTime() - Date.parse(summary.computedAt) >=
