@@ -19,7 +19,11 @@ function ReasonRow({ reason }: { readonly reason: Reason }): React.JSX.Element {
 				{formatInteger(reason.count)}{' '}
 				{categories[reason.objectType] ?? reason.objectType} ·{' '}
 				{reason.httpStatus
-					? 'HTTP ' + reason.httpStatus
+					? 'HTTP ' +
+						reason.httpStatus +
+						(reason.httpStatus >= 200 && reason.httpStatus < 300
+							? ' · check failed'
+							: '')
 					: (reason.errorType ?? 'Unclassified failure').replaceAll('_', ' ')}
 			</strong>
 			<small>
@@ -35,8 +39,8 @@ export function ArchiveFindings({
 }): React.JSX.Element {
 	const summary = source.failureSummary;
 	const count =
-		summary?.status === 'current' &&
-		summary.remoteFailureCount === source.archiveEvidenceFailures
+		summary?.status !== 'unavailable' &&
+		(summary?.knownAffectedCheckpointCount ?? 0) > 0
 			? summary.knownAffectedCheckpointCount
 			: undefined;
 	const hasReasons = summary && summary.status !== 'unavailable';

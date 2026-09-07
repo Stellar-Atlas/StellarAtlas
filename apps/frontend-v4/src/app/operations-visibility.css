@@ -576,3 +576,17 @@
 .archive-extra-findings {
 	font-size: 0.8rem;
 }
+
+.archive-root-inventory-table th[scope='rowgroup'] small {
+	display: block;
+	margin-top: 3px;
+	font-weight: 400;
+}
+@media (max-width: 560px) {
+	.archive-root-inventory-table tbody tr {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.archive-root-inventory-table td[data-label='Archive findings'] {
+		border-top: 1px solid var(--border-color, #39484d);
+	}
+}
