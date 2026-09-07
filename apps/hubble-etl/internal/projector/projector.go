@@ -49,16 +49,20 @@ func (p *Projector) ProcessLedger(
 	if err := p.emit(ctx, "history_ledgers", sequence, ledger); err != nil {
 		return err
 	}
-	if err := p.projectTransactions(ctx, meta); err != nil {
+	transactions, err := input.TransactionsFromLedger(meta, p.networkPassphrase)
+	if err != nil {
+		return fmt.Errorf("read transactions at ledger %d: %w", sequence, err)
+	}
+	if err := p.projectTransactions(ctx, meta, transactions); err != nil {
 		return err
 	}
-	if err := p.projectOperations(ctx, meta); err != nil {
+	if err := p.projectOperations(ctx, meta, transactions); err != nil {
 		return err
 	}
 	if err := p.projectAssets(ctx, meta); err != nil {
 		return err
 	}
-	if err := p.projectTrades(ctx, meta); err != nil {
+	if err := p.projectTrades(ctx, meta, transactions); err != nil {
 		return err
 	}
 	transfers, err := p.transformTokenTransfers(meta)
@@ -79,12 +83,9 @@ func (p *Projector) ProcessLedger(
 func (p *Projector) projectTransactions(
 	ctx context.Context,
 	meta xdr.LedgerCloseMeta,
+	transactions []input.LedgerTransformInput,
 ) error {
 	sequence := meta.LedgerSequence()
-	transactions, err := input.TransactionsFromLedger(meta, p.networkPassphrase)
-	if err != nil {
-		return fmt.Errorf("read transactions at ledger %d: %w", sequence, err)
-	}
 	for _, item := range transactions {
 		transaction, err := transform.TransformTransaction(
 			item.Transaction,
@@ -139,12 +140,10 @@ func (p *Projector) projectTransactions(
 func (p *Projector) projectOperations(
 	ctx context.Context,
 	meta xdr.LedgerCloseMeta,
+	transactions []input.LedgerTransformInput,
 ) error {
 	sequence := meta.LedgerSequence()
-	operations, err := input.OperationsFromLedger(meta, p.networkPassphrase)
-	if err != nil {
-		return fmt.Errorf("read operations at ledger %d: %w", sequence, err)
-	}
+	operations := operationsFromTransactions(meta, transactions)
 	for _, item := range operations {
 		operation, err := transform.TransformOperation(
 			item.Operation,
@@ -190,12 +189,10 @@ func (p *Projector) projectAssets(
 func (p *Projector) projectTrades(
 	ctx context.Context,
 	meta xdr.LedgerCloseMeta,
+	transactions []input.LedgerTransformInput,
 ) error {
 	sequence := meta.LedgerSequence()
-	trades, err := input.TradesFromLedger(meta, p.networkPassphrase)
-	if err != nil {
-		return fmt.Errorf("read trades at ledger %d: %w", sequence, err)
-	}
+	trades := tradesFromTransactions(meta, transactions)
 	for _, item := range trades {
 		rows, err := transform.TransformTrade(
 			item.OperationIndex,
