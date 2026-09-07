@@ -11,6 +11,7 @@ import {
 	type ExplorerFilters
 } from '../../api/explorer-analytics';
 import { LocalDateTime } from '../local-date-time';
+import { ExplorerEventProvenance } from './explorer-event-provenance';
 import styles from './explorer-entity.module.css';
 export function ExplorerContractActivity({
 	contractId,
@@ -34,6 +35,8 @@ export function ExplorerContractActivity({
 		controller.current = abort;
 		setBusy(true);
 		setError(null);
+		setRows([]);
+		setNextOffset(null);
 		const timeout = setTimeout(() => abort.abort(), 25000);
 		const query = new URLSearchParams({
 			min_ledger: min ?? '',
@@ -137,6 +140,7 @@ export function ExplorerContractActivity({
 							/>
 						)}
 					</div>
+					{tab === 'events' && <ExplorerEventProvenance row={row} />}
 					{entityText(row, 'transaction_hash') && (
 						<Link
 							href={buildEntityHref(

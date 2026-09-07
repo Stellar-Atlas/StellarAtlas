@@ -98,7 +98,11 @@ function Field({
 		return text ? (
 			<EntityLink collection="accounts" id={text} />
 		) : (
-			<>Native asset</>
+			<>
+				{field === 'issuer' && entityText(row, 'id') === 'native'
+					? 'Native asset'
+					: 'Not recorded'}
+			</>
 		);
 	if (field === 'transactionId') {
 		const id = entityText(row, 'transactionHash');
@@ -260,7 +264,10 @@ export function ExplorerEntityDetails({
 			)}
 			{collection === 'trades' && entityText(row, 'operationId') && (
 				<Link
-					href={buildEntityHref('operations', entityText(row, 'operationId'))}
+					href={buildEntityHref('operations', entityText(row, 'operationId'), {
+						min_ledger: entityText(row, 'ledgerSequence'),
+						max_ledger: entityText(row, 'ledgerSequence')
+					})}
 				>
 					Open trade operation
 				</Link>

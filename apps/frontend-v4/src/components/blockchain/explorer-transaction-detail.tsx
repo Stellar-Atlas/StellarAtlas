@@ -1,22 +1,24 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { searchExplorer } from '../../app/actions/network-data';
+import { useEffect, useRef, useState } from 'react';
+import {
+	requestExplorerTransaction,
+	transactionRelations as relations,
+	type TransactionRelation as Relation,
+	type TransactionCursors as Cursors
+} from '../../api/explorer-transaction';
 import {
 	buildEntityHref,
 	entityText,
 	recordValue,
-	requestExplorerJson,
 	type EntityRecord
 } from '../../api/explorer-analytics';
 import { LocalDateTime } from '../local-date-time';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { EntityLink } from './explorer-entity-table';
+import { ExplorerEventProvenance } from './explorer-event-provenance';
 import Link from 'next/link';
 import styles from './explorer-entity.module.css';
 
-type Relation = 'operations' | 'effects' | 'events';
-const relations: readonly Relation[] = ['operations', 'effects', 'events'];
-type Cursors = Partial<Record<Relation, string>>;
 function decoded(value: unknown): unknown {
 	if (typeof value !== 'string') return value;
 	try {
@@ -60,7 +62,12 @@ function RelationRecord({
 				{relation === 'operations' && id ? (
 					<>
 						{' '}
-						· <EntityLink collection="operations" id={id} />
+						·{' '}
+						<EntityLink
+							collection="operations"
+							id={id}
+							filters={{ min_ledger: ledger, max_ledger: ledger }}
+						/>
 					</>
 				) : null}
 			</h4>
@@ -99,6 +106,7 @@ function RelationRecord({
 			</dl>
 			{relation === 'events' ? (
 				<>
+					<ExplorerEventProvenance row={row} />
 					<h5>Topics</h5>
 					<JsonValue value={row.topicsJson} />
 					<h5>Payload</h5>
@@ -125,8 +133,8 @@ export function ExplorerTransactionDetail({
 	readonly hash: string;
 	readonly ledgerSequence?: string;
 }): React.JSX.Element {
-	const [data, setData] = useState<EntityRecord | null>(null),
-		[summary, setSummary] = useState<EntityRecord | null>(null);
+	const [data, setData] = useState<EntityRecord | null>(null);
+	const resolvedLedger = useRef<{ hash: string; ledger: string } | null>(null);
 	const [busy, setBusy] = useState(false),
 		[error, setError] = useState<string | null>(null);
 	const [ledger, setLedger] = useState(ledgerSequence ?? ''),
@@ -143,34 +151,26 @@ export function ExplorerTransactionDetail({
 		setBusy(true);
 		setError(null);
 		void (async () => {
-			let selected = ledger;
-			if (!selected) {
-				const lookup = await searchExplorer(hash, 'transaction');
-				if (disposed) return;
-				const found = recordValue(lookup.search?.result);
-				setSummary(found);
-				selected =
-					entityText(found, 'ledger') || entityText(found, 'ledgerSequence');
-				if (!selected)
-					throw new Error(
-						lookup.message ||
-							'The transaction ledger could not be located. Enter its ledger number to query the parsed history.'
-					);
-				setInput(selected);
-			}
-			const query = new URLSearchParams({
-				view: 'typed',
-				ledger_sequence: selected,
-				limit: '20'
-			});
-			for (const relation of relations)
-				if (cursors[relation])
-					query.set(relation + '_after', cursors[relation] ?? '');
-			const result = await requestExplorerJson(
-				'/v1/analytics/transactions/' + encodeURIComponent(hash) + '?' + query,
+			const selected =
+				ledger ||
+				(resolvedLedger.current?.hash === hash
+					? resolvedLedger.current.ledger
+					: '');
+			const result = await requestExplorerTransaction(
+				hash,
+				selected,
+				cursors,
 				abort.signal
 			);
-			if (!disposed) setData(recordValue(result));
+			if (!disposed) {
+				const foundLedger = entityText(
+					recordValue(result.transaction),
+					'ledgerSequence'
+				);
+				resolvedLedger.current = { hash, ledger: foundLedger };
+				if (foundLedger) setInput(foundLedger);
+				setData(result);
+			}
 		})()
 			.catch((failure) => {
 				if (!disposed)
@@ -192,7 +192,7 @@ export function ExplorerTransactionDetail({
 			clearTimeout(timeout);
 		};
 	}, [hash, ledger, cursors, retry]);
-	const tx = data ? recordValue(data.transaction) : summary;
+	const tx = data ? recordValue(data.transaction) : null;
 	const chosenLedger = tx
 		? entityText(tx, 'ledgerSequence') || entityText(tx, 'ledger')
 		: ledger;
@@ -213,7 +213,7 @@ export function ExplorerTransactionDetail({
 					}}
 				>
 					<label>
-						Ledger number{' '}
+						Ledger number (optional){' '}
 						<input
 							inputMode="numeric"
 							value={input}

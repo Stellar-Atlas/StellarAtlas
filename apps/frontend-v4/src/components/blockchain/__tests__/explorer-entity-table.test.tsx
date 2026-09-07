@@ -9,6 +9,29 @@ const { ExplorerEntityNavigation } =
 const { ExplorerEntityTable, ExplorerEntityDetails } =
 	await import('../explorer-entity-table');
 describe('parsed explorer presentation', () => {
+	it('does not label an unrecorded trade counterparty as a native asset', () => {
+		const html = renderToStaticMarkup(
+			createElement(ExplorerEntityTable, {
+				collection: 'trades',
+				filters: {},
+				rows: [{ id: 'trade', seller: null, buyer: null }]
+			})
+		);
+		expect(html).toContain('Not recorded');
+		expect(html).not.toContain('Native asset');
+	});
+	it('pins trade-to-operation navigation to the observed ledger', () => {
+		const html = renderToStaticMarkup(
+			createElement(ExplorerEntityDetails, {
+				collection: 'trades',
+				filters: {},
+				row: { id: 'trade', operationId: 'op', ledgerSequence: 63490364 }
+			})
+		);
+		expect(html).toContain(
+			'/explorer/operations/op?min_ledger=63490364&amp;max_ledger=63490364'
+		);
+	});
 	it('exposes all working browse routes including trades and offers', () => {
 		const html = renderToStaticMarkup(
 			createElement(ExplorerEntityNavigation, { active: 'trades' })
