@@ -66,6 +66,43 @@ const datasetSchema: OpenApiRecord = {
 	required: ['columns', 'name', 'rowCount'],
 	type: 'object'
 };
+const datasetDetailSchema: OpenApiRecord = {
+	additionalProperties: false,
+	properties: {
+		database: { type: 'string' },
+		dataset: datasetSchema,
+		generatedAt: { format: 'date-time', type: 'string' },
+		ingestion: {
+			additionalProperties: false,
+			properties: {
+				completedBatches: { type: 'string', pattern: '^[0-9]+$' },
+				failedBatches: { type: 'string', pattern: '^[0-9]+$' },
+				maximumLedger: { type: 'string', nullable: true },
+				minimumLedger: { type: 'string', nullable: true },
+				startedBatches: { type: 'string', pattern: '^[0-9]+$' },
+				totalRows: { type: 'string', pattern: '^[0-9]+$' }
+			},
+			required: [
+				'completedBatches',
+				'failedBatches',
+				'maximumLedger',
+				'minimumLedger',
+				'startedBatches',
+				'totalRows'
+			],
+			type: 'object'
+		},
+		officialSchemaSource: { type: 'string' }
+	},
+	required: [
+		'database',
+		'dataset',
+		'generatedAt',
+		'ingestion',
+		'officialSchemaSource'
+	],
+	type: 'object'
+};
 const queryResultSchema: OpenApiRecord = {
 	additionalProperties: false,
 	properties: {
@@ -207,17 +244,17 @@ const hubblePaths: Readonly<Record<string, OpenApiRecord>> = withHubbleExplorerP
 	'/v1/analytics/datasets/{dataset}': {
 		get: {
 			description:
-				'Returns one Hubble table schema and current immutable-batch coverage.',
+				'Returns the database name, one Hubble table schema, ingestion metadata, generation timestamp, and official schema source. Use the dataset catalog for ledger coverage.',
 			operationId: 'getHubbleDataset',
 			parameters: [datasetParameter],
 			responses: {
 				'200': {
 					content: {
 						'application/json': {
-							schema: datasetSchema
+							schema: datasetDetailSchema
 						}
 					},
-					description: 'Hubble dataset schema and coverage.'
+					description: 'Hubble dataset schema with warehouse and ingestion metadata.'
 				},
 				'400': errorResponse('The Hubble dataset is unknown.'),
 				'503': errorResponse('The Hubble warehouse is unavailable.')

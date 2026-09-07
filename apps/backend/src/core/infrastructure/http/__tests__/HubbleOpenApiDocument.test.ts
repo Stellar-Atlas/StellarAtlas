@@ -1,5 +1,14 @@
 import { withHubbleOpenApiPaths } from '../HubbleOpenApiDocument.js';
 import { hubbleCoverageSchema } from '../HubbleOpenApiSchemas.js';
+import express from 'express';
+import request from 'supertest';
+import { hubbleWarehouseRouter } from '../../../../status/infrastructure/http/HubbleWarehouseRouter.js';
+import { summarizeHubbleLedgerCoverage } from '../../../../status/infrastructure/http/HubbleLedgerCoverage.js';
+import type {
+	HubbleCatalog,
+	HubbleWarehouse
+} from '../../../../status/infrastructure/http/HubbleWarehouseContracts.js';
+import { readOpenApiRecord } from '../OpenApiDocumentProjection.js';
 
 describe('Hubble OpenAPI paths', () => {
 	const document = withHubbleOpenApiPaths({
@@ -11,6 +20,81 @@ describe('Hubble OpenAPI paths', () => {
 		string,
 		Record<string, Record<string, unknown>>
 	>;
+	it('matches the actual dataset-detail wrapper without promising an absent coverage field', async () => {
+		const catalog: HubbleCatalog = {
+			database: 'stellar_hubble',
+			coverage: summarizeHubbleLedgerCoverage([
+				{ start_ledger: 2, end_ledger: 66 }
+			]),
+			datasets: [
+				{
+					columns: [{ name: 'id', position: 1, type: 'String' }],
+					name: 'history_transactions',
+					rowCount: '123'
+				}
+			],
+			generatedAt: '2026-09-07T00:00:00.000Z',
+			ingestion: {
+				completedBatches: '2',
+				failedBatches: '0',
+				maximumLedger: '66',
+				minimumLedger: '2',
+				startedBatches: '0',
+				totalRows: '123'
+			},
+			officialSchemaSource: 'stellar/stellar-etl'
+		};
+		const unused = async (): Promise<never> => {
+			throw new Error('Unexpected warehouse query');
+		};
+		const warehouse: HubbleWarehouse = {
+			catalog: async () => catalog,
+			contractEvents: unused,
+			transactionDetail: unused,
+			transferActivity: unused,
+			classifyEventRows: unused,
+			accountTransactions: unused,
+			assetHolders: unused,
+			query: unused
+		};
+		const app = express();
+		app.use('/v1/analytics', hubbleWarehouseRouter({ warehouse }));
+		const response = await request(app)
+			.get('/v1/analytics/datasets/history_transactions')
+			.expect(200);
+		expect(response.body).toEqual({
+			database: catalog.database,
+			dataset: catalog.datasets[0],
+			generatedAt: catalog.generatedAt,
+			ingestion: catalog.ingestion,
+			officialSchemaSource: catalog.officialSchemaSource
+		});
+		const operation = paths['/v1/analytics/datasets/{dataset}']!.get!;
+		const responses = readOpenApiRecord(operation.responses)!;
+		const success = readOpenApiRecord(responses['200'])!;
+		const content = readOpenApiRecord(success.content)!;
+		const json = readOpenApiRecord(content['application/json'])!;
+		const schema = readOpenApiRecord(json.schema)!;
+		const properties = readOpenApiRecord(schema.properties)!;
+		expect(schema.type).toBe('object');
+		expect(schema.additionalProperties).toBe(false);
+		expect(schema.required).toEqual(Object.keys(response.body));
+		expect(Object.keys(properties)).toEqual(Object.keys(response.body));
+		expect(properties).not.toHaveProperty('coverage');
+		expect(properties.dataset).toMatchObject({
+			type: 'object',
+			required: ['columns', 'name', 'rowCount']
+		});
+		const ingestion = readOpenApiRecord(properties.ingestion)!;
+		expect(ingestion.required).toEqual(Object.keys(catalog.ingestion));
+		expect(Object.keys(readOpenApiRecord(ingestion.properties)!)).toEqual(
+			Object.keys(catalog.ingestion)
+		);
+		expect(success.description).toBe(
+			'Hubble dataset schema with warehouse and ingestion metadata.'
+		);
+	});
+
 	it('documents optional merged completed intervals without changing legacy required fields', () => {
 		expect(hubbleCoverageSchema.required).not.toContain('completedRanges');
 		expect(hubbleCoverageSchema.properties).toMatchObject({
