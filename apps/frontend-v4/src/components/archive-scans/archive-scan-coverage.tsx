@@ -19,7 +19,7 @@ export function ArchiveScanCoverage({
 	const reconciling = coverage?.status !== 'complete';
 	const percent = calculateCoveragePercent(scanned, expected);
 	const listingPercent =
-		coverage?.status === 'complete'
+		coverage && coverage.scannedCheckpointPositions >= verified
 			? calculateCoveragePercent(
 					coverage.listingCoveredCheckpointPositions,
 					expected

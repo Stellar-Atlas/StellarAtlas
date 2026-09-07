@@ -36,6 +36,18 @@ describe('separate scan coverage', () => {
 		expect(html).not.toContain('≥');
 		expect(html).not.toContain('90.00%');
 	});
+	it('colors known listing exclusions during partial reconciliation', () => {
+		const html = renderToStaticMarkup(
+			<ArchiveScanCoverage
+				source={{
+					...root,
+					scanCoverage: { ...coverage, status: 'reconciling' }
+				}}
+			/>
+		);
+		expect(html).toContain('≥70.00%');
+		expect(html).toContain('width:40%');
+	});
 	it('labels an incomplete historic seed as a minimum and never adds unseeded verified counts', () => {
 		const source = {
 			...root,
