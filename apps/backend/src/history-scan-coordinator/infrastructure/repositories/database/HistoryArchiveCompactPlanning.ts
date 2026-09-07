@@ -128,7 +128,9 @@ export async function findVerifiedCheckpointsNeedingFanout(
 		.orderBy('object.checkpointLedger', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.verifiedAt', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.id', 'ASC')
-		.take(safeLimit);
+		// The cursor primary key makes this join one-to-one. LIMIT avoids
+		// TypeORM's redundant DISTINCT-ID query followed by the same lookup.
+		.limit(safeLimit);
 
 	return await query.getMany();
 }
