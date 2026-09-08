@@ -1,30 +1,34 @@
 /** @jest-environment node */
 import { GET as embeddedReference } from '../../docs/reference/route';
-import { GET as standaloneReference } from '../route';
+import { GET as docsAlias } from '../route';
 
-describe('path-bound Swagger reference', () => {
+describe('documentation routing', () => {
 	afterEach(() => jest.restoreAllMocks());
-	it('omits inner chrome without relying on a query while preserving standalone navigation', async () => {
+	it('routes the old docs entry to native documentation without fetching the backend', () => {
+		const fetcher = jest.spyOn(globalThis, 'fetch');
+		const response = docsAlias(
+			new Request('https://stellaratlas.io/api-docs?view=swagger')
+		);
+		expect(response.status).toBe(307);
+		expect(response.headers.get('location')).toBe(
+			'https://stellaratlas.io/docs'
+		);
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+	it('retains the old explicit embedded reference endpoint for existing integrations', async () => {
 		const fetcher = jest
 			.spyOn(globalThis, 'fetch')
-			.mockImplementation(
-				async () =>
-					new Response(
-						'<html><body><div id="swagger-ui"></div></body></html>',
-						{ headers: { 'content-type': 'text/html' } }
-					)
+			.mockResolvedValue(
+				new Response('<html><body><div id="swagger-ui"></div></body></html>', {
+					headers: { 'content-type': 'text/html' }
+				})
 			);
-		const embedded = await embeddedReference(
+		const response = await embeddedReference(
 			new Request('https://stellaratlas.io/docs/reference')
 		);
-		expect(await embedded.text()).not.toContain('sa-docs-header');
-		const standalone = await standaloneReference(
-			new Request('https://stellaratlas.io/api-docs')
-		);
-		expect(await standalone.text()).toContain('sa-docs-header');
+		expect(await response.text()).not.toContain('sa-docs-header');
 		expect(fetcher).toHaveBeenCalledWith(expect.stringMatching(/\/docs\/$/), {
 			cache: 'no-store'
 		});
-		expect(embedded.headers.get('cache-control')).toBe('no-store');
 	});
 });

@@ -1,18 +1,18 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
+import '../../../components/nodes/node-detail.css';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { fetchKnownNode } from '@api/known-network-client';
-import { fetchKnownNodes, fetchPublicNetwork } from '@api/client';
+import { fetchPublicNetwork } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
-import { RouteModal } from '@components/layout/route-modal';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
 import { ArchiveEvidenceErrorBoundary } from '@components/archive-scans/archive-evidence-error-boundary';
 import { ArchiveEvidenceRouteState } from '@components/archive-scans/archive-evidence-route-state';
 import { NodeArchiveEvidenceRoute } from '@components/archive-scans/known-archive-evidence-route';
 import { NodeDetail } from '@components/nodes/node-detail';
-import { NodeTable } from '@components/nodes/node-table';
 import { getNodeLabel, getOrganizationForNode } from '@domain/network';
-import { formatInteger } from '@format/formatters';
+import { nodeRecordScopeLabels } from '@domain/known-network-scopes';
 
 interface NodeDetailPageProps {
 	params: Promise<{ publicKey: string }>;
@@ -27,25 +27,14 @@ async function NodeDetailRouteContent({
 }): Promise<React.JSX.Element> {
 	await connection();
 	const decodedPublicKey = decodeURIComponent(publicKey);
-	const [network, knownNode, knownNodes] = await Promise.all([
+	const [network, knownNode] = await Promise.all([
 		fetchPublicNetwork({ revalidate }),
-		fetchKnownNode(decodedPublicKey, { revalidate }),
-		fetchKnownNodes({ limit: 50, scope: 'all-known' }, { revalidate })
+		fetchKnownNode(decodedPublicKey, { revalidate })
 	]);
 	const node = knownNode?.node ?? null;
 
 	if (!knownNode) notFound();
-	const snapshottedNodes = knownNodes.nodes.flatMap((candidate) =>
-		candidate.node ? [candidate.node] : []
-	);
-	const inventoryNetwork = {
-		...network,
-		nodes: snapshottedNodes,
-		organizations: network.organizations
-	};
-	const organization = node
-		? getOrganizationForNode(inventoryNetwork, node)
-		: null;
+	const organization = node ? getOrganizationForNode(network, node) : null;
 	const archiveEvidence = (
 		<ArchiveEvidenceErrorBoundary title="Archive health">
 			<Suspense
@@ -59,50 +48,23 @@ async function NodeDetailRouteContent({
 	);
 
 	return (
-		<main className="shell" data-inventory-scope={knownNodes.scope}>
+		<main
+			className="shell node-detail-page"
+			data-record-scope={knownNode.scope}
+		>
 			<PageHeading
-				description="Browse validators, listener nodes, reported software versions, geodata, availability, and current health signals."
-				eyebrow={network.name}
-				scopeContext={{ kind: 'node-inventory', scope: knownNodes.scope }}
-				title="Nodes"
-				aside={
-					<div className="heading-metrics">
-						<strong>
-							{formatInteger(knownNodes.scopeTotals['current-validator'])}
-						</strong>
-						<span>current validators</span>
-						<strong>{formatInteger(knownNodes.scopeTotals.listener)}</strong>
-						<span>current listeners</span>
-						<strong>
-							{formatInteger(knownNodes.scopeTotals['public-key-only'])}
-						</strong>
-						<span>public-key only</span>
-					</div>
-				}
-			/>
-			<NodeTable
-				network={inventoryNetwork}
-				nodes={knownNodes.nodes}
-				page={knownNodes.page}
-				query=""
-				scope="all-known"
-				selectedPublicKey={knownNode.publicKey}
-				totalCount={knownNodes.scopeTotals['all-known']}
-			/>
-			<RouteModal
-				closeHref="/nodes"
-				eyebrow="Node"
-				scopeContext={{ kind: 'node-record', scope: knownNode.scope }}
+				description="Node status, quorum relationships, and archive evidence."
+				eyebrow={`${network.name} · ${nodeRecordScopeLabels[knownNode.scope]}`}
 				title={node ? getNodeLabel(node) : knownNode.publicKey}
-			>
-				<NodeDetail
-					archiveEvidence={archiveEvidence}
-					knownNode={knownNode}
-					network={inventoryNetwork}
-					node={node}
-					organization={organization}
-				/>
-			</RouteModal>
+				aside={<Link href="/nodes">← All nodes</Link>}
+			/>
+			<NodeDetail
+				archiveEvidence={archiveEvidence}
+				knownNode={knownNode}
+				network={network}
+				node={node}
+				organization={organization}
+			/>
 		</main>
 	);
 }

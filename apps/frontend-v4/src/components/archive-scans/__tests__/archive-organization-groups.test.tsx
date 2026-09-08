@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
 	groupAdvertisers,
-	type ArchiveInventorySort
+	type ArchiveInventorySort,
+	type ArchiveSource
 } from '../archive-inventory-model';
 import {
 	archiveGroupPage,
@@ -164,6 +165,14 @@ describe('organization archive hierarchy', () => {
 			archiveEvidenceFailures: 5,
 			failureSummary: {
 				status: 'current',
+				computedAt: '2026-09-07T00:00:00Z',
+				limit: 20,
+				totalGroups: 0,
+				remainingGroupCount: 0,
+				remainingFailureCount: 0,
+				workerIssueCount: 0,
+				knownAffectedCheckpointCount: 5,
+				unknownCheckpointFailureCount: 0,
 				remoteFailureCount: 5,
 				archiveFaultCount: 5,
 				groups: []

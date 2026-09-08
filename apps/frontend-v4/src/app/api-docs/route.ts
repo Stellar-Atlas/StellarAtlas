@@ -1,10 +1,4 @@
-import { renderSwaggerReference } from './render-reference';
-
-export const dynamic = 'force-dynamic';
-
-export async function GET(request: Request): Promise<Response> {
-	return renderSwaggerReference(
-		request,
-		new URL(request.url).searchParams.get('embedded') === '1'
-	);
+export function GET(request: Request): Response {
+	// Preserve the established entry URL; raw OpenAPI and asset subpaths keep their existing routes.
+	return Response.redirect(new URL('/docs', request.url), 307);
 }
