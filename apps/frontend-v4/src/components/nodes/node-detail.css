@@ -46,6 +46,10 @@
 .node-trust-graph {
 	margin-block-start: 16px;
 }
+.node-trust-graph .graph-toolbar {
+	background: var(--panel);
+	color: var(--ink);
+}
 .node-trust-graph .graph {
 	inline-size: 100%;
 	block-size: min(48vw, 390px);
