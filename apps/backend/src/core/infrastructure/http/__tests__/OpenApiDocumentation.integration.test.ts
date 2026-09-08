@@ -3,77 +3,63 @@ import request from 'supertest';
 import openApiDocument from '../../../../../openapi.json' with { type: 'json' };
 import { mountOpenApiDocumentation } from '../OpenApiDocumentation.js';
 
-describe('OpenAPI documentation routes', () => {
-	it('serves consumer JSON publicly and historical compatibility JSON only to operators', async () => {
-		const app = express();
-		mountOpenApiDocumentation(app, {
-			document: openApiDocument,
-			operatorPassword: 'secret',
-			operatorUserName: 'operator'
-		});
+function createApp(document: unknown = openApiDocument) {
+	const app = express();
+	app.get('/v1/node', (_req, res) => res.json({ legacyApi: 'unchanged' }));
+	mountOpenApiDocumentation(app, { document });
+	return app;
+}
 
-		const publicResponse = await request(app)
-			.get('/docs/openapi.json')
-			.expect(200);
-		expect(publicResponse.body.info.title).toBe('StellarAtlas Public API');
-		expect(publicResponse.body.paths['/v1/history-scan/job']).toBeUndefined();
-
-		const historicalResponse = await request(app)
-			.get('/docs/historical/openapi.json')
-			.auth('operator', 'secret')
-			.expect(200);
-		expect(historicalResponse.body.info.title).toBe(
-			'StellarAtlas Historical Compatibility API'
-		);
-		expect(historicalResponse.body.paths['/v1/node']).toBeDefined();
+describe('one public documentation UI', () => {
+	it('serves the reviewed consumer JSON contract without altering legacy data APIs', async () => {
+		const app = createApp();
+		const response = await request(app).get('/docs/openapi.json').expect(200);
+		expect(response.body.info.title).toBe('StellarAtlas Public API');
+		expect(response.body.paths['/v1/known/nodes']).toBeDefined();
+		expect(response.body.paths['/v1/history-scan/job']).toBeUndefined();
+		expect(response.body.paths['/v1/status/archive-queue']).toBeUndefined();
+		await request(app).get('/v1/node').expect(200, { legacyApi: 'unchanged' });
 	});
-
 	it.each([
-		'/docs/historical/openapi.json',
-		'/docs/historical/',
-		'/docs/historical/swagger-ui.css',
-		'/docs/operators/openapi.json',
+		'/docs',
+		'/docs/',
+		'/docs/operators',
 		'/docs/operators/',
+		'/docs/historical',
+		'/docs/historical/'
+	])('redirects the old HTML entry %s to the sole docs UI', async (path) => {
+		const response = await request(createApp()).get(path).expect(307);
+		expect(response.headers.location).toBe('https://stellaratlas.io/docs');
+		expect(response.text).not.toContain('swagger-ui');
+	});
+	it.each([
+		'/docs/operators/openapi.json',
+		'/docs/historical/openapi.json',
+		'/docs/swagger-ui.css',
+		'/docs/swagger-ui-init.js',
 		'/docs/operators/swagger-ui.css'
-	])('guards non-consumer documentation at %s', async (path) => {
-		const app = express();
-		mountOpenApiDocumentation(app, {
-			document: openApiDocument,
-			operatorUserName: 'operator',
-			operatorPassword: 'secret'
-		});
-		await request(app).get(path).expect(401);
-		await request(app).get(path).auth('operator', 'wrong').expect(401);
+	])('does not serve or redirect retired document/asset %s', async (path) => {
+		await request(createApp()).get(path).expect(404);
+		await request(createApp()).get(path).auth('operator', 'secret').expect(404);
 	});
-
-	it('requires configured operator credentials for the operator document', async () => {
-		const app = express();
-		mountOpenApiDocumentation(app, {
-			document: openApiDocument,
-			operatorPassword: 'secret',
-			operatorUserName: 'operator'
+	it('cannot expose an injected deprecated privileged operation through a retired spec', async () => {
+		const app = createApp({
+			...openApiDocument,
+			paths: {
+				...openApiDocument.paths,
+				'/v1/retired-maintenance': {
+					post: {
+						operationId: 'retiredMaintenance',
+						deprecated: true,
+						security: [{ basicAuth: [] }],
+						'x-internal': true
+					}
+				}
+			}
 		});
-
-		await request(app).get('/docs/operators/openapi.json').expect(401);
-		await request(app)
-			.get('/docs/operators/openapi.json')
-			.auth('operator', 'wrong')
-			.expect(401);
-		const response = await request(app)
-			.get('/docs/operators/openapi.json')
-			.auth('operator', 'secret')
-			.expect(200);
-
-		expect(response.body.info.title).toBe('StellarAtlas Operator API');
-		expect(response.body.paths['/v1/history-scan/job']).toBeDefined();
-		expect(response.body.paths['/v1']).toBeUndefined();
-	});
-
-	it('does not expose operator docs when credentials are not configured', async () => {
-		const app = express();
-		mountOpenApiDocumentation(app, { document: openApiDocument });
-
-		await request(app).get('/docs/operators/openapi.json').expect(404);
+		const response = await request(app).get('/docs/openapi.json').expect(200);
+		expect(response.body.paths['/v1/retired-maintenance']).toBeUndefined();
 		await request(app).get('/docs/historical/openapi.json').expect(404);
+		await request(app).get('/docs/operators/openapi.json').expect(404);
 	});
 });

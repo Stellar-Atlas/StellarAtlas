@@ -246,9 +246,6 @@ importers:
       shared:
         specifier: workspace:*
         version: link:../../packages/shared
-      swagger-ui-express:
-        specifier: ^5.0.0
-        version: 5.0.1(express@4.22.2)
       to-semver:
         specifier: ^3.0.0
         version: 3.0.0
@@ -295,9 +292,6 @@ importers:
       '@types/supertest':
         specifier: 7.2.0
         version: 7.2.0
-      '@types/swagger-ui-express':
-        specifier: ^4.1.8
-        version: 4.1.8
       '@types/uuid':
         specifier: ^8.3.4
         version: 8.3.4
