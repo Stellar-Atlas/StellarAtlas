@@ -6,6 +6,34 @@ import {
 } from '../../src/dto/known-archive-evidence-v1';
 
 describe('known archive evidence DTOs', () => {
+	it.each(['not_requested', 'unavailable'])(
+		'preserves source faults with unknown copy counts when %s',
+		(lookupStatus) => {
+			const ajv = new Ajv();
+			addFormats.default(ajv);
+			const validate = ajv.compile(KnownNodeArchiveEvidenceV1Schema);
+			const evidence = createEvidence();
+			const set = { copies: [], count: null, lookupStatus, sampleLimit: 0 };
+			expect(
+				validate({
+					...evidence,
+					organizationId: null,
+					publicKey: 'GNODE',
+					remoteFailures: {
+						...evidence.remoteFailures,
+						total: 1,
+						failures: [
+							{
+								object: createHistoryArchiveObject(),
+								networkVerifiedCopies: set,
+								sameOrganizationVerifiedCopies: set
+							}
+						]
+					}
+				})
+			).toBe(true);
+		}
+	);
 	it('validates paginated node and organization evidence', () => {
 		const ajv = new Ajv();
 		addFormats.default(ajv);

@@ -197,7 +197,12 @@ const KnownArchiveVerifiedCopySetV1Schema: JSONSchemaType<KnownArchiveVerifiedCo
 		type: 'object',
 		properties: {
 			copies: { type: 'array', items: KnownArchiveVerifiedCopyV1Schema },
-			count: { type: 'number' },
+			count: nullable({ type: 'number' }),
+			lookupStatus: {
+				type: 'string',
+				enum: ['available', 'not_requested', 'unavailable'],
+				nullable: true
+			},
 			sampleLimit: { type: 'number' }
 		},
 		required: ['copies', 'count', 'sampleLimit'],

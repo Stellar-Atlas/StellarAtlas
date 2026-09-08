@@ -83,6 +83,7 @@ export interface KnownArchiveObjectCopyCoverageReadModel {
 
 export interface KnownArchiveEvidenceReadModel {
 	readonly copyCoverage: readonly KnownArchiveObjectCopyCoverageReadModel[];
+	readonly copyLookupStatus?: 'available' | 'not_requested' | 'unavailable';
 	readonly eventPage: {
 		readonly events: readonly HistoryArchiveObjectEvent[];
 		readonly total: number;

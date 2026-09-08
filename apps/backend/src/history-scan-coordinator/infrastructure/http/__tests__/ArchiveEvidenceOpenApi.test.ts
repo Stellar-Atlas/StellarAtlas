@@ -89,7 +89,7 @@ describe('archive evidence OpenAPI contract', () => {
 		).toMatchObject({ default: 25, maximum: 250, minimum: 0 });
 		expect(
 			document.components.parameters.ArchiveEvidenceCopyLimit?.schema
-		).toMatchObject({ default: 3, maximum: 10, minimum: 1 });
+		).toMatchObject({ default: 3, maximum: 10, minimum: 0 });
 		expect(
 			document.components.schemas.HistoryArchiveEvidenceV2?.required
 		).toEqual(

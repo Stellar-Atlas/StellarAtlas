@@ -2,11 +2,13 @@ import {
 	projectOpenApiDocument,
 	readOpenApiStringArray,
 	type OpenApiOperationContext,
+	type OpenApiProjectionOptions,
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
 import { withDataAccessOpenApiPaths } from './DataAccessOpenApiDocument.js';
 import { withHubbleOpenApiPaths } from './HubbleOpenApiDocument.js';
 import { isPublicOpenApiOperation } from './OpenApiOperationClassification.js';
+import { withLocalPublicOpenApiSchemas } from './LocalPublicOpenApiSchemas.js';
 
 const publicServer = {
 	description: 'API for the Stellar public network',
@@ -74,19 +76,25 @@ const publicTagDefinitions = [
 ] as const;
 
 export function createPublicOpenApiDocument(document: unknown): OpenApiRecord {
-	return projectOpenApiDocument(
+	const options: OpenApiProjectionOptions = {
+		includeOperation: isPublicOpenApiOperation,
+		info: {
+			description:
+				'Canonical public read and notification endpoints provided by StellarAtlas.',
+			title: 'StellarAtlas Public API'
+		},
+		servers: [publicServer],
+		tags: publicTagDefinitions,
+		transformOperation: canonicalizePublicOperation
+	};
+	// Excluded operator/legacy routes must not introduce schema dependencies.
+	const publicDocument = projectOpenApiDocument(
 		withHubbleOpenApiPaths(withDataAccessOpenApiPaths(document)),
-		{
-			includeOperation: isPublicOpenApiOperation,
-			info: {
-				description:
-					'Canonical public read and notification endpoints provided by StellarAtlas.',
-				title: 'StellarAtlas Public API'
-			},
-			servers: [publicServer],
-			tags: publicTagDefinitions,
-			transformOperation: canonicalizePublicOperation
-		}
+		options
+	);
+	return projectOpenApiDocument(
+		withLocalPublicOpenApiSchemas(publicDocument),
+		options
 	);
 }
 

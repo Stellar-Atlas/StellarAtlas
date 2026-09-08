@@ -30,7 +30,7 @@ export function archiveEvidencePageValidators(): ValidationChain[] {
 		query('archiveUrl')
 			.optional()
 			.isURL({ protocols: ['http', 'https'], require_protocol: true }),
-		limitValidator('copyLimit', 1, maxArchiveEvidenceCopyLimit),
+		limitValidator('copyLimit', 0, maxArchiveEvidenceCopyLimit),
 		cursorValidator('eventCursor'),
 		query('eventEvidenceClass')
 			.optional()
@@ -88,7 +88,11 @@ export function isArchiveEvidenceClientError(error: Error): boolean {
 	);
 }
 
-function limitValidator(name: string, min: number, max: number): ValidationChain {
+function limitValidator(
+	name: string,
+	min: number,
+	max: number
+): ValidationChain {
 	return query(name).optional().isInt({ min, max });
 }
 

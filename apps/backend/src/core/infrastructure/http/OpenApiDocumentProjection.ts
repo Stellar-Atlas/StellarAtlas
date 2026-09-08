@@ -195,7 +195,7 @@ function parseComponentReference(
 	value: string | undefined
 ): { category: string; name: string } | null {
 	if (value === undefined) return null;
-	const match = /^#\/components\/([^/]+)\/(.+)$/.exec(value);
+	const match = /^#\/components\/([^/]+)\/([^/]+)(?:\/.*)?$/.exec(value);
 	if (match === null) return null;
 	return {
 		category: decodePointerSegment(match[1]!),

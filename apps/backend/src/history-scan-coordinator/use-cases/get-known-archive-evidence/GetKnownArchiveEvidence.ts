@@ -203,7 +203,8 @@ export class GetKnownArchiveEvidence {
 						return {
 							networkVerifiedCopies: mapCopySet(
 								coverage?.network,
-								pages.copyLimit
+								pages.copyLimit,
+								readModel.copyLookupStatus
 							),
 							object: mapHistoryArchiveObject(failure.object),
 							...(failure.retainedFinding === undefined
@@ -213,7 +214,8 @@ export class GetKnownArchiveEvidence {
 									}),
 							sameOrganizationVerifiedCopies: mapCopySet(
 								coverage?.sameOrganization,
-								pages.copyLimit
+								pages.copyLimit,
+								readModel.copyLookupStatus
 							)
 						};
 					}),
@@ -359,17 +361,21 @@ function ensureArchiveFilterIsOwned(
 
 function mapCopySet(
 	set: KnownArchiveVerifiedCopySetReadModel | undefined,
-	sampleLimit: number
+	sampleLimit: number,
+	lookupStatus: KnownArchiveVerifiedCopySetV1['lookupStatus']
 ): KnownArchiveVerifiedCopySetV1 {
+	const status =
+		lookupStatus ?? (sampleLimit === 0 ? 'not_requested' : 'available');
 	return {
-		copies: (set?.copies ?? []).map((copy) => ({
+		copies: (status === 'available' ? (set?.copies ?? []) : []).map((copy) => ({
 			archiveUrl: mapPublicArchiveUrl(copy.archiveUrl),
 			archiveUrlIdentity: mapPublicArchiveUrl(copy.archiveUrlIdentity),
 			objectUrl: requirePublicObjectUrl(copy.objectUrl),
 			remoteId: copy.remoteId,
 			verifiedAt: copy.verifiedAt?.toISOString() ?? null
 		})),
-		count: set?.count ?? 0,
+		count: status === 'available' ? (set?.count ?? 0) : null,
+		lookupStatus: status,
 		sampleLimit
 	};
 }

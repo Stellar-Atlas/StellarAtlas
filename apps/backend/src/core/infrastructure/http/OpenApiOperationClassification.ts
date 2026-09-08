@@ -2,6 +2,7 @@ import {
 	readOpenApiStringArray,
 	type OpenApiOperationContext
 } from './OpenApiDocumentProjection.js';
+import { isReviewedPublicOpenApiOperation } from './PublicOpenApiOperationPolicy.js';
 
 const operatorTags = new Set([
 	'Archive scanner operators',
@@ -53,6 +54,8 @@ export function isPublicOpenApiOperation(
 	}
 	const security = context.operation.security;
 	return (
-		security === undefined || (Array.isArray(security) && security.length === 0)
+		isReviewedPublicOpenApiOperation(context) &&
+		(security === undefined ||
+			(Array.isArray(security) && security.length === 0))
 	);
 }
