@@ -115,6 +115,8 @@ import { historyAnalyticsRouter } from '@status/infrastructure/http/HistoryAnaly
 import { hubbleWarehouseRouter } from '@status/infrastructure/http/HubbleWarehouseRouter.js';
 import { hubbleWarehouseGraphqlHandler } from '@status/infrastructure/http/HubbleWarehouseGraphql.js';
 import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
+import { withHubbleTransactionLedgerHints } from '@status/infrastructure/http/HubbleTransactionLedgerHints.js';
+import { createPostgresHubbleTransactionLedgerLocator } from '@status/infrastructure/http/HubbleTransactionLedgerLocator.js';
 import { corsMiddleware } from './CorsMiddleware.js';
 import {
 	stellarRpcRouter,
@@ -154,7 +156,13 @@ const listen = async () => {
 	const { config, kernel } = await setup();
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
-	const hubbleWarehouse = hubbleWarehouseFromEnvironment();
+	const hubbleWarehouse = withHubbleTransactionLedgerHints(
+		hubbleWarehouseFromEnvironment(),
+		createPostgresHubbleTransactionLedgerLocator(
+			kernel.container.get(DataSource),
+			config.networkConfig.networkPassphrase
+		)
+	);
 	const stopArchiveBackgroundTasks = startArchiveBackgroundTasks(kernel);
 
 	api.use(
