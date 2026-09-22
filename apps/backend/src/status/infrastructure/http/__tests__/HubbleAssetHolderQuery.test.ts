@@ -51,7 +51,9 @@ describe('queryHubbleAssetHolders publication', () => {
 				capturedSql.indexOf('GROUP BY account_id')
 			);
 			expect(capturedSql).toContain('AND account_id > {after:String}');
-			expect(capturedSql).toContain('WHERE deleted = false AND balance > 0');
+			expect(capturedSql).toContain(
+				'WHERE _latest_deleted = false AND _latest_balance > 0'
+			);
 			expect(capturedParameters).toContainEqual({
 				name: 'row_limit',
 				type: 'UInt32',
