@@ -36,6 +36,18 @@ function transactionExample(
 }
 
 export const graphqlExamples = {
+	holders: {
+		label: 'Asset holders (latest-ingested Float64 observations)',
+		query: `query Holders($asset: String!, $input: HubbleAssetHolderInput) {
+  hubbleAssetHolders(asset: $asset, input: $input) {
+    asset limit nextCursor
+    holders { accountId balance amountPrecision buyingLiabilities sellingLiabilities }
+    coverage { contiguousLastLedger maximumLedger gapCount }
+    watermark { mode catalogGeneratedAt catalogMaximumLedger snapshotPinned }
+  }
+}`,
+		variables: { asset: 'native', input: { limit: 10 } }
+	},
 	transaction: transactionExample(
 		'Transaction, operations, effects and contract events',
 		{
@@ -136,7 +148,8 @@ export function graphqlPageVariables(
 	const typedPage =
 		data.hubbleTransfers ??
 		data.hubbleAccountTransfers ??
-		data.hubbleAssetTransfers;
+		data.hubbleAssetTransfers ??
+		data.hubbleAssetHolders;
 	if (isRecord(typedPage)) {
 		if (
 			direction < 0 ||

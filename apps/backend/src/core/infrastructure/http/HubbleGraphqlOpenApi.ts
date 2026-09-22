@@ -8,7 +8,7 @@ export const hubbleGraphqlSchemas: Record<string, OpenApiRecord> = {
 		variables: { type: 'object', additionalProperties: true, nullable: true }
 	}, ['query']),
 	HubbleGraphqlResponse: object({
-		data: { type: 'object', additionalProperties: true, nullable: true, description: 'Fields selected by the query; typed transaction, transfer, contract-event, trade and offer fields use their documented GraphQL types.' },
+		data: { type: 'object', additionalProperties: true, nullable: true, description: 'Fields selected by the query; typed transaction, transfer, contract-event, trade, offer and asset-holder fields use their documented GraphQL types.' },
 		errors: array(object({
 			message: text,
 			locations: array(object({ line: { type: 'integer' }, column: { type: 'integer' } })),
@@ -18,6 +18,10 @@ export const hubbleGraphqlSchemas: Record<string, OpenApiRecord> = {
 	}, [])
 };
 const examples: OpenApiRecord = {
+ assetHolders: {
+  summary: 'Latest-ingested asset holders with source Float64 balances and coverage',
+  value: { query: 'query Holders($asset:String!,$input:HubbleAssetHolderInput) { hubbleAssetHolders(asset:$asset,input:$input) { holders { accountId balance amountPrecision buyingLiabilities sellingLiabilities } nextCursor limit coverage { contiguousLastLedger maximumLedger gapCount } watermark { mode catalogGeneratedAt catalogMaximumLedger snapshotPinned } } }', variables: { asset: 'native', input: { limit: 10 } } }
+ },
  contractEvents: {
   summary: 'Historical contract diagnostics with typed cursor pagination',
   value: { query: 'query Events($after: String) { hubbleContractEvents(contractId: "CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA", input: {minLedger:63490364,maxLedger:63490364,typeCode:2,successful:false,limit:2,after:$after}) { items { id transactionHash typeCode successful topicsJson dataJson eventXdr classification { transactionKind eventKind sorobanExecutionEvidence provenance } } nextCursor watermark { minimumLedger maximumLedger observedAt coverage } coverage { contiguousLastLedger maximumLedger gapCount } } }', variables: { after: null } }
@@ -54,7 +58,7 @@ export const hubbleGraphqlPaths: Record<string, OpenApiRecord> = {
 		post: {
 			operationId: 'postAnalyticsGraphql',
 			summary: 'Run a read-only GraphQL query',
-			description: 'Typed hubbleTransaction, hubbleTransfers, hubbleAccountTransfers and hubbleAssetTransfers share REST query services. hubbleDatasets, hubbleStatus and structured hubbleQuery are also available. Use schema introspection for complete field and argument definitions. Preserve separate nextCursor values for transaction operations, effects and events; transfers use after with unchanged filters. IDs and exact amounts are strings, never GraphQL Float. No mutation schema is exposed.',
+			description: 'Typed hubbleTransaction, hubbleTransfers, hubbleAccountTransfers and hubbleAssetTransfers share REST query services. hubbleDatasets, hubbleStatus and structured hubbleQuery are also available. Use schema introspection for complete field and argument definitions. Preserve separate nextCursor values for transaction operations, effects and events; transfers use after with unchanged filters. IDs and exact amounts are strings, never GraphQL Float. hubbleAssetHolders and hubbleAssetHolder reuse the REST holder service: native or CODE:ISSUER, after account-ID pagination, latest-ingested observations with cached coverage rather than an atomic/current/as-of state. HubbleParsedNumber preserves source numbers/strings; balance and liabilities have float64-observation precision, not exact reconstructed atomic units. No mutation schema is exposed.',
 			tags: ['Analytics'],
 			security: [],
 			requestBody: { required: true, content: { 'application/json': { schema: ref('HubbleGraphqlRequest'), examples } } },

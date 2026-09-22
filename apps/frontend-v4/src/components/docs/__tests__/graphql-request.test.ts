@@ -1,4 +1,5 @@
 import {
+	graphqlExamples,
 	graphqlPageVariables,
 	parseGraphqlVariables
 } from '../graphql-request';
@@ -99,5 +100,43 @@ describe('typed transfer GraphQL pagination', () => {
 				1
 			)
 		).toBeNull();
+	});
+});
+
+describe('typed holder GraphQL pagination', () => {
+	it('keeps the asset and limit while carrying the returned account cursor', () => {
+		const variables = JSON.stringify({
+			asset: 'USD:GISSUER',
+			input: { limit: 10 }
+		});
+		const result = {
+			data: {
+				hubbleAssetHolders: {
+					nextCursor: 'GACCOUNT',
+					holders: [{ balance: 1.25, amountPrecision: 'float64-observation' }]
+				}
+			}
+		};
+		expect(JSON.parse(graphqlPageVariables(variables, result, 1)!)).toEqual({
+			asset: 'USD:GISSUER',
+			input: { limit: 10, after: 'GACCOUNT' }
+		});
+		expect(graphqlPageVariables(variables, result, -1)).toBeNull();
+		expect(
+			graphqlPageVariables(
+				variables,
+				{ data: { hubbleAssetHolders: { nextCursor: null, holders: [] } } },
+				1
+			)
+		).toBeNull();
+	});
+	it('provides an executable typed-holder example with coverage and source precision', () => {
+		expect(graphqlExamples.holders.query).toContain('hubbleAssetHolders');
+		expect(graphqlExamples.holders.query).toContain('amountPrecision');
+		expect(graphqlExamples.holders.query).toContain('snapshotPinned');
+		expect(graphqlExamples.holders.variables).toEqual({
+			asset: 'native',
+			input: { limit: 10 }
+		});
 	});
 });
