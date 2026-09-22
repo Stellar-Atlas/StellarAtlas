@@ -223,7 +223,11 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 	async assetHolders(
 		input: HubbleAssetHolderQuery
 	): Promise<HubbleAssetHolderPage> {
-		return queryHubbleAssetHolders(this.semanticExecutor(), input);
+		return queryHubbleAssetHolders(
+			this.semanticExecutor(),
+			input,
+			await this.catalog()
+		);
 	}
 	async query(input: HubbleQuery): Promise<HubbleQueryResult> {
 		const catalog = await this.catalog();

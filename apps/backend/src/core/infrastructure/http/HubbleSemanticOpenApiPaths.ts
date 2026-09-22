@@ -21,7 +21,7 @@ import {
 	contractIdParameter,
 	assetParameter
 } from './HubbleSemanticOpenApiParameters.js';
-import { semanticResponse } from './HubbleSemanticOpenApiSchemas.js';
+import { semanticResponse, holderNotFoundResponse } from './HubbleSemanticOpenApiSchemas.js';
 
 export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/ledgers/{sequence}': {
@@ -388,7 +388,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/assets/{asset}/holders': {
 		get: {
 			description:
-				'Returns positive balances from each account’s latest observed completed-batch change. This is not a complete current-chain holder set when history has gaps. Use native or URL-encoded CODE:ISSUER.',
+				'Returns positive balances from each account’s latest observed completed-batch change. This is not a complete current-chain holder set when history has gaps. Use native or URL-encoded CODE:ISSUER. Response coverage comes from the shared cached catalog and is not an atomic balance snapshot; no historical as-of parameter is supported.',
 			operationId: 'listAnalyticsAssetHolders',
 			parameters: [
 				{
@@ -413,14 +413,14 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
 			security: publicAccess,
-			summary: 'List current asset holders',
+			summary: 'List latest-ingested asset holders',
 			tags: analyticsTag
 		}
 	},
 	'/v1/analytics/assets/{asset}/holders/{account}': {
 		get: {
 			description:
-				'Returns one account’s latest observed positive balance from completed batches, not a guarantee of current-chain state when history has gaps.',
+				'Returns one account’s latest observed positive balance from completed batches, not a guarantee of current-chain state when history has gaps. Coverage and watermark identify cached catalog observations, not a pinned snapshot or historical as-of state.',
 			operationId: 'getAnalyticsAssetHolder',
 			parameters: [
 				{
@@ -435,13 +435,11 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 			responses: {
 				'200': semanticResponse('getAnalyticsAssetHolder'),
 				'400': errorResponse('The asset or account is invalid.'),
-				'404': errorResponse(
-					'The account has no current positive balance in the ingested range.'
-				),
+				'404': holderNotFoundResponse,
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
 			security: publicAccess,
-			summary: 'Get one current asset holder',
+			summary: 'Get one latest-ingested asset holder',
 			tags: analyticsTag
 		}
 	}

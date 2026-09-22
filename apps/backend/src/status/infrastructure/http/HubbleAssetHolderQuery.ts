@@ -1,3 +1,5 @@
+import type { HubbleCatalog } from './HubbleWarehouseContracts.js';
+import { HubbleWarehouseUnavailableError } from './HubbleWarehouseErrors.js';
 import { completedHubbleBatchPredicate } from './HubbleBatchVisibility.js';
 import {
 	boundedSemanticLimit,
@@ -10,7 +12,8 @@ import {
 
 export async function queryHubbleAssetHolders(
 	executor: HubbleSemanticQueryExecutor,
-	input: HubbleAssetHolderQuery
+	input: HubbleAssetHolderQuery,
+	catalog: Pick<HubbleCatalog, 'coverage' | 'generatedAt'>
 ): Promise<HubbleAssetHolderPage> {
 	const limit = boundedSemanticLimit(input.limit, executor.maximumRows);
 	const parameters: HubblePreparedParameter[] = [
@@ -34,10 +37,21 @@ export async function queryHubbleAssetHolders(
 		sql,
 		parameters
 	);
-	const holders = [...(response.data ?? [])];
+	if (!Array.isArray(response.data) || response.data.length > limit + 1)
+		throw new HubbleWarehouseUnavailableError(
+			'Incomplete or oversized holder response'
+		);
+	const holders = [...response.data];
 	const hasMore = holders.length > limit;
 	const selected = hasMore ? holders.slice(0, limit) : holders;
 	return {
+		coverage: catalog.coverage,
+		watermark: {
+			mode: 'latest-ingested-observations',
+			catalogGeneratedAt: catalog.generatedAt,
+			catalogMaximumLedger: catalog.coverage.maximumLedger,
+			snapshotPinned: false
+		},
 		asset:
 			input.asset.type === 'native'
 				? 'native'

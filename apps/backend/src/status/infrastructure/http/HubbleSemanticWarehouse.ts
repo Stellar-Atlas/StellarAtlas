@@ -1,3 +1,5 @@
+import type { HubbleLedgerCoverage } from './HubbleLedgerCoverage.js';
+
 export interface HubblePreparedParameter {
 	readonly name: string;
 	readonly type: string;
@@ -48,7 +50,16 @@ export interface HubbleAssetHolderQuery {
 	readonly limit?: number;
 }
 
-export interface HubbleAssetHolderPage {
+export interface HubbleAssetHolderEvidence {
+	readonly coverage: HubbleLedgerCoverage;
+	readonly watermark: {
+		readonly mode: 'latest-ingested-observations';
+		readonly catalogGeneratedAt: string;
+		readonly catalogMaximumLedger: string | null;
+		readonly snapshotPinned: false;
+	};
+}
+export interface HubbleAssetHolderPage extends HubbleAssetHolderEvidence {
 	readonly asset: string;
 	readonly elapsedMilliseconds: number;
 	readonly holders: readonly Record<string, unknown>[];
