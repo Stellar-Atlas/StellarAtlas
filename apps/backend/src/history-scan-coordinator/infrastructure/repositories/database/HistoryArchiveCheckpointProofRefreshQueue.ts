@@ -753,7 +753,8 @@ function extractQueryRows<T>(result: unknown): readonly T[] {
 
 export const enqueueProofRefreshesSql = `
 	with source_objects as materialized (
-		select object.*,
+		select object."archiveUrlIdentity", object."checkpointLedger",
+			object."objectType", object."bucketHash",
 			case
 				when object.status = 'verified' then greatest(
 					coalesce(object."verifiedAt", object."updatedAt"),
@@ -798,11 +799,25 @@ export const enqueueProofRefreshesSql = `
                         max(affected.evidence_updated_at) as evidence_updated_at
                 from affected
                 group by affected."archiveUrlIdentity", affected."checkpointLedger"
+        ), pending_targets as materialized (
+                select candidate.*
+                from candidate_targets candidate
+                where not exists (
+                        select 1
+                        from "history_archive_checkpoint_proof_refresh_queue" queued
+                        where queued."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+                                and queued."checkpointLedger" = candidate."checkpointLedger"
+                                and queued."evidenceUpdatedAt" >= candidate.evidence_updated_at
+                )
+                -- Skip covered notifications before dependency readiness and root
+                -- locks. A consumer retires this row only atomically with handled
+                -- proof evidence. Newer evidence still reaches the final upsert
+                -- fence, including when an older claim is concurrently retired.
         ), lockable_roots as materialized (
                 select root."archiveUrlIdentity"
                 from (
                         select distinct candidate."archiveUrlIdentity"
-                        from candidate_targets candidate
+                        from pending_targets candidate
                 ) root
                 where pg_try_advisory_xact_lock(
                         ${historyArchiveRootTransitionLockNamespace},
@@ -810,7 +825,7 @@ export const enqueueProofRefreshesSql = `
                 )
         ), targets as materialized (
                 select candidate.*
-                from candidate_targets candidate
+                from pending_targets candidate
                 join lockable_roots lockable
                         on lockable."archiveUrlIdentity" =
                                 candidate."archiveUrlIdentity"
