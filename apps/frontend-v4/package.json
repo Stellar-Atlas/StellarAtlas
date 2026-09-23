@@ -7,18 +7,24 @@
 		"dev": "node ../../scripts/refuse-frontend-v4-dev.mjs",
 		"build": "pnpm run build:staging",
 		"build:production": "pnpm run build:staging",
-		"build:staging": "pnpm --filter shared build && pnpm run release:prepare-staging && node ../../scripts/refuse-live-next-build.mjs .next-staging && NEXT_DEPLOYMENT_ID=$(git rev-parse HEAD) NEXT_DIST_DIR=.next-staging next build",
+		"build:staging": "pnpm --filter shared build && pnpm run docs:generate && pnpm run release:prepare-staging && node ../../scripts/refuse-live-next-build.mjs .next-staging && NEXT_DEPLOYMENT_ID=$(git rev-parse HEAD) NEXT_DIST_DIR=.next-staging next build",
 		"release:prepare-staging": "node ../../scripts/refuse-root.mjs frontend-v4 release:prepare-staging && node ../../scripts/frontend-v4-release.mjs prepare-staging",
 		"release:promote-staging": "node ../../scripts/refuse-root.mjs frontend-v4 release:promote-staging && node ../../scripts/frontend-v4-release.mjs promote-staging",
 		"release:rollback-production": "node ../../scripts/refuse-root.mjs frontend-v4 release:rollback-production && node ../../scripts/frontend-v4-release.mjs rollback-production",
 		"start": "node ../../scripts/refuse-root.mjs frontend-v4 start && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-production} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3104}",
 		"start:staging": "node ../../scripts/refuse-root.mjs frontend-v4 start:staging && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-staging} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3114}",
-		"typecheck": "NEXT_DIST_DIR=.next-staging next typegen && tsc --noEmit"
+		"typecheck": "pnpm run docs:generate && NEXT_DIST_DIR=.next-staging next typegen && tsc --noEmit",
+		"docs:generate": "node --import tsx ../../scripts/export-api-docs.ts && node scripts/build-docs-css.mjs"
 	},
 	"dependencies": {
 		"3d-force-graph": "1.80.0",
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",
+		"fumadocs-core": "16.15.8",
+		"fumadocs-openapi": "11.4.1",
+		"fumadocs-ui": "16.15.8",
+		"graphiql": "5.4.0",
+		"graphql": "16.11.0",
 		"history-scanner-dto": "workspace:*",
 		"next": "16.3.0-canary.106",
 		"react": "19.2.7",
@@ -28,11 +34,16 @@
 	},
 	"devDependencies": {
 		"@jest/globals": "30.4.1",
+		"@tailwindcss/postcss": "4.3.3",
 		"@types/node": "^26.0.1",
 		"@types/react": "19.2.17",
 		"@types/react-dom": "19.2.3",
 		"@types/three": "0.185.0",
-		"typescript": "6.0.3"
+		"postcss": "8.5.28",
+		"postcss-selector-parser": "7.1.6",
+		"tailwindcss": "4.3.3",
+		"typescript": "6.0.3",
+		"tsx": "4.23.13"
 	},
 	"engines": {
 		"node": "26.x"

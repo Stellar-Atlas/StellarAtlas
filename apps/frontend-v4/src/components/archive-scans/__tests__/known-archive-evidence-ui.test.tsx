@@ -22,6 +22,40 @@ import {
 	formatObjectStatusDetail
 } from '../known-archive-evidence-table-parts';
 describe('known archive evidence UI', () => {
+	it.each(['not_requested', 'unavailable'] as const)(
+		'does not describe unknown copies as absent when %s',
+		(lookupStatus) => {
+			const evidence = createEvidence();
+			const set = { count: null, copies: [], lookupStatus, sampleLimit: 0 };
+			const markup = renderToStaticMarkup(
+				createElement(RemoteFailureTable, {
+					page: {
+						...evidence.remoteFailures,
+						failures: evidence.remoteFailures.failures.map((failure) => ({
+							...failure,
+							object: {
+								...failure.object,
+								error: {
+									type: 'archive_http_error',
+									httpStatus: 404,
+									message: 'missing source file'
+								}
+							},
+							networkVerifiedCopies: set,
+							sameOrganizationVerifiedCopies: set
+						}))
+					}
+				})
+			);
+			expect(markup).toContain(
+				lookupStatus === 'not_requested'
+					? 'Replacement copies: check the Repair view'
+					: 'Replacement copy lookup temporarily unavailable'
+			);
+			expect(markup).not.toContain('No verified alternate copy found');
+			expect(markup).toContain('404');
+		}
+	);
 	it('renders listing gaps separately from GET failures with exact source, observation and alternate proof provenance', () => {
 		const evidence = createEvidence();
 		const original = evidence.roots[0];

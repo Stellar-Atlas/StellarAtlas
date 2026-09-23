@@ -5,3 +5,8 @@
 next-env.d.ts
 AGENTS.md
 CLAUDE.md
+
+# Generated from the authoritative backend projector by docs:generate.
+/generated/public-openapi.json
+/generated/operation-openapi.json
+/generated/fumadocs.css

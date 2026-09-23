@@ -107,7 +107,7 @@ export async function loadKnownArchiveFailurePages(
 		() => readFailureContext(request),
 		(context) => ({
 			archiveUrl: context.query.archiveUrl ?? undefined,
-			copyLimit: archiveEvidenceCopyLimit,
+			copyLimit: context.subject.kind === 'node' ? 0 : archiveEvidenceCopyLimit,
 			eventLimit: 0,
 			failureCursor: readCursor(request.failureCursor),
 			failureLimit: archiveEvidencePageLimit,

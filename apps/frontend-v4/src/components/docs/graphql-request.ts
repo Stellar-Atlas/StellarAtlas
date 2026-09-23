@@ -1,3 +1,5 @@
+import { graphqlAnalyticsExamples } from './graphql-analytics-examples';
+
 interface TransactionExample {
 	readonly kind: 'transaction';
 	readonly label: string;
@@ -36,6 +38,7 @@ function transactionExample(
 }
 
 export const graphqlExamples = {
+	...graphqlAnalyticsExamples,
 	holders: {
 		label: 'Asset holders (latest-ingested Float64 observations)',
 		query: `query Holders($asset: String!, $input: HubbleAssetHolderInput) {
@@ -149,7 +152,9 @@ export function graphqlPageVariables(
 		data.hubbleTransfers ??
 		data.hubbleAccountTransfers ??
 		data.hubbleAssetTransfers ??
-		data.hubbleAssetHolders;
+		data.hubbleAssetHolders ??
+		data.hubbleAccountBalances ??
+		data.hubbleContractEvents;
 	if (isRecord(typedPage)) {
 		if (
 			direction < 0 ||
@@ -166,8 +171,27 @@ export function graphqlPageVariables(
 			2
 		);
 	}
-	if (!isRecord(data.hubbleQuery)) return null;
-	const page = data.hubbleQuery;
+	const page =
+		data.hubbleOperations ??
+		data.hubbleAssets ??
+		data.hubbleContracts ??
+		data.hubbleTrades ??
+		data.hubbleOffers ??
+		data.hubbleQuery;
+	if (!isRecord(page)) return null;
+	if (direction > 0 && 'nextOffset' in page) {
+		if (
+			typeof page.nextOffset !== 'number' ||
+			!Number.isSafeInteger(page.nextOffset) ||
+			page.nextOffset < 0
+		)
+			return null;
+		return JSON.stringify(
+			{ ...variables, input: { ...variables.input, offset: page.nextOffset } },
+			null,
+			2
+		);
+	}
 	if (
 		typeof page.limit !== 'number' ||
 		page.limit < 1 ||

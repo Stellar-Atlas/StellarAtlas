@@ -53,6 +53,16 @@ export function VerifiedAlternateCopies({
 }): React.JSX.Element {
 	const sameOrganization = failure.sameOrganizationVerifiedCopies;
 	const network = failure.networkVerifiedCopies;
+	if (sameOrganization.count === null || network.count === null) {
+		return (
+			<span className="muted-inline">
+				{sameOrganization.lookupStatus === 'not_requested' &&
+				network.lookupStatus === 'not_requested'
+					? 'Replacement copies: check the Repair view'
+					: 'Replacement copy lookup temporarily unavailable'}
+			</span>
+		);
+	}
 	const total = sameOrganization.count + network.count;
 
 	if (total === 0) {
@@ -83,7 +93,7 @@ function VerifiedCopyGroup({
 	readonly label: string;
 	readonly set: VerifiedCopySet;
 }): React.JSX.Element | null {
-	if (set.count === 0) return null;
+	if (set.count === null || set.count === 0) return null;
 
 	return (
 		<div className="verified-copy-group">

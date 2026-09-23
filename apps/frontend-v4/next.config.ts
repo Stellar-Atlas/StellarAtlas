@@ -24,6 +24,10 @@ const nextConfig: NextConfig = {
 	reactStrictMode: true,
 	rewrites: async () => [
 		{
+			destination: `${normalizedApiBaseUrl}/graphql`,
+			source: '/graphql'
+		},
+		{
 			destination: `${normalizedApiBaseUrl}/docs/:path*`,
 			source: '/api-docs/:path*'
 		},

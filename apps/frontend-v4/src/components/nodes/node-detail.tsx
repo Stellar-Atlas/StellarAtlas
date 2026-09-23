@@ -1,4 +1,3 @@
-import { Fragment } from 'react';
 import Link from 'next/link';
 import type {
 	PublicKnownNode,
@@ -11,14 +10,18 @@ import {
 	getOrganizationForNode,
 	getOrganizationLabel
 } from '../../domain/network';
-import { formatBoolean, formatDateTime } from '../../format/formatters';
+import { formatBoolean } from '../../format/formatters';
 import {
 	formatNode24HourActive,
 	formatNode24HourValidating,
 	formatNode30DayActive,
-	formatNode30DayValidating
+	formatNode30DayValidating,
+	type DisplayMetric
 } from '../../domain/availability';
 import { StatusTags } from '../status-tags';
+import { NodeTrust } from './node-trust';
+import { NodeArchiveActions } from './node-archive-actions';
+import { LocalDateTime } from '../local-date-time';
 
 interface NodeDetailProps {
 	archiveEvidence: React.ReactNode;
@@ -38,9 +41,6 @@ export function NodeDetail({
 	if (node === null) {
 		return (
 			<section className="detail-grid">
-				<Fragment key={`archive-evidence:${knownNode.publicKey}`}>
-					{archiveEvidence}
-				</Fragment>
 				<article className="panel detail-panel">
 					<div className="panel-heading">
 						<h2>Known public key</h2>
@@ -55,14 +55,18 @@ export function NodeDetail({
 						</div>
 						<div>
 							<dt>Date discovered</dt>
-							<dd>{formatDateTime(knownNode.dateDiscovered)}</dd>
+							<dd>
+								<LocalDateTime dateTime={knownNode.dateDiscovered} />
+							</dd>
 						</div>
 						<div>
 							<dt>Last seen</dt>
 							<dd>
-								{knownNode.lastSeen
-									? formatDateTime(knownNode.lastSeen)
-									: 'Unavailable'}
+								{knownNode.lastSeen ? (
+									<LocalDateTime dateTime={knownNode.lastSeen} />
+								) : (
+									'Unavailable'
+								)}
 							</dd>
 						</div>
 						<div>
@@ -71,28 +75,42 @@ export function NodeDetail({
 						</div>
 					</dl>
 				</article>
+				<NodeTrust network={network} knownNode={knownNode} node={null} />
+				<div className="node-detail-wide">{archiveEvidence}</div>
 			</section>
 		);
 	}
 
 	const organization =
 		routeOrganization ?? getOrganizationForNode(network, node);
-	const active24Hours = formatNode24HourActive(node);
-	const active30Days = formatNode30DayActive(node);
-	const validating24Hours = formatNode24HourValidating(node);
-	const validating30Days = formatNode30DayValidating(node);
+	const recorded = (metric: DisplayMetric): DisplayMetric =>
+		knownNode.current
+			? metric
+			: {
+					...metric,
+					value:
+						metric.value === 'Collecting'
+							? 'Insufficient history'
+							: metric.value.replace(' now', ' at snapshot'),
+					detail: metric.detail?.replace('Current scan', 'Recorded scan')
+				};
+	const active24Hours = recorded(formatNode24HourActive(node));
+	const active30Days = recorded(formatNode30DayActive(node));
+	const validating24Hours = recorded(formatNode24HourValidating(node));
+	const validating30Days = recorded(formatNode30DayValidating(node));
 	const nodeTags = getNodeTags(node);
 
 	return (
 		<section className="detail-grid">
-			<Fragment key={`archive-evidence:${knownNode.publicKey}`}>
-				{archiveEvidence}
-			</Fragment>
 			<article className="panel detail-panel">
 				<div className="panel-heading">
-					<h2>Node status</h2>
+					<h2>{knownNode.current ? 'Node status' : 'Recorded node status'}</h2>
 					<StatusTags tags={nodeTags} />
 				</div>
+				<p className="muted-copy">
+					Snapshot <LocalDateTime dateTime={node.dateUpdated} />
+					{knownNode.current ? '' : ' · historical record'}
+				</p>
 				<dl className="details">
 					<div>
 						<dt>Public key</dt>
@@ -140,7 +158,9 @@ export function NodeDetail({
 			</article>
 			<article className="panel detail-panel">
 				<div className="panel-heading">
-					<h2>Availability</h2>
+					<h2>
+						{knownNode.current ? 'Availability' : 'Recorded availability'}
+					</h2>
 				</div>
 				<dl className="details">
 					<div>
@@ -191,6 +211,9 @@ export function NodeDetail({
 					</div>
 				</dl>
 			</article>
+			<NodeArchiveActions archiveUrl={node.historyUrl} />
+			<NodeTrust network={network} knownNode={knownNode} node={node} />
+			<div className="node-detail-wide">{archiveEvidence}</div>
 		</section>
 	);
 }

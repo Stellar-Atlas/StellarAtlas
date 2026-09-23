@@ -1,0 +1,75 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@import 'fumadocs-openapi/css/preset.css';
+@source '../../../node_modules/fumadocs-ui/dist';
+@source '../../../node_modules/fumadocs-openapi/dist';
+@source '.';
+@source '../../app/docs';
+
+.developer-docs {
+	--fd-banner-height: 69px;
+	--fd-layout-width: 100%;
+	--fd-sidebar-width: 17rem;
+	--fd-toc-width: 14rem;
+	min-width: 0;
+	background: var(--color-fd-background);
+	color: var(--color-fd-foreground);
+	font-size: 15px;
+}
+.developer-docs,
+.developer-docs *,
+.developer-docs *::before,
+.developer-docs *::after {
+	box-sizing: border-box;
+}
+.developer-docs #nd-docs-layout {
+	min-height: calc(100vh - 100px);
+}
+.developer-docs #nd-page {
+	min-width: 0;
+}
+.developer-docs .developer-guide-section {
+	scroll-margin-top: 6rem;
+}
+.developer-docs .developer-docs-cards {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+	margin: 1.5rem 0;
+}
+.developer-docs .developer-docs-card {
+	display: block;
+	border: 1px solid var(--color-fd-border);
+	border-radius: 0.75rem;
+	padding: 1rem;
+	text-decoration: none;
+}
+.developer-docs .developer-docs-card h2 {
+	font-size: 1.05rem;
+	margin: 0 0 0.4rem;
+}
+.developer-docs .developer-docs-card p {
+	font-size: 0.9rem;
+	margin: 0;
+	color: var(--color-fd-muted-foreground);
+}
+.developer-docs pre {
+	max-width: 100%;
+	overflow: auto;
+}
+.developer-docs table {
+	display: block;
+	max-width: 100%;
+	overflow: auto;
+}
+@media (max-width: 720px) {
+	.developer-docs .developer-docs-cards {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.developer-docs {
+		font-size: 14px;
+	}
+}

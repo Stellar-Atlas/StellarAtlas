@@ -1,3 +1,4 @@
+import { archiveSource } from './archive-organization-fixtures';
 import type { PublicNode } from '@api/types';
 import {
 	groupAdvertisers,
@@ -82,23 +83,31 @@ describe('archive inventory search and identity', () => {
 });
 
 describe('archive inventory ordering', () => {
-	const root = (url: string, failures = 0, verified = 1): ArchiveSource =>
-		({
-			archiveUrl: url,
-			archiveUrlIdentity: url,
-			archiveEvidenceFailures: failures,
-			failureSummary: {
-				status: 'current',
-				archiveFaultCount: failures,
-				remoteFailureCount: failures,
-				groups: []
-			},
-			mismatchCheckpointProofs: 0,
-			durableVerifiedCheckpointProofs: verified,
-			currentLedger: 639,
-			latestCheckpointLedger: 639,
-			latestDiscoveredCheckpointLedger: 639
-		}) as ArchiveSource;
+	const root = (url: string, failures = 0, verified = 1): ArchiveSource => ({
+		...archiveSource(url, verified, 10),
+		archiveUrl: url,
+		archiveUrlIdentity: url,
+		archiveEvidenceFailures: failures,
+		failureSummary: {
+			status: 'current',
+			computedAt: '2026-09-07T00:00:00Z',
+			limit: 20,
+			totalGroups: 0,
+			remainingGroupCount: 0,
+			remainingFailureCount: 0,
+			workerIssueCount: 0,
+			knownAffectedCheckpointCount: failures,
+			unknownCheckpointFailureCount: 0,
+			archiveFaultCount: failures,
+			remoteFailureCount: failures,
+			groups: []
+		},
+		mismatchCheckpointProofs: 0,
+		durableVerifiedCheckpointProofs: verified,
+		currentLedger: 639,
+		latestCheckpointLedger: 639,
+		latestDiscoveredCheckpointLedger: 639
+	});
 	const alphaTwo = root('https://a.example/second', 7, 2);
 	const alphaOne = root('https://z.example/first', 3, 8);
 	const alphaOneOtherRoot = root('https://z.example/other', 3, 8);

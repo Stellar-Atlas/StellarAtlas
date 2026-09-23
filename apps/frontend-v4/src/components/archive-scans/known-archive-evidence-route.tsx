@@ -34,7 +34,7 @@ export async function NodeArchiveEvidenceRoute({
 	try {
 		const evidence = await fetchKnownNodeArchiveEvidence(
 			publicKey,
-			initialEvidenceQuery,
+			{ ...initialEvidenceQuery, copyLimit: 0 },
 			liveEvidenceOptions
 		);
 		if (evidence === null) {

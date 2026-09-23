@@ -32,7 +32,7 @@ const summary = {
 			count: 10,
 			attribution: 'archive_fault' as const
 		}
-	]
+	] as const
 };
 describe('archive findings attribution', () => {
 	it('keeps confirmed responses compact and puts exact diagnostics behind details', () => {
