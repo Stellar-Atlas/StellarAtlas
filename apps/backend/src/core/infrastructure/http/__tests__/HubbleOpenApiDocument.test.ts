@@ -55,6 +55,7 @@ describe('Hubble OpenAPI paths', () => {
 			classifyEventRows: unused,
 			accountTransactions: unused,
 			assetHolders: unused,
+			accountBalances: unused,
 			query: unused
 		};
 		const app = express();

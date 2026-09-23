@@ -1,3 +1,9 @@
+import { queryHubbleAccountBalances } from './HubbleAccountBalanceQuery.js';
+import { UnavailableHubbleWarehouse } from './HubbleUnavailableWarehouse.js';
+import type {
+	HubbleAccountBalanceInput,
+	HubbleAccountBalancePage
+} from './HubbleAccountBalanceContracts.js';
 import { queryHubbleContractEvents } from './HubbleContractEventQuery.js';
 import { normalizeHubbleContractEventInput } from './HubbleContractEventValidation.js';
 import type {
@@ -229,6 +235,15 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 			await this.catalog()
 		);
 	}
+	async accountBalances(
+		input: HubbleAccountBalanceInput
+	): Promise<HubbleAccountBalancePage> {
+		return queryHubbleAccountBalances(
+			this.semanticExecutor(),
+			input,
+			await this.catalog()
+		);
+	}
 	async query(input: HubbleQuery): Promise<HubbleQueryResult> {
 		const catalog = await this.catalog();
 		const dataset = catalog.datasets.find(
@@ -441,34 +456,6 @@ FORMAT JSON`,
 				{ cause: error }
 			);
 		}
-	}
-}
-
-class UnavailableHubbleWarehouse implements HubbleWarehouse {
-	constructor(private readonly reason: string) {}
-	async contractEvents(): Promise<HubbleContractEventPage> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
-	}
-	async transactionDetail(): Promise<HubbleTransactionDetail | null> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
-	}
-	async classifyEventRows(): Promise<readonly Record<string, unknown>[]> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
-	}
-	async transferActivity(): Promise<HubbleTransferPage> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
-	}
-	async accountTransactions(): Promise<HubbleSemanticPage> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
-	}
-	async assetHolders(): Promise<HubbleAssetHolderPage> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
-	}
-	async catalog(): Promise<HubbleCatalog> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
-	}
-	async query(): Promise<HubbleQueryResult> {
-		throw new HubbleWarehouseUnavailableError(this.reason);
 	}
 }
 

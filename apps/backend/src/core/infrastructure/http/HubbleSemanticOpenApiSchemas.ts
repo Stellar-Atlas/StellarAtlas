@@ -21,7 +21,7 @@ const classification = object({
 	sorobanExecutionEvidence: { type: 'boolean' },
 	provenance: { type: 'string', enum: ['complete', 'missing', 'incomplete', 'mismatch'] }
 });
-const holderEvidence: OpenApiRecord = {
+export const holderEvidence: OpenApiRecord = {
 	coverage: ref('HubbleLedgerCoverage'),
 	watermark: object({
 		mode: { type: 'string', enum: ['latest-ingested-observations'] },

@@ -1,4 +1,8 @@
 import type {
+	HubbleAccountBalanceInput,
+	HubbleAccountBalancePage
+} from './HubbleAccountBalanceContracts.js';
+import type {
 	HubbleContractEventInput,
 	HubbleContractEventPage
 } from './HubbleContractEventContracts.js';
@@ -93,6 +97,9 @@ import type {
 import type { HubbleLedgerCoverage } from './HubbleLedgerCoverage.js';
 
 export interface HubbleWarehouse {
+	accountBalances(
+		input: HubbleAccountBalanceInput
+	): Promise<HubbleAccountBalancePage>;
 	contractEvents(
 		input: HubbleContractEventInput
 	): Promise<HubbleContractEventPage>;

@@ -75,7 +75,8 @@ function warehouse(
 		transactionDetail: jest.fn(async () => null),
 		transferActivity: jest.fn(),
 		accountTransactions: jest.fn(),
-		assetHolders: jest.fn()
+		assetHolders: jest.fn(),
+		accountBalances: jest.fn()
 	};
 }
 function app(w: HubbleWarehouse) {

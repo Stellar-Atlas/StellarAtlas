@@ -330,6 +330,7 @@ function mockWarehouse(): HubbleWarehouse & {
 } {
 	return {
 		transactionDetail: jest.fn(),
+		accountBalances: jest.fn(),
 		transferActivity: jest.fn(),
 		classifyEventRows: jest.fn(
 			async (rows: readonly Record<string, unknown>[]) => rows
