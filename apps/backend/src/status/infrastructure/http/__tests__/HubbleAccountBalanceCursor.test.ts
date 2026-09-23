@@ -1,4 +1,5 @@
 import { StrKey } from '@stellar/stellar-sdk';
+import { accountBalanceSql } from '../HubbleAccountBalanceQuery.js';
 import {
 	decodeBalanceCursor,
 	encodeBalanceCursor,
@@ -7,6 +8,19 @@ import {
 const account = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 1));
 const issuer = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 2));
 describe('account-scoped balance cursor', () => {
+	it('filters only account identity early, then checks publication before latest-state aggregation', () => {
+		const sql = accountBalanceSql('fixture');
+		const prewhere = sql
+			.split('\n')
+			.filter((line) => line.includes(' PREWHERE '));
+		expect(prewhere).toHaveLength(2);
+		for (const line of prewhere) {
+			expect(line).toContain('PREWHERE account_id = {account:String}');
+			expect(line).not.toMatch(/_source_sha256|asset_type|asset_code/);
+		}
+		expect(sql).toContain('WHERE (_batch_id, _source_sha256) IN');
+		expect(sql).toContain('AND (_batch_id, _source_sha256) IN');
+	});
 	it('roundtrips native and issued keys', () => {
 		for (const key of [
 			{ kind: 0 as const, code: '', issuer: '' },

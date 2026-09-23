@@ -82,6 +82,8 @@ export async function queryHubbleAccountBalances(
 
 // Both branches constrain the leading account_id sorting key before aggregation.
 // Completed/digest-matched evidence is selected before latest-state/deletion logic.
+// Keep PREWHERE account-only: automatic movement of the publication tuple into
+// PREWHERE reads wide digest columns from every sparse-index candidate granule.
 export function accountBalanceSql(databaseName: string): string {
 	const database = quoteHubbleIdentifier(databaseName),
 		published = completedHubbleBatchPredicate(databaseName);
@@ -93,8 +95,8 @@ export function accountBalanceSql(databaseName: string): string {
 		tupleElement(observed,5) AS ledger_sequence, tupleElement(observed,7) AS flags,
 		CAST(NULL, 'Nullable(String)') AS trust_line_limit_raw
 	FROM (SELECT argMax(tuple(balance,buying_liabilities,selling_liabilities,last_modified_ledger,ledger_sequence,deleted,flags),${order}) AS observed
-		FROM ${database}.accounts WHERE account_id = {account:String} AND {include_native:UInt8} = 1
-		AND ${published} GROUP BY account_id)
+		FROM ${database}.accounts PREWHERE account_id = {account:String} AND {include_native:UInt8} = 1
+		WHERE ${published} GROUP BY account_id)
 	WHERE tupleElement(observed,6) = false
 	UNION ALL
 	SELECT 1 AS asset_kind, asset_code, asset_issuer, tupleElement(observed,1) AS asset_type,
@@ -104,8 +106,8 @@ export function accountBalanceSql(databaseName: string): string {
 		toNullable(toString(tupleElement(observed,5))) AS trust_line_limit_raw
 	FROM (SELECT asset_code,asset_issuer,
 		argMax(tuple(asset_type,balance,buying_liabilities,selling_liabilities,trust_line_limit,flags,last_modified_ledger,ledger_sequence,deleted),${order}) AS observed
-		FROM ${database}.trustlines WHERE account_id = {account:String}
-		AND asset_type IN ('credit_alphanum4','credit_alphanum12')
+		FROM ${database}.trustlines PREWHERE account_id = {account:String}
+		WHERE asset_type IN ('credit_alphanum4','credit_alphanum12')
 		AND tuple(asset_code,asset_issuer) > tuple({after_code:String},{after_issuer:String})
 		AND ${published} GROUP BY asset_code,asset_issuer)
 	WHERE tupleElement(observed,9) = false

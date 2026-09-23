@@ -77,7 +77,14 @@ engineTest(
 				sql: string,
 				parameters: readonly HubblePreparedParameter[]
 			) {
+				// Values is not a MergeTree storage and rejects PREWHERE. Preserve the
+				// identical filter semantics here; live EXPLAIN + a bounded source-SQL
+				// acceptance query cover the account-only early-read stage separately.
 				const query = sql
+					.replace(
+						/PREWHERE account_id = \{account:String\}([^\n]*)\n\t\tWHERE /g,
+						'WHERE account_id = {account:String}$1 AND '
+					)
 					.replaceAll('`stellar_hubble`.accounts', '(' + accounts + ')')
 					.replaceAll('`stellar_hubble`.trustlines', '(' + trustlines + ')')
 					.replaceAll(
