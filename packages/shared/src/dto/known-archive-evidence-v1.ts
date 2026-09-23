@@ -81,7 +81,10 @@ export interface KnownArchiveVerifiedCopyV1 {
 
 export interface KnownArchiveVerifiedCopySetV1 {
 	readonly copies: readonly KnownArchiveVerifiedCopyV1[];
-	readonly count: number;
+	/** Null means copies were not looked up or the bounded lookup was unavailable. */
+	readonly count: number | null;
+	/** Absent on older responses, whose numeric count came from a completed lookup. */
+	readonly lookupStatus?: 'available' | 'not_requested' | 'unavailable';
 	readonly sampleLimit: number;
 }
 

@@ -7598,11 +7598,11 @@
 			"ArchiveEvidenceCopyLimit": {
 				"name": "copyLimit",
 				"in": "query",
-				"description": "Maximum verified-copy rows retained in each same-organization and network sample. Exact copy counts are always returned.",
+				"description": "Maximum verified-copy rows in each same-organization and network sample. Set 0 to skip optional copy discovery. Counts are null when not requested or temporarily unavailable; source failures still return.",
 				"required": false,
 				"schema": {
 					"type": "integer",
-					"minimum": 1,
+					"minimum": 0,
 					"maximum": 10,
 					"default": 3
 				}
@@ -13765,10 +13765,20 @@
 							"$ref": "#/components/schemas/KnownArchiveVerifiedCopyV1"
 						}
 					},
-					"count": { "type": "integer", "minimum": 0 },
+					"count": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true,
+						"description": "Exact count only after successful copy discovery; null means unknown, not zero."
+					},
+					"lookupStatus": {
+						"type": "string",
+						"enum": ["available", "not_requested", "unavailable"],
+						"description": "Absent on older responses with completed numeric counts. Copy lookup availability is independent of source failure evidence."
+					},
 					"sampleLimit": {
 						"type": "integer",
-						"minimum": 1,
+						"minimum": 0,
 						"maximum": 10
 					}
 				}

@@ -15,6 +15,7 @@ import { findKnownArchiveCopyCoverage } from './KnownArchiveCopyCoverageQuery.js
 import { findKnownArchiveObjectPage } from './KnownArchiveObjectPageQuery.js';
 import { findKnownArchiveObjectEventPage } from './KnownArchiveObjectEventPageQuery.js';
 import { withBoundedArchiveEvidenceRead } from './BoundedArchiveEvidenceRead.js';
+import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import {
 	applyKnownArchiveFailureAggregateTotal,
 	applyKnownArchiveObjectAggregateTotal
@@ -30,6 +31,7 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 		if (query.roots.length === 0) {
 			return {
 				copyCoverage: [],
+				copyLookupStatus: query.copyLimit === 0 ? 'not_requested' : 'available',
 				eventPage: { events: [], total: 0 },
 				objectPage: { objects: [], total: 0 },
 				remoteFailures: { failures: [], total: 0 },
@@ -37,10 +39,16 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 				workerIssues: { failures: [], total: 0 }
 			};
 		}
-		const evidence = await withBoundedArchiveEvidenceRead(
+		const snapshot = await withBoundedArchiveEvidenceRead(
 			this.dataSource,
 			(manager) => readEvidenceSnapshot(manager, query)
 		);
+		// Optional copy discovery must not roll back already-read source faults.
+		// Release the first transaction before acquiring another (also pool-size 1).
+		const evidence = {
+			...snapshot,
+			...(await readCopyCoverage(this.dataSource, query, snapshot))
+		};
 		// This cache may acquire its own connection. Never hold the request
 		// transaction across refresh, including when the pool has only one slot.
 		const onlyRoot = query.roots.length === 1 ? query.roots[0] : undefined;
@@ -142,20 +150,11 @@ async function readEvidenceSnapshot(
 				query.eventPage
 			)
 		: { events: [], total: query.eventPage.snapshotTotal ?? 0 };
-	const copyCoverage = await findKnownArchiveCopyCoverage(
-		manager,
-		remoteFailures.failures
-			.slice(0, query.remoteFailures.limit)
-			.map((failure) => failure.object),
-		query.sameOrganizationArchiveUrlIdentities,
-		query.copyLimit,
-		query.snapshotAt
-	);
 	const statesByIdentity = new Map(
 		states.map((state) => [state.archiveUrlIdentity, state])
 	);
 	return {
-		copyCoverage,
+		copyCoverage: [],
 		eventPage,
 		objectPage,
 		remoteFailures,
@@ -165,6 +164,42 @@ async function readEvidenceSnapshot(
 			scannerOwnedState: statesByIdentity.get(root.archiveUrlIdentity) ?? null
 		}))
 	};
+}
+
+async function readCopyCoverage(
+	dataSource: DataSource,
+	query: KnownArchiveEvidenceQuery,
+	evidence: KnownArchiveEvidenceReadModel
+): Promise<
+	Pick<KnownArchiveEvidenceReadModel, 'copyCoverage' | 'copyLookupStatus'>
+> {
+	if (query.copyLimit === 0) {
+		return { copyCoverage: [], copyLookupStatus: 'not_requested' };
+	}
+	const sources = evidence.remoteFailures.failures
+		.slice(0, query.remoteFailures.limit)
+		.map((failure) => failure.object);
+	if (sources.length === 0) {
+		return { copyCoverage: [], copyLookupStatus: 'available' };
+	}
+	try {
+		const copyCoverage = await withBoundedArchiveEvidenceRead(
+			dataSource,
+			(manager) =>
+				findKnownArchiveCopyCoverage(
+					manager,
+					sources,
+					query.sameOrganizationArchiveUrlIdentities,
+					query.copyLimit,
+					query.snapshotAt
+				)
+		);
+		return { copyCoverage, copyLookupStatus: 'available' };
+	} catch (error) {
+		if (!(error instanceof ArchiveEvidenceReadModelUnavailableError))
+			throw error;
+		return { copyCoverage: [], copyLookupStatus: 'unavailable' };
+	}
 }
 
 function shouldReadPage(page: KnownArchiveEvidencePageRequest): boolean {

@@ -127,11 +127,14 @@ export function normalizeArchiveEvidencePages(
 	const workerIssueLimit = normalizePageLimit(options.workerIssueLimit);
 
 	return {
-		copyLimit: normalizeLimit(
-			options.copyLimit,
-			defaultArchiveEvidenceCopyLimit,
-			maxArchiveEvidenceCopyLimit
-		),
+		copyLimit:
+			options.copyLimit === 0
+				? 0
+				: normalizeLimit(
+						options.copyLimit,
+						defaultArchiveEvidenceCopyLimit,
+						maxArchiveEvidenceCopyLimit
+					),
 		cursorScope: normalizedCursorScope,
 		eventPage: {
 			before: toPosition(decoded.events),

@@ -204,7 +204,7 @@ describe('ArchiveEvidencePagination', () => {
 		expect(pages.workerIssues.limit).toBe(250);
 	});
 
-	it('omits zero-limit projections without disabling copy sampling', () => {
+	it('omits zero-limit projections including optional copy lookup', () => {
 		const pages = normalizeArchiveEvidencePages(
 			{
 				copyLimit: 0,
@@ -216,7 +216,7 @@ describe('ArchiveEvidencePagination', () => {
 			codec
 		);
 
-		expect(pages.copyLimit).toBe(3);
+		expect(pages.copyLimit).toBe(0);
 		expect(pages.eventPage).toMatchObject({ limit: 0, snapshotTotal: 0 });
 		expect(pages.objectPage).toMatchObject({ limit: 0, snapshotTotal: 0 });
 		expect(pages.remoteFailures).toMatchObject({

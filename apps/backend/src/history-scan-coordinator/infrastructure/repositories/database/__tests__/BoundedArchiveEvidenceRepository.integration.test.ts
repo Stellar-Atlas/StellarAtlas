@@ -10,6 +10,8 @@ import { knownArchiveFailurePageSql } from '../KnownArchiveFailurePageQuery.js';
 import { knownArchiveObjectPageSql } from '../KnownArchiveObjectPageQuery.js';
 import { knownArchiveObjectEventPageKeysSql } from '../KnownArchiveObjectEventPageQuery.js';
 import { knownArchiveFailureSummarySql } from '../KnownArchiveFailureSummaryQuery.js';
+import { knownArchiveCopyCoverageSql } from '../KnownArchiveCopyCoverageQuery.js';
+import { ArchiveEvidenceReadModelUnavailableError } from '../../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import {
 	createKnownEvidenceDataSource,
 	resetKnownEvidence,
@@ -70,21 +72,25 @@ describe('one bounded transaction per rooted evidence snapshot', () => {
 		return () => spy.mock.calls.map(([sql]) => sql);
 	}
 
-	function expectOneTransaction(statements: readonly string[]) {
+	function expectOneTransaction(statements: readonly string[], count = 1) {
 		expect(
 			statements.filter((sql) => sql === 'START TRANSACTION')
-		).toHaveLength(1);
-		expect(statements.filter((sql) => sql === 'COMMIT')).toHaveLength(1);
+		).toHaveLength(count);
+		expect(statements.filter((sql) => sql === 'COMMIT')).toHaveLength(count);
 		expect(
 			statements.filter(
 				(sql) => sql === 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ'
 			)
-		).toHaveLength(1);
+		).toHaveLength(count);
 		expect(
 			statements.filter((sql) => sql.startsWith('set transaction read only;'))
-		).toEqual([
-			"set transaction read only; set local statement_timeout = '5s'; set local lock_timeout = '250ms'"
-		]);
+		).toEqual(
+			Array.from(
+				{ length: count },
+				() =>
+					"set transaction read only; set local statement_timeout = '5s'; set local lock_timeout = '250ms'"
+			)
+		);
 		expect(statements.some((sql) => /SAVEPOINT|ROLLBACK/.test(sql))).toBe(
 			false
 		);
@@ -98,6 +104,102 @@ describe('one bounded transaction per rooted evidence snapshot', () => {
 		expect(statements).not.toContain(knownArchiveObjectPageSql);
 		expect(statements).not.toContain(knownArchiveObjectEventPageKeysSql);
 	}
+
+	function timeoutQuery(target: string) {
+		let attempts = 0;
+		const createRunner = db.createQueryRunner.bind(db);
+		jest.spyOn(db, 'createQueryRunner').mockImplementation((mode) => {
+			const runner = createRunner(mode);
+			const query = runner.query.bind(runner);
+			jest
+				.spyOn(runner, 'query')
+				.mockImplementation(async (sql, parameters, structured) => {
+					if (sql === target) {
+						attempts++;
+						await query("set local statement_timeout = '10ms'");
+						return query('select pg_sleep(0.1)', [], structured);
+					}
+					return query(sql, parameters, structured);
+				});
+			return runner;
+		});
+		return () => attempts;
+	}
+
+	async function failedSource() {
+		const failure = createEvidenceObject(
+			root,
+			'ledger:0000003f',
+			'ledger',
+			'failed'
+		);
+		failure.failureChannel = 'archive_availability';
+		failure.errorType = 'archive_http_error';
+		failure.httpStatus = 404;
+		await db.getRepository(HistoryArchiveObject).save(failure);
+		const input = request();
+		return {
+			failure,
+			input: {
+				...input,
+				remoteFailures: {
+					...input.remoteFailures,
+					limit: 10,
+					snapshotTotal: null
+				}
+			}
+		};
+	}
+
+	it('skips optional copy SQL entirely when disabled while preserving indexed failure rows', async () => {
+		const { failure, input } = await failedSource();
+		const queries = traceQueries();
+		const evidence = await new TypeOrmKnownArchiveEvidenceRepository(
+			db
+		).findEvidence({ ...input, copyLimit: 0 });
+		expectOneTransaction(queries());
+		expect(queries()).not.toContain(knownArchiveCopyCoverageSql);
+		expect(evidence.copyLookupStatus).toBe('not_requested');
+		expect(evidence.remoteFailures.total).toBe(1);
+		expect(evidence.remoteFailures.failures[0]?.object.remoteId).toBe(
+			failure.remoteId
+		);
+	});
+
+	it('rolls back only the timed-out optional copy read and retains the committed source snapshot', async () => {
+		const { failure, input } = await failedSource();
+		const queries = traceQueries();
+		const attempts = timeoutQuery(knownArchiveCopyCoverageSql);
+		const evidence = await new TypeOrmKnownArchiveEvidenceRepository(
+			db
+		).findEvidence(input);
+		expect(attempts()).toBe(1);
+		expect(evidence.copyLookupStatus).toBe('unavailable');
+		expect(evidence.copyCoverage).toEqual([]);
+		expect(evidence.remoteFailures.total).toBe(1);
+		expect(evidence.remoteFailures.failures[0]?.object.remoteId).toBe(
+			failure.remoteId
+		);
+		expect(evidence.roots[0]?.objects.remoteFailureObjects).toBe(1);
+		expect(queries().filter((sql) => sql === 'START TRANSACTION')).toHaveLength(
+			2
+		);
+		expect(queries().filter((sql) => sql === 'COMMIT')).toHaveLength(1);
+		expect(queries().filter((sql) => sql === 'ROLLBACK')).toHaveLength(1);
+		expect(queries().indexOf('COMMIT')).toBeLessThan(
+			queries().indexOf('select pg_sleep(0.1)')
+		);
+		await expect(db.query('select 1')).resolves.toEqual([{ '?column?': 1 }]);
+	});
+
+	it('still rejects unavailable source evidence instead of disguising it as an empty success', async () => {
+		const { input } = await failedSource();
+		const attempts = timeoutQuery(knownArchiveFailurePageSql('remote'));
+		await expect(
+			new TypeOrmKnownArchiveEvidenceRepository(db).findEvidence(input)
+		).rejects.toBeInstanceOf(ArchiveEvidenceReadModelUnavailableError);
+		expect(attempts()).toBe(1);
+	});
 
 	it('does no database work when no roots were requested', async () => {
 		const queries = traceQueries();
@@ -175,7 +277,8 @@ describe('one bounded transaction per rooted evidence snapshot', () => {
 			},
 			objectPage: { ...input.objectPage, limit: 1, snapshotTotal: null }
 		});
-		expectOneTransaction(queries());
+		expectOneTransaction(queries(), 2);
+		expect(evidence.copyLookupStatus).toBe('available');
 		expect(
 			queries().filter((sql) => sql === knownArchiveFailurePageSql('remote'))
 		).toHaveLength(1);

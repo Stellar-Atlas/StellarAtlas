@@ -34,7 +34,8 @@ export function mountOpenApiDocumentation(
 		api,
 		'/docs/historical',
 		createHistoricalOpenApiDocument(config.document),
-		'StellarAtlas Historical API'
+		'StellarAtlas Historical API',
+		[operatorAuth]
 	);
 	mountDocument(
 		api,

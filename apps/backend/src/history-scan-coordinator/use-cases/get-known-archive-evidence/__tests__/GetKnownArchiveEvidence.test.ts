@@ -11,6 +11,66 @@ const rootA = 'https://history-a.example.com';
 const rootB = 'https://history-b.example.com';
 
 describe('GetKnownArchiveEvidence', () => {
+	it.each(['not_requested', 'unavailable'] as const)(
+		'retains the exact source failure when copy lookup is %s',
+		async (copyLookupStatus) => {
+			const repository = mock<KnownArchiveEvidenceRepository>();
+			const failure = createObject(rootA, 'remote-a', 'failed');
+			failure.failureChannel = 'archive_availability';
+			failure.httpStatus = 404;
+			failure.errorType = 'archive_http_error';
+			failure.errorMessage = 'missing source file';
+			repository.findEvidence.mockResolvedValue({
+				copyCoverage: [],
+				copyLookupStatus,
+				eventPage: { events: [], total: 0 },
+				objectPage: { objects: [], total: 0 },
+				remoteFailures: {
+					failures: [{ object: failure, evidenceClass: 'archive-object' }],
+					total: 69_687
+				},
+				roots: [createRoot(rootA)],
+				workerIssues: { failures: [], total: 0 }
+			});
+			const result = await new GetKnownArchiveEvidence(
+				repository,
+				mock<ExceptionLogger>(),
+				createCursorCodec()
+			).execute({
+				nodePublicKeys: ['GA'],
+				options: {
+					failureLimit: 10,
+					copyLimit: copyLookupStatus === 'not_requested' ? 0 : 10
+				},
+				roots: [
+					{
+						archiveUrl: rootA,
+						archiveUrlIdentity: rootA,
+						nodePublicKeys: ['GA']
+					}
+				],
+				sameOrganizationArchiveUrlIdentities: [rootA]
+			});
+			if (result.isErr()) throw result.error;
+			expect(result.value.remoteFailures.total).toBe(69_687);
+			expect(result.value.remoteFailures.failures[0]).toMatchObject({
+				object: {
+					remoteId: failure.remoteId,
+					error: { httpStatus: 404, message: 'missing source file' }
+				},
+				networkVerifiedCopies: {
+					count: null,
+					copies: [],
+					lookupStatus: copyLookupStatus
+				},
+				sameOrganizationVerifiedCopies: {
+					count: null,
+					copies: [],
+					lookupStatus: copyLookupStatus
+				}
+			});
+		}
+	);
 	it('paginates composed evidence and separates remote failures from worker issues', async () => {
 		const repository = mock<KnownArchiveEvidenceRepository>();
 		const exceptionLogger = mock<ExceptionLogger>();
