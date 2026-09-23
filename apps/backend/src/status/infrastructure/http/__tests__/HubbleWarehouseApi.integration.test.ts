@@ -48,6 +48,37 @@ const result: HubbleQueryResult = {
 };
 
 describe('HubbleWarehouseRouter.integration', () => {
+	it('routes a dataset-specific aggregate body to the shared query service', async () => {
+		const warehouse = mockWarehouse();
+		const input = {
+			minLedger: 2,
+			maxLedger: 63,
+			groupBy: ['source_account'],
+			aggregations: [{ function: 'count', alias: 'transactions' }],
+			limit: 10
+		};
+		await request(buildRestApp(warehouse))
+			.post('/v1/analytics/datasets/history_transactions/query')
+			.send(input)
+			.expect(200);
+		expect(warehouse.query).toHaveBeenCalledWith(
+			expect.objectContaining({ ...input, dataset: 'history_transactions' })
+		);
+	});
+	it('rejects route/body dataset conflicts and unrecognized options without querying', async () => {
+		const warehouse = mockWarehouse();
+		const app = buildRestApp(warehouse);
+		await request(app)
+			.post('/v1/analytics/datasets/history_transactions/query')
+			.send({ dataset: 'accounts' })
+			.expect(400);
+		await request(app)
+			.post('/v1/analytics/query')
+			.send({ dataset: 'accounts', sql: 'DROP TABLE accounts' })
+			.expect(400);
+		expect(warehouse.query).not.toHaveBeenCalled();
+	});
+
 	it('maps dynamic resource filters to one shared warehouse query', async () => {
 		const warehouse = mockWarehouse();
 		await request(buildRestApp(warehouse))

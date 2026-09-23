@@ -1,3 +1,4 @@
+import { parseHubbleAggregateFields } from './HubbleAggregateValidation.js';
 import { registerHubbleContractEventRoutes } from './HubbleContractEventRoutes.js';
 import express, { type Request, type Response, Router } from 'express';
 import {
@@ -66,6 +67,20 @@ export function hubbleWarehouseRouter(
 		});
 	});
 
+	router.post('/datasets/:dataset/query', async (request, response) => {
+		await send(response, async () => {
+			const body = requireRecord(request.body, 'request body');
+			if (body.dataset !== undefined && body.dataset !== request.params.dataset)
+				throw new HubbleWarehouseInputError(
+					'Body dataset must match the route dataset'
+				);
+			response.setHeader('Cache-Control', 'no-store');
+			return config.warehouse.query(
+				parseBodyQuery({ ...body, dataset: request.params.dataset })
+			);
+		});
+	});
+
 	router.post('/query', async (request, response) => {
 		await send(response, async () => {
 			response.setHeader('Cache-Control', 'no-store');
@@ -120,9 +135,25 @@ async function send(
 
 function parseBodyQuery(value: unknown): HubbleQuery {
 	const body = requireRecord(value, 'request body');
+	const allowed = new Set([
+		'dataset',
+		'filters',
+		'limit',
+		'offset',
+		'orderBy',
+		'select',
+		'groupBy',
+		'aggregations',
+		'minLedger',
+		'maxLedger'
+	]);
+	for (const key of Object.keys(body))
+		if (!allowed.has(key))
+			throw new HubbleWarehouseInputError('Unknown query property: ' + key);
 	const dataset = requireString(body.dataset, 'dataset');
 	return {
 		dataset,
+		...parseHubbleAggregateFields(body),
 		filters:
 			body.filters === undefined
 				? undefined

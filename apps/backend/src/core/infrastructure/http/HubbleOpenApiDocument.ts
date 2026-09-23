@@ -1,16 +1,43 @@
-import { hubbleAccountBalancePaths, hubbleAccountBalanceSchemas } from './HubbleAccountBalanceOpenApi.js';
-import { withHubbleContractEventPath, hubbleContractEventSchemas } from './HubbleContractEventOpenApi.js';
+import {
+	withHubbleAggregateInput,
+	withHubbleAggregateResult,
+	hubbleDatasetQueryPaths
+} from './HubbleAggregateOpenApi.js';
+import {
+	hubbleCatalogExample,
+	hubbleDatasetDetailExample,
+	hubbleExampleDescription,
+	hubbleQueryBodyExample,
+	hubbleQueryResultExample
+} from './HubbleOpenApiExamples.js';
+import {
+	hubbleAccountBalancePaths,
+	hubbleAccountBalanceSchemas
+} from './HubbleAccountBalanceOpenApi.js';
+import {
+	withHubbleContractEventPath,
+	hubbleContractEventSchemas
+} from './HubbleContractEventOpenApi.js';
 import {
 	readOpenApiRecord,
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
 import { hubbleSemanticPaths } from './HubbleSemanticOpenApiPaths.js';
-import { hubbleTransferPaths, hubbleTransferSchemas } from './HubbleTransferOpenApiPaths.js';
+import {
+	hubbleTransferPaths,
+	hubbleTransferSchemas
+} from './HubbleTransferOpenApiPaths.js';
 import { withHubbleExplorerPaths } from './HubbleExplorerOpenApiPaths.js';
 import { hubbleExplorerSchemas } from './HubbleExplorerOpenApiSchemas.js';
 import { hubbleSemanticSchemas } from './HubbleSemanticOpenApiSchemas.js';
-import { hubbleGraphqlPaths, hubbleGraphqlSchemas } from './HubbleGraphqlOpenApi.js';
-import { hubbleCoverageSchema, hubbleErrorSchema } from './HubbleOpenApiSchemas.js';
+import {
+	hubbleGraphqlPaths,
+	hubbleGraphqlSchemas
+} from './HubbleGraphqlOpenApi.js';
+import {
+	hubbleCoverageSchema,
+	hubbleErrorSchema
+} from './HubbleOpenApiSchemas.js';
 import { hubbleTypedTransactionSchema } from './HubbleTransactionOpenApi.js';
 
 const analyticsTag = ['Analytics'];
@@ -68,6 +95,10 @@ const datasetSchema: OpenApiRecord = {
 	type: 'object'
 };
 const datasetDetailSchema: OpenApiRecord = {
+	description:
+		hubbleExampleDescription +
+		' One representative column is shown; the real dataset response includes all columns.',
+	example: hubbleDatasetDetailExample,
 	additionalProperties: false,
 	properties: {
 		database: { type: 'string' },
@@ -105,6 +136,8 @@ const datasetDetailSchema: OpenApiRecord = {
 	type: 'object'
 };
 const queryResultSchema: OpenApiRecord = {
+	description: hubbleExampleDescription,
+	example: hubbleQueryResultExample,
 	additionalProperties: false,
 	properties: {
 		columns: { items: { type: 'string' }, type: 'array' },
@@ -131,6 +164,9 @@ const queryResultSchema: OpenApiRecord = {
 	type: 'object'
 };
 const queryBodySchema: OpenApiRecord = {
+	description:
+		'Representative bounded query for one historical ledger. This example does not promise that the selected dataset range is currently ingested.',
+	example: hubbleQueryBodyExample,
 	additionalProperties: false,
 	properties: {
 		dataset: { type: 'string' },
@@ -189,165 +225,175 @@ const queryBodySchema: OpenApiRecord = {
 
 const ledgerCoverageSchema: OpenApiRecord = hubbleCoverageSchema;
 
-const hubblePaths: Readonly<Record<string, OpenApiRecord>> = withHubbleExplorerPaths({
-	...withHubbleContractEventPath(hubbleSemanticPaths),
-	...hubbleTransferPaths,
-	...hubbleAccountBalancePaths,
-	...hubbleGraphqlPaths,
-	'/v1/analytics/datasets': {
-		get: {
-			description:
-				'Lists all 20 official Stellar ETL/Hubble tables, their live ClickHouse columns, row estimates, and immutable-batch ingestion coverage.',
-			operationId: 'listHubbleDatasets',
-			responses: {
-				'200': {
-					content: {
-						'application/json': {
-							schema: {
-								additionalProperties: false,
-								properties: {
-									database: { type: 'string' },
-									coverage: ledgerCoverageSchema,
-									datasets: {
-										items: datasetSchema,
-										type: 'array'
+const hubblePaths: Readonly<Record<string, OpenApiRecord>> =
+	withHubbleExplorerPaths({
+		...withHubbleContractEventPath(hubbleSemanticPaths),
+		...hubbleTransferPaths,
+		...hubbleAccountBalancePaths,
+		...hubbleGraphqlPaths,
+		...hubbleDatasetQueryPaths(queryBodySchema, queryResultSchema),
+		'/v1/analytics/datasets': {
+			get: {
+				description:
+					'Lists configured parsed datasets, their live ClickHouse columns, row estimates, and completed-batch ingestion coverage. Raw ETL datasets do not imply every curated Hubble model is available.',
+				operationId: 'listHubbleDatasets',
+				responses: {
+					'200': {
+						content: {
+							'application/json': {
+								schema: {
+									description:
+										hubbleExampleDescription +
+										' One dataset with one column is shown for brevity; the live catalog returns all datasets and columns.',
+									example: hubbleCatalogExample,
+									additionalProperties: false,
+									properties: {
+										database: { type: 'string' },
+										coverage: ledgerCoverageSchema,
+										datasets: {
+											items: datasetSchema,
+											type: 'array'
+										},
+										generatedAt: {
+											format: 'date-time',
+											type: 'string'
+										},
+										ingestion: readOpenApiRecord(
+											datasetDetailSchema.properties
+										)!.ingestion,
+										officialSchemaSource: { type: 'string' }
 									},
-									generatedAt: {
-										format: 'date-time',
-										type: 'string'
-									},
-									ingestion: {
-										additionalProperties: false,
-										type: 'object'
-									},
-									officialSchemaSource: { type: 'string' }
-								},
-								required: [
-									'database',
-									'coverage',
-									'datasets',
-									'generatedAt',
-									'ingestion',
-									'officialSchemaSource'
-								],
-								type: 'object'
+									required: [
+										'database',
+										'coverage',
+										'datasets',
+										'generatedAt',
+										'ingestion',
+										'officialSchemaSource'
+									],
+									type: 'object'
+								}
 							}
+						},
+						description: 'Live Hubble warehouse catalog.'
+					},
+					'503': errorResponse('The Hubble warehouse is unavailable.')
+				},
+				security: publicAccess,
+				summary: 'List Hubble datasets',
+				tags: analyticsTag
+			}
+		},
+		'/v1/analytics/datasets/{dataset}': {
+			get: {
+				description:
+					'Returns the database name, one Hubble table schema, ingestion metadata, generation timestamp, and official schema source. Use the dataset catalog for ledger coverage.',
+				operationId: 'getHubbleDataset',
+				parameters: [datasetParameter],
+				responses: {
+					'200': {
+						content: {
+							'application/json': {
+								schema: datasetDetailSchema
+							}
+						},
+						description:
+							'Hubble dataset schema with warehouse and ingestion metadata.'
+					},
+					'400': errorResponse('The Hubble dataset is unknown.'),
+					'503': errorResponse('The Hubble warehouse is unavailable.')
+				},
+				security: publicAccess,
+				summary: 'Get a Hubble dataset schema',
+				tags: analyticsTag
+			}
+		},
+		'/v1/analytics/{dataset}': {
+			get: {
+				description:
+					'Queries one Hubble table. Any column may be a query parameter. Append __eq, __ne, __gt, __gte, __lt, __lte, __in, __contains, __is_null, or __is_not_null to select an operator. Use select for comma-separated columns and order with a minus prefix for descending order.',
+				operationId: 'queryHubbleDatasetResource',
+				parameters: [
+					datasetParameter,
+					{
+						description: 'Comma-separated response columns.',
+						in: 'query',
+						name: 'select',
+						required: false,
+						schema: { type: 'string' }
+					},
+					{
+						description:
+							'Comma-separated order columns; prefix a column with - for descending.',
+						in: 'query',
+						name: 'order',
+						required: false,
+						schema: { type: 'string' }
+					},
+					{
+						in: 'query',
+						name: 'limit',
+						required: false,
+						schema: {
+							default: 100,
+							maximum: 1000,
+							minimum: 1,
+							type: 'integer'
 						}
 					},
-					description: 'Live Hubble warehouse catalog.'
+					{
+						in: 'query',
+						name: 'offset',
+						required: false,
+						schema: { default: 0, minimum: 0, type: 'integer' }
+					}
+				],
+				responses: {
+					'200': {
+						content: {
+							'application/json': { schema: queryResultSchema }
+						},
+						description: 'Filtered Hubble rows.'
+					},
+					'400': errorResponse('The Hubble query is invalid.'),
+					'503': errorResponse('The Hubble warehouse is unavailable.')
 				},
-				'503': errorResponse('The Hubble warehouse is unavailable.')
-			},
-			security: publicAccess,
-			summary: 'List Hubble datasets',
-			tags: analyticsTag
-		}
-	},
-	'/v1/analytics/datasets/{dataset}': {
-		get: {
-			description:
-				'Returns the database name, one Hubble table schema, ingestion metadata, generation timestamp, and official schema source. Use the dataset catalog for ledger coverage.',
-			operationId: 'getHubbleDataset',
-			parameters: [datasetParameter],
-			responses: {
-				'200': {
+				security: publicAccess,
+				summary: 'Query a Hubble dataset',
+				tags: analyticsTag
+			}
+		},
+		'/v1/analytics/query': {
+			post: {
+				description:
+					'Runs a structured, parameterized query against any official Hubble table. Raw SQL is not accepted.',
+				operationId: 'queryHubbleWarehouse',
+				requestBody: {
 					content: {
 						'application/json': {
-							schema: datasetDetailSchema
+							schema: withHubbleAggregateInput(queryBodySchema)
 						}
 					},
-					description: 'Hubble dataset schema with warehouse and ingestion metadata.'
+					required: true
 				},
-				'400': errorResponse('The Hubble dataset is unknown.'),
-				'503': errorResponse('The Hubble warehouse is unavailable.')
-			},
-			security: publicAccess,
-			summary: 'Get a Hubble dataset schema',
-			tags: analyticsTag
-		}
-	},
-	'/v1/analytics/{dataset}': {
-		get: {
-			description:
-				'Queries one Hubble table. Any column may be a query parameter. Append __eq, __ne, __gt, __gte, __lt, __lte, __in, __contains, __is_null, or __is_not_null to select an operator. Use select for comma-separated columns and order with a minus prefix for descending order.',
-			operationId: 'queryHubbleDatasetResource',
-			parameters: [
-				datasetParameter,
-				{
-					description: 'Comma-separated response columns.',
-					in: 'query',
-					name: 'select',
-					required: false,
-					schema: { type: 'string' }
-				},
-				{
-					description:
-						'Comma-separated order columns; prefix a column with - for descending.',
-					in: 'query',
-					name: 'order',
-					required: false,
-					schema: { type: 'string' }
-				},
-				{
-					in: 'query',
-					name: 'limit',
-					required: false,
-					schema: {
-						default: 100,
-						maximum: 1000,
-						minimum: 1,
-						type: 'integer'
-					}
-				},
-				{
-					in: 'query',
-					name: 'offset',
-					required: false,
-					schema: { default: 0, minimum: 0, type: 'integer' }
-				}
-			],
-			responses: {
-				'200': {
-					content: {
-						'application/json': { schema: queryResultSchema }
+				responses: {
+					'200': {
+						content: {
+							'application/json': {
+								schema: withHubbleAggregateResult(queryResultSchema)
+							}
+						},
+						description: 'Filtered Hubble rows.'
 					},
-					description: 'Filtered Hubble rows.'
+					'400': errorResponse('The Hubble query is invalid.'),
+					'503': errorResponse('The Hubble warehouse is unavailable.')
 				},
-				'400': errorResponse('The Hubble query is invalid.'),
-				'503': errorResponse('The Hubble warehouse is unavailable.')
-			},
-			security: publicAccess,
-			summary: 'Query a Hubble dataset',
-			tags: analyticsTag
+				security: publicAccess,
+				summary: 'Run a structured Hubble query',
+				tags: analyticsTag
+			}
 		}
-	},
-	'/v1/analytics/query': {
-		post: {
-			description:
-				'Runs a structured, parameterized query against any official Hubble table. Raw SQL is not accepted.',
-			operationId: 'queryHubbleWarehouse',
-			requestBody: {
-				content: {
-					'application/json': { schema: queryBodySchema }
-				},
-				required: true
-			},
-			responses: {
-				'200': {
-					content: {
-						'application/json': { schema: queryResultSchema }
-					},
-					description: 'Filtered Hubble rows.'
-				},
-				'400': errorResponse('The Hubble query is invalid.'),
-				'503': errorResponse('The Hubble warehouse is unavailable.')
-			},
-			security: publicAccess,
-			summary: 'Run a structured Hubble query',
-			tags: analyticsTag
-		}
-	}
-});
+	});
 
 export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 	const source = readOpenApiRecord(document);
@@ -355,14 +401,17 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 		throw new TypeError('OpenAPI document must be an object');
 	}
 	const sourcePaths = readOpenApiRecord(source.paths);
-	if (sourcePaths === null) throw new TypeError('OpenAPI paths must be an object');
+	if (sourcePaths === null)
+		throw new TypeError('OpenAPI paths must be an object');
 	// Generated legacy docs used different placeholder names for the same routes.
 	// Keep one canonical definition and operation ID for each real HTTP path.
 	const holderAliases = new Set([
 		'/v1/analytics/assets/{assetId}/holders',
 		'/v1/analytics/assets/{assetId}/holders/{address}'
 	]);
-	const paths = Object.fromEntries(Object.entries(sourcePaths).filter(([path]) => !holderAliases.has(path)));
+	const paths = Object.fromEntries(
+		Object.entries(sourcePaths).filter(([path]) => !holderAliases.has(path))
+	);
 	for (const path of Object.keys(hubblePaths)) {
 		if (path in paths && path !== '/graphql') {
 			throw new Error('OpenAPI Hubble path already exists: ' + path);
@@ -372,13 +421,18 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 	const existingSchemas = readOpenApiRecord(components.schemas) ?? {};
 	const schemas = {
 		...hubbleAccountBalanceSchemas,
-		...hubbleContractEventSchemas, ...hubbleSemanticSchemas, ...hubbleExplorerSchemas, ...hubbleGraphqlSchemas, ...hubbleTransferSchemas,
+		...hubbleContractEventSchemas,
+		...hubbleSemanticSchemas,
+		...hubbleExplorerSchemas,
+		...hubbleGraphqlSchemas,
+		...hubbleTransferSchemas,
 		HubbleLedgerCoverage: hubbleCoverageSchema,
 		HubbleError: hubbleErrorSchema,
 		HubbleTypedTransaction: hubbleTypedTransactionSchema
 	};
 	for (const name of Object.keys(schemas)) {
-		if (name in existingSchemas) throw new Error('OpenAPI Hubble schema already exists: ' + name);
+		if (name in existingSchemas)
+			throw new Error('OpenAPI Hubble schema already exists: ' + name);
 	}
 	return {
 		...source,

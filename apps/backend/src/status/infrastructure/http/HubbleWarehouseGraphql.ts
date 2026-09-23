@@ -1,3 +1,8 @@
+import { validateHubbleGraphqlBudget } from './HubbleGraphqlBudget.js';
+import {
+	hubbleAccountBalanceSchema,
+	hubbleAccountBalanceResolvers
+} from './HubbleAccountBalanceGraphql.js';
 import {
 	hubbleAssetHolderSchema,
 	hubbleAssetHolderResolvers,
@@ -16,6 +21,7 @@ import {
 	hubbleTransactionResolvers
 } from './HubbleTransactionGraphql.js';
 import type { RequestHandler } from 'express';
+import type { HubbleAggregateFunction } from './HubbleAggregateContracts.js';
 import {
 	buildSchema,
 	GraphQLError,
@@ -97,6 +103,16 @@ const schema = buildSchema(
 		limit: Int!
 		offset: Float!
 		rows: [JSON!]!
+		aggregates: [HubbleAggregateColumn!]
+		coverage: HubbleLedgerCoverage
+		coverageStatus: String
+		window: HubbleExplorerWindow
+		nextOffset: Float
+		semantics: String
+	}
+	type HubbleAggregateColumn {
+		alias: String! function: String! field: String sourceType: String
+		valueEncoding: String! approximate: Boolean!
 	}
 
 	input HubbleQueryInput {
@@ -106,7 +122,13 @@ const schema = buildSchema(
 		offset: Float
 		orderBy: [HubbleOrderInput!]
 		select: [String!]
+		groupBy: [String!]
+		aggregations: [HubbleAggregateInput!]
+		minLedger: Int
+		maxLedger: Int
 	}
+	input HubbleAggregateInput { function: HubbleAggregateFunction! field: String alias: String! }
+	enum HubbleAggregateFunction { COUNT COUNT_DISTINCT SUM AVG MIN MAX }
 
 	input HubbleFilterInput {
 		field: String!
@@ -142,7 +164,8 @@ const schema = buildSchema(
 		hubbleTransactionSchema +
 		hubbleContractEventSchema +
 		hubbleExplorerSchema +
-		hubbleAssetHolderSchema
+		hubbleAssetHolderSchema +
+		hubbleAccountBalanceSchema
 );
 configureHubbleAssetHolderScalar(schema);
 
@@ -171,6 +194,16 @@ interface GraphqlQueryArguments {
 			readonly field: string;
 		}[];
 		readonly select?: readonly string[];
+		readonly groupBy?: readonly string[] | null;
+		readonly aggregations?:
+			| readonly {
+					readonly function: string;
+					readonly field?: string | null;
+					readonly alias: string;
+			  }[]
+			| null;
+		readonly minLedger?: number | null;
+		readonly maxLedger?: number | null;
 	};
 }
 
@@ -179,12 +212,17 @@ export function hubbleWarehouseGraphqlHandler(
 ): RequestHandler {
 	return createHandler({
 		schema,
+		validationRules: (_request, _args, specifiedRules) => [
+			...specifiedRules,
+			validateHubbleGraphqlBudget
+		],
 		rootValue: {
 			...hubbleTransferResolvers(warehouse, mapGraphqlError),
 			...hubbleTransactionResolvers(warehouse, mapGraphqlError),
 			...hubbleContractEventResolvers(warehouse, mapGraphqlError),
 			...hubbleExplorerResolvers(warehouse, mapGraphqlError),
 			...hubbleAssetHolderResolvers(warehouse, mapGraphqlError),
+			...hubbleAccountBalanceResolvers(warehouse, mapGraphqlError),
 			hubbleDatasets: async () => (await warehouse.catalog()).datasets,
 			hubbleQuery: async ({ input }: GraphqlQueryArguments) => {
 				try {
@@ -210,7 +248,14 @@ export function hubbleWarehouseGraphqlHandler(
 							'hubbleOffers',
 							'hubbleOffer',
 							'hubbleAssetHolders',
-							'hubbleAssetHolder'
+							'hubbleAssetHolder',
+							'hubbleAccountBalances',
+							'hubbleOperations',
+							'hubbleOperation',
+							'hubbleAssets',
+							'hubbleAsset',
+							'hubbleContracts',
+							'hubbleContract'
 						],
 						compatibility: 'official-stellar-etl-schema',
 						coverage: catalog.coverage,
@@ -249,8 +294,33 @@ function mapQuery(input: GraphqlQueryArguments['input']): HubbleQuery {
 					: (order.direction.toLowerCase() as 'asc' | 'desc'),
 			field: order.field
 		})),
-		select: input.select
+		select: input.select,
+		groupBy: input.groupBy ?? undefined,
+		aggregations: input.aggregations?.map((metric) => ({
+			function: mapAggregateFunction(metric.function),
+			field: metric.field ?? undefined,
+			alias: metric.alias
+		})),
+		minLedger: input.minLedger ?? undefined,
+		maxLedger: input.maxLedger ?? undefined
 	};
+}
+
+function mapAggregateFunction(value: string): HubbleAggregateFunction {
+	const functions: Readonly<Record<string, HubbleAggregateFunction>> = {
+		COUNT: 'count',
+		COUNT_DISTINCT: 'count_distinct',
+		SUM: 'sum',
+		AVG: 'avg',
+		MIN: 'min',
+		MAX: 'max'
+	};
+	const result = functions[value];
+	if (result === undefined)
+		throw new HubbleWarehouseInputError(
+			'Unsupported aggregate function: ' + value
+		);
+	return result;
 }
 
 function mapOperator(value: string): HubbleFilterOperator {
