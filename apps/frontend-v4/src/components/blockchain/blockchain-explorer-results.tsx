@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import type {
 	PublicExplorerAccount,
 	PublicExplorerAsset,
@@ -8,7 +7,6 @@ import type {
 	PublicExplorerContract,
 	PublicExplorerLedger,
 	PublicExplorerLocalAccountChanges,
-	PublicRecentTransactions,
 	PublicTransactionLookup
 } from '@api/types';
 import type {
@@ -22,10 +20,9 @@ import {
 	formatContractReadiness,
 	formatDate,
 	formatExplorerSource,
-	formatTransactionHash,
-	formatTransactionSource,
-	writeClipboardText
+	formatTransactionSource
 } from './blockchain-explorer-format';
+import { ExplorerTransactionTable } from './explorer-transaction-table';
 import { ExplorerTransactionFeedStatus } from './explorer-transaction-feed-status';
 import { ExplorerOperationTable } from './explorer-operation-table';
 import { ExplorerAccountObservation } from './explorer-account-observation';
@@ -126,7 +123,7 @@ export function RecentTransactionsView({
 	onInspect,
 	result
 }: {
-	readonly onInspect: (hash: string) => void;
+	readonly onInspect: (hash: string, ledger: string) => void;
 	readonly result: ExplorerTransactionsResult;
 }): React.JSX.Element | null {
 	if (result.message)
@@ -148,7 +145,7 @@ export function RecentTransactionsView({
 					text={`Showing the latest ${result.transactions.records.length} transactions.`}
 				/>
 			) : null}
-			<TransactionFeedRows
+			<ExplorerTransactionTable
 				onInspect={onInspect}
 				transactions={result.transactions}
 			/>
@@ -162,105 +159,6 @@ export function toDateInputValue(value: string | undefined): string {
 	if (Number.isNaN(date.getTime())) return '';
 	const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
 	return local.toISOString().slice(0, 16);
-}
-
-function TransactionFeedRows({
-	onInspect,
-	transactions
-}: {
-	readonly onInspect: (hash: string) => void;
-	readonly transactions: PublicRecentTransactions;
-}): React.JSX.Element {
-	const [expandedHash, setExpandedHash] = useState<string | null>(null);
-	const [copiedHash, setCopiedHash] = useState<string | null>(null);
-	const copyResetTimer = useRef<number | null>(null);
-
-	useEffect(() => {
-		return () => {
-			if (copyResetTimer.current !== null) {
-				window.clearTimeout(copyResetTimer.current);
-			}
-		};
-	}, []);
-
-	if (transactions.records.length === 0)
-		return <ExplorerState tone="neutral" text="No transactions returned." />;
-
-	const copyHash = (hash: string): void => {
-		void writeClipboardText(hash)
-			.then(() => {
-				setCopiedHash(hash);
-				if (copyResetTimer.current !== null) {
-					window.clearTimeout(copyResetTimer.current);
-				}
-				copyResetTimer.current = window.setTimeout(() => {
-					setCopiedHash(null);
-					copyResetTimer.current = null;
-				}, 1600);
-			})
-			.catch(() => setCopiedHash(null));
-	};
-
-	return (
-		<div className="explorer-table transaction-feed">
-			{transactions.records.slice(0, transactions.limit).map((transaction) => {
-				const expanded = expandedHash === transaction.hash;
-				const copied = copiedHash === transaction.hash;
-				const hashDetailsId = `transaction-hash-${transaction.hash}`;
-
-				return (
-					<div className="explorer-transaction-row" key={transaction.hash}>
-						<div className="transaction-hash-cell">
-							<strong
-								aria-label={`Transaction hash ${transaction.hash}`}
-								className="transaction-hash-short"
-								title={transaction.hash}
-							>
-								{formatTransactionHash(transaction.hash)}
-							</strong>
-							<button
-								aria-label={`Copy transaction hash ${transaction.hash}`}
-								className="hash-action"
-								onClick={() => copyHash(transaction.hash)}
-								type="button"
-							>
-								{copied ? 'Copied' : 'Copy'}
-							</button>
-							<button
-								aria-controls={hashDetailsId}
-								aria-expanded={expanded}
-								aria-label={`${expanded ? 'Collapse' : 'Expand'} transaction hash ${transaction.hash}`}
-								className="hash-action"
-								onClick={() =>
-									setExpandedHash(expanded ? null : transaction.hash)
-								}
-								type="button"
-							>
-								{expanded ? 'Hide' : 'Full'}
-							</button>
-							{expanded ? (
-								<code className="transaction-hash-full" id={hashDetailsId}>
-									{transaction.hash}
-								</code>
-							) : null}
-						</div>
-						<span>{formatDate(transaction.createdAt)}</span>
-						<span>ledger {transaction.ledger}</span>
-						<span>{transaction.operationCount} ops</span>
-						<span>{transaction.successful ? 'successful' : 'failed'}</span>
-						<button
-							aria-label={`Inspect transaction ${transaction.hash}`}
-							className="inspect-action"
-							onClick={() => onInspect(transaction.hash)}
-							type="button"
-						>
-							Inspect
-						</button>
-					</div>
-				);
-			})}
-		</div>
-	);
 }
 
 function LedgerCard({

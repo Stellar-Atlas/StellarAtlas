@@ -1,15 +1,9 @@
 'use client';
 import Link from 'next/link';
+import { localTimeInput } from '../../api/explorer-search-route';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-	localTimeInput,
-	normalizeExplorerTimes
-} from '../../api/explorer-search-route';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-	buildEntityApiPath,
 	buildEntityHref,
-	parseEntityPage,
-	requestExplorerJson,
 	type AnalyticsCollection,
 	type AnalyticsEntityPage,
 	type ExplorerFilters
@@ -26,17 +20,25 @@ import {
 	ExplorerEntityTable
 } from './explorer-entity-table';
 import { ExplorerContractActivity } from './explorer-contract-activity';
+import { ExplorerBalanceObservations } from './explorer-balance-observations';
+import {
+	ExplorerEntityRequest,
+	explorerPageHref,
+	previousExplorerOffset
+} from './explorer-entity-request';
 import styles from './explorer-entity.module.css';
 
 interface Props {
 	readonly collection: AnalyticsCollection;
 	readonly identifier?: string;
 	readonly initialFilters: ExplorerFilters;
+	readonly initialOffset?: number;
 }
 export function ExplorerEntityBrowser({
 	collection,
 	identifier,
-	initialFilters
+	initialFilters,
+	initialOffset = 0
 }: Props): React.JSX.Element {
 	const [filters, setFilters] = useState<ExplorerFilters>(initialFilters);
 	const [mounted, setMounted] = useState(false);
@@ -47,36 +49,33 @@ export function ExplorerEntityBrowser({
 		[elapsed, setElapsed] = useState<number | null>(null);
 	const [history, setHistory] = useState<number[]>([]);
 	const currentOffset = useRef(0);
-	const requestId = useRef(0),
-		controller = useRef<AbortController | null>(null);
+	const requests = useMemo(
+		() => new ExplorerEntityRequest(collection, identifier),
+		[collection, identifier]
+	);
 	const load = useCallback(
 		async (
 			nextFilters: ExplorerFilters,
 			offset = 0,
 			direction: 'reset' | 'next' | 'previous' = 'reset'
 		) => {
-			controller.current?.abort();
-			const abort = new AbortController(),
-				id = ++requestId.current;
-			controller.current = abort;
-			const timeout = setTimeout(() => abort.abort(), 25000),
-				started = performance.now();
+			const started = performance.now();
 			setBusy(true);
 			setError(null);
-			try {
-				nextFilters = normalizeExplorerTimes(nextFilters);
-				const previousOffset = currentOffset.current;
-				const data = parseEntityPage(
-					await requestExplorerJson(
-						buildEntityApiPath(collection, identifier, nextFilters, offset),
-						abort.signal
-					)
-				);
-				if (id !== requestId.current) return;
+			const previousOffset = currentOffset.current;
+			const outcome = await requests.run({
+				filters: nextFilters,
+				offset,
+				direction
+			});
+			if (!outcome) return;
+			setBusy(false);
+			if (outcome.ok) {
+				const data = outcome.page;
 				currentOffset.current = data.offset;
 				setPage(data);
 				const pinnedFilters = {
-					...nextFilters,
+					...outcome.request.filters,
 					min_ledger: String(data.window.minLedger),
 					max_ledger: String(data.window.maxLedger)
 				};
@@ -89,32 +88,22 @@ export function ExplorerEntityBrowser({
 							? old.slice(0, -1)
 							: [...old, previousOffset]
 				);
-				const url = buildEntityHref(collection, identifier, pinnedFilters);
-				window.history.replaceState(null, '', url);
-			} catch (failure) {
-				if (id !== requestId.current) return;
-				setError(
-					abort.signal.aborted
-						? 'The query timed out. Narrow the ledger range and try again.'
-						: failure instanceof Error
-							? failure.message
-							: 'The data service could not complete this query.'
+				const url = explorerPageHref(
+					collection,
+					identifier,
+					pinnedFilters,
+					data.offset
 				);
-			} finally {
-				clearTimeout(timeout);
-				if (id === requestId.current) {
-					setBusy(false);
-					controller.current = null;
-				}
-			}
+				window.history.replaceState(null, '', url);
+			} else setError(outcome.message);
 		},
-		[collection, identifier]
+		[collection, identifier, requests]
 	);
 	useEffect(() => {
 		setMounted(true);
-		void load(initialFilters);
-		return () => controller.current?.abort();
-	}, [load, initialFilters]);
+		void load(initialFilters, initialOffset);
+		return () => requests.cancel();
+	}, [load, initialFilters, initialOffset, requests]);
 	const chosenWindow: ExplorerFilters = page
 		? {
 				min_ledger: String(page.window.minLedger),
@@ -195,13 +184,26 @@ export function ExplorerEntityBrowser({
 				{error && (
 					<div className={styles.error} role="alert">
 						{error}{' '}
-						<button type="button" onClick={() => void load(submitted)}>
+						<button
+							type="button"
+							disabled={busy}
+							onClick={() => {
+								const retry = requests.retryRequest;
+								if (retry)
+									void load(retry.filters, retry.offset, retry.direction);
+							}}
+						>
 							Retry query
 						</button>
 					</div>
 				)}
 				{page && (
 					<>
+						{error && (
+							<p role="status">
+								Showing the last successful result; the requested update failed.
+							</p>
+						)}
 						<div className={styles.status}>
 							<span>
 								Ledgers {page.window.minLedger.toLocaleString()}–
@@ -244,9 +246,13 @@ export function ExplorerEntityBrowser({
 									returned
 								</span>
 								<button
-									disabled={busy || history.length === 0}
+									disabled={busy || page.offset === 0}
 									onClick={() =>
-										void load(submitted, history.at(-1) ?? 0, 'previous')
+										void load(
+											submitted,
+											previousExplorerOffset(page.offset, page.limit, history),
+											'previous'
+										)
 									}
 								>
 									Previous
@@ -277,6 +283,13 @@ export function ExplorerEntityBrowser({
 					</>
 				)}
 			</section>
+			{identifier && collection === 'assets' && (
+				<ExplorerBalanceObservations
+					key={identifier}
+					kind="holders"
+					identifier={identifier}
+				/>
+			)}
 		</div>
 	);
 }

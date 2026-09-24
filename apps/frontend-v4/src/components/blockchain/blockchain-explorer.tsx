@@ -90,8 +90,11 @@ export function BlockchainExplorer(): React.JSX.Element {
 			>
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<h2>Recent transactions</h2>
-						<span>Freshness and the supplying source are reported below.</span>
+						<h2>Latest available transactions</h2>
+						<span>
+							Open a record to inspect its operations, events and related
+							accounts.
+						</span>
 					</div>
 					<button disabled={feed.loading} onClick={() => void refresh()}>
 						Refresh
@@ -104,8 +107,12 @@ export function BlockchainExplorer(): React.JSX.Element {
 				/>
 				{feed.result.transactions !== null ? (
 					<RecentTransactionsView
-						onInspect={(hash) =>
-							router.push(buildEntityHref('transactions', hash))
+						onInspect={(hash, ledger) =>
+							router.push(
+								buildEntityHref('transactions', hash, {
+									ledger_sequence: ledger
+								})
+							)
 						}
 						result={feed.result}
 					/>

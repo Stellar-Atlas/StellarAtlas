@@ -9,7 +9,8 @@ import { TransferActivityPanel } from '@components/analytics/transfer-activity-p
 import { isAnalyticsCollection } from '../../../api/explorer-analytics';
 import {
 	decodeExplorerIdentifier,
-	explorerRouteFilters
+	explorerRouteFilters,
+	explorerRouteOffset
 } from '../../../api/explorer-search-route';
 interface Props {
 	readonly params: Promise<{ segments: string[] }>;
@@ -29,12 +30,15 @@ async function EntityRoute({
 	if (!collection || segments.length > 2) notFound();
 	if (identifier === null) notFound();
 	const filters = explorerRouteFilters(query);
+	const offset = explorerRouteOffset(query.offset);
+	if (offset === null) notFound();
 	if (isAnalyticsCollection(collection))
 		return (
 			<ExplorerEntityBrowser
 				collection={collection}
 				identifier={identifier}
 				initialFilters={filters}
+				initialOffset={identifier ? 0 : offset}
 			/>
 		);
 	if (collection === 'transfers' && !identifier)

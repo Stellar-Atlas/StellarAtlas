@@ -2,7 +2,12 @@
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PublicRecentTransactions } from '@api/types';
-import { RecentTransactionsView } from '../blockchain-explorer-results';
+import { jest } from '@jest/globals';
+jest.unstable_mockModule('../explorer-transaction-table.module.css', () => ({
+	default: {}
+}));
+const { RecentTransactionsView } =
+	await import('../blockchain-explorer-results');
 import { ExplorerTransactionFeedStatus } from '../explorer-transaction-feed-status';
 
 describe('ExplorerTransactionFeedStatus', () => {

@@ -1,0 +1,162 @@
+.container {
+	min-width: 0;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+.table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.83rem;
+}
+.table caption {
+	text-align: left;
+	padding: 10px 14px;
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+.table th {
+	text-align: left;
+	color: var(--muted);
+	font-size: 0.72rem;
+	font-weight: 600;
+	white-space: nowrap;
+	background: var(--surface-subtle);
+}
+.table th,
+.table td {
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--border);
+	vertical-align: middle;
+}
+.table tr:last-child td {
+	border-bottom: 0;
+}
+.table tbody tr:hover {
+	background: var(--surface-hover);
+}
+.table a {
+	color: var(--blue);
+	text-decoration: none;
+}
+.table a:hover {
+	text-decoration: underline;
+}
+.table time {
+	display: block;
+	min-width: 132px;
+	font-size: 0.77rem;
+	color: var(--muted);
+}
+.hash {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+	min-width: 196px;
+}
+.identifier {
+	font-family: var(--font-mono);
+	white-space: nowrap;
+	font-size: 0.78rem;
+}
+.actions {
+	display: flex;
+	gap: 4px;
+}
+.actions button,
+.inspect {
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	font-size: 0.72rem;
+	padding: 4px 7px;
+	cursor: pointer;
+}
+.actions button:hover,
+.inspect:hover {
+	color: var(--blue);
+	background: var(--surface-hover);
+}
+.fullHash {
+	display: block;
+	width: 100%;
+	max-width: 290px;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	font-size: 0.75rem;
+}
+.numeric {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.success,
+.failed {
+	display: inline-block;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 3px 6px;
+	font-size: 0.72rem;
+}
+.success {
+	color: var(--blue);
+}
+.failed {
+	color: var(--state-warning-ink);
+	background: var(--state-warning-bg);
+}
+@media (max-width: 680px) {
+	.container {
+		overflow: visible;
+	}
+	.table,
+	.table tbody,
+	.table tr,
+	.table td {
+		display: block;
+	}
+	.table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+	.table caption {
+		display: block;
+	}
+	.table tr {
+		padding: 10px 12px;
+		border-top: 1px solid var(--border);
+	}
+	.table td {
+		display: grid;
+		grid-template-columns: 94px minmax(0, 1fr);
+		gap: 8px;
+		padding: 5px 0;
+		border: 0;
+	}
+	.table td::before {
+		content: attr(data-label);
+		color: var(--muted);
+		font-size: 0.75rem;
+	}
+	.hash {
+		min-width: 0;
+	}
+	.identifier {
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	.table time {
+		min-width: 0;
+	}
+	.actions button,
+	.inspect {
+		min-height: 32px;
+	}
+	.table td:last-child::before {
+		align-self: center;
+	}
+}

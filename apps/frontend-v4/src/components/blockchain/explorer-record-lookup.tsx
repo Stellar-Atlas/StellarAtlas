@@ -8,6 +8,7 @@ import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { buildEntityHref } from '../../api/explorer-analytics';
+import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import styles from './explorer-entity.module.css';
 
 export function ExplorerRecordLookup({
@@ -89,6 +90,13 @@ export function ExplorerRecordLookup({
 					) : null}
 				</div>
 			</section>
+			{collection === 'accounts' && (
+				<ExplorerBalanceObservations
+					key={identifier}
+					kind="balances"
+					identifier={identifier}
+				/>
+			)}
 		</div>
 	);
 }

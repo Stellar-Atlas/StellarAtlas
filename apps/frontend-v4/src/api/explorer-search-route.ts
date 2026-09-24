@@ -56,6 +56,15 @@ export function explorerRouteFilters(
 		)
 	) as ExplorerFilters;
 }
+
+export function explorerRouteOffset(
+	value: string | string[] | undefined
+): number | null {
+	if (value === undefined) return 0;
+	if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) return null;
+	const offset = Number(value);
+	return Number.isSafeInteger(offset) && offset <= 10000 ? offset : null;
+}
 export function resolveExplorerSearch(
 	query: string,
 	type = 'auto'

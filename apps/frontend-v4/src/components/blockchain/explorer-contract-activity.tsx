@@ -1,18 +1,20 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useReducer, useState } from 'react';
+import { entityText, type ExplorerFilters } from '../../api/explorer-analytics';
 import {
-	buildEntityHref,
-	entityText,
-	recordValue,
-	requestExplorerJson,
-	normalizeWarehouseTimestamp,
-	type EntityRecord,
-	type ExplorerFilters
-} from '../../api/explorer-analytics';
+	contractActivityPath,
+	requestContractActivity,
+	type ContractActivityTab
+} from '../../api/explorer-contract-activity';
 import { LocalDateTime } from '../local-date-time';
-import { ExplorerEventProvenance } from './explorer-event-provenance';
+import { ExplorerContractRecord } from './explorer-contract-record';
+import {
+	contractActivityReducer,
+	initialContractActivityState,
+	type ContractActivityState
+} from './explorer-contract-activity-model';
 import styles from './explorer-entity.module.css';
+
 export function ExplorerContractActivity({
 	contractId,
 	filters
@@ -20,183 +22,211 @@ export function ExplorerContractActivity({
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
 }): React.JSX.Element {
-	const [tab, setTab] = useState<'events' | 'state'>('events'),
-		[rows, setRows] = useState<readonly EntityRecord[]>([]);
-	const [busy, setBusy] = useState(false),
-		[error, setError] = useState<string | null>(null),
-		[offset, setOffset] = useState(0),
-		[nextOffset, setNextOffset] = useState<number | null>(null);
-	const controller = useRef<AbortController | null>(null);
-	const min = filters.min_ledger,
-		max = filters.max_ledger;
-	useEffect(() => {
-		let disposed = false;
-		const abort = new AbortController();
-		controller.current = abort;
-		setBusy(true);
-		setError(null);
-		setRows([]);
-		setNextOffset(null);
-		const timeout = setTimeout(() => abort.abort(), 25000);
-		const query = new URLSearchParams({
-			min_ledger: min ?? '',
-			max_ledger: max ?? '',
-			limit: '10',
-			offset: String(offset)
-		});
-		void requestExplorerJson(
-			'/v1/analytics/contracts/' +
-				encodeURIComponent(contractId) +
-				'/' +
-				tab +
-				'?' +
-				query,
-			abort.signal
-		)
-			.then((value) => {
-				if (disposed) return;
-				const data = recordValue(value);
-				setRows(Array.isArray(data.rows) ? data.rows.map(recordValue) : []);
-				setNextOffset(
-					typeof data.nextOffset === 'number' ? data.nextOffset : null
-				);
-			})
-			.catch((failure) => {
-				if (!disposed)
-					setError(
-						abort.signal.aborted
-							? 'Contract query timed out. Narrow the ledger range and try again.'
-							: failure instanceof Error
-								? failure.message
-								: 'Contract data unavailable.'
-					);
-			})
-			.finally(() => {
-				clearTimeout(timeout);
-				if (!disposed) setBusy(false);
-			});
-		return () => {
-			disposed = true;
-			clearTimeout(timeout);
-			abort.abort();
-		};
-	}, [contractId, tab, offset, min, max]);
+	const [tab, setTab] = useState<ContractActivityTab>('events');
 	return (
-		<section
-			className={styles.panel}
-			aria-label="Contract activity"
-			aria-busy={busy}
-		>
+		<section className={styles.panel} aria-label="Contract activity">
 			<div className={styles.actions}>
 				<button
 					aria-pressed={tab === 'events'}
-					onClick={() => {
-						setTab('events');
-						setOffset(0);
-					}}
+					onClick={() => setTab('events')}
 				>
 					Events
 				</button>
-				<button
-					aria-pressed={tab === 'state'}
-					onClick={() => {
-						setTab('state');
-						setOffset(0);
-					}}
-				>
+				<button aria-pressed={tab === 'state'} onClick={() => setTab('state')}>
 					State changes
 				</button>
 			</div>
 			<p className={styles.muted}>
 				{tab === 'events'
-					? 'Decoded event topics and payloads, linked to their transactions.'
+					? 'Typed decoded event topics and payloads, with recorded provenance and transaction links.'
 					: 'Recorded key/value changes. This is historical evidence, not a complete current-state snapshot.'}
 			</p>
-			{busy && <p role="status">Loading contract {tab}…</p>}
-			{error && (
-				<p role="alert" className={styles.error}>
-					{error}
+			<ContractActivityResults
+				key={contractActivityPath(contractId, tab, filters)}
+				contractId={contractId}
+				filters={filters}
+				tab={tab}
+			/>
+		</section>
+	);
+}
+
+function ContractActivityResults({
+	contractId,
+	filters,
+	tab
+}: {
+	readonly contractId: string;
+	readonly filters: ExplorerFilters;
+	readonly tab: ContractActivityTab;
+}): React.JSX.Element {
+	const [state, dispatch] = useReducer(
+		contractActivityReducer,
+		initialContractActivityState
+	);
+	const { requestId, requestedPosition } = state;
+	const path = contractActivityPath(
+		contractId,
+		tab,
+		filters,
+		requestedPosition
+	);
+	useEffect(() => {
+		let disposed = false;
+		const abort = new AbortController();
+		const timeout = setTimeout(() => abort.abort(), 25000);
+		void requestContractActivity(
+			path,
+			contractId,
+			tab,
+			requestedPosition,
+			abort.signal
+		)
+			.then((page) => {
+				if (!disposed) dispatch({ type: 'loaded', requestId, page });
+			})
+			.catch((failure: unknown) => {
+				if (!disposed)
+					dispatch({
+						type: 'failed',
+						requestId,
+						error: abort.signal.aborted
+							? 'Contract query timed out. Narrow the ledger range or retry.'
+							: failure instanceof Error
+								? failure.message
+								: 'Contract data unavailable.'
+					});
+			})
+			.finally(() => clearTimeout(timeout));
+		return () => {
+			disposed = true;
+			clearTimeout(timeout);
+			abort.abort();
+		};
+	}, [path, contractId, tab, requestedPosition, requestId]);
+	return (
+		<ContractActivityView
+			state={state}
+			tab={tab}
+			onRetry={() => dispatch({ type: 'retry' })}
+			onPrevious={() => dispatch({ type: 'previous' })}
+			onNext={() => dispatch({ type: 'next' })}
+			onRefresh={() => dispatch({ type: 'refresh' })}
+		/>
+	);
+}
+
+export function ContractActivityView({
+	state,
+	tab,
+	onRetry,
+	onPrevious,
+	onNext,
+	onRefresh
+}: {
+	readonly state: ContractActivityState;
+	readonly tab: ContractActivityTab;
+	readonly onRetry: () => void;
+	readonly onPrevious: () => void;
+	readonly onNext: () => void;
+	readonly onRefresh: () => void;
+}): React.JSX.Element {
+	const page = state.page;
+	const minimum = page ? entityText(page.watermark, 'minimumLedger') : '';
+	const maximum = page ? entityText(page.watermark, 'maximumLedger') : '';
+	const observedAt = page ? entityText(page.watermark, 'observedAt') : '';
+	return (
+		<div aria-busy={state.loading}>
+			{state.loading && (
+				<p role="status">
+					Loading contract {tab}…
+					{page ? ' Keeping the last successful page visible.' : ''}
 				</p>
 			)}
-			{!busy && !error && rows.length === 0 && (
-				<p>No contract {tab} in the selected published window.</p>
-			)}
-			{rows.map((row, index) => (
-				<article
-					className={styles.panel}
-					key={entityText(row, '_row_number') + ':' + index}
-				>
-					<div className={styles.status}>
-						<span>
-							Ledger{' '}
-							{entityText(row, 'ledger_sequence') ||
-								entityText(row, '_ledger_sequence')}
-						</span>
-						{entityText(row, 'closed_at') && (
-							<LocalDateTime
-								dateTime={normalizeWarehouseTimestamp(
-									entityText(row, 'closed_at')
-								)}
-							/>
-						)}
-					</div>
-					{tab === 'events' && <ExplorerEventProvenance row={row} />}
-					{entityText(row, 'transaction_hash') && (
-						<Link
-							href={buildEntityHref(
-								'transactions',
-								entityText(row, 'transaction_hash'),
-								{
-									ledger_sequence:
-										entityText(row, 'ledger_sequence') ||
-										entityText(row, '_ledger_sequence')
-								}
-							)}
-						>
-							Open transaction
-						</Link>
+			{state.error && (
+				<div role="alert" className={styles.error}>
+					<p>{state.error}</p>
+					{page && (
+						<p>
+							Showing the last successful page; the failed request did not
+							replace these results.
+						</p>
 					)}
-					<dl className={styles.details}>
-						{(tab === 'events'
-							? [
-									['Topics', row.topics_decoded ?? row.topics],
-									['Payload', row.data_decoded ?? row.data]
-								]
-							: [
-									['Key', row.key_decoded ?? row.key],
-									['Value', row.val_decoded ?? row.val ?? row.value]
-								]
-						).flatMap(([label, value]) => [
-							<dt key={String(label) + 'label'}>{String(label)}</dt>,
-							<dd key={String(label)}>
-								<pre className={styles.json}>
-									{typeof value === 'string'
-										? value
-										: JSON.stringify(value ?? null, null, 2)}
-								</pre>
-							</dd>
-						])}
-					</dl>
-					<details>
-						<summary>Original event / state record</summary>
-						<pre className={styles.json}>{JSON.stringify(row, null, 2)}</pre>
-					</details>
-				</article>
+					<button disabled={state.loading} onClick={onRetry}>
+						Retry contract {tab}
+					</button>
+				</div>
+			)}
+			{page && (
+				<p className={styles.muted}>
+					Page {state.pageIndex + 1} · {page.rows.length}{' '}
+					{tab === 'events' ? 'events' : 'state changes'} returned.
+					{minimum && maximum && (
+						<>
+							{' '}
+							Query ledgers {minimum}–{maximum}.
+						</>
+					)}{' '}
+					Imported records only; unavailable historical data is not evidence of
+					no activity.
+				</p>
+			)}
+			{page && observedAt && (
+				<p className={styles.muted}>
+					Query watermark recorded <LocalDateTime dateTime={observedAt} />.
+				</p>
+			)}
+			{page && Object.keys(page.coverage).length > 0 && (
+				<details>
+					<summary>Published dataset coverage</summary>
+					<p>
+						Contiguous imported ledgers:{' '}
+						{entityText(page.coverage, 'contiguousFirstLedger') ||
+							'not reported'}
+						–
+						{entityText(page.coverage, 'contiguousLastLedger') ||
+							'not reported'}
+						.
+					</p>
+					<p>
+						Coverage describes imported data, not complete network history or
+						current contract state.
+					</p>
+				</details>
+			)}
+			{!state.loading && !state.error && page?.rows.length === 0 && (
+				<p>
+					No contract {tab} were returned from imported records in this query
+					window.
+				</p>
+			)}
+			{page?.rows.map((row, index) => (
+				<ExplorerContractRecord
+					key={
+						entityText(row, 'id') ||
+						entityText(row, '_row_number') + ':' + index
+					}
+					row={row}
+					tab={tab}
+				/>
 			))}
 			<div className={styles.actions}>
 				<button
-					disabled={busy || offset === 0}
-					onClick={() => setOffset(Math.max(0, offset - 10))}
+					disabled={state.loading || state.pageIndex === 0}
+					onClick={onPrevious}
 				>
 					Previous {tab}
 				</button>
 				<button
-					disabled={busy || nextOffset === null}
-					onClick={() => setOffset(nextOffset ?? offset)}
+					disabled={state.loading || !page || page.nextPosition === null}
+					onClick={onNext}
 				>
 					Next {tab}
 				</button>
+				<button disabled={state.loading || !page} onClick={onRefresh}>
+					Refresh current page
+				</button>
 			</div>
-		</section>
+		</div>
 	);
 }
