@@ -163,3 +163,34 @@ References: [DETACH preservation](https://clickhouse.com/docs/reference/statemen
 [CHECK TABLE](https://clickhouse.com/docs/reference/statements/check-table),
 [MergeTree settings / old_parts_lifetime](https://clickhouse.com/docs/reference/settings/merge-tree-settings),
 [official checksum format](https://github.com/ClickHouse/ClickHouse/blob/master/src/Storages/MergeTree/MergeTreeDataPartChecksum.cpp).
+
+## Automatic admission recovery deployed
+
+On 2026-09-08 at 02:12:06–02:12:07 UTC, the Hubble importer alone was restarted
+onto the tested warehouse-readiness binary:
+
+- Source commit: `d9670a4b`.
+- Binary: `/mnt/fast/stellaratlas/bin/stellaratlas-hubble-etl-warehouse-readiness-20260908T020700Z`.
+- SHA-256: `19890d836915dcf0c829f44af5cc38637298df0c3285a82c6f9f7cb7f1d9de87`.
+- Previous binary remains available at
+  `/mnt/fast/stellaratlas/bin/stellaratlas-hubble-etl-shared-input-360adeb9`.
+
+The shared readiness gate probes required schemas without scanning dataset rows.
+It pauses new batch admission while required tables are unavailable and resumes
+automatically once they are accessible. It does not discard parts, bypass
+corruption guards, or automatically repair arbitrary data corruption.
+Full Go race tests passed before deployment.
+
+At 02:22:34 UTC, Hubble PID 1074583, ClickHouse PID 962278, scanner PID 49041 and
+dispatcher PID 48556 were active with zero restarts. The scanner and dispatcher
+PIDs were unchanged throughout this recovery. The readiness log appeared at
+02:12:12 UTC. Two normal batches completed after deployment:
+
+- `b707a6b2...`: ledgers 29,508,739–29,509,762, completed 02:14:56 UTC.
+- `8e603673...`: ledgers 29,507,715–29,508,738, completed 02:15:42 UTC.
+
+The importer reported 2,048 ledgers, 4,175,840 rows and zero failed batches.
+The public datasets catalog returned HTTP 200 in 531 ms. Contiguous coverage
+was ledger 2 through 29,509,762, plus a separate 1,024-ledger supplemental range
+63,490,179–63,491,202. This is recovered ingestion, not a completed historical
+backfill or evidence that storage pressure is resolved.
