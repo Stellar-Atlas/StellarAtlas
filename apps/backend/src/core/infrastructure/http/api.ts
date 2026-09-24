@@ -9,7 +9,7 @@ import { subscriptionRouter } from '@notifications/infrastructure/http/Subscript
 import bodyParser from 'body-parser';
 import { Server } from 'http';
 import type { Socket } from 'net';
-import swaggerDocument from '../../../../openapi.json' with { type: 'json' };
+import openApiDocument from '../../../../openapi.json' with { type: 'json' };
 import { ConfirmSubscription } from '@notifications/use-cases/confirm-subscription/ConfirmSubscription.js';
 import { Subscribe } from '@notifications/use-cases/subscribe/Subscribe.js';
 import { UnmuteNotification } from '@notifications/use-cases/unmute-notification/UnmuteNotification.js';
@@ -218,9 +218,7 @@ const listen = async () => {
 	api.all('/graphql', hubbleWarehouseGraphqlHandler(hubbleWarehouse));
 
 	mountOpenApiDocumentation(api, {
-		document: swaggerDocument,
-		operatorPassword: config.historyScanAPIPassword,
-		operatorUserName: config.historyScanAPIUsername
+		document: openApiDocument
 	});
 
 	api.use(
