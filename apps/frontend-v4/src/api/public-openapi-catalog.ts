@@ -85,15 +85,11 @@ export function parsePublicOpenApiCatalog(
 
 export function publicOperationTryItUrl(
 	operation: PublicOpenApiOperation,
-	tag: string
+	_tag: string
 ): string {
-	return (
-		'/api-docs?view=swagger#/' +
-		encodeURIComponent(tag) +
-		(operation.operationId
-			? '/' + encodeURIComponent(operation.operationId)
-			: '')
-	);
+	return operation.operationId
+		? '/docs/api/' + encodeURIComponent(operation.operationId)
+		: '/docs/api';
 }
 
 function readTags(operation: Record<string, unknown>): readonly string[] {
