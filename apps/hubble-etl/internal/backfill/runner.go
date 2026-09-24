@@ -24,6 +24,7 @@ type Config struct {
 	MaximumBatches    int
 	PriorityBatchID   string
 	PressureGuard     *PressureGuard
+	ReadinessGuard    *WarehouseReadinessGuard
 	OnProgress        func(Summary)
 }
 
@@ -63,6 +64,11 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 	if config.MaximumBatches < 0 {
 		return summary, fmt.Errorf("maximum batches cannot be negative")
 	}
+	if config.ReadinessGuard != nil {
+		if err := config.ReadinessGuard.Wait(ctx); err != nil {
+			return summary, err
+		}
+	}
 	batches, err := catalog.Load(
 		ctx,
 		config.DatabaseURL,
@@ -95,10 +101,8 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		go func() {
 			defer workers.Done()
 			for batch := range jobs {
-				if config.PressureGuard != nil {
-					if err := config.PressureGuard.Wait(ctx); err != nil {
-						return
-					}
+				if err := waitBatchAdmission(ctx, config); err != nil {
+					return
 				}
 				path, err := sourcePath(config.StorageRoot, batch.StorageKey)
 				var receipt ingestion.Receipt
@@ -113,6 +117,9 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 						DecodeLimits:      config.DecodeLimits,
 						WriterLimits:      config.WriterLimits,
 					})
+				}
+				if config.ReadinessGuard != nil {
+					config.ReadinessGuard.Invalidate(err)
 				}
 				select {
 				case results <- result{batch: batch, receipt: receipt, err: err}:

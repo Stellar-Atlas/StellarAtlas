@@ -1,9 +1,39 @@
 # ClickHouse interrupted-merge recovery handoff — 2026-09-07
 
-Status: diagnosis and read-only verification complete; **recovery has NOT run**.
-Automatic review rejected the recovery command before execution. Explicit user
-approval for the brief Hubble/ClickHouse interruption and exact recoverable move
-is pending. Do not retry indirectly or broaden the repair.
+Status: **recovered and data gate passed on 2026-09-08 UTC**. After the user
+explicitly required recovery, the exact command was resubmitted through review
+and executed. The original rejection was not bypassed. The damaged merged part
+was preserved; no data or predecessor parts were deleted.
+
+## Executed recovery and validation
+
+- 01:52:23 UTC: stopped only Hubble and ClickHouse, verified inactive processes,
+  and revalidated all eight retained parts: 317 manifest size entries,
+  2,318,735 rows, 1,957,894,212 total file bytes.
+- Moved only the exact damaged part to the recoverable detached path below.
+  Existing corruption thresholds were unchanged.
+- 01:54:30 UTC: ClickHouse active, PID 962278. Hubble remained stopped for checks.
+- ClickHouse rebuilt the covering part from the retained predecessors using the
+  same part name. The new tx_envelope.bin is 742,380,262 bytes; the preserved
+  damaged copy remains 645,922,816 bytes.
+- 01:58:32–01:58:36 UTC: native CHECK TABLE PART on the regenerated
+  28_56957_56992_3 returned is_passed=1. An exact-part query confirmed
+  2,318,735 rows, ledger range 29,491,331–29,503,493. The supported query limit
+  is max_local_read_bandwidth=26214400, with max_threads=1.
+- Public requests passed: datasets HTTP 200 (571 ms), documented typed
+  transaction HTTP 200 (24,856 ms), account balances HTTP 200 (10,422 ms).
+  These restore availability, not acceptable final query latency.
+- Coverage remained honest: contiguous ledgers 2–29,503,618 plus the separate
+  1,024-ledger supplemental range 63,490,179–63,491,202. This is not full ingestion.
+- 02:00:48 UTC: resumed the existing Hubble importer with unchanged configuration,
+  PID 1006801. Two subsequent normal batches completed: ledgers
+  29,503,619–29,505,666, 2,048 ledgers, 3,855,880 rows, zero failed batches.
+  The existing I/O-pressure admission guard deferred/resumed new work as designed.
+- Archive scanner PID 49041 and dispatcher PID 48556 remained active, unchanged,
+  with zero restarts throughout recovery.
+
+The remaining sections retain the original diagnostic evidence and exact
+recovery procedure. They are not instructions to repeat a now-completed move.
 
 ## Exact incident and evidence
 
@@ -30,7 +60,8 @@ is pending. Do not retry indirectly or broaden the repair.
 | `tx_meta.bin` | 821,953,442 | 801,112,064 |
 
 Despite a startup “Detaching broken part” log, the size guard prevented completed
-recovery: the broken directory remains in `BASE`; the checked detached listing was empty.
+recovery at diagnosis time: the broken directory remained in `BASE` and the checked
+detached listing was empty. The completed recovery above supersedes that state.
 
 ## Verified predecessor parts — preserve every one
 
@@ -59,7 +90,7 @@ At 23:44:50 UTC, the small `_ingestion_batches FINAL` manifest query returned
 12 complete source batches spanning 29,491,331–29,503,618 with source SHA-256s.
 Raw lake files were not reread. No source replay is needed if predecessor recovery passes.
 
-## Approved-scope recovery proposal — requires explicit user approval
+## Exact recovery procedure — executed once after authorization
 
 Only the existing Hubble importer and ClickHouse may be stopped. Last verified
 proof units: scanner PID 49041 and dispatcher PID 48556, both active, zero restarts.
@@ -67,7 +98,8 @@ Hubble PID 48577 was active. Reconfirm identities immediately before proceeding.
 
 Use the configured VM SSH route, then **only** `admins@192.168.122.1` for the host.
 Use the normal authorized ClickHouse operator client; never print credentials.
-The following is a proposal, not a record of commands executed:
+The following records the recovery sequence. Do not rerun it: a new healthy part
+of the same name now exists and the preserved destination is occupied.
 
 ```bash
 set -euo pipefail

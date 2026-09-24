@@ -9,6 +9,34 @@ LCM batches into the existing ClickHouse warehouse. The shared I/O pressure
 guard, immutable source-digest checks, and completed-batch deduplication apply
 to every batch, including a priority batch.
 
+## Warehouse readiness admission
+
+Both workers share one cached readiness gate. It resolves the ingestion manifest
+and all 20 required dataset tables using sequential `DESCRIBE TABLE` requests,
+without reading dataset rows. A running ClickHouse process or successful ping
+does not prove that its asynchronously loaded tables are available.
+
+A successful probe is cached for 60 seconds; only one probe runs at a time.
+Probes have a 10-second total deadline. An unavailable warehouse pauses new batch
+admission and is rechecked after 15 seconds, with cancellation-aware waits.
+ClickHouse request failures invalidate the cache; local source/digest/decoder
+failures and normal shutdown do not. The gate runs before catalog loading and
+again before source decoding, including after a long I/O-pressure wait.
+Already admitted batches retain their normal completion/failure handling.
+
+`warehouse-unavailable` journal events include the table/request failure and
+paused-admission action; `warehouse-ready` records recovery. Once table readiness
+returns, the same workers resume automatically under unchanged I/O limits.
+Startup initialization failures wait for readiness before one initialization
+retry, rather than repeatedly issuing schema statements while tables are down.
+
+This is availability supervision, not corruption repair: it does not move or
+delete parts, raise corruption thresholds, replay source data, restart ClickHouse,
+or send an external alert. Damaged parts still require the separately validated
+recovery procedure. Observe transitions with
+`journalctl -u stellaratlas-hubble-etl.service`; a healthy gate does not claim
+complete historical coverage or validate every stored row/checksum.
+
 ## Optional one-time retained batch priority
 
 Set `HUBBLE_ETL_PRIORITY_BATCH_ID` in the existing host file

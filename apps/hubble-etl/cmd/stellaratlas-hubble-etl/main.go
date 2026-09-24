@@ -29,6 +29,7 @@ type config struct {
 	storageRoot       string
 	workers           int
 	pressureGuard     *backfill.PressureGuard
+	readinessGuard    *backfill.WarehouseReadinessGuard
 }
 
 func main() {
@@ -51,7 +52,16 @@ func run() int {
 		syscall.SIGTERM,
 	)
 	defer cancel()
-	if err := cfg.client.Initialize(ctx); err != nil {
+	err = cfg.client.Initialize(ctx)
+	if err != nil && os.Args[1] == "run" && cfg.readinessGuard.Invalidate(err) {
+		if err := cfg.readinessGuard.Wait(ctx); err != nil {
+			return 0
+		}
+		// Retry initialization once after table readiness recovers. A persistent
+		// DDL/configuration error with otherwise healthy tables must not spin.
+		err = cfg.client.Initialize(ctx)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "stellaratlas-hubble-etl:", err)
 		return 1
 	}
@@ -97,7 +107,13 @@ func loadConfig() (config, error) {
 		return result, err
 	}
 	result = config{
-		pressureGuard:     guard,
+		pressureGuard: guard,
+		readinessGuard: &backfill.WarehouseReadinessGuard{
+			Probe: client.CheckReady,
+			Log: func(event, reason string) {
+				_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"event": event, "reason": reason})
+			},
+		},
 		client:            client,
 		databaseURL:       os.Getenv("ACTIVE_DATABASE_URL"),
 		maximumBatches:    maximumBatches,
@@ -127,6 +143,7 @@ func runBackfill(ctx context.Context, cfg config) error {
 			StorageRoot:       cfg.storageRoot,
 			WorkerCount:       cfg.workers,
 			PressureGuard:     cfg.pressureGuard,
+			ReadinessGuard:    cfg.readinessGuard,
 			OnProgress: func(summary backfill.Summary) {
 				_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
 					"event":           "batch-completed",
@@ -151,6 +168,12 @@ func runBackfill(ctx context.Context, cfg config) error {
 			},
 		})
 		if err != nil {
+			if cfg.readinessGuard.Invalidate(err) {
+				if waitErr := cfg.readinessGuard.Wait(ctx); waitErr != nil {
+					return waitErr
+				}
+				continue
+			}
 			return err
 		}
 		if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {

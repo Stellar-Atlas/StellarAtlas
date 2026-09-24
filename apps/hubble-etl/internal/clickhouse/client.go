@@ -189,7 +189,12 @@ func (c *Client) execute(
 	query string,
 	params url.Values,
 	body []byte,
-) ([]byte, error) {
+) (result []byte, finalErr error) {
+	defer func() {
+		if finalErr != nil {
+			finalErr = &RequestError{Err: finalErr}
+		}
+	}()
 	requestURL := *c.endpoint
 	values := requestURL.Query()
 	values.Set("query", query)
