@@ -1,3 +1,4 @@
+import { StrKey } from '@stellar/stellar-sdk';
 import { attachExplorerTransactionHashes } from './HubbleExplorerRelationships.js';
 import { isHubbleLedgerWindowComplete } from './HubbleLedgerCoverage.js';
 import type {
@@ -32,7 +33,8 @@ const datasets: Record<ExplorerEntity, string> = {
 	assets: 'history_assets',
 	contracts: 'contract_data',
 	trades: 'history_trades',
-	offers: 'offers'
+	offers: 'offers',
+	'liquidity-pools': 'liquidity_pools'
 };
 export function operationLedger(id: string): number {
 	if (!/^[1-9][0-9]{0,18}$/.test(id) || BigInt(id) > 9223372036854775807n)
@@ -146,11 +148,13 @@ export async function queryExplorer(
 		coverageStatus: complete ? 'complete' : 'partial_or_unknown',
 		source: 'stellar_hubble',
 		semantics:
-			input.entity === 'offers'
-				? 'Historical offer changes; detail is latest observed in the selected window, not the current order book.'
-				: distinct
-					? 'Distinct identities observed in completed parsed batches within the selected window, not a current global registry.'
-					: 'Records from completed parsed batches within the selected ledger and optional time window.'
+			input.entity === 'liquidity-pools'
+				? 'Native protocol liquidity-pool change observations, including removals. Rows are not distinct pools. Detail is latest observed in the selected window, not current reserves or a live inventory; contract AMMs are separate.'
+				: input.entity === 'offers'
+					? 'Historical offer changes; detail is latest observed in the selected window, not the current order book.'
+					: distinct
+						? 'Distinct identities observed in completed parsed batches within the selected window, not a current global registry.'
+						: 'Records from completed parsed batches within the selected ledger and optional time window.'
 	};
 	let records = result.rows
 		.slice(0, input.id ? 1 : limit)
@@ -178,6 +182,7 @@ function addFilters(input: ExplorerInput, filters: HubbleFilter[]): void {
 		operations: { source_account: 'source_account', type: 'type' },
 		assets: { asset_code: 'asset_code', asset_issuer: 'asset_issuer' },
 		contracts: {},
+		'liquidity-pools': {},
 		offers: { seller: 'seller_id', offer_id: 'offer_id' },
 		trades: {
 			seller: 'selling_account_address',
@@ -186,6 +191,28 @@ function addFilters(input: ExplorerInput, filters: HubbleFilter[]): void {
 		}
 	};
 	for (const [name, value] of Object.entries(input.filters)) {
+		if (input.entity === 'liquidity-pools') {
+			if (name === 'pool_id') {
+				eq('liquidity_pool_id', normalizeNativePoolId(value));
+				continue;
+			}
+			if (name === 'deleted') {
+				if (value !== 'true' && value !== 'false')
+					fail('deleted must be true or false');
+				filters.push({
+					field: 'deleted',
+					operator: 'eq',
+					value: value === 'true'
+				});
+				continue;
+			}
+			if (name === 'asset_a' || name === 'asset_b') {
+				assetFilters(value, '', (field, match) =>
+					eq(field.replace('asset_', name + '_'), match)
+				);
+				continue;
+			}
+		}
 		if (
 			input.entity === 'operations' &&
 			name === 'type' &&
@@ -222,6 +249,8 @@ function addFilters(input: ExplorerInput, filters: HubbleFilter[]): void {
 		fail('Unsupported ' + input.entity + ' filter: ' + name);
 	}
 	if (input.id === undefined) return;
+	if (input.entity === 'liquidity-pools')
+		eq('liquidity_pool_id', normalizeNativePoolId(input.id));
 	if (input.entity === 'operations') eq('id', input.id);
 	if (input.entity === 'offers') {
 		if (!/^[1-9][0-9]{0,18}$/.test(input.id)) fail('Invalid offer id');
@@ -256,4 +285,13 @@ function assetFilters(
 }
 function fail(message: string): never {
 	throw new HubbleWarehouseInputError(message);
+}
+
+export function normalizeNativePoolId(value: string): string {
+	if (/^[a-fA-F0-9]{64}$/.test(value)) return value.toLowerCase();
+	if (StrKey.isValidLiquidityPool(value))
+		return StrKey.decodeLiquidityPool(value).toString('hex');
+	return fail(
+		'Pool id must be a 64-character hex hash or checksum-valid L-address'
+	);
 }

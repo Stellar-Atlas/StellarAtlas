@@ -29,7 +29,7 @@ export async function findPrioritizedHistoryArchiveObjectTransitions(
 				])) as readonly TransitionTargetRow[]);
 	const remaining = safeLimit - runtimeRows.length;
 	const genericRows =
-		remaining <= 0 || maximumPriority === 0 || runtimeRows.length > 0
+		remaining <= 0 || maximumPriority === 0
 			? []
 			: ((await repository.manager.query(
 					genericTransitionsSqlByMaximumPriority[maximumPriority],
@@ -60,8 +60,8 @@ const terminalTransitionPredicateSql = `
 `;
 
 // Frontier work must not wait behind historical terminal rows. Those rows remain
-// durable and are drained by the generic remainder after the current bottom-up
-// cohort has been reconciled.
+// durable and fill any remaining batch capacity even while the current bottom-up
+// cohort is busy, without displacing the frontier rows selected first.
 export const frontierTransitionsSql = `
 	select object."remoteId"
 	from "history_archive_checkpoint_scan_cursor" chain_cursor

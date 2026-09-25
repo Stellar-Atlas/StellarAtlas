@@ -9,6 +9,35 @@ const { ExplorerEntityNavigation } =
 const { ExplorerEntityTable, ExplorerEntityDetails } =
 	await import('../explorer-entity-table');
 describe('parsed explorer presentation', () => {
+	it('shows native pool observations, nullable removals and correctly scoped pair-trade links', () => {
+		const html = renderToStaticMarkup(
+			createElement(ExplorerEntityDetails, {
+				collection: 'liquidity-pools',
+				filters: { min_ledger: '63491202', max_ledger: '63491202' },
+				row: {
+					id: 'pool',
+					assetA: { id: 'native' },
+					assetB: { id: 'USD:GABC', code: 'USD' },
+					reserveA: '1635.3635675',
+					deleted: false
+				}
+			})
+		);
+		expect(html).toContain('Reserve A');
+		expect(html).toContain('1635.3635675');
+		expect(html).toContain('selling_asset=native');
+		expect(html).toContain('buying_asset=native');
+		expect(html).toContain('(all venues)');
+		const removed = renderToStaticMarkup(
+			createElement(ExplorerEntityTable, {
+				collection: 'liquidity-pools',
+				filters: {},
+				rows: [{ id: 'pool', deleted: true, reserveA: null }]
+			})
+		);
+		expect(removed).toContain('Removed');
+		expect(removed).not.toContain('Open at observation');
+	});
 	it('does not label an unrecorded trade counterparty as a native asset', () => {
 		const html = renderToStaticMarkup(
 			createElement(ExplorerEntityTable, {
@@ -42,6 +71,7 @@ describe('parsed explorer presentation', () => {
 			'contracts',
 			'trades',
 			'offers',
+			'liquidity-pools',
 			'transfers'
 		])
 			expect(html).toContain('/explorer/' + collection);

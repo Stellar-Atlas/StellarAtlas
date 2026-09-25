@@ -15,7 +15,8 @@ export function registerHubbleExplorerRoutes(
 		'assets',
 		'contracts',
 		'trades',
-		'offers'
+		'offers',
+		'liquidity-pools'
 	] as const) {
 		for (const detail of [false, true]) {
 			router.get(

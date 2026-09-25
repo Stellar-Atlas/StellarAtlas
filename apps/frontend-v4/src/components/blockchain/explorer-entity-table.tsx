@@ -64,7 +64,7 @@ function Field({
 		return text ? <LocalDateTime dateTime={text} /> : <>—</>;
 	if (field === 'deleted')
 		return <>{row.deleted === true ? 'Removed' : 'Open at observation'}</>;
-	if (field === 'sellingAsset' || field === 'buyingAsset') {
+	if (['sellingAsset', 'buyingAsset', 'assetA', 'assetB'].includes(field)) {
 		const asset = recordValue(row[field]),
 			id = entityText(asset, 'id');
 		return id ? (
@@ -271,6 +271,28 @@ export function ExplorerEntityDetails({
 				>
 					Open trade operation
 				</Link>
+			)}
+			{collection === 'liquidity-pools' && row.deleted !== true && (
+				<div className={styles.actions}>
+					{(['a', 'b'] as const).map((side) => (
+						<Link
+							key={side}
+							href={buildEntityHref('trades', undefined, {
+								...filters,
+								selling_asset: entityText(
+									recordValue(row[side === 'a' ? 'assetA' : 'assetB']),
+									'id'
+								),
+								buying_asset: entityText(
+									recordValue(row[side === 'a' ? 'assetB' : 'assetA']),
+									'id'
+								)
+							})}
+						>
+							Pair trades: {side === 'a' ? 'A to B' : 'B to A'} (all venues)
+						</Link>
+					))}
+				</div>
 			)}
 		</>
 	);

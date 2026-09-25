@@ -32,6 +32,10 @@ const filterNames = new Set([
 	'seller',
 	'buyer',
 	'offer_id',
+	'pool_id',
+	'asset_a',
+	'asset_b',
+	'deleted',
 	'selling_asset',
 	'buying_asset',
 	'operation_id',
@@ -76,21 +80,24 @@ export function resolveExplorerSearch(
 	if (!value) return null;
 	const selected =
 		type === 'auto'
-			? /^C[A-Z2-7]{55}$/.test(value)
-				? 'contract'
-				: /^G[A-Z2-7]{55}$/.test(value)
-					? 'account'
-					: /^[a-fA-F0-9]{64}$/.test(value)
-						? 'transaction'
-						: value === 'native' || /^[^:]+:G[A-Z2-7]{55}$/.test(value)
-							? 'asset'
-							: /^\d+$/.test(value)
-								? BigInt(value) > 4294967295n
-									? 'operation'
-									: 'ledger'
-								: null
+			? /^L[A-Z2-7]{55}$/.test(value)
+				? 'pool'
+				: /^C[A-Z2-7]{55}$/.test(value)
+					? 'contract'
+					: /^G[A-Z2-7]{55}$/.test(value)
+						? 'account'
+						: /^[a-fA-F0-9]{64}$/.test(value)
+							? 'transaction'
+							: value === 'native' || /^[^:]+:G[A-Z2-7]{55}$/.test(value)
+								? 'asset'
+								: /^\d+$/.test(value)
+									? BigInt(value) > 4294967295n
+										? 'operation'
+										: 'ledger'
+									: null
 			: type;
 	const collections: Readonly<Record<string, string>> = {
+		pool: 'liquidity-pools',
 		contract: 'contracts',
 		account: 'accounts',
 		transaction: 'transactions',

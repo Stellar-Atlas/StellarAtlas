@@ -1,184 +1,271 @@
 import Link from 'next/link';
-import type { PublicNetwork, PublicNode } from '../api/types';
+import type { PublicNetwork } from '../api/types';
 import { formatOrganization30DayAvailability } from '../domain/availability';
-import { getRiskNodes, getTopOrganizations } from '../domain/network';
-import { formatBoolean, formatInteger } from '../format/formatters';
+import { getNodeLabel, getOrganizationLabel } from '../domain/network';
+import {
+	getOverviewAttention,
+	getOverviewOrganizations,
+	getOverviewVersions,
+	type OverviewOrganization
+} from '../domain/network-overview-model';
+import { formatInteger } from '../format/formatters';
 import { PageHeading } from './layout/page-heading';
-import { StatCard } from './stat-card';
+import styles from './network-overview.module.css';
 
-const countByVersion = (nodes: PublicNode[]): Map<string, number> => {
-	const counts = new Map<string, number>();
-
-	for (const node of nodes) {
-		const label = node.versionStr ?? 'Unknown';
-		counts.set(label, (counts.get(label) ?? 0) + 1);
-	}
-
-	return counts;
-};
-
-const getTopVersions = (nodes: PublicNode[]): [string, number][] =>
-	Array.from(countByVersion(nodes).entries())
-		.sort((left, right) => right[1] - left[1])
-		.slice(0, 5);
-
-interface NetworkOverviewProps {
-	network: PublicNetwork;
+function OrganizationRows({
+	rows
+}: {
+	rows: readonly OverviewOrganization[];
+}): React.JSX.Element {
+	return (
+		<div className={styles.tableWrap}>
+			<table className={styles.table}>
+				<thead>
+					<tr>
+						<th scope="col">Organization</th>
+						<th scope="col">Validating</th>
+						<th scope="col">Quorum path</th>
+						<th scope="col">30-day availability</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map(({ organization, validating, validators }) => (
+						<tr key={organization.id}>
+							<td>
+								<Link
+									href={`/organizations/${encodeURIComponent(organization.id)}`}
+									prefetch={false}
+								>
+									<strong>{getOrganizationLabel(organization)}</strong>
+								</Link>
+								<small>{organization.homeDomain}</small>
+							</td>
+							<td>
+								{validating} / {validators}
+								<small>observed validators</small>
+							</td>
+							<td
+								className={
+									organization.subQuorumAvailable ? styles.good : styles.warning
+								}
+							>
+								{organization.subQuorumAvailable ? 'Available' : 'Unavailable'}
+							</td>
+							<td>{formatOrganization30DayAvailability(organization).value}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	);
 }
 
 export function NetworkOverview({
 	network
-}: NetworkOverviewProps): React.JSX.Element {
-	const topVersions = getTopVersions(network.nodes);
-	const riskNodes = getRiskNodes(network.nodes).slice(0, 8);
-	const topOrganizations = getTopOrganizations(network.organizations).slice(
-		0,
-		8
+}: {
+	network: PublicNetwork;
+}): React.JSX.Element {
+	const validators = network.nodes.filter((node) => node.isValidator);
+	const validating = validators.filter((node) => node.isValidating);
+	const organizations = getOverviewOrganizations(network);
+	const participating = organizations.filter((row) => row.validating > 0);
+	const other = organizations.filter((row) => row.validating === 0);
+	const attention = getOverviewAttention(network.nodes);
+	const versions = getOverviewVersions(network.nodes);
+	const roots = new Set(
+		validators.flatMap((node) => (node.historyUrl ? [node.historyUrl] : []))
 	);
-
+	const statistics = network.statistics;
 	return (
-		<main className="shell" data-network-scope={network.scope}>
+		<main
+			className={`shell ${styles.overview}`}
+			data-network-scope={network.scope}
+		>
 			<PageHeading
-				description="Live network topology, validator health, organization coverage, and observed Stellar Core versions."
+				title="Network overview"
 				eyebrow={network.name}
-				scopeContext={{
-					kind: 'network',
-					scope: network.scope
-				}}
-				title="Network operations"
+				description="Who is validating, which operators need attention, and how the observed quorum is connected."
+				scopeContext={{ kind: 'network', scope: network.scope }}
 			/>
-
-			<section className="stats-grid" aria-label="Network statistics">
-				<StatCard
-					detail={`${formatInteger(network.nodes.length)} observed nodes`}
-					label="Connectable nodes"
-					value={formatInteger(network.statistics.nrOfConnectableNodes)}
-				/>
-				<StatCard
-					detail={`${formatInteger(network.statistics.transitiveQuorumSetSize)} in transitive quorum set`}
-					label="Validator nodes"
-					value={formatInteger(network.statistics.nrOfActiveValidators)}
-				/>
-				<StatCard
-					detail={`${formatInteger(network.statistics.topTierSize)} top tier validators`}
-					label="Full validators"
-					value={formatInteger(network.statistics.nrOfActiveFullValidators)}
-				/>
-				<StatCard
-					detail={`${formatInteger(network.organizations.length)} discovered organizations`}
-					label="Organizations"
-					value={formatInteger(network.statistics.nrOfActiveOrganizations)}
-				/>
-				<StatCard
-					detail={`${formatInteger(network.statistics.minBlockingSetSize)} node blocking set`}
-					label="Quorum intersection"
-					tone={network.statistics.hasQuorumIntersection ? 'good' : 'danger'}
-					value={formatBoolean(network.statistics.hasQuorumIntersection)}
-				/>
-				<StatCard
-					detail={network.stellarCoreVersion ?? 'No dominant core version'}
-					label="Protocol"
-					value={network.maxLedgerVersion?.toString() ?? 'Unknown'}
-				/>
-			</section>
-
-			<section className="panel overview-topology">
-				<div>
-					<p className="eyebrow">Trust graph</p>
-					<h2>Interactive topology moved to the primary graph view</h2>
-					<p>
-						The live 3D view shows organization clusters, listener nodes, quorum
-						edges, archive warnings, and observed SCP statements without
-						compressing the network into a small dashboard chart.
-					</p>
-				</div>
-				<Link className="primary-button" href="/">
-					Open graph
+			<section className={styles.metrics} aria-label="Current network snapshot">
+				<Link href="/nodes" prefetch={false}>
+					<span>Validating nodes</span>
+					<strong>{formatInteger(validating.length)}</strong>
+					<small>
+						of {formatInteger(validators.length)} observed validators →
+					</small>
+				</Link>
+				<Link href="/organizations" prefetch={false}>
+					<span>Participating organizations</span>
+					<strong>{formatInteger(participating.length)}</strong>
+					<small>with a validating node in this snapshot →</small>
+				</Link>
+				<Link href="/archives" prefetch={false}>
+					<span>Validator archive sources</span>
+					<strong>{formatInteger(roots.size)}</strong>
+					<small>distinct advertised URLs; inspect coverage →</small>
+				</Link>
+				<Link href="#validator-attention">
+					<span>Validators needing attention</span>
+					<strong>{formatInteger(attention.length)}</strong>
+					<small>validation, connection, or software findings ↓</small>
 				</Link>
 			</section>
-
-			<section className="content-grid">
-				<article className="panel">
-					<div className="panel-heading">
-						<h2>Validator attention</h2>
-						<span>{formatInteger(riskNodes.length)} shown</span>
+			<nav className={styles.links} aria-label="Network tools">
+				<Link href="/">Inspect trust graph →</Link>
+				<Link href="/archives">Compare archive coverage →</Link>
+				<Link href="/explorer">Explore ledger activity →</Link>
+				<Link href="/status">Check service and ingestion status →</Link>
+			</nav>
+			<div className={styles.columns}>
+				<section
+					className={styles.panel}
+					aria-label="Organization participation"
+				>
+					<div className={styles.heading}>
+						<h2>Organizations validating now</h2>
+						<Link href="/organizations" prefetch={false}>
+							Full organization directory →
+						</Link>
 					</div>
-					<div className="table">
-						{riskNodes.map((node) => (
-							<div className="row" key={node.publicKey}>
-								<div>
-									<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
-										<strong>
-											{node.alias ?? node.name ?? node.publicKey.slice(0, 12)}
-										</strong>
-									</Link>
-									<small>{node.homeDomain ?? node.publicKey}</small>
-								</div>
-								<div className="tags">
-									{!node.isValidating && (
-										<span className="tag danger">not validating</span>
-									)}
-									{node.connectivityError && (
-										<span className="tag danger">connection failed</span>
-									)}
-									{node.stellarCoreVersionBehind && (
-										<span className="tag warning">core behind</span>
-									)}
-								</div>
-							</div>
-						))}
-					</div>
-				</article>
-
-				<article className="panel">
-					<div className="panel-heading">
-						<h2>Organizations</h2>
-						<span>{formatInteger(network.organizations.length)} total</span>
-					</div>
-					<div className="table">
-						{topOrganizations.map((organization) => (
-							<div className="row compact" key={organization.id}>
-								<div>
-									<Link
-										href={`/organizations/${encodeURIComponent(organization.id)}`}
-									>
-										<strong>
-											{organization.name ??
-												organization.dba ??
-												organization.homeDomain}
-										</strong>
-									</Link>
-									<small>{organization.homeDomain}</small>
-								</div>
-								<div className="metric">
-									<strong>
-										{formatInteger(organization.validators.length)}
-									</strong>
-									<small>
-										{formatOrganization30DayAvailability(organization).value}
-									</small>
-								</div>
-							</div>
-						))}
-					</div>
-				</article>
-
-				<article className="panel">
-					<div className="panel-heading">
-						<h2>Core versions</h2>
-						<span>Observed software</span>
-					</div>
-					<div className="version-list">
-						{topVersions.map(([version, count]) => (
-							<div className="version-row" key={version}>
-								<span>{version}</span>
-								<meter min={0} max={network.nodes.length} value={count} />
-								<strong>{formatInteger(count)}</strong>
-							</div>
-						))}
-					</div>
-				</article>
-			</section>
+					<p className={styles.note}>
+						All {participating.length} organizations with observed validation,
+						alphabetically. Availability measures the organization’s quorum
+						path—not archive completeness.
+					</p>
+					{participating.length ? (
+						<OrganizationRows rows={participating} />
+					) : (
+						<p className={styles.note}>
+							No validating organization is recorded in this snapshot.
+						</p>
+					)}
+					{other.length > 0 && (
+						<details className={styles.other}>
+							<summary>
+								{other.length} other observed organizations · no validating
+								nodes in this snapshot
+							</summary>
+							<OrganizationRows rows={other} />
+						</details>
+					)}
+				</section>
+				<div>
+					<section
+						className={styles.panel}
+						id="validator-attention"
+						aria-label="Validator attention"
+					>
+						<div className={styles.heading}>
+							<h2>Validator attention</h2>
+							<span>{attention.length} total</span>
+						</div>
+						{attention.length ? (
+							<ul className={styles.attention}>
+								{attention.slice(0, 8).map((node) => (
+									<li key={node.publicKey}>
+										<Link
+											href={`/nodes/${encodeURIComponent(node.publicKey)}`}
+											prefetch={false}
+										>
+											<strong>{getNodeLabel(node)} →</strong>
+										</Link>
+										<p>
+											{[
+												!node.isValidating
+													? 'No validation observed in this scan'
+													: null,
+												node.connectivityError
+													? 'Connection attempt failed'
+													: null,
+												node.stellarCoreVersionBehind
+													? 'Software behind configured baseline'
+													: null
+											]
+												.filter(Boolean)
+												.join(' · ')}
+										</p>
+									</li>
+								))}
+							</ul>
+						) : (
+							<p className={`${styles.note} ${styles.good}`}>
+								No validation, connection, or software-baseline findings in this
+								snapshot.
+							</p>
+						)}
+						<p className={styles.note}>
+							{attention.length > 8 ? `Showing 8 of ${attention.length}. ` : ''}
+							These are network-scan findings.{' '}
+							<Link href="/archives">Archive file findings are separate.</Link>
+						</p>
+					</section>
+					<section
+						className={styles.panel}
+						aria-label="Observed quorum analysis"
+					>
+						<div className={styles.heading}>
+							<h2>Observed quorum</h2>
+							<Link href="/">Inspect graph →</Link>
+						</div>
+						<dl className={styles.analysis}>
+							<dt>Quorum intersection</dt>
+							<dd>
+								{statistics.hasTransitiveQuorumSet
+									? statistics.hasQuorumIntersection
+										? 'Yes'
+										: 'No'
+									: 'Not evaluated'}
+							</dd>
+							<dt>Top-tier validators</dt>
+							<dd>{formatInteger(statistics.topTierSize)}</dd>
+							<dt>Top-tier organizations</dt>
+							<dd>{formatInteger(statistics.topTierOrgsSize)}</dd>
+							<dt>Smallest blocking set</dt>
+							<dd>
+								{statistics.hasTransitiveQuorumSet
+									? `${statistics.minBlockingSetSize} nodes`
+									: 'Not evaluated'}
+							</dd>
+							<dt>Organization blocking set</dt>
+							<dd>
+								{statistics.hasTransitiveQuorumSet
+									? `${statistics.minBlockingSetOrgsSize} organizations`
+									: 'Not evaluated'}
+							</dd>
+						</dl>
+						<p className={styles.note}>
+							Blocking sets are groups whose unavailability can halt consensus
+							under the observed quorum configuration. They are not a count of
+							failed nodes.
+						</p>
+					</section>
+					<section className={styles.panel} aria-label="Validator software">
+						<div className={styles.heading}>
+							<h2>Validator software</h2>
+							<span>{validating.length} validating nodes</span>
+						</div>
+						<ul className={styles.versions}>
+							{versions.map(([version, count]) => (
+								<li key={version}>
+									<span>{version}</span>
+									<strong>{count}</strong>
+									<meter
+										aria-label={`${version}: ${count} validating nodes`}
+										min={0}
+										max={Math.max(1, validating.length)}
+										value={count}
+									/>
+								</li>
+							))}
+						</ul>
+						<p className={styles.note}>
+							Observed software versions, not the network’s activated protocol.
+							Snapshot ledger {formatInteger(Number(network.latestLedger))}.
+						</p>
+					</section>
+				</div>
+			</div>
 		</main>
 	);
 }

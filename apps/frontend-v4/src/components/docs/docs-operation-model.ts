@@ -27,6 +27,7 @@ export function operationGroup(path: string, tag: string): string {
 		return 'Contracts & events';
 	if (path.includes('/trades') || path.includes('/offers'))
 		return 'Trades & offers';
+	if (path.includes('/liquidity-pools')) return 'Liquidity pools';
 	if (path.includes('/assets')) return 'Assets';
 	if (path.includes('/balances') || path.includes('/accounts'))
 		return 'Accounts & balances';

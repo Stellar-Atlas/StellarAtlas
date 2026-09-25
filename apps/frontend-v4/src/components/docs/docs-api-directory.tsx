@@ -5,9 +5,11 @@ import type { DocsOperation } from './docs-operation-model';
 import styles from './docs-api-directory.module.css';
 
 export function DocsApiDirectory({
-	operations
+	operations,
+	collapsible = false
 }: {
 	operations: readonly DocsOperation[];
+	collapsible?: boolean;
 }) {
 	const [query, setQuery] = useState('');
 	const groups = useMemo(() => {
@@ -32,7 +34,7 @@ export function DocsApiDirectory({
 	}, [operations, query]);
 	const count = groups.reduce((total, [, rows]) => total + rows.length, 0);
 	return (
-		<div className={styles.directory}>
+		<div className={styles.directory} data-compact={collapsible}>
 			<label className={styles.filter}>
 				Find an endpoint
 				<input
@@ -43,11 +45,13 @@ export function DocsApiDirectory({
 				/>
 			</label>
 			<p className={styles.count} role="status">
-				{count} of {operations.length} endpoints
+				{count} of {operations.length} endpoints in {groups.length} sections
+				{collapsible
+					? ' · Expand a section or search by resource, route, or method.'
+					: ''}
 			</p>
-			{groups.map(([name, rows]) => (
-				<section key={name}>
-					<h2>{name}</h2>
+			{groups.map(([name, rows]) => {
+				const links = (
 					<ul>
 						{rows.map((operation) => (
 							<li key={operation.id}>
@@ -64,8 +68,26 @@ export function DocsApiDirectory({
 							</li>
 						))}
 					</ul>
-				</section>
-			))}
+				);
+				return collapsible ? (
+					<details
+						className={styles.group}
+						key={name + (query ? '-search' : '-browse')}
+						open={query.trim().length > 0}
+					>
+						<summary>
+							<strong>{name}</strong>
+							<span>{rows.length} endpoints</span>
+						</summary>
+						{links}
+					</details>
+				) : (
+					<section key={name}>
+						<h2>{name}</h2>
+						{links}
+					</section>
+				);
+			})}
 			{count === 0 ? <p>No endpoints match that search.</p> : null}
 		</div>
 	);

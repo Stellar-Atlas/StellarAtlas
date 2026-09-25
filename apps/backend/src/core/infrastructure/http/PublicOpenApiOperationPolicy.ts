@@ -176,6 +176,8 @@ const publicOperations = new Map<string, string>([
 	['listParsedAssets', 'get /v1/analytics/assets'],
 	['listParsedContracts', 'get /v1/analytics/contracts'],
 	['listParsedOffers', 'get /v1/analytics/offers'],
+	['listParsedLiquidityPools', 'get /v1/analytics/liquidity-pools'],
+	['getParsedLiquidityPool', 'get /v1/analytics/liquidity-pools/{poolId}'],
 	['listParsedOperations', 'get /v1/analytics/operations'],
 	['postAnalyticsGraphql', 'post /graphql'],
 	['queryHubbleDataset', 'post /v1/analytics/datasets/{dataset}/query'],

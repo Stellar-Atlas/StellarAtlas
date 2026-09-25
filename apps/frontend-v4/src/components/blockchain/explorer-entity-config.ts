@@ -7,6 +7,8 @@ export interface EntityField {
 }
 export const entityDescriptions: Readonly<Record<AnalyticsCollection, string>> =
 	{
+		'liquidity-pools':
+			'Native protocol liquidity-pool observations, not smart-contract AMMs. Each row is a historical change, not a distinct pool or current reserve balance. Removed entries remain visible.',
 		operations:
 			'Actions inside transactions: payments, account changes, trades and contract invocations.',
 		assets:
@@ -21,6 +23,20 @@ export const entityDescriptions: Readonly<Record<AnalyticsCollection, string>> =
 export const entityFields: Readonly<
 	Record<AnalyticsCollection, readonly EntityField[]>
 > = {
+	'liquidity-pools': [
+		{
+			key: 'pool_id',
+			label: 'Pool ID or address',
+			placeholder: '64-character hex or L…'
+		},
+		{ key: 'asset_a', label: 'Asset A', placeholder: 'native or CODE:ISSUER' },
+		{ key: 'asset_b', label: 'Asset B', placeholder: 'native or CODE:ISSUER' },
+		{
+			key: 'deleted',
+			label: 'Removed at observation',
+			placeholder: 'true or false; blank includes both'
+		}
+	],
 	operations: [
 		{ key: 'source_account', label: 'Source account', placeholder: 'G…' },
 		{
@@ -77,6 +93,19 @@ export const windowFields: readonly EntityField[] = [
 export const entityColumns: Readonly<
 	Record<AnalyticsCollection, readonly [string, string][]>
 > = {
+	'liquidity-pools': [
+		['id', 'Pool'],
+		['assetA', 'Asset A'],
+		['reserveA', 'Reserve A'],
+		['assetB', 'Asset B'],
+		['reserveB', 'Reserve B'],
+		['shares', 'Pool shares'],
+		['feeBasisPoints', 'Fee (basis points)'],
+		['trustlineCount', 'Share trustlines'],
+		['ledgerSequence', 'Ledger'],
+		['deleted', 'State'],
+		['closedAt', 'Observed']
+	],
 	operations: [
 		['id', 'Operation'],
 		['type', 'Action'],
@@ -113,4 +142,4 @@ export const entityColumns: Readonly<
 	]
 };
 export const titleCase = (value: string): string =>
-	value.charAt(0).toUpperCase() + value.slice(1);
+	value.charAt(0).toUpperCase() + value.slice(1).replaceAll('-', ' ');

@@ -1,7 +1,12 @@
 import { HubbleWarehouseUnavailableError } from './HubbleWarehouseErrors.js';
 
 export type ExplorerEntity =
-	'operations' | 'assets' | 'contracts' | 'trades' | 'offers';
+	| 'operations'
+	| 'assets'
+	| 'contracts'
+	| 'trades'
+	| 'offers'
+	| 'liquidity-pools';
 type Row = Readonly<Record<string, unknown>>;
 
 export function explorerAsset(row: Row, prefix = ''): Record<string, unknown> {
@@ -33,6 +38,31 @@ export function mapExplorerRecord(
 		entity === 'trades' ? 'ledger_closed_at' : 'closed_at'
 	);
 	const shared = { ledgerSequence, closedAt, sourceRecord };
+	if (entity === 'liquidity-pools') {
+		const deleted = boolean(row, 'deleted');
+		const poolAsset = (side: 'a' | 'b') =>
+			explorerAsset({
+				asset_type: row['asset_' + side + '_type'],
+				asset_code: row['asset_' + side + '_code'],
+				asset_issuer: row['asset_' + side + '_issuer']
+			});
+		return {
+			...shared,
+			id: text(row, 'liquidity_pool_id'),
+			poolAddress: text(row, 'liquidity_pool_id_strkey'),
+			type: deleted ? null : text(row, 'type'),
+			assetA: deleted ? null : poolAsset('a'),
+			assetB: deleted ? null : poolAsset('b'),
+			reserveA: deleted ? null : decimal(row, 'asset_a_amount'),
+			reserveB: deleted ? null : decimal(row, 'asset_b_amount'),
+			shares: deleted ? null : decimal(row, 'pool_share_count'),
+			feeBasisPoints: deleted ? null : integer(row, 'fee'),
+			trustlineCount: deleted ? null : exact(row, 'trustline_count'),
+			amountPrecision: 'source_float64',
+			deleted,
+			lastModifiedLedger: integer(row, 'last_modified_ledger')
+		};
+	}
 	if (entity === 'operations')
 		return {
 			...shared,

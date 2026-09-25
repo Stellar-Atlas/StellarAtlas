@@ -6,6 +6,8 @@ const windowFields =
 	'minLedger: Int maxLedger: Int startTime: String endTime: String';
 export const hubbleExplorerSchema = `
 	extend type Query {
+		nativeLiquidityPools(input: NativeLiquidityPoolInput): NativeLiquidityPoolPage!
+		nativeLiquidityPool(id: String!, input: HubbleExplorerWindowInput): NativeLiquidityPoolDetail!
 		hubbleOperations(input: HubbleOperationInput): HubbleOperationPage!
 		hubbleOperation(id: String!, input: HubbleExplorerWindowInput): HubbleOperationDetail!
 		hubbleAssets(input: HubbleAssetInput): HubbleAssetPage!
@@ -18,6 +20,16 @@ export const hubbleExplorerSchema = `
 		hubbleOffer(id: String!, input: HubbleExplorerWindowInput): HubbleOfferDetail!
 	}
 	input HubbleExplorerWindowInput { ${windowFields} }
+	input NativeLiquidityPoolInput { ${windowFields} limit: Int offset: Int poolId: String assetA: String assetB: String deleted: Boolean }
+	"""One native protocol pool observation, not a current inventory or contract AMM. Removal rows have null state values; reserves/shares retain source precision."""
+	type NativeLiquidityPool {
+		id: String! poolAddress: String! type: String assetA: HubbleTransferAsset assetB: HubbleTransferAsset
+		reserveA: String reserveB: String shares: String feeBasisPoints: Int trustlineCount: String
+		amountPrecision: String! deleted: Boolean! lastModifiedLedger: Int!
+		ledgerSequence: Int! closedAt: String! sourceRecord: HubbleSourceRecord!
+	}
+	type NativeLiquidityPoolPage { entity: String! window: HubbleExplorerWindow! coverage: HubbleLedgerCoverage! coverageStatus: String! source: String! semantics: String! limit: Int! offset: Int! nextOffset: Int rows: [NativeLiquidityPool!]! }
+	type NativeLiquidityPoolDetail { entity: String! window: HubbleExplorerWindow! coverage: HubbleLedgerCoverage! coverageStatus: String! source: String! semantics: String! record: NativeLiquidityPool }
 	input HubbleExplorerPageInput { ${windowFields} limit: Int offset: Int }
 	input HubbleOperationInput { ${windowFields} limit: Int offset: Int sourceAccount: String type: String }
 	input HubbleAssetInput { ${windowFields} limit: Int offset: Int assetCode: String assetIssuer: String }
@@ -64,6 +76,10 @@ export const hubbleExplorerSchema = `
 	type HubbleOfferDetail { entity: String! window: HubbleExplorerWindow! coverage: HubbleLedgerCoverage! coverageStatus: String! source: String! semantics: String! record: HubbleOffer }
 `;
 interface Input {
+	readonly poolId?: string;
+	readonly assetA?: string;
+	readonly assetB?: string;
+	readonly deleted?: boolean;
 	readonly minLedger?: number;
 	readonly maxLedger?: number;
 	readonly startTime?: string;
@@ -94,6 +110,10 @@ export function hubbleExplorerResolvers(
 		async ({ id, input }: Arguments) => {
 			try {
 				const {
+					poolId,
+					assetA,
+					assetB,
+					deleted,
 					seller,
 					buyer,
 					sellingAsset,
@@ -108,6 +128,10 @@ export function hubbleExplorerResolvers(
 				} = input ?? {};
 				const filters: Record<string, string> = {};
 				for (const [name, value] of Object.entries({
+					pool_id: poolId,
+					asset_a: assetA,
+					asset_b: assetB,
+					deleted: deleted === undefined ? undefined : String(deleted),
 					seller,
 					buyer,
 					selling_asset: sellingAsset,
@@ -131,6 +155,8 @@ export function hubbleExplorerResolvers(
 			}
 		};
 	return {
+		nativeLiquidityPools: execute('liquidity-pools'),
+		nativeLiquidityPool: execute('liquidity-pools'),
 		hubbleOperations: execute('operations'),
 		hubbleOperation: execute('operations'),
 		hubbleAssets: execute('assets'),

@@ -18,6 +18,7 @@ import {
 import type { ArchiveEvidenceSubject } from '@domain/known-archive-evidence-request';
 import { formatInteger } from '@format/formatters';
 import { LocalDateTime } from '../local-date-time';
+import { NodeArchiveCheckpoints } from '../nodes/node-archive-checkpoints';
 import { KnownArchiveEvidenceTabContent } from './known-archive-evidence-views';
 import { KnownArchiveRawEvidence } from './known-archive-raw-evidence';
 import { useKnownArchiveEvidence } from './use-known-archive-evidence';
@@ -93,10 +94,17 @@ export function KnownArchiveEvidence({
 				/>
 			</div>
 			{sourceRoot ? <ArchiveSourceOverview root={sourceRoot} /> : null}
-			<EvidenceMetrics
-				evidence={liveEvidence}
-				sourceDetail={sourceRoot !== undefined}
-			/>
+			{subject.kind === 'node' ? (
+				<NodeArchiveCheckpoints
+					roots={liveEvidence.roots}
+					failures={liveEvidence.remoteFailures.failures}
+				/>
+			) : (
+				<EvidenceMetrics
+					evidence={liveEvidence}
+					sourceDetail={sourceRoot !== undefined}
+				/>
+			)}
 			{sourceRoot ? (
 				<div className="archive-source-findings">
 					<ArchiveSourceErrorSummary

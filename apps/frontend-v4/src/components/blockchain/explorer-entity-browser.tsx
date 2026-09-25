@@ -235,6 +235,14 @@ export function ExplorerEntityBrowser({
 								Price numerator and denominator are retained as exact integers.
 							</p>
 						)}
+						{collection === 'liquidity-pools' && (
+							<p className={styles.muted}>
+								Reserves and shares retain source floating-point precision, not
+								exact atomic units. Removed rows have no reserve snapshot; null
+								does not mean zero. Repeated pool IDs represent separate
+								observations. Pair-trade links include all venues.
+							</p>
+						)}
 						{!identifier && (
 							<div className={styles.actions}>
 								<span>

@@ -10,6 +10,32 @@ import {
 	normalizeExplorerTimes
 } from '../explorer-search-route';
 describe('explorer entity routes', () => {
+	it('keeps pool pair and observation filters in bounded page links', () => {
+		const filters = explorerRouteFilters({
+			asset_a: 'native',
+			asset_b: 'USD:GABC',
+			deleted: 'false',
+			pool_id: 'a'.repeat(64),
+			min_ledger: '63491202',
+			max_ledger: '63491202'
+		});
+		expect(
+			buildEntityApiPath('liquidity-pools', undefined, filters, 25)
+		).toContain('/v1/analytics/liquidity-pools?');
+		expect(
+			buildEntityApiPath('liquidity-pools', undefined, filters, 25)
+		).toContain('offset=25');
+		expect(filters).toMatchObject({
+			asset_a: 'native',
+			deleted: 'false',
+			pool_id: 'a'.repeat(64)
+		});
+		expect(
+			resolveExplorerSearch(
+				'LD4CYQEDQYUTJB3OYPE7M75GAUQ5U2QNQN4J7IYSHPMNYHJGRQB3MQZG'
+			)
+		).toContain('/explorer/liquidity-pools/');
+	});
 	it('decodes asset and trade route identifiers exactly once', () => {
 		for (const id of ['USDC:GABC', '272689036991197185:0', 'native']) {
 			expect(decodeExplorerIdentifier(id)).toBe(id);

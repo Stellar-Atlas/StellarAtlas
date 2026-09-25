@@ -47,6 +47,7 @@ const pageParameters = [
 	)
 ];
 const filterNames = {
+	'liquidity-pools': ['pool_id', 'asset_a', 'asset_b', 'deleted'],
 	operations: ['source_account', 'type'],
 	assets: ['asset_code', 'asset_issuer'],
 	contracts: [],
@@ -54,6 +55,7 @@ const filterNames = {
 	trades: ['seller', 'buyer', 'selling_asset', 'buying_asset', 'operation_id']
 } as const;
 const idNames = {
+	'liquidity-pools': 'poolId',
 	operations: 'operationId',
 	assets: 'asset',
 	contracts: 'contractId',
@@ -61,6 +63,8 @@ const idNames = {
 	trades: 'tradeId'
 } as const;
 const idDescriptions = {
+	'liquidity-pools':
+		'64-character hexadecimal native pool ID or checksum-valid L-address. Detail is the latest observation in the selected window.',
 	operations:
 		'Exact decimal operation TOID; its encoded ledger is used automatically.',
 	assets: 'native or URL-encoded CODE:ISSUER.',
@@ -70,6 +74,8 @@ const idDescriptions = {
 	trades: 'OPERATION_ID:ORDER, using the exact operation TOID and trade order.'
 } as const;
 const semantics = {
+	'liquidity-pools':
+		'Native protocol liquidity-pool change observations, including removals; not contract AMMs. Rows are not distinct pools or a current inventory. Reserves and shares retain source Float64 precision. Removal rows expose null state values rather than fabricated zero balances.',
 	operations:
 		'Parsed operations with exact identifiers and a bounded transaction-hash relationship. Details are legacy parsed values, not a guarantee of exact amounts; use typed transaction amounts for hash-verified envelope values.',
 	assets:
@@ -127,7 +133,7 @@ export function withHubbleExplorerPaths(
 						]
 					: []),
 				...windowParameters.map((parameter) =>
-					entity === 'contracts' &&
+					(entity === 'contracts' || entity === 'liquidity-pools') &&
 					['min_ledger', 'max_ledger'].includes(String(parameter.name))
 						? {
 								...parameter,
@@ -142,12 +148,18 @@ export function withHubbleExplorerPaths(
 				...filterNames[entity].map((filter) =>
 					queryParameter(
 						filter,
-						filter.endsWith('_asset')
+						filter.endsWith('_asset') ||
+							filter === 'asset_a' ||
+							filter === 'asset_b'
 							? 'native or CODE:ISSUER.'
 							: filter === 'type'
 								? 'Exact numeric Stellar operation type code or stored snake_case name (24 or invoke_host_function).'
 								: 'Exact ' + filter.replaceAll('_', ' ') + '.',
-						['offer_id', 'operation_id'].includes(filter) ? exactInteger : text
+						filter === 'deleted'
+							? { type: 'string', enum: ['true', 'false'] }
+							: ['offer_id', 'operation_id'].includes(filter)
+								? exactInteger
+								: text
 					)
 				)
 			];
@@ -159,7 +171,7 @@ export function withHubbleExplorerPaths(
 				'The default window is the latest 64 parsed ledgers; date filters only narrow it. Check returned window and coverage. ' +
 				'Offset pagination is not immutable under backfill; use narrower ledger windows for large histories. ' +
 				(detail
-					? 'Missing data returns 404 only within the contiguous parsed prefix; otherwise 409 with coverage metadata.'
+					? 'Missing data returns 404 only when the selected window is fully published, including supplemental ranges; otherwise 409 with coverage metadata.'
 					: '');
 			const operation: OpenApiRecord = {
 				operationId:

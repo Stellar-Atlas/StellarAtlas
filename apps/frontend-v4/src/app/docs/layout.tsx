@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import '../../../generated/fumadocs.css';
 import {
@@ -22,7 +23,18 @@ export default async function DeveloperLayout({
 				tree={tree}
 				nav={{ title: 'StellarAtlas Developers', url: '/docs' }}
 				themeSwitch={{ enabled: false }}
-				sidebar={{ prefetch: false, defaultOpenLevel: 1 }}
+				sidebar={{
+					prefetch: false,
+					defaultOpenLevel: 0,
+					footer: (
+						<div className="developer-docs-nav-footer">
+							<span>Scrollable navigation ↕</span>
+							<Link href="/docs/api" prefetch={false}>
+								Browse all endpoints →
+							</Link>
+						</div>
+					)
+				}}
 				links={[
 					{ text: 'Explorer', url: '/explorer' },
 					{ text: 'Network status', url: '/status' }

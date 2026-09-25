@@ -1,4 +1,5 @@
 /// <reference types="jest" />
+import { jest } from '@jest/globals';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type {
@@ -6,7 +7,6 @@ import type {
 	PublicKnownNodeArchiveEvidence
 } from '../../../api/archive-evidence-types';
 import { getArchiveScanDetailPath } from '../../../domain/archive-scan-routes';
-import { KnownArchiveEvidence } from '../known-archive-evidence';
 import { KnownArchiveListingGaps } from '../known-archive-listing-gaps';
 import { ArchiveSourceFilter } from '../known-archive-evidence-controls';
 import { getInitialRepairArchiveUrl } from '../known-archive-evidence-state';
@@ -21,6 +21,11 @@ import {
 	formatEventType,
 	formatObjectStatusDetail
 } from '../known-archive-evidence-table-parts';
+jest.unstable_mockModule(
+	'../../nodes/node-archive-checkpoints.module.css',
+	() => ({ default: {} })
+);
+const { KnownArchiveEvidence } = await import('../known-archive-evidence');
 describe('known archive evidence UI', () => {
 	it.each(['not_requested', 'unavailable'] as const)(
 		'does not describe unknown copies as absent when %s',
@@ -161,6 +166,10 @@ describe('known archive evidence UI', () => {
 		expect(markup).toContain('Raw initial API response');
 		expect(markup).not.toContain('&quot;generatedAt&quot;');
 		expect(markup).toContain('1 archive source across 1 node');
+		expect(markup).toContain('Archive checkpoint coverage');
+		expect(markup).toContain('checkpoint positions verified');
+		expect(markup).not.toContain('<dt>Verified / recorded files</dt>');
+		expect(markup).toContain('Root findings &amp; repair / download details');
 	});
 
 	it('separates a failed source from API-proven alternate copies', () => {

@@ -31,6 +31,56 @@
 .developer-docs #nd-page {
 	min-width: 0;
 }
+.developer-docs #nd-sidebar [data-radix-scroll-area-viewport] {
+	overscroll-behavior-y: auto;
+	mask-image: none;
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-fd-muted-foreground) transparent;
+}
+.developer-docs
+	#nd-sidebar
+	[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+	display: block;
+	width: 8px;
+}
+.developer-docs
+	#nd-sidebar
+	[data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+	background: var(--color-fd-muted-foreground);
+	border-radius: 8px;
+}
+.developer-docs .developer-docs-nav-footer {
+	display: grid;
+	gap: 0.35rem;
+	font-size: 0.75rem;
+	color: var(--color-fd-muted-foreground);
+}
+.developer-docs .developer-docs-nav-footer a {
+	color: var(--color-fd-primary);
+}
+.developer-docs .developer-docs-start {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.75rem;
+	margin: 1.2rem 0;
+}
+.developer-docs .developer-docs-start a {
+	display: grid;
+	gap: 0.45rem;
+	border: 1px solid var(--color-fd-border);
+	border-radius: 0.6rem;
+	padding: 1rem;
+	text-decoration: none;
+	font-size: 0.9rem;
+}
+.developer-docs .developer-docs-start span,
+.developer-docs .developer-docs-coverage-note {
+	font-size: 0.82rem;
+	color: var(--color-fd-muted-foreground);
+}
+.developer-docs .developer-docs-start a:hover {
+	background: var(--color-fd-muted);
+}
 .developer-docs .developer-guide-section {
 	scroll-margin-top: 6rem;
 }
@@ -66,6 +116,9 @@
 	overflow: auto;
 }
 @media (max-width: 720px) {
+	.developer-docs .developer-docs-start {
+		grid-template-columns: 1fr;
+	}
 	.developer-docs .developer-docs-cards {
 		grid-template-columns: minmax(0, 1fr);
 	}

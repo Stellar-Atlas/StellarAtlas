@@ -1,6 +1,35 @@
 // Recorded from published single-ledger detail responses at ledger 63490364.
 // These are historical record examples, not current coverage or current-state claims.
 export const explorerRecordExamples = {
+	// Published native pool observation at ledger 63491202; not current liquidity.
+	pool: {
+		id: 'f82c4083862934876ec3c9f67fa60521da6a0d83789fa3123bd8dc1d268c03b6',
+		poolAddress: 'LD4CYQEDQYUTJB3OYPE7M75GAUQ5U2QNQN4J7IYSHPMNYHJGRQB3MQZG',
+		type: 'constant_product',
+		assetA: { id: 'native', type: 'native', code: null, issuer: null },
+		assetB: {
+			id: '224:GBN42AP5SK3IPTEJ2KAY7DLCAH6YQSMI3H6CCZLWW7KIJCYJ3X57JZ6R',
+			type: 'credit_alphanum4',
+			code: '224',
+			issuer: 'GBN42AP5SK3IPTEJ2KAY7DLCAH6YQSMI3H6CCZLWW7KIJCYJ3X57JZ6R'
+		},
+		reserveA: '1635.3635675',
+		reserveB: '3259.9386692',
+		shares: '83.8077031',
+		feeBasisPoints: 30,
+		trustlineCount: '4',
+		amountPrecision: 'source_float64',
+		deleted: false,
+		lastModifiedLedger: 63491202,
+		ledgerSequence: 63491202,
+		closedAt: '2026-07-15T18:05:02.000Z',
+		sourceRecord: {
+			batchId: '3dca0dce-5e01-4620-a95b-e95ce4a58323',
+			digest:
+				'78dadc18671e087b3e9169c34601c932d5215aafc1d14ae7ec81e9bf0ddc2426',
+			rowNumber: '30979'
+		}
+	},
 	operation: {
 		details: {
 			parameters: [
@@ -135,6 +164,7 @@ export const explorerRecordExamples = {
 	}
 } as const;
 export const explorerIdentifierExamples = {
+	'liquidity-pools': explorerRecordExamples.pool.id,
 	operations: explorerRecordExamples.operation.id,
 	assets: 'USDC:GBVVYDFLEBUNSWBHNJS3RSLLJTMJ46PJXTTMA3V6YJ4KDRMAEJIDUSDC',
 	contracts: 'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA',

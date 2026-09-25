@@ -3,7 +3,8 @@ export const analyticsCollections = [
 	'assets',
 	'contracts',
 	'trades',
-	'offers'
+	'offers',
+	'liquidity-pools'
 ] as const;
 export type AnalyticsCollection = (typeof analyticsCollections)[number];
 export type EntityRecord = Readonly<Record<string, unknown>>;

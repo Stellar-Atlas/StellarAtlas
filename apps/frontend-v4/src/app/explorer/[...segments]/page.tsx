@@ -70,7 +70,7 @@ export default function ExplorerEntityPage(props: Props): React.JSX.Element {
 			<PageHeading
 				title="Explorer"
 				eyebrow="Stellar history"
-				description="Explore transactions, assets, contracts, operations, trades and offers."
+				description="Explore transactions, assets, contracts, operations, trades, offers and liquidity pools."
 			/>
 			<Suspense fallback={<p role="status">Loading explorer…</p>}>
 				<EntityRoute {...props} />

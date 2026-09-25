@@ -110,11 +110,17 @@ const metadata = (entity: string): OpenApiRecord => ({
 	window: object({
 		minLedger: {
 			...ledger,
-			example: entity === 'contracts' ? 63491202 : 63490364
+			example:
+				entity === 'contracts' || entity === 'liquidity-pools'
+					? 63491202
+					: 63490364
 		},
 		maxLedger: {
 			...ledger,
-			example: entity === 'contracts' ? 63491202 : 63490364
+			example:
+				entity === 'contracts' || entity === 'liquidity-pools'
+					? 63491202
+					: 63490364
 		}
 	}),
 	coverage: ref('HubbleLedgerCoverage'),
@@ -133,6 +139,7 @@ const metadata = (entity: string): OpenApiRecord => ({
 	}
 });
 export const hubbleExplorerEntities = {
+	'liquidity-pools': 'LiquidityPool',
 	operations: 'Operation',
 	assets: 'Asset',
 	contracts: 'Contract',
@@ -140,6 +147,27 @@ export const hubbleExplorerEntities = {
 	trades: 'Trade'
 } as const;
 export const hubbleExplorerSchemas: Record<string, OpenApiRecord> = {
+	HubbleExplorerLiquidityPool: {
+		...object({
+			...shared,
+			id: { ...text, pattern: '^[0-9a-f]{64}$' },
+			poolAddress: { ...text, pattern: '^L[A-Z2-7]{55}$' },
+			type: nullableText,
+			assetA: { ...asset, nullable: true },
+			assetB: { ...asset, nullable: true },
+			reserveA: nullableText,
+			reserveB: nullableText,
+			shares: nullableText,
+			feeBasisPoints: { ...integer, nullable: true },
+			trustlineCount: { ...identifier, nullable: true },
+			amountPrecision: pair.amountPrecision,
+			deleted: { type: 'boolean' },
+			lastModifiedLedger: ledger
+		}),
+		description:
+			'One historical native pool change. State values are null on removal; not current reserves. sourceRecord identifies the completed source batch and exact row.',
+		example: explorerRecordExamples.pool
+	},
 	HubbleExplorerAsset: asset,
 	HubbleExplorerContract: {
 		...object({

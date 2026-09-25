@@ -28,6 +28,7 @@ export async function getDocsTree(): Promise<Root> {
 		'Transfers',
 		'Operations',
 		'Trades & offers',
+		'Liquidity pools',
 		'Contracts & events',
 		'Ledgers',
 		'Dataset queries',

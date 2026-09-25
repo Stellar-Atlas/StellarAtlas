@@ -100,7 +100,7 @@ describe('self-contained public OpenAPI schemas', () => {
 				operationCount++;
 			}
 		}
-		expect(operationCount).toBe(115);
+		expect(operationCount).toBe(117);
 	});
 	it('retains a referenced component when the only reference points into one property', () => {
 		const source = {

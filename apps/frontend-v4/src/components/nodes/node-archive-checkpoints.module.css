@@ -1,0 +1,88 @@
+.summary {
+	display: grid;
+	gap: 1rem;
+	min-width: 0;
+}
+.root {
+	padding: 1rem;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	min-width: 0;
+}
+.heading {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.5rem 1rem;
+}
+.heading h3 {
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: 1rem;
+}
+.coverage {
+	margin-block: 0.75rem 0.25rem;
+	font-size: 1.05rem;
+}
+.root progress {
+	width: 100%;
+	accent-color: var(--accent);
+}
+.positions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+	gap: 0.75rem;
+	margin-block: 1rem;
+}
+.positions dt {
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+.positions dd {
+	margin: 0.25rem 0 0;
+	font-variant-numeric: tabular-nums;
+}
+.details {
+	min-width: 0;
+	margin-block: 0.75rem;
+}
+.details summary {
+	cursor: pointer;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.details summary:focus-visible,
+.root a:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+}
+.details p,
+.details li {
+	overflow-wrap: anywhere;
+}
+.details li + li {
+	margin-top: 0.5rem;
+}
+.files {
+	display: grid;
+	gap: 0.75rem;
+}
+.files dt {
+	font-weight: 600;
+}
+.files dd {
+	display: grid;
+	gap: 0.25rem;
+	margin: 0.25rem 0 0;
+}
+.files code {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	font-size: 0.82rem;
+}
+.gap {
+	border-left: 3px solid var(--warning);
+	padding-left: 0.75rem;
+}

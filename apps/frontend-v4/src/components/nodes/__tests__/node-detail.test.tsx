@@ -9,6 +9,9 @@ import {
 	organizationFixture,
 	quorum
 } from './node-detail-fixtures';
+jest.unstable_mockModule('../node-archive-checkpoints.module.css', () => ({
+	default: {}
+}));
 
 jest.unstable_mockModule('../../graph/network-graph-canvas', () => ({
 	NetworkGraphCanvas: () =>

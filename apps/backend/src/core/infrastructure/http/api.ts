@@ -111,7 +111,6 @@ import { mountExplorerRoutes } from './ExplorerRoutes.js';
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
-import { historyAnalyticsRouter } from '@status/infrastructure/http/HistoryAnalyticsRouter.js';
 import { hubbleWarehouseRouter } from '@status/infrastructure/http/HubbleWarehouseRouter.js';
 import { hubbleWarehouseGraphqlHandler } from '@status/infrastructure/http/HubbleWarehouseGraphql.js';
 import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
@@ -205,14 +204,6 @@ const listen = async () => {
 	api.use(
 		'/v1/analytics',
 		hubbleWarehouseRouter({ warehouse: hubbleWarehouse })
-	);
-
-	api.use(
-		'/v1/analytics',
-		historyAnalyticsRouter({
-			dataSource: kernel.container.get(DataSource),
-			networkPassphrase: config.networkConfig.networkPassphrase
-		})
 	);
 
 	api.all('/graphql', hubbleWarehouseGraphqlHandler(hubbleWarehouse));
