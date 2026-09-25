@@ -13,6 +13,7 @@ import { NodeArchiveEvidenceRoute } from '@components/archive-scans/known-archiv
 import { NodeDetail } from '@components/nodes/node-detail';
 import { getNodeLabel, getOrganizationForNode } from '@domain/network';
 import { nodeRecordScopeLabels } from '@domain/known-network-scopes';
+import { selectNodeSnapshot } from '@domain/select-node-snapshot';
 
 interface NodeDetailPageProps {
 	params: Promise<{ publicKey: string }>;
@@ -31,7 +32,11 @@ async function NodeDetailRouteContent({
 		fetchPublicNetwork({ revalidate }),
 		fetchKnownNode(decodedPublicKey, { revalidate })
 	]);
-	const node = knownNode?.node ?? null;
+	const node = selectNodeSnapshot(
+		network,
+		decodedPublicKey,
+		knownNode?.node ?? null
+	);
 
 	if (!knownNode) notFound();
 	const organization = node ? getOrganizationForNode(network, node) : null;

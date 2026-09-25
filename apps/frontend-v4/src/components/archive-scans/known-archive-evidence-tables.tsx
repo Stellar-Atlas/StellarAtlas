@@ -262,7 +262,7 @@ export function ArchiveRootSummaryTable({
 							<th>State</th>
 							<th>Files</th>
 							<th>Unresolved remote checks</th>
-							<th>Continuous history</th>
+							<th>Historical scan progress</th>
 							<th>Checkpoint file consistency</th>
 						</tr>
 					</thead>
@@ -303,7 +303,7 @@ export function ArchiveRootSummaryTable({
 										</small>
 									) : null}
 								</td>
-								<td data-label="Continuous history">
+								<td data-label="Historical scan progress">
 									<SequentialCoverageSummary root={root} />
 								</td>
 								<td data-label="Checkpoint file consistency">
@@ -338,7 +338,7 @@ function SequentialCoverageSummary({
 }): React.JSX.Element {
 	const coverage = root.sequentialCoverage;
 	if (coverage === undefined || coverage === null) {
-		return <small>Sequential coverage is loading.</small>;
+		return <small>Historical scan progress is loading.</small>;
 	}
 	if (coverage.status === 'unavailable') {
 		return (
@@ -348,13 +348,11 @@ function SequentialCoverageSummary({
 	if (coverage.status === 'caught-up') {
 		return (
 			<>
-				<strong>Caught up</strong>
+				<strong>Historical scan position caught up</strong>
 				<small>
-					Verified continuously through checkpoint{' '}
-					{formatNullableCheckpoint(
-						coverage.lastContinuouslyVerifiedCheckpointLedger
-					)}
-					.
+					Advertised latest checkpoint{' '}
+					{formatNullableCheckpoint(coverage.advertisedLatestCheckpointLedger)}.
+					This does not mean every checkpoint is verified.
 				</small>
 			</>
 		);
@@ -364,15 +362,14 @@ function SequentialCoverageSummary({
 		return (
 			<>
 				<strong className="known-evidence-error">
-					Blocked at checkpoint{' '}
-					{formatNullableCheckpoint(coverage.blockedCheckpointLedger)}
+					Checkpoint{' '}
+					{formatNullableCheckpoint(coverage.blockedCheckpointLedger)} needs
+					evidence
 				</strong>
 				<small>
-					Continuous through{' '}
-					{formatNullableCheckpoint(
-						coverage.lastContinuouslyVerifiedCheckpointLedger
-					)}
-					.
+					Next historical checkpoint{' '}
+					{formatNullableCheckpoint(coverage.nextCheckpointLedger)}. Other
+					checkpoint positions may continue scanning.
 				</small>
 				{blocker === null ? null : (
 					<small>
@@ -392,15 +389,13 @@ function SequentialCoverageSummary({
 	return (
 		<>
 			<strong>
-				Continuous through{' '}
-				{formatNullableCheckpoint(
-					coverage.lastContinuouslyVerifiedCheckpointLedger
-				)}
+				Next historical checkpoint{' '}
+				{formatNullableCheckpoint(coverage.nextCheckpointLedger)}
 			</strong>
 			<small>
-				Next {formatNullableCheckpoint(coverage.nextCheckpointLedger)};
-				advertised latest{' '}
+				Advertised latest checkpoint{' '}
 				{formatNullableCheckpoint(coverage.advertisedLatestCheckpointLedger)}.
+				Scan position is not verified checkpoint coverage.
 			</small>
 		</>
 	);

@@ -78,18 +78,15 @@ export function NodeArchiveCheckpoints({
 								<dd>{checkpoint(coverage.advertisedLatestCheckpointLedger)}</dd>
 							</div>
 							<div>
-								<dt>Continuously verified through</dt>
-								<dd>
-									{checkpoint(
-										coverage.lastContinuouslyVerifiedCheckpointLedger
-									)}
-								</dd>
-							</div>
-							<div>
 								<dt>Next historical checkpoint</dt>
 								<dd>{checkpoint(coverage.nextCheckpointLedger)}</dd>
 							</div>
 						</dl>
+						<p className="muted-copy">
+							The next checkpoint is a scan position, not proof of an unbroken
+							verified range. Scanning can continue past recorded archive
+							failures.
+						</p>
 						<details className={styles.details}>
 							<summary>
 								File findings ·{' '}

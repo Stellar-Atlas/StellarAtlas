@@ -111,4 +111,42 @@ describe('node detail evidence-independent navigation', () => {
 		expect(html).not.toContain('Active now');
 		expect(html).not.toContain('Current scan');
 	});
+	it('distinguishes unchanged metadata since July from a fresh September measurement', () => {
+		const node = nodeFixture('selected', {
+			dateUpdated: '2026-07-04T18:18:56.056Z',
+			versionStr: 'stellar-core 27.0.0',
+			quorumSet: quorum()
+		});
+		const html = renderToStaticMarkup(
+			createElement(NodeDetail, {
+				node,
+				network: networkFixture([node]),
+				knownNode: {
+					...knownNodeFixture(node),
+					lastMeasurementAt: '2026-09-08T10:22:07.159Z'
+				},
+				organization: null,
+				archiveEvidence: null
+			})
+		);
+		expect(html).toContain('Node status');
+		expect(html.match(/Metadata snapshot since/g)).toHaveLength(2);
+		expect(html).toContain('2026-07-04T18:18:56.056Z');
+		expect(html).toContain('Last measured');
+		expect(html).toContain('2026-09-08T10:22:07.159Z');
+		expect(html).toContain('stellar-core 27.0.0');
+	});
+	it('does not substitute network time when last measurement is unavailable', () => {
+		const node = nodeFixture('selected');
+		const html = renderToStaticMarkup(
+			createElement(NodeDetail, {
+				node,
+				network: networkFixture([node]),
+				knownNode: { ...knownNodeFixture(node), lastMeasurementAt: null },
+				organization: null,
+				archiveEvidence: null
+			})
+		);
+		expect(html).toContain('Last measured Unavailable');
+	});
 });

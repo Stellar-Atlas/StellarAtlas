@@ -70,11 +70,10 @@ describe('node directional trust', () => {
 		expect(result.trusts).toEqual([]);
 		expect(result.trustedBy.map((item) => item.publicKey)).toEqual(['a']);
 	});
-	it('uses the selected historical quorum without replacing other current node snapshots', () => {
+	it('uses the selected historical quorum only when absent from the current network', () => {
 		const historical = nodeFixture('selected', { quorumSet: quorum('old') });
 		const result = buildNodeTrust(
 			networkFixture([
-				nodeFixture('selected', { quorumSet: quorum('new') }),
 				nodeFixture('current', { quorumSet: quorum('selected') })
 			]),
 			'selected',
@@ -82,5 +81,28 @@ describe('node directional trust', () => {
 		);
 		expect(result.trusts.map((item) => item.publicKey)).toEqual(['old']);
 		expect(result.trustedBy.map((item) => item.publicKey)).toEqual(['current']);
+	});
+	it('does not overwrite current quorum or graph data with a retained snapshot', () => {
+		const historical = nodeFixture('selected', { quorumSet: quorum('old') });
+		const current = nodeFixture('selected', { quorumSet: quorum('new') });
+		const result = buildNodeTrust(
+			networkFixture([current, nodeFixture('new'), nodeFixture('old')]),
+			'selected',
+			historical
+		);
+		expect(result.trusts.map((item) => item.publicKey)).toEqual(['new']);
+		expect(
+			result.graph.edges.map((edge) => [edge.source, edge.target])
+		).toEqual([['selected', 'new']]);
+		expect(result.quorumAvailable).toBe(true);
+	});
+	it('does not restore an old quorum when the current record reports no quorum', () => {
+		const result = buildNodeTrust(
+			networkFixture([nodeFixture('selected', { quorumSet: null })]),
+			'selected',
+			nodeFixture('selected', { quorumSet: quorum('old') })
+		);
+		expect(result.trusts).toEqual([]);
+		expect(result.quorumAvailable).toBe(false);
 	});
 });

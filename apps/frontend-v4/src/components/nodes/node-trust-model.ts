@@ -22,7 +22,8 @@ export function buildNodeTrust(
 	const nodes = new Map(
 		network.nodes.map((candidate) => [candidate.publicKey, candidate])
 	);
-	if (node) nodes.set(publicKey, node);
+	const selectedNode = nodes.get(publicKey) ?? node;
+	if (selectedNode) nodes.set(publicKey, selectedNode);
 	const organizations = new Map(
 		network.organizations.map((organization) => [organization.id, organization])
 	);
@@ -46,7 +47,9 @@ export function buildNodeTrust(
 					a.label.localeCompare(b.label, 'en') ||
 					a.publicKey.localeCompare(b.publicKey, 'en')
 			);
-	const trusts = sort(collectQuorumValidatorIds(node?.quorumSet ?? null));
+	const trusts = sort(
+		collectQuorumValidatorIds(selectedNode?.quorumSet ?? null)
+	);
 	// Nested members of each advertised quorum set, not trust-of-trust reachability.
 	const trustedBy = sort(
 		network.nodes
@@ -95,7 +98,7 @@ export function buildNodeTrust(
 	return {
 		trusts,
 		trustedBy,
-		quorumAvailable: node?.quorumSet != null,
+		quorumAvailable: selectedNode?.quorumSet != null,
 		graph: scopedGraph
 	};
 }

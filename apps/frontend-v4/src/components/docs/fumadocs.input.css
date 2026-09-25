@@ -31,6 +31,19 @@
 .developer-docs #nd-page {
 	min-width: 0;
 }
+.developer-docs #nd-sidebar button {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	color: var(--color-fd-foreground);
+}
+.developer-docs #nd-sidebar button:hover {
+	background: var(--color-fd-accent);
+}
+.developer-docs #nd-sidebar button:focus-visible {
+	outline: 2px solid var(--color-fd-ring);
+	outline-offset: 2px;
+}
 .developer-docs #nd-sidebar [data-radix-scroll-area-viewport] {
 	overscroll-behavior-y: auto;
 	mask-image: none;

@@ -5,6 +5,7 @@ import type {
 	PublicNode
 } from '../../api/types';
 import { getOrganizationLabel } from '../../domain/network';
+import { selectNodeSnapshot } from '../../domain/select-node-snapshot';
 import { LocalDateTime } from '../local-date-time';
 import { NetworkGraphCanvas } from '../graph/network-graph-canvas';
 import {
@@ -22,7 +23,8 @@ export function NodeTrust({
 	readonly knownNode: PublicKnownNode;
 	readonly node: PublicNode | null;
 }): React.JSX.Element {
-	const model = buildNodeTrust(network, knownNode.publicKey, node);
+	const selectedNode = selectNodeSnapshot(network, knownNode.publicKey, node);
+	const model = buildNodeTrust(network, knownNode.publicKey, selectedNode);
 	return (
 		<section
 			className="node-detail-wide node-trust"
@@ -35,9 +37,10 @@ export function NodeTrust({
 					available={model.quorumAvailable}
 				>
 					This node’s reported quorum set, including nested sets.{' '}
-					{node ? (
+					{selectedNode ? (
 						<>
-							Snapshot <LocalDateTime dateTime={node.dateUpdated} />
+							Metadata snapshot since{' '}
+							<LocalDateTime dateTime={selectedNode.dateUpdated} />
 							{knownNode.current ? '.' : ' (historical).'}
 						</>
 					) : null}

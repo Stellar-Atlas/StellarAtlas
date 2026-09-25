@@ -326,6 +326,48 @@ describe('known archive evidence UI', () => {
 		).toContain('Retry scheduled until');
 	});
 
+	it.each(['advancing', 'blocked', 'caught-up'] as const)(
+		'describes %s as scan position, never continuous proof coverage',
+		(status) => {
+			const root = createEvidence().roots[0];
+			if (root === undefined) throw new Error('Expected archive root');
+			const markup = renderToStaticMarkup(
+				createElement(ArchiveRootSummaryTable, {
+					roots: [
+						{
+							...root,
+							sequentialCoverage: {
+								advertisedLatestCheckpointLedger: 6_400_063,
+								blockedCheckpointLedger: status === 'blocked' ? 127 : null,
+								blocker: null,
+								lastContinuouslyVerifiedCheckpointLedger: 5_000_063,
+								nextCheckpointLedger:
+									status === 'caught-up' ? 6_400_127 : 5_000_127,
+								status
+							}
+						}
+					]
+				})
+			);
+			expect(markup).toContain('Historical scan progress');
+			expect(markup).not.toContain('5,000,063');
+			expect(markup).not.toMatch(
+				/continuous|continuously|Blocked at checkpoint/i
+			);
+			if (status === 'caught-up') {
+				expect(markup).toContain('Historical scan position caught up');
+				expect(markup).toContain('does not mean every checkpoint is verified');
+			} else {
+				expect(markup).toContain('Next historical checkpoint');
+				expect(markup).toContain('5,000,127');
+			}
+			if (status === 'blocked') {
+				expect(markup).toContain('needs evidence');
+				expect(markup).toContain('checkpoint positions may continue scanning');
+			}
+		}
+	);
+
 	it('shows retained state separately from a later failed refresh', () => {
 		const evidence = createEvidence();
 		const root = evidence.roots[0];

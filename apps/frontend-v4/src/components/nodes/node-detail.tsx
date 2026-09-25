@@ -108,8 +108,16 @@ export function NodeDetail({
 					<StatusTags tags={nodeTags} />
 				</div>
 				<p className="muted-copy">
-					Snapshot <LocalDateTime dateTime={node.dateUpdated} />
+					Metadata snapshot since <LocalDateTime dateTime={node.dateUpdated} />
 					{knownNode.current ? '' : ' · historical record'}
+				</p>
+				<p className="muted-copy">
+					Last measured{' '}
+					{knownNode.lastMeasurementAt ? (
+						<LocalDateTime dateTime={knownNode.lastMeasurementAt} />
+					) : (
+						'Unavailable'
+					)}
 				</p>
 				<dl className="details">
 					<div>

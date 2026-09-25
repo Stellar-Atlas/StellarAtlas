@@ -108,6 +108,11 @@ describe('node archive checkpoint summary', () => {
 		expect(html).toContain('checkpoint positions verified');
 		expect(html).not.toContain('8,000 / 9,999');
 		expect(html).toContain('Ledger 1,343');
+		expect(html).not.toContain('Continuously verified through');
+		expect(html).not.toContain('Ledger 1,279');
+		expect(html).toContain(
+			'Scanning can continue past recorded archive failures'
+		);
 		expect(html).toContain(getArchiveScanDetailPath(rootUrl));
 	});
 	it('does not invent a denominator or percentage when the advertised head is unknown', () => {
