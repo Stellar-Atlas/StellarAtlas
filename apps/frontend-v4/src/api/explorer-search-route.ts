@@ -43,6 +43,9 @@ const filterNames = new Set([
 	'event_topic',
 	'transaction_hash',
 	'contract_id',
+	'type_code',
+	'successful',
+	'in_successful_contract_call',
 	'min_amount_raw',
 	'max_amount_raw'
 ]);

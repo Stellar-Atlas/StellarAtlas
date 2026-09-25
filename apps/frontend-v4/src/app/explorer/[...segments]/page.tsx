@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { PageHeading } from '@components/layout/page-heading';
 import { ExplorerEntityBrowser } from '@components/blockchain/explorer-entity-browser';
+import { ExplorerContractEvents } from '@components/blockchain/explorer-contract-events';
 import { ExplorerEntityNavigation } from '@components/blockchain/explorer-entity-navigation';
 import { ExplorerRecordLookup } from '@components/blockchain/explorer-record-lookup';
 import { ExplorerTransactionDetail } from '@components/blockchain/explorer-transaction-detail';
@@ -32,6 +33,8 @@ async function EntityRoute({
 	const filters = explorerRouteFilters(query);
 	const offset = explorerRouteOffset(query.offset);
 	if (offset === null) notFound();
+	if (collection === 'contract-events' && !identifier)
+		return <ExplorerContractEvents filters={filters} />;
 	if (isAnalyticsCollection(collection))
 		return (
 			<ExplorerEntityBrowser

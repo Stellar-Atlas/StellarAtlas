@@ -7,10 +7,19 @@ export function LedgerCloseMetaStatusRow({
 	fullHistory
 }: {
 	readonly fullHistory: PublicFullHistoryStatus;
-}): React.JSX.Element | null {
+}): React.JSX.Element {
 	const formatDateTime = useLocalDateTimeFormatter();
 	const coverage = fullHistory.ledgerCloseMeta;
-	if (coverage === null) return null;
+	if (coverage === null) {
+		return (
+			<StatusRow
+				label="Retained source lake"
+				status="unavailable"
+				value="Coverage unavailable"
+				detail="Retained ledger-close metadata coverage has not loaded; this does not establish whether data is missing or ingestion is stopped."
+			/>
+		);
+	}
 	const recordCount = coverage.outputs.reduce(
 		(sum, output) => sum + BigInt(output.recordCount),
 		0n
@@ -26,8 +35,8 @@ export function LedgerCloseMetaStatusRow({
 			: `; ${formatUnsigned(coverage.supplementalLedgerCount)} supplemental near-head ledgers are also decoded through ${formatNullableLedger(coverage.lastLedger)}`;
 	return (
 		<StatusRow
-			detail={`${formatUnsigned(coverage.contiguousLedgerCount)} continuous ledgers in ${formatInteger(coverage.batchCount)} immutable batches${supplementalDetail}; ${formatUnsigned(recordCount.toString())} decoded dataset rows across ${formatInteger(coverage.outputs.length)} typed datasets; updated ${formatDateTime(coverage.updatedAt)}`}
-			label="Decoded history ingestion"
+			detail={`${formatUnsigned(coverage.contiguousLedgerCount)} continuous ledgers in ${formatInteger(coverage.batchCount)} immutable batches${supplementalDetail}; ${formatUnsigned(recordCount.toString())} decoded file rows across ${formatInteger(coverage.outputs.length)} source datasets; updated ${formatDateTime(coverage.updatedAt)}. Persisted coverage, not live importer status or parsed analytics coverage.`}
+			label="Retained source lake"
 			pillText="Persisted"
 			status="ok"
 			value={continuousRange}

@@ -3,6 +3,33 @@ import type { PublicHistoricalFullHistoryBackfill } from '@api/types';
 import { HistoricalBackfillStatusRow } from '../historical-backfill-status-row';
 
 describe('HistoricalBackfillStatusRow', () => {
+	it('preserves the exact failed index error without calling analytics failed', () => {
+		const markup = renderToStaticMarkup(
+			<HistoricalBackfillStatusRow
+				backfill={{
+					...backfill(),
+					state: 'failed',
+					latestErrorCode: 'promotion-candidate-incomplete'
+				}}
+			/>
+		);
+		expect(markup).toContain('Needs attention');
+		expect(markup).toContain('last error: promotion-candidate-incomplete');
+		expect(markup).toContain(
+			'not a separate archive prover or parsed analytics import'
+		);
+	});
+
+	it('limits completion claims to the compatibility index', () => {
+		const markup = renderToStaticMarkup(
+			<HistoricalBackfillStatusRow
+				backfill={{ ...backfill(), state: 'complete' }}
+			/>
+		);
+		expect(markup).toContain('compatibility index backfill complete');
+		expect(markup).not.toContain('full history indexed');
+	});
+
 	it('renders incomplete bucket checks without claiming a remote failure', () => {
 		const markup = renderToStaticMarkup(
 			<HistoricalBackfillStatusRow backfill={backfill()} />

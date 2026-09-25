@@ -33,6 +33,12 @@ export function ExplorerEntityNavigation({
 					{titleCase(collection)}
 				</Link>
 			))}
+			<Link
+				href="/explorer/contract-events"
+				aria-current={active === 'contract-events' ? 'page' : undefined}
+			>
+				Contract events
+			</Link>
 		</nav>
 	);
 }

@@ -1,10 +1,16 @@
 import type { PublicFullHistoryStatus, PublicStatusLevel } from '@api/types';
 import { combineStatusLevels } from './status-dashboard-headlines';
 
-/** The section badge summarizes its displayed services, not just API connectivity. */
+/** Platform connectivity must not inherit compatibility-index failures. */
 export function platformMonitoringStatus(
 	api: PublicStatusLevel,
-	network: PublicStatusLevel,
+	network: PublicStatusLevel
+): PublicStatusLevel {
+	return combineStatusLevels(api, network);
+}
+
+/** Failures stay visible on the separate compatibility-index section. */
+export function compatibilityIndexStatus(
 	history: PublicFullHistoryStatus
 ): PublicStatusLevel {
 	const state = history.ledgerCloseMetaState;
@@ -29,10 +35,9 @@ export function platformMonitoringStatus(
 		['promoting', 'running', 'waiting-for-proof'].includes(
 			history.canonicalPromotion.state
 		);
-	const historyStatus: PublicStatusLevel = knownFailure
+	return knownFailure
 		? 'degraded'
 		: history.canonicalCoverage === null || !promotionAvailable
 			? 'unavailable'
 			: history.status;
-	return combineStatusLevels(combineStatusLevels(api, network), historyStatus);
 }

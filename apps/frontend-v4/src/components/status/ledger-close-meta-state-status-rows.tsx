@@ -20,7 +20,7 @@ export function LedgerCloseMetaStateStatusRows({
 	) {
 		return (
 			<StatusRow
-				label="State import and linkage records"
+				label="Compatibility state import and linkage records"
 				status="unavailable"
 				value="Telemetry unavailable"
 				detail="Import and linkage records have not loaded; no empty-state conclusion is available."
@@ -50,10 +50,10 @@ function StateImportRow({
 		<StatusRow
 			detail={
 				empty
-					? 'No account or trustline change batch has been registered for import yet.'
-					: `Last recorded: ${formatInteger(lifecycle.importing)} importing, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed. Updated ${formatNullableDate(imports.latestUpdatedAt, formatDateTime)}; not live worker status.`
+					? 'No account or trustline change batch has been registered for this compatibility index. This is not parsed analytics coverage. Importer runtime is not reported.'
+					: `Last recorded: ${formatInteger(lifecycle.importing)} importing, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed. Updated ${formatNullableDate(imports.latestUpdatedAt, formatDateTime)}; not live worker status. Importer runtime is not reported: stored importing or queued records do not mean it is running. This compatibility index is not the parsed analytics dataset.`
 			}
-			label="Account and trustline state (recorded)"
+			label="Account and trustline compatibility index"
 			pillText={
 				empty
 					? 'Awaiting data'
@@ -62,7 +62,7 @@ function StateImportRow({
 						: active
 							? 'Recorded importing'
 							: waiting
-								? 'Queued'
+								? 'Recorded queued'
 								: 'Imported'
 			}
 			status={failed ? 'degraded' : 'ok'}
@@ -96,10 +96,10 @@ function CanonicalStateLinkageRow({
 		<StatusRow
 			detail={
 				empty
-					? 'No LedgerCloseMeta batch overlaps proof-gated canonical history yet.'
+					? 'No decoded source batch is recorded as overlapping the proof-linked compatibility index yet. This does not describe parsed analytics coverage.'
 					: `Compares decoded ledger headers and hashes with proof-gated canonical ledgers. Last recorded: ${formatInteger(lifecycle.checking)} checking, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed. Updated ${formatNullableDate(linkage.latestUpdatedAt, formatDateTime)}; not live worker status. This does not verify account/trustline contents or SCP signatures.`
 			}
-			label="Canonical ledger linkage (recorded)"
+			label="Compatibility ledger linkage (recorded)"
 			pillText={
 				empty
 					? 'Awaiting overlap'

@@ -17,7 +17,7 @@ export function HistoricalBackfillStatusRow({
 		backfill.state === 'failed' ? 'degraded' : 'ok';
 	return (
 		<StatusRow
-			detail={historicalBackfillDetail(backfill)}
+			detail={`Populates the compatibility index from existing proof evidence; not a separate archive prover or parsed analytics import. ${historicalBackfillDetail(backfill)}${backfill.state === 'failed' ? `; last error: ${backfill.latestErrorCode ?? 'not reported'}` : ''}`}
 			label="Historical index backfill"
 			pillText={historicalBackfillPill(backfill)}
 			status={status}
@@ -35,7 +35,7 @@ function historicalBackfillValue(
 	if (backfill.completedCheckpoints !== undefined) {
 		const completed = `${formatInteger(backfill.completedCheckpoints)} checkpoints indexed`;
 		if (backfill.state === 'complete')
-			return `${completed}; full history indexed`;
+			return `${completed}; compatibility index backfill complete`;
 		if (checkpoint === null) return completed;
 		const formattedCheckpoint = formatInteger(Number(checkpoint));
 		const proof = backfill.currentProof;
@@ -51,7 +51,8 @@ function historicalBackfillValue(
 		return `${completed}; checkpoint ${formattedCheckpoint} has no current source aggregate`;
 	}
 
-	if (backfill.state === 'complete') return 'Full history indexed';
+	if (backfill.state === 'complete')
+		return 'Compatibility index backfill complete';
 	if (backfill.state === 'running') {
 		return `Processing ${formatCheckpoint(checkpoint)}`;
 	}

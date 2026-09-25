@@ -25,12 +25,13 @@ function render(slug: string): string {
 	);
 }
 describe('developer guides', () => {
-	it('provides six discoverable pages with stable unique section anchors', () => {
+	it('provides discoverable pages with stable unique section anchors', () => {
 		expect(developerGuidePages.map((page) => page.slug)).toEqual([
 			'quickstart',
 			'datasets',
 			'querying',
 			'rest',
+			'contract-events',
 			'graphql-guide',
 			'services'
 		]);
@@ -108,5 +109,19 @@ describe('developer guides', () => {
 			'not an alternate URL for the ClickHouse'
 		);
 		expect(render('services')).toContain('https://api.stellaratlas.io/rpc');
+	});
+	it('documents the working contract event workflow without conflating events with successful transfers', () => {
+		const html = render('contract-events');
+		for (const value of [
+			'/explorer/contract-events',
+			'/docs/api/listAnalyticsContractEvents',
+			'nextCursor',
+			'input.after',
+			'topicsJson',
+			'in_successful_contract_call',
+			'not automatically a token transfer'
+		])
+			expect(html).toContain(value);
+		expect(html).toContain('hubbleContractEvents');
 	});
 });

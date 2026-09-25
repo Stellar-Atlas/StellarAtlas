@@ -1,6 +1,9 @@
 import { parseStatusLiveMessage } from '@api/status-live-stream';
 import { createStatusLivePayload } from '../../../api/__tests__/support/status-live-contract-fixtures';
-import { platformMonitoringStatus } from '../status-dashboard-health';
+import {
+	compatibilityIndexStatus,
+	platformMonitoringStatus
+} from '../status-dashboard-health';
 
 function history() {
 	const message = parseStatusLiveMessage({
@@ -10,12 +13,17 @@ function history() {
 	if (message?.type !== 'status') throw new Error('Expected valid fixture');
 	return message.payload.fullHistory;
 }
-describe('platform monitoring section health', () => {
+describe('separate platform and compatibility-index health', () => {
+	it('reports only API and network health in the platform badge', () => {
+		expect(platformMonitoringStatus('ok', 'ok')).toBe('ok');
+		expect(platformMonitoringStatus('ok', 'degraded')).toBe('degraded');
+		expect(platformMonitoringStatus('unavailable', 'ok')).toBe('unavailable');
+	});
 	it('does not report OK when recorded state imports failed', () => {
 		const current = history();
 		const imports = current.ledgerCloseMetaState.imports;
 		expect(
-			platformMonitoringStatus('ok', 'ok', {
+			compatibilityIndexStatus({
 				...current,
 				ledgerCloseMetaState: {
 					...current.ledgerCloseMetaState,
@@ -32,7 +40,7 @@ describe('platform monitoring section health', () => {
 		if (current.canonicalPromotion === null)
 			throw new Error('Expected promotion fixture');
 		expect(
-			platformMonitoringStatus('ok', 'ok', {
+			compatibilityIndexStatus({
 				...current,
 				canonicalPromotion: { ...current.canonicalPromotion, state: 'failed' }
 			})
@@ -40,7 +48,7 @@ describe('platform monitoring section health', () => {
 	});
 	it('keeps unavailable telemetry unavailable', () => {
 		expect(
-			platformMonitoringStatus('ok', 'ok', {
+			compatibilityIndexStatus({
 				...history(),
 				status: 'unavailable',
 				canonicalCoverage: null

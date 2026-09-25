@@ -48,6 +48,12 @@ describe('LedgerCloseMetaStateStatusRows', () => {
 		expect(html).toContain('Recorded importing');
 		expect(html).toContain('Last recorded: 3 importing');
 		expect(html).toContain('not live worker status');
+		expect(html).toContain('Importer runtime is not reported');
+		expect(html).toContain(
+			'stored importing or queued records do not mean it is running'
+		);
+		expect(html).toContain('not the parsed analytics dataset');
+		expect(html).not.toContain('Importer stopped');
 		expect(html).toContain('2026-08-09 12:00 UTC');
 	});
 
@@ -60,6 +66,8 @@ describe('LedgerCloseMetaStateStatusRows', () => {
 		expect(html).toContain('3 / 4 imports complete');
 		expect(html).toContain('96 / 128 LCM ledgers matched');
 		expect(html).toContain('Needs attention');
+		expect(html).toContain('1 failed');
+		expect(html).toContain('Account and trustline compatibility index');
 		expect(html).toContain('proof-gated canonical ledgers');
 		expect(html).not.toContain('proof-v6');
 		expect(html).toContain('does not verify account/trustline contents');

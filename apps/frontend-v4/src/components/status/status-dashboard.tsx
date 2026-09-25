@@ -23,7 +23,10 @@ import {
 } from '@domain/history-archive-health';
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { getArchiveDownloadActivity } from './archive-download-activity';
-import { platformMonitoringStatus } from './status-dashboard-health';
+import {
+	compatibilityIndexStatus,
+	platformMonitoringStatus
+} from './status-dashboard-health';
 import { formatArchiveWorkerCapacity } from './archive-worker-table-model';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
 import { resolveArchiveRuntimeActivity } from './archive-runtime-activity';
@@ -171,8 +174,7 @@ export function StatusDashboard({
 						<StatusPill
 							status={platformMonitoringStatus(
 								api.status,
-								networkMonitoringStatus,
-								fullHistory
+								networkMonitoringStatus
 							)}
 						/>
 					</div>
@@ -182,12 +184,6 @@ export function StatusDashboard({
 							label="Public API"
 							status={api.status}
 							value={statusLabel(api.status)}
-						/>
-						<CanonicalHistoryStatusRow fullHistory={fullHistory} />
-						<LedgerCloseMetaStatusRow fullHistory={fullHistory} />
-						<LedgerCloseMetaStateStatusRows fullHistory={fullHistory} />
-						<HistoricalBackfillStatusRow
-							backfill={fullHistory.historicalBackfill}
 						/>
 						<StatusRow
 							detail={`Age ${formatDuration(dataQuality.dataFreshness.networkScan.ageMs)}`}
@@ -211,6 +207,55 @@ export function StatusDashboard({
 									? 'Unavailable'
 									: `${formatInteger(scan.completedScans)} / ${formatInteger(scan.totalScans)}`
 							}
+						/>
+					</div>
+				</section>
+
+				<section
+					className="panel"
+					aria-label="Source lake and parsed analytics"
+				>
+					<div className="panel-heading">
+						<div>
+							<strong>Source lake and parsed analytics</strong>
+							<span>
+								Retained source data and queryable datasets have separate
+								coverage
+							</span>
+						</div>
+					</div>
+					<div className="status-list">
+						<LedgerCloseMetaStatusRow fullHistory={fullHistory} />
+					</div>
+					<p className="muted-copy">
+						The lake retains ledger-close metadata and decoded files. Parsed
+						analytics publishes queryable datasets separately; a retained ledger
+						is not necessarily available to analytics yet. See{' '}
+						<a href="/explorer">published analytics coverage in the explorer</a>
+						.
+					</p>
+				</section>
+
+				<section className="panel" aria-label="Compatibility indexes">
+					<div className="panel-heading">
+						<div>
+							<strong>Compatibility indexes</strong>
+							<span>
+								Separate proof-linked indexes used by older local-history APIs
+							</span>
+						</div>
+						<StatusPill status={compatibilityIndexStatus(fullHistory)} />
+					</div>
+					<p className="muted-copy">
+						These retained index records are not the parsed analytics dataset.
+						Index failures remain unresolved below; they do not establish
+						whether the source-lake or analytics importer is running.
+					</p>
+					<div className="status-list">
+						<CanonicalHistoryStatusRow fullHistory={fullHistory} />
+						<LedgerCloseMetaStateStatusRows fullHistory={fullHistory} />
+						<HistoricalBackfillStatusRow
+							backfill={fullHistory.historicalBackfill}
 						/>
 					</div>
 				</section>
@@ -267,10 +312,10 @@ function CanonicalHistoryStatusRow({
 			<StatusRow
 				detail={
 					fullHistory.status === 'unavailable'
-						? 'Canonical history telemetry is unavailable; indexed coverage has not been reported.'
+						? 'Canonical index telemetry is unavailable; indexed coverage has not been reported.'
 						: 'No proof-gated checkpoint has been promoted into the local index.'
 				}
-				label="Canonical history"
+				label="Proof-linked canonical index"
 				status="unavailable"
 				value={
 					fullHistory.status === 'unavailable'
@@ -297,8 +342,8 @@ function CanonicalHistoryStatusRow({
 			: `latest checkpoint ${formatInteger(Number(evidence.checkpointLedger))} selected by proof ${evidence.checkpointProofId} v${evidence.proofVersion} from ${evidence.archiveUrlIdentity}`;
 	return (
 		<StatusRow
-			detail={`${formatInteger(coverage.ledgerCount)} proof-gated ledgers; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${evidenceDetail}; ${formatCanonicalEvidenceSelection(coverage.archiveSourceCount)}; ${promotionLabel}`}
-			label="Canonical history"
+			detail={`${formatInteger(coverage.ledgerCount)} proof-gated ledgers; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${evidenceDetail}; ${formatCanonicalEvidenceSelection(coverage.archiveSourceCount)}; ${promotionLabel}. This index coverage is not source-lake or parsed analytics coverage.`}
+			label="Proof-linked canonical index"
 			pillText={canonicalPromotionPill(fullHistory)}
 			status={promotionStatus}
 			value={`${formatInteger(Number(coverage.firstLedger))} - ${formatInteger(Number(coverage.lastLedger))}`}

@@ -11,6 +11,38 @@ import {
 } from '../status-dashboard';
 
 describe('StatusDashboard historical backfill', () => {
+	it('keeps index failures visible and separate from source-lake coverage', () => {
+		const props = statusProps();
+		const promotion = props.fullHistory.canonicalPromotion;
+		if (promotion === null) throw new Error('Expected promotion fixture');
+		const markup = renderToStaticMarkup(
+			<StatusDashboard
+				{...props}
+				fullHistory={{
+					...props.fullHistory,
+					canonicalPromotion: {
+						...promotion,
+						state: 'failed',
+						lastErrorCode: 'promotion-candidate-incomplete'
+					}
+				}}
+			/>
+		);
+		const source = markup.match(
+			/<section[^>]*aria-label="Source lake and parsed analytics"[\s\S]*?<\/section>/
+		)?.[0];
+		const indexes = markup.match(
+			/<section[^>]*aria-label="Compatibility indexes"[\s\S]*?<\/section>/
+		)?.[0];
+		expect(source).toContain('Retained source lake');
+		expect(source).toContain('not necessarily available to analytics yet');
+		expect(source).not.toContain('promotion-candidate-incomplete');
+		expect(indexes).toContain('Promotion failed');
+		expect(indexes).toContain('promotion-candidate-incomplete');
+		expect(indexes).toContain('not the parsed analytics dataset');
+		expect(indexes).toContain('not a separate archive prover');
+	});
+
 	it('does not turn wholly unavailable snapshots into zero or empty claims', () => {
 		const props = statusProps();
 		const markup = renderToStaticMarkup(
@@ -49,13 +81,14 @@ describe('StatusDashboard historical backfill', () => {
 		expect(markup).toContain('Archive runtime telemetry is unavailable');
 		expect(markup).toContain('Network scan counts unavailable');
 		expect(markup).toContain('Telemetry unavailable');
+		expect(markup).toContain('Retained source lake');
 		expect(markup).not.toContain('no active object checks at this instant');
 		expect(markup).not.toContain('0 configured worker slots');
 		expect(markup).not.toContain('0 recent scans');
 		expect(markup).not.toContain('No proof-gated checkpoint has been promoted');
 	});
 
-	it('includes quantified checkpoint progress in the platform status panel', () => {
+	it('includes quantified checkpoint progress in the compatibility index panel', () => {
 		const payload = createStatusLivePayload();
 		const fullHistory = record(payload.fullHistory);
 		const backfill = record(fullHistory.historicalBackfill);

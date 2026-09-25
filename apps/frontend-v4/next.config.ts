@@ -5,6 +5,8 @@ const apiBaseUrl =
 const normalizedApiBaseUrl = apiBaseUrl.endsWith('/')
 	? apiBaseUrl.slice(0, -1)
 	: apiBaseUrl;
+// Keep Horizon's generated resource links on the public API origin, not loopback.
+const publicDataApiBaseUrl = 'https://api.stellaratlas.io';
 
 const nextConfig: NextConfig = {
 	distDir: process.env.NEXT_DIST_DIR ?? '.next-production',
@@ -26,6 +28,18 @@ const nextConfig: NextConfig = {
 		{
 			destination: `${normalizedApiBaseUrl}/graphql`,
 			source: '/graphql'
+		},
+		{
+			destination: `${publicDataApiBaseUrl}/horizon/`,
+			source: '/horizon'
+		},
+		{
+			destination: `${publicDataApiBaseUrl}/horizon/:path*`,
+			source: '/horizon/:path*'
+		},
+		{
+			destination: `${publicDataApiBaseUrl}/rpc`,
+			source: '/rpc'
 		},
 		{
 			destination: `${normalizedApiBaseUrl}/docs/:path*`,
