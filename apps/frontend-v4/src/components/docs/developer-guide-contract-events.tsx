@@ -124,7 +124,9 @@ export const contractEventsGuide: DeveloperGuidePage = {
 							<code>topicsJson · dataJson</code>
 						</dt>
 						<dd>
-							Decoded topic and payload JSON retained as strings. Preserve large
+							Decoded topics and payloads retained as strings. Payloads may be
+							JSON or the literal <code>void</code> for a return with no value;
+							check for that sentinel before JSON parsing. Preserve large
 							integer tokens; JavaScript Number may round them.
 						</dd>
 						<dt>

@@ -125,7 +125,9 @@ export function parseContractActivityPage(
 				);
 			try {
 				JSON.parse(row.topicsJson);
-				JSON.parse(row.dataJson);
+				// The retained SCVal decoder represents a void return as literal text.
+				// Preserve it without rejecting all other events on this page.
+				if (row.dataJson !== 'void') JSON.parse(row.dataJson);
 			} catch {
 				throw new Error(
 					'The data service returned invalid decoded event JSON.'

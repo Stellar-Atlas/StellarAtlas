@@ -68,6 +68,20 @@ describe('typed contract activity API contract', () => {
 			'170141183460469231731687303715884105727'
 		);
 	});
+	it('preserves a decoded void return alongside other events and its next cursor', () => {
+		const response = eventResponse('next-page');
+		const value = {
+			...response,
+			items: [
+				response.items[0],
+				{ ...response.items[0], id: 'return-event', dataJson: 'void' }
+			]
+		};
+		const page = parseContractActivityPage(value, contractId, 'events');
+		expect(page.rows).toHaveLength(2);
+		expect(page.rows[1]?.dataJson).toBe('void');
+		expect(page.nextPosition).toBe('next-page');
+	});
 	it.each([
 		{ rows: [] },
 		{ ...eventResponse(), contractId: 'wrong' },
