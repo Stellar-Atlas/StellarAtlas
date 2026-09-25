@@ -21,6 +21,10 @@ import {
 	type HistoryArchiveBrokerJob
 } from '../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
 import { historyArchiveReadyNotificationChannel } from '../../repositories/database/HistoryArchiveObjectReadyQueue.js';
+import {
+	createArchiveBrokerConsumerStateReporter,
+	readArchiveBrokerOccupancy
+} from './ArchiveBrokerConsumerHealth.js';
 
 interface PostgresNotification {
 	readonly channel: string;
@@ -169,12 +173,15 @@ export class HistoryArchiveBrokerDispatcher {
 	private wakeVersion = 0;
 	private readonly wakeWaiters = new Set<() => void>();
 	private stopping = false;
+	private readonly reportConsumerState;
 
 	constructor(
 		private readonly repository: HistoryArchiveBrokerFrontierRepository,
 		private readonly config: HistoryArchiveBrokerConfig,
 		private readonly logger: Logger
-	) {}
+	) {
+		this.reportConsumerState = createArchiveBrokerConsumerStateReporter(logger);
+	}
 
 	async run(): Promise<void> {
 		await this.initialize();
@@ -262,6 +269,9 @@ export class HistoryArchiveBrokerDispatcher {
 			now + orphanedPublishedReplayIntervalMs;
 		// Recovery is independent of queue emptiness; another root's work must not
 		// starve a current checkpoint whose executable ready row was lost.
+		// A newly advertised checkpoint may not have any object row yet. Materialize
+		// it through the existing bounded maintenance transaction before ready repair.
+		await this.repository.ensurePrefetch(this.config.canonicalFirstRoot);
 		await this.repository.recoverMissingFrontierReady(this.config.batchSize);
 		if (availableCapacity === this.config.highWatermark) {
 			const requeued = await this.repository.requeueOrphanedPublishedJobs(
@@ -447,15 +457,17 @@ export class HistoryArchiveBrokerDispatcher {
 
 	private async getAvailableCapacity(): Promise<number> {
 		const manager = this.requireManager();
-		const [consumerInfo, streamInfo] = await Promise.all([
-			manager.consumers.info(this.config.stream, this.config.consumer),
-			manager.streams.info(this.config.stream)
-		]);
+		const occupancy = await readArchiveBrokerOccupancy(
+			() => manager.consumers.info(this.config.stream, this.config.consumer),
+			() => manager.streams.info(this.config.stream)
+		);
+		this.reportConsumerState(occupancy);
+		if (occupancy.inconsistent) return 0;
 		return calculateHistoryArchiveBrokerAvailableCapacity(
 			this.config.highWatermark,
-			consumerInfo.num_ack_pending,
-			consumerInfo.num_pending,
-			streamInfo.state.messages
+			occupancy.consumer.num_ack_pending,
+			occupancy.consumer.num_pending,
+			occupancy.stream.state.messages
 		);
 	}
 
