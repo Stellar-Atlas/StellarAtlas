@@ -2,17 +2,16 @@ module github.com/stellar/stellar-etl/v2/stellaratlas-hubble
 
 go 1.26.5
 
-require github.com/stellar/stellar-etl/v2 v2.8.23
+require github.com/stellar/stellar-etl/v2 v2.8.25
 
 require (
 	github.com/ClickHouse/ch-go v0.74.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.48.0
-	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.10.0 // indirect
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/paulmach/orb v0.13.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
@@ -74,7 +73,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.14 // indirect
 	github.com/googleapis/gax-go/v2 v2.21.0 // indirect
-	github.com/guregu/null v4.0.0+incompatible // indirect
+	github.com/guregu/null v4.0.0+incompatible
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/holiman/uint256 v1.2.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
@@ -92,9 +91,9 @@ require (
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
-	github.com/stellar/go-stellar-sdk v0.6.0
-	github.com/stellar/go-stellar-xdr-json v0.0.0-20260612200516-eeb6f667582c // indirect
-	github.com/stellar/go-xdr v0.0.0-20260529210834-0bf8f4956364 // indirect
+	github.com/stellar/go-stellar-sdk v0.7.3
+	github.com/stellar/go-stellar-xdr-json v0.0.0-20260818190510-707287dd9837
+	github.com/stellar/go-xdr v0.0.0-20260806060815-dc590f17552a // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

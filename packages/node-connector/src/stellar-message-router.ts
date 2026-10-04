@@ -20,7 +20,7 @@ export class StellarMessageRouter extends Transform {
 		encoding: string,
 		next: TransformCallback
 	): void {
-		const stream = this.streams.get(stellarMessage.switch().name);
+		const stream = this.streams.get(stellarMessage.type);
 		if (stream) {
 			stream.write(stellarMessage); //use write, not push because we add to the writable side of the duplex stream. Push is for adding to the readable side.
 		}

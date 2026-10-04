@@ -23,9 +23,7 @@ const invocation: HubbleEventProvenance = {
 	transactionId: '100',
 	ledgerSequence: 123,
 	expectedOperationCount: 1,
-	operations: [
-		{ id: '101', type: xdr.OperationType.invokeHostFunction().value }
-	]
+	operations: [{ id: '101', type: xdr.OperationType.invokeHostFunction.value }]
 };
 
 describe('Hubble event classification', () => {
@@ -129,7 +127,7 @@ describe('Hubble event classification', () => {
 			classifyHubbleEvent(event, {
 				...invocation,
 				operations: [
-					{ id: '101', type: xdr.OperationType.restoreFootprint().value }
+					{ id: '101', type: xdr.OperationType.restoreFootprint.value }
 				]
 			}).sorobanExecutionEvidence
 		).toBe(false);
@@ -175,16 +173,16 @@ describe('Hubble event classification', () => {
 		const batch = xdr.LedgerCloseMetaBatch.fromXDR(
 			zstdDecompressSync(compressed, { maxOutputLength: 1 << 20 })
 		);
-		const meta = batch.ledgerCloseMeta()[0]!.v1();
-		const envelopes = meta
-			.txSet()
-			.v1TxSet()
-			.phases()
-			.flatMap((phase) =>
-				phase
-					.v0Components()
-					.flatMap((component) => component.txsMaybeDiscountedFee().txes())
+		const ledgerMeta = batch.ledgerCloseMetas[0];
+		if (ledgerMeta?.type !== 'v1') throw new Error('Expected V1 fixture');
+		const meta = ledgerMeta.v1;
+		const envelopes = meta.txSet.v1TxSet.phases.flatMap((phase) => {
+			if (phase.type !== 'v0Components')
+				throw new Error('Expected serial fixture phase');
+			return phase.v0Components.flatMap(
+				(component) => component.txsMaybeDiscountedFee.txs
 			);
+		});
 		const transaction = envelopes
 			.map((envelope) =>
 				TransactionBuilder.fromXDR(envelope.toXDR('base64'), Networks.PUBLIC)
@@ -196,58 +194,57 @@ describe('Hubble event classification', () => {
 						(operation) => operation.type === 'invokeHostFunction'
 					)
 			);
-		expect(transaction?.hash().toString('hex')).toBe(
+		expect(transaction && Buffer.from(transaction.hash()).toString('hex')).toBe(
 			'f551d9cfa65681c9376db2fc0efcc8ef9045c306c0b54e779c0a70514dec880f'
 		);
 		if (transaction === undefined)
 			throw new Error('Fixture invocation missing');
-		const position = meta
-			.txProcessing()
-			.findIndex((item) =>
-				item.result().transactionHash().equals(transaction.hash())
-			);
-		const soroban = meta
-			.txProcessing()
-			[position]!.txApplyProcessing()
-			.v3()
-			.sorobanMeta();
+		const position = meta.txProcessing.findIndex((item) =>
+			Buffer.from(item.result.transactionHash.toBytes()).equals(
+				Buffer.from(transaction.hash())
+			)
+		);
+		const applied = meta.txProcessing[position]?.txApplyProcessing;
+		if (applied?.type !== 'v3')
+			throw new Error('Expected V3 transaction fixture');
+		const soroban = applied.v3.sorobanMeta;
 		if (soroban === null || soroban === undefined)
 			throw new Error('Fixture Soroban metadata missing');
-		const diagnostic = soroban.diagnosticEvents().find((item) => {
-			const topics = item.event().body().v0().topics();
+		const diagnostic = soroban.diagnosticEvents.find((item) => {
+			const topics = item.event.body.v0.topics;
 			return (
 				topics.length === 2 &&
-				topics.every((topic) => topic.switch().name === 'scvSymbol') &&
-				topics[0]!.sym().toString() === 'fn_return' &&
-				topics[1]!.sym().toString() === 'set_price'
+				topics[0]?.type === 'scvSymbol' &&
+				topics[0].sym.toString() === 'fn_return' &&
+				topics[1]?.type === 'scvSymbol' &&
+				topics[1].sym.toString() === 'set_price'
 			);
 		});
 		if (diagnostic === undefined)
 			throw new Error('Fixture set_price return missing');
 		const transactionId = String(
-			(BigInt(batch.startSequence()) << 32n) | (BigInt(position + 1) << 12n)
+			(BigInt(batch.startSequence) << 32n) | (BigInt(position + 1) << 12n)
 		);
 		const row = {
 			transaction_id: transactionId,
-			ledger_sequence: batch.startSequence(),
+			ledger_sequence: batch.startSequence,
 			operation_id: null,
-			type: diagnostic.event().type().value,
-			topics_decoded: diagnostic
-				.event()
-				.body()
-				.v0()
-				.topics()
-				.map((topic) => ({ symbol: topic.sym().toString() }))
+			type: diagnostic.event.type.value,
+			topics_decoded: diagnostic.event.body.v0.topics.map((topic) => {
+				if (topic.type !== 'scvSymbol')
+					throw new Error('Expected symbol topic');
+				return { symbol: topic.sym.toString() };
+			})
 		};
 		expect(
 			classifyHubbleEvent(row, {
 				transactionId,
-				ledgerSequence: batch.startSequence(),
+				ledgerSequence: batch.startSequence,
 				expectedOperationCount: transaction.operations.length,
 				operations: [
 					{
 						id: String(BigInt(transactionId) + 1n),
-						type: xdr.OperationType.invokeHostFunction().value
+						type: xdr.OperationType.invokeHostFunction.value
 					}
 				]
 			})

@@ -54,7 +54,7 @@ describe('StellarMessageHandler', () => {
 			);
 			expect(scpManager.handle).toHaveBeenCalledTimes(1);
 			expect(scpManager.handle).toHaveBeenCalledWith(
-				stellarMessage.envelope(),
+				stellarMessage.value,
 				observation,
 				senderPublicKey,
 				observedFromAddress

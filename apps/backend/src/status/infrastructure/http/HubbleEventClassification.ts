@@ -2,14 +2,14 @@ import { Asset, Networks, xdr } from '@stellar/stellar-sdk';
 
 // Protocol MAX_OPS_PER_TX; the installed XDR declaration omits this constant.
 export const maximumHubbleTransactionOperations = 100;
-const invokeHostFunction = xdr.OperationType.invokeHostFunction().value;
-const firstOperationType = xdr.OperationType.createAccount().value;
-const lastOperationType = xdr.OperationType.restoreFootprint().value;
+const invokeHostFunction = xdr.OperationType.invokeHostFunction.value;
+const firstOperationType = xdr.OperationType.createAccount.value;
+const lastOperationType = xdr.OperationType.restoreFootprint.value;
 const nativeAssetContractId = Asset.native().contractId(Networks.PUBLIC);
 const sorobanOperationTypes = new Set<number>([
 	invokeHostFunction,
-	xdr.OperationType.extendFootprintTtl().value,
-	xdr.OperationType.restoreFootprint().value
+	xdr.OperationType.extendFootprintTtl.value,
+	xdr.OperationType.restoreFootprint.value
 ]);
 
 export interface HubbleEventOperation {
@@ -67,7 +67,7 @@ export function classifyHubbleEvent(
 	const fee =
 		event.operation_id === null &&
 		event.contract_id === nativeAssetContractId &&
-		event.type === xdr.ContractEventType.contract().value &&
+		event.type === xdr.ContractEventType.contract.value &&
 		typeof firstTopic === 'object' &&
 		firstTopic !== null &&
 		'symbol' in firstTopic &&
@@ -127,9 +127,9 @@ export function classifyHubbleEvent(
 			: operations.get(operationId) === invokeHostFunction;
 	const eventKind: HubbleEventClassification['eventKind'] = fee
 		? 'fee'
-		: event.type === xdr.ContractEventType.diagnostic().value
+		: event.type === xdr.ContractEventType.diagnostic.value
 			? 'diagnostic'
-			: event.type === xdr.ContractEventType.contract().value && invokes
+			: event.type === xdr.ContractEventType.contract.value && invokes
 				? 'contract'
 				: operationId !== null && transactionKind === 'classic'
 					? 'operation'

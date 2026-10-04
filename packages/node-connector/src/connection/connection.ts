@@ -101,7 +101,7 @@ export class Connection extends Duplex {
 		this.socket.setTimeout(2500);
 		this.connectionAuthentication = connectionAuthentication;
 		this.keyPair = connectionOptions.keyPair;
-		this.localNonce = hash(Buffer.from(BigNumber.random()));
+		this.localNonce = Buffer.from(hash(Buffer.from(BigNumber.random())));
 		this.localSequence = Buffer.alloc(8);
 		this.remoteSequence = Buffer.alloc(8);
 
@@ -127,7 +127,7 @@ export class Connection extends Duplex {
 	}
 
 	get localPublicKeyRaw(): Buffer {
-		return this.keyPair.rawPublicKey();
+		return Buffer.from(this.keyPair.rawPublicKey());
 	}
 
 	get remoteAddress(): string {
@@ -338,24 +338,24 @@ export class Connection extends Duplex {
 		if (
 			(
 				[
-					MessageType.transaction().value,
-					MessageType.floodAdvert().value
+					MessageType.transaction.value,
+					MessageType.floodAdvert.value
 				] as number[]
 			).includes(messageType) &&
 			!this.receiveTransactionMessages
 		) {
 			this.increaseRemoteSequenceByOne();
 			this.doneProcessing(
-				messageType === MessageType.transaction().value
-					? MessageType.transaction()
-					: MessageType.floodAdvert(),
+				messageType === MessageType.transaction.value
+					? MessageType.transaction
+					: MessageType.floodAdvert,
 				stellarMessageSize
 			);
 			return ok(true);
 		}
 
 		if (
-			messageType === MessageType.scpMessage().value &&
+			messageType === MessageType.scpMessage.value &&
 			!this.receiveSCPMessages
 		) {
 			this.increaseRemoteSequenceByOne();
@@ -364,7 +364,7 @@ export class Connection extends Duplex {
 
 		if (
 			this.handshakeState >= HandshakeState.GOT_HELLO &&
-			messageType !== MessageType.errorMsg().value
+			messageType !== MessageType.errorMsg.value
 		) {
 			const result = this.verifyAuthentication(
 				authenticatedMessageV0XDR,
@@ -377,7 +377,7 @@ export class Connection extends Duplex {
 
 		let stellarMessage: xdr.StellarMessage;
 		try {
-			stellarMessage = StellarMessage.fromXDR(data.slice(12, data.length - 32));
+			stellarMessage = StellarMessage.fromXdr(data.slice(12, data.length - 32));
 		} catch (error) {
 			if (error instanceof Error) return err(error);
 			else return err(new Error('Error converting xdr to StellarMessage'));
@@ -471,10 +471,10 @@ export class Connection extends Duplex {
 		stellarMessage: StellarMessage,
 		stellarMessageSize: number
 	): Result<boolean, Error> {
-		switch (stellarMessage.switch()) {
-			case MessageType.hello(): {
+		switch (stellarMessage.type) {
+			case 'hello': {
 				const processHelloMessageResult = this.processHelloMessage(
-					stellarMessage.hello()
+					stellarMessage.hello
 				);
 				if (processHelloMessageResult.isErr()) {
 					return err(processHelloMessageResult.error);
@@ -491,19 +491,19 @@ export class Connection extends Duplex {
 				return ok(true);
 			}
 
-			case MessageType.auth(): {
+			case 'auth': {
 				const completedHandshakeResult = this.completeHandshake();
 				if (completedHandshakeResult.isErr())
 					return err(completedHandshakeResult.error);
 				return ok(true);
 			}
 
-			case MessageType.sendMoreExtended(): {
+			case 'sendMoreExtended': {
 				this.sendMoreMsgReceivedCounter++; //server send more functionality not implemented; only for testing purposes;
 				return ok(true);
 			}
 
-			case MessageType.sendMore(): {
+			case 'sendMore': {
 				this.sendMoreMsgReceivedCounter++; //server send more functionality not implemented; only for testing purposes;
 				return ok(true);
 			}
@@ -515,14 +515,17 @@ export class Connection extends Duplex {
 						remote: this.remoteAddress,
 						local: this.localAddress
 					},
-					'Rcv ' + stellarMessage.switch().name
+					'Rcv ' + stellarMessage.type
 				);
 
 				return ok(
 					this.push({
 						stellarMessage: stellarMessage,
 						done: () =>
-							this.doneProcessing(stellarMessage.switch(), stellarMessageSize)
+							this.doneProcessing(
+								MessageType.fromName(stellarMessage.type),
+								stellarMessageSize
+							)
 					} as StellarMessageWork)
 				);
 		}
@@ -607,7 +610,7 @@ export class Connection extends Duplex {
 	): boolean {
 		this.logger.debug(
 			{ remote: this.remoteAddress, local: this.localAddress },
-			'send ' + message.switch().name
+			'send ' + message.type
 		);
 		return this.write(message, cb);
 	}
@@ -649,24 +652,16 @@ export class Connection extends Duplex {
 	): Result<xdr.AuthenticatedMessage, Error> {
 		try {
 			const xdrAuthenticatedMessageV0 = new xdr.AuthenticatedMessageV0({
-				sequence: xdr.Uint64.fromXDR(this.localSequence),
+				sequence: xdr.Uint64.fromXdr(this.localSequence),
 				message: message,
 				mac: this.getMacForAuthenticatedMessage(message)
 			});
 
-			//@ts-ignore wrong type information. Because the switch is a number, not an enum, it does not work as advertised.
-			// We have to create the union object through the constructor https://github.com/stellar/js-xdr/blob/892b662f98320e1221d8f53ff17c6c10442e086d/src/union.js#L9
-			// However the constructor type information is also missing.
-			const authenticatedMessage = new xdr.AuthenticatedMessage(
-				//@ts-ignore
-				0,
+			const authenticatedMessage = xdr.AuthenticatedMessage.v0(
 				xdrAuthenticatedMessageV0
 			);
 
-			if (
-				message.switch() !== MessageType.hello() &&
-				message.switch() !== MessageType.errorMsg()
-			)
+			if (message.type !== 'hello' && message.type !== 'errorMsg')
 				this.increaseLocalSequenceByOne();
 
 			return ok(authenticatedMessage);
@@ -688,7 +683,7 @@ export class Connection extends Duplex {
 			mac = Buffer.alloc(32);
 		else
 			mac = createSHA256Hmac(
-				Buffer.concat([this.localSequence, message.toXDR()]),
+				Buffer.concat([this.localSequence, message.toXdr()]),
 				this.sendingMacKey
 			);
 
@@ -701,24 +696,24 @@ export class Connection extends Duplex {
 		if (
 			!this.connectionAuthentication.verifyRemoteAuthCert(
 				new Date(),
-				hello.peerId().value(),
-				hello.cert()
+				Buffer.from(hello.peerId.value.toBytes()),
+				hello.cert
 			)
 		)
 			return err(new Error('Invalid auth cert'));
 		try {
-			this.remoteNonce = hello.nonce();
-			this.remotePublicKeyECDH = hello.cert().pubkey().key();
+			this.remoteNonce = Buffer.from(hello.nonce.toBytes());
+			this.remotePublicKeyECDH = Buffer.from(hello.cert.pubkey.key);
 			this.remotePublicKey = StrKey.encodeEd25519PublicKey(
-				hello.peerId().value()
+				hello.peerId.value.toBytes()
 			);
-			this.remotePublicKeyRaw = hello.peerId().value();
+			this.remotePublicKeyRaw = Buffer.from(hello.peerId.value.toBytes());
 			this.remoteNodeInfo = {
-				ledgerVersion: hello.ledgerVersion(),
-				overlayVersion: hello.overlayVersion(),
-				overlayMinVersion: hello.overlayMinVersion(),
-				versionString: hello.versionStr().toString(),
-				networkId: hello.networkId().toString('base64')
+				ledgerVersion: hello.ledgerVersion,
+				overlayVersion: hello.overlayVersion,
+				overlayMinVersion: hello.overlayMinVersion,
+				versionString: hello.versionStr.toString(),
+				networkId: Buffer.from(hello.networkId.toBytes()).toString('base64')
 			};
 			this.sendingMacKey = this.connectionAuthentication.getSendingMacKey(
 				this.localNonce,
@@ -773,7 +768,7 @@ export class Connection extends Duplex {
 				remote: this.remoteAddress,
 				local: this.localAddress
 			},
-			'write ' + message.switch().name + ' to socket'
+			'write ' + message.type + ' to socket'
 		);
 
 		const authenticatedMessageResult = this.authenticateMessage(message);

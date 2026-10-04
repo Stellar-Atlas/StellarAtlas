@@ -84,11 +84,11 @@ it('should crawl, listen for validating nodes and harvest quorumSets', async () 
 		});
 		connection.on('data', (stellarMessageWork: StellarMessageWork) => {
 			const stellarMessage = stellarMessageWork.stellarMessage;
-			switch (stellarMessage.switch()) {
-				case xdr.MessageType.getScpQuorumset(): {
+			switch (stellarMessage.type) {
+				case 'getScpQuorumset': {
 					const dontHave = new xdr.DontHave({
-						reqHash: stellarMessage.qSetHash(),
-						type: xdr.MessageType.getScpQuorumset()
+						reqHash: stellarMessage.value,
+						type: xdr.MessageType.getScpQuorumset
 					});
 					const dontHaveMessage = xdr.StellarMessage.dontHave(dontHave);
 					connection.sendStellarMessage(dontHaveMessage);
@@ -121,8 +121,8 @@ it('should crawl, listen for validating nodes and harvest quorumSets', async () 
 		});
 		connection.on('data', (stellarMessageWork: StellarMessageWork) => {
 			const stellarMessage = stellarMessageWork.stellarMessage;
-			switch (stellarMessage.switch()) {
-				case xdr.MessageType.getScpQuorumset(): {
+			switch (stellarMessage.type) {
+				case 'getScpQuorumset': {
 					const qSetMessage = xdr.StellarMessage.scpQuorumset(qSet);
 					connection.sendStellarMessage(qSetMessage);
 				}
@@ -196,12 +196,14 @@ it('should crawl, listen for validating nodes and harvest quorumSets', async () 
 	expect(peerNode.participatingInSCP).toBeTruthy();
 	expect(peerNode.latestActiveSlotIndex).toEqual('1');
 	expect(peerNode.suppliedPeerList).toBeTruthy();
-	expect(peerNode.quorumSetHash).toEqual(hash(qSet.toXDR()).toString('base64'));
+	expect(peerNode.quorumSetHash).toEqual(
+		Buffer.from(hash(qSet.toXdr())).toString('base64')
+	);
 	expect(peerNode.quorumSet).toBeDefined();
 	expect(crawledPeerNode).toBeDefined();
 	if (!crawledPeerNode) return;
 	expect(crawledPeerNode.quorumSetHash).toEqual(
-		hash(qSet.toXDR()).toString('base64')
+		Buffer.from(hash(qSet.toXdr())).toString('base64')
 	);
 	expect(crawledPeerNode.quorumSet).toBeDefined();
 	expect(crawledPeerNode.isValidating).toBeTruthy();
@@ -257,20 +259,20 @@ function createExternalizeMessage(
 	const externalize = new xdr.ScpStatementExternalize({
 		commit: commit,
 		nH: 1,
-		commitQuorumSetHash: hash(qSet.toXDR())
+		commitQuorumSetHash: hash(qSet.toXdr())
 	});
 	const pledges = xdr.ScpStatementPledges.scpStExternalize(externalize);
 
 	const statement = new xdr.ScpStatement({
 		nodeId: xdr.PublicKey.publicKeyTypeEd25519(node.keyPair.rawPublicKey()),
-		slotIndex: xdr.Uint64.fromString('1'),
+		slotIndex: 1n,
 		pledges: pledges
 	});
 	const signatureResult = createSCPEnvelopeSignature(
 		statement,
-		node.keyPair.rawPublicKey(),
-		node.keyPair.rawSecretKey(),
-		hash(Buffer.from(Networks.TESTNET))
+		Buffer.from(node.keyPair.rawPublicKey()),
+		Buffer.from(node.keyPair.rawSecretKey()),
+		Buffer.from(hash(Buffer.from(Networks.TESTNET)))
 	);
 	if (signatureResult.isOk()) {
 		const envelope = new xdr.ScpEnvelope({

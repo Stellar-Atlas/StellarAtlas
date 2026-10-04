@@ -111,7 +111,7 @@ describe('scp-statement-handler', () => {
 		observation.peerNodes = new PeerNodeCollection();
 
 		const result = handler.handle(
-			nominationMessage.envelope().statement(),
+			nominationMessage.value.statement,
 			observation
 		);
 		expect(result.isOk()).toBeTruthy();

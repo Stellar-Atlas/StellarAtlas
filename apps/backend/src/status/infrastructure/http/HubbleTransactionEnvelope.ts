@@ -12,7 +12,7 @@ export function transactionEnvelopeOperations(
 ): readonly unknown[] | null {
 	try {
 		const parsed = TransactionBuilder.fromXDR(envelope, Networks.PUBLIC);
-		if (parsed.hash().toString('hex') !== hash) return null;
+		if (Buffer.from(parsed.hash()).toString('hex') !== hash) return null;
 		const transaction =
 			parsed instanceof FeeBumpTransaction ? parsed.innerTransaction : parsed;
 		return transaction.operations;

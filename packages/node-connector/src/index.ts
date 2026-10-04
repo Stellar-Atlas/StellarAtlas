@@ -55,7 +55,7 @@ export function createNode(config: NodeConfig, logger?: pino.Logger): Node {
 		keyPair = Keypair.random();
 	}
 
-	const networkId = hash(Buffer.from(config.network));
+	const networkId = Buffer.from(hash(Buffer.from(config.network)));
 
 	const connectionAuthentication = new ConnectionAuthentication(
 		keyPair,

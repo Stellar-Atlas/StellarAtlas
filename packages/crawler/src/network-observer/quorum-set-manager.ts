@@ -209,34 +209,19 @@ export class QuorumSetManager {
 	): Result<QuorumSetHash, Error> {
 		try {
 			let quorumSetHash: QuorumSetHash | undefined;
-			switch (scpStatement.pledges().switch()) {
-				case xdr.ScpStatementType.scpStExternalize():
-					quorumSetHash = scpStatement
-						.pledges()
-						.externalize()
-						.commitQuorumSetHash()
-						.toString('base64');
+			const pledges = scpStatement.pledges;
+			switch (pledges.type) {
+				case 'scpStExternalize':
+					quorumSetHash = Buffer.from(
+						pledges.value.commitQuorumSetHash.toBytes()
+					).toString('base64');
 					break;
-				case xdr.ScpStatementType.scpStConfirm():
-					quorumSetHash = scpStatement
-						.pledges()
-						.confirm()
-						.quorumSetHash()
-						.toString('base64');
-					break;
-				case xdr.ScpStatementType.scpStPrepare():
-					quorumSetHash = scpStatement
-						.pledges()
-						.prepare()
-						.quorumSetHash()
-						.toString('base64');
-					break;
-				case xdr.ScpStatementType.scpStNominate():
-					quorumSetHash = scpStatement
-						.pledges()
-						.nominate()
-						.quorumSetHash()
-						.toString('base64');
+				case 'scpStConfirm':
+				case 'scpStPrepare':
+				case 'scpStNominate':
+					quorumSetHash = Buffer.from(
+						pledges.value.quorumSetHash.toBytes()
+					).toString('base64');
 					break;
 			}
 

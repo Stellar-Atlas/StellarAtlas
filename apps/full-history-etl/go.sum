@@ -476,8 +476,12 @@ github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasO
 github.com/spf13/afero v1.2.2/go.mod h1:9ZxEEn6pIJ8Rxe320qSDBk6AsU0r9pR7Q4OcevTdifk=
 github.com/stellar/go-stellar-sdk v0.6.0 h1:NM2oqZJQup0QxnJMq6C8s4iIIhU6rHFX0rlsF3wh/Ho=
 github.com/stellar/go-stellar-sdk v0.6.0/go.mod h1:IkcqcrE9UQi7n/1y+MxKB+7qzdjG1T2kGOD7Ss8dqjw=
+github.com/stellar/go-stellar-sdk v0.7.3 h1:r4kKiiTOuNdJrEjKYs5ykLSLWKpq9fp6HnIXUs4TiuI=
+github.com/stellar/go-stellar-sdk v0.7.3/go.mod h1:YTYl7/zFt7oIX5Y4WRgL+3d2upWQDLywlHunZ4fOxvc=
 github.com/stellar/go-xdr v0.0.0-20260529210834-0bf8f4956364 h1:gOKrfuWdZ92LFlv0TAwgZ7OsWKeBsOMDlGLyFgduI1w=
 github.com/stellar/go-xdr v0.0.0-20260529210834-0bf8f4956364/go.mod h1:If+U9Z1W5xU97VrOgJandQT+2dN7/iOpkCrxBJEyF80=
+github.com/stellar/go-xdr v0.0.0-20260806060815-dc590f17552a h1:40YIhQusSioBKDW5Tr+YdjoXphcVeu7eXUS2ibMQBTs=
+github.com/stellar/go-xdr v0.0.0-20260806060815-dc590f17552a/go.mod h1:If+U9Z1W5xU97VrOgJandQT+2dN7/iOpkCrxBJEyF80=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.2.0/go.mod h1:qt09Ya8vawLte6SNmTgCsAVtYtaKzEcn8ATUoHMkEqE=

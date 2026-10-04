@@ -20,12 +20,12 @@ export function ledgerCloseMetaBatchFixture(
 	}
 	const batch = new xdr.LedgerCloseMetaBatch({
 		endSequence,
-		ledgerCloseMeta: ledgerSequences.map((sequence, index) =>
+		ledgerCloseMetas: ledgerSequences.map((sequence, index) =>
 			ledgerCloseMeta(sequence, versions[index]!)
 		),
 		startSequence
 	});
-	const xdrBytes = batch.toXDR();
+	const xdrBytes = Buffer.from(batch.toXDR());
 	return { compressed: zstdCompressSync(xdrBytes), xdrBytes };
 }
 
@@ -34,37 +34,34 @@ function ledgerCloseMeta(
 	version: FullHistoryLedgerCloseMetaVersion
 ): xdr.LedgerCloseMeta {
 	if (version === 0) {
-		return new xdr.LedgerCloseMeta(
-			0,
+		return xdr.LedgerCloseMeta.v0(
 			new xdr.LedgerCloseMetaV0({
 				ledgerHeader: ledgerHeader(sequence),
 				scpInfo: [],
 				txProcessing: [],
 				txSet: new xdr.TransactionSet({
 					previousLedgerHash: hash(sequence - 1),
-					txes: []
+					txs: []
 				}),
 				upgradesProcessing: []
 			})
 		);
 	}
 
-	const generalizedTxSet = new xdr.GeneralizedTransactionSet(
-		1,
+	const generalizedTxSet = xdr.GeneralizedTransactionSet.v1TxSet(
 		new xdr.TransactionSetV1({
 			phases: [],
 			previousLedgerHash: hash(sequence - 1)
 		})
 	);
 	if (version === 1) {
-		return new xdr.LedgerCloseMeta(
-			1,
+		return xdr.LedgerCloseMeta.v1(
 			new xdr.LedgerCloseMetaV1({
 				evictedKeys: [],
-				ext: new xdr.LedgerCloseMetaExt(0),
+				ext: xdr.LedgerCloseMetaExt.v0(),
 				ledgerHeader: ledgerHeader(sequence),
 				scpInfo: [],
-				totalByteSizeOfLiveSorobanState: xdr.Uint64.fromString('0'),
+				totalByteSizeOfLiveSorobanState: 0n,
 				txProcessing: [],
 				txSet: generalizedTxSet,
 				unused: [],
@@ -72,14 +69,13 @@ function ledgerCloseMeta(
 			})
 		);
 	}
-	return new xdr.LedgerCloseMeta(
-		2,
+	return xdr.LedgerCloseMeta.v2(
 		new xdr.LedgerCloseMetaV2({
 			evictedKeys: [],
-			ext: new xdr.LedgerCloseMetaExt(0),
+			ext: xdr.LedgerCloseMetaExt.v0(),
 			ledgerHeader: ledgerHeader(sequence),
 			scpInfo: [],
-			totalByteSizeOfLiveSorobanState: xdr.Uint64.fromString('0'),
+			totalByteSizeOfLiveSorobanState: 0n,
 			txProcessing: [],
 			txSet: generalizedTxSet,
 			upgradesProcessing: []
@@ -89,28 +85,28 @@ function ledgerCloseMeta(
 
 function ledgerHeader(sequence: number): xdr.LedgerHeaderHistoryEntry {
 	return new xdr.LedgerHeaderHistoryEntry({
-		ext: new xdr.LedgerHeaderHistoryEntryExt(0),
+		ext: xdr.LedgerHeaderHistoryEntryExt.v0(),
 		hash: hash(sequence),
 		header: new xdr.LedgerHeader({
 			baseFee: 100,
 			baseReserve: 5_000_000,
 			bucketListHash: hash(10),
-			ext: new xdr.LedgerHeaderExt(0),
-			feePool: xdr.Int64.fromString('0'),
-			idPool: xdr.Uint64.fromString('0'),
+			ext: xdr.LedgerHeaderExt.v0(),
+			feePool: 0n,
+			idPool: 0n,
 			inflationSeq: 0,
 			ledgerSeq: sequence,
 			ledgerVersion: 22,
 			maxTxSetSize: 1000,
 			previousLedgerHash: hash(sequence - 1),
 			scpValue: new xdr.StellarValue({
-				closeTime: xdr.Uint64.fromString(sequence.toString()),
+				closeTime: BigInt(sequence),
 				ext: xdr.StellarValueExt.stellarValueBasic(),
 				txSetHash: hash(8),
 				upgrades: []
 			}),
 			skipList: [hash(0), hash(0), hash(0), hash(0)],
-			totalCoins: xdr.Int64.fromString('0'),
+			totalCoins: 0n,
 			txSetResultHash: hash(9)
 		})
 	});

@@ -2,7 +2,6 @@ import { hash, Keypair, xdr } from '@stellar/stellar-sdk';
 import sodium from 'sodium-native';
 import EnvelopeType = xdr.EnvelopeType;
 import Uint64 = xdr.Uint64;
-import UnsignedHyper = xdr.UnsignedHyper;
 import BigNumber from 'bignumber.js';
 import { createSHA256Hmac, verifySignature } from '../crypto-helper.js';
 
@@ -11,7 +10,7 @@ type Curve25519PublicBuffer = Buffer;
 
 interface AuthCert {
 	publicKeyECDH: Curve25519PublicBuffer;
-	expiration: UnsignedHyper;
+	expiration: bigint;
 	signature: Buffer;
 }
 
@@ -84,11 +83,12 @@ export class ConnectionAuthentication {
 		this.authCertExpiration =
 			time.getTime() + ConnectionAuthentication.AUTH_EXPIRATION_LIMIT;
 		const expiration = Uint64.fromString(this.authCertExpiration.toString());
+		const expirationBytes = Buffer.alloc(8);
+		expirationBytes.writeBigUInt64BE(expiration);
 		const rawSigData = Buffer.concat([
 			this.networkId,
-			//@ts-ignore
-			EnvelopeType.envelopeTypeAuth().toXDR(),
-			expiration.toXDR(),
+			EnvelopeType.envelopeTypeAuth.toXdr(),
+			expirationBytes,
 			this.publicKeyECDH
 		]);
 		const sha256RawSigData = hash(rawSigData);
@@ -97,7 +97,7 @@ export class ConnectionAuthentication {
 		return {
 			publicKeyECDH: this.publicKeyECDH,
 			expiration: expiration,
-			signature: signature
+			signature: Buffer.from(signature)
 		};
 	}
 
@@ -106,22 +106,27 @@ export class ConnectionAuthentication {
 		remotePublicKey: Buffer,
 		authCert: xdr.AuthCert
 	): boolean {
-		const expiration = new BigNumber(authCert.expiration().toString());
+		const expiration = new BigNumber(authCert.expiration.toString());
 		if (expiration.lt(Math.round(time.getTime() / 1000))) {
 			return false;
 		}
 
+		const expirationBytes = Buffer.alloc(8);
+		expirationBytes.writeBigUInt64BE(authCert.expiration);
 		const rawSigData = Buffer.concat([
 			this.networkId,
 
-			//@ts-ignore
-			EnvelopeType.envelopeTypeAuth().toXDR(),
-			authCert.expiration().toXDR(),
-			authCert.pubkey().key()
+			EnvelopeType.envelopeTypeAuth.toXdr(),
+			expirationBytes,
+			authCert.pubkey.key
 		]);
 		const sha256RawSigData = hash(rawSigData);
 
-		return verifySignature(remotePublicKey, authCert.sig(), sha256RawSigData);
+		return verifySignature(
+			remotePublicKey,
+			Buffer.from(authCert.sig.toBytes()),
+			Buffer.from(sha256RawSigData)
+		);
 	}
 
 	public getSendingMacKey(

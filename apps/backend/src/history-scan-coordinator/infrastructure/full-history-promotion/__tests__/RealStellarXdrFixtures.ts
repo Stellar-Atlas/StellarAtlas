@@ -28,27 +28,27 @@ export function readClassicArchiveTransactionFixture(): RealTransactionFixture {
 	const resultEntry = xdr.TransactionHistoryResultEntry.fromXDR(
 		firstXdrFrame(`${fixtureRoot}/results.xdr.gz`)
 	);
-	const envelopes = transactionEntry.txSet().txes();
-	const resultPairs = resultEntry.txResultSet().results();
+	const envelopes = transactionEntry.txSet.txs;
+	const resultPairs = resultEntry.txResultSet.results;
 	if (
 		envelopes.length !== 1 ||
 		resultPairs.length !== 1 ||
-		transactionEntry.ledgerSeq() !== resultEntry.ledgerSeq()
+		transactionEntry.ledgerSeq !== resultEntry.ledgerSeq
 	) {
 		throw new Error('Classic archive fixture no longer has one exact pair');
 	}
 
 	return {
-		envelopeXdr: envelopes[0]!.toXDR().toString('base64'),
-		ledgerSequence: transactionEntry.ledgerSeq(),
-		resultXdr: resultPairs[0]!.result().toXDR().toString('base64'),
+		envelopeXdr: envelopes[0]!.toXDR('base64'),
+		ledgerSequence: transactionEntry.ledgerSeq,
+		resultXdr: resultPairs[0]!.result.toXDR('base64'),
 		transactionHash: FullHistoryHash.fromBytes(
-			resultPairs[0]!.transactionHash()
+			resultPairs[0]!.transactionHash.toBytes()
 		),
-		transactionResultHash: sha256(resultEntry.txResultSet().toXDR()),
+		transactionResultHash: sha256(resultEntry.txResultSet.toXDR()),
 		transactionSetHash: sha256(
 			Buffer.concat([
-				transactionEntry.txSet().previousLedgerHash(),
+				transactionEntry.txSet.previousLedgerHash.toBytes(),
 				...envelopes.map((envelope) => envelope.toXDR())
 			])
 		)

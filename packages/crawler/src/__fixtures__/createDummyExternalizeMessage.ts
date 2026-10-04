@@ -25,20 +25,20 @@ export function createDummyExternalizeStatement(
 
 	return new xdr.ScpStatement({
 		nodeId: xdr.PublicKey.publicKeyTypeEd25519(keyPair.rawPublicKey()),
-		slotIndex: xdr.Uint64.fromString(slotIndex),
+		slotIndex: BigInt(slotIndex),
 		pledges: pledges
 	});
 }
 
 export function createDummyExternalizeScpEnvelope(
 	keyPair: Keypair = Keypair.random(),
-	networkHash = hash(Buffer.from(Networks.PUBLIC))
+	networkHash = Buffer.from(hash(Buffer.from(Networks.PUBLIC)))
 ) {
 	const statement = createDummyExternalizeStatement(keyPair);
 	const signatureResult = createSCPEnvelopeSignature(
 		statement,
-		keyPair.rawPublicKey(),
-		keyPair.rawSecretKey(),
+		Buffer.from(keyPair.rawPublicKey()),
+		Buffer.from(keyPair.rawSecretKey()),
 		networkHash
 	);
 
@@ -54,7 +54,7 @@ export function createDummyExternalizeScpEnvelope(
 
 export function createDummyExternalizeMessage(
 	keyPair: Keypair = Keypair.random(),
-	networkHash = hash(Buffer.from(Networks.PUBLIC))
+	networkHash = Buffer.from(hash(Buffer.from(Networks.PUBLIC)))
 ) {
 	return xdr.StellarMessage.scpMessage(
 		createDummyExternalizeScpEnvelope(keyPair, networkHash)
@@ -63,13 +63,13 @@ export function createDummyExternalizeMessage(
 
 export function createDummyNominationMessage(
 	keyPair: Keypair = Keypair.random(),
-	networkHash = hash(Buffer.from(Networks.PUBLIC))
+	networkHash = Buffer.from(hash(Buffer.from(Networks.PUBLIC)))
 ) {
 	const statement = createDummyNominateStatement(keyPair);
 	const signatureResult = createSCPEnvelopeSignature(
 		statement,
-		keyPair.rawPublicKey(),
-		keyPair.rawSecretKey(),
+		Buffer.from(keyPair.rawPublicKey()),
+		Buffer.from(keyPair.rawSecretKey()),
 		networkHash
 	);
 
@@ -97,7 +97,7 @@ export function createDummyNominateStatement(
 
 	return new xdr.ScpStatement({
 		nodeId: xdr.PublicKey.publicKeyTypeEd25519(keyPair.rawPublicKey()),
-		slotIndex: xdr.Uint64.fromString('1'),
+		slotIndex: 1n,
 		pledges: pledges
 	});
 }

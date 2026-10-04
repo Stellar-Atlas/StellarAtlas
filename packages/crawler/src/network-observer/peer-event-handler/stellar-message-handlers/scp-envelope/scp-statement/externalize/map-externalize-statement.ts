@@ -14,23 +14,26 @@ export function mapExternalizeStatement(
 	externalizeStatement: xdr.ScpStatement
 ): Result<ExternalizeData, Error> {
 	const publicKeyResult = getPublicKeyStringFromBuffer(
-		externalizeStatement.nodeId().value()
+		Buffer.from(externalizeStatement.nodeId.value.toBytes())
 	);
 	if (publicKeyResult.isErr()) {
 		return err(publicKeyResult.error);
 	}
 
 	const publicKey = publicKeyResult.value;
-	const slotIndex = BigInt(externalizeStatement.slotIndex().toString());
+	const slotIndex = externalizeStatement.slotIndex;
 
-	const value = externalizeStatement.pledges().externalize().commit().value();
+	const pledges = externalizeStatement.pledges;
+	if (pledges.type !== 'scpStExternalize')
+		return err(new Error('Expected externalize statement'));
+	const value = pledges.value.commit.value.toBytes();
 
 	const closeTime = extractCloseTimeFromValue(value);
 
 	return ok({
 		publicKey,
 		slotIndex,
-		value: value.toString('base64'),
+		value: Buffer.from(value).toString('base64'),
 		closeTime
 	});
 }

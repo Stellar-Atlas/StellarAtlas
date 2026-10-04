@@ -59,6 +59,7 @@ interface DecodedResult {
 }
 
 export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpointDecoder {
+	// Persisted batch-identity contract, not the runtime SDK version; outputs are unchanged.
 	readonly version =
 		'stellar-sdk-16/archive-xdr-v4-operation-account-references';
 	readonly operationAccountReferenceDecoderVersion =
@@ -176,7 +177,7 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 			);
 			operationResults.push(
 				...decodeStellarFullHistoryOperationResults(
-					decodedResult.xdrPair.result(),
+					decodedResult.xdrPair.result,
 					canonicalTransaction
 				)
 			);
@@ -333,17 +334,17 @@ function decodeEnvelope(
 				}
 			};
 		}
-		const envelopeType = envelopeXdr.switch().value;
+		const envelopeType = envelopeXdr.type;
 		if (
 			!(sdkTransaction instanceof Transaction) ||
-			![0, 2].includes(envelopeType)
+			(envelopeType !== 'envelopeTypeTxV0' && envelopeType !== 'envelopeTypeTx')
 		) {
 			throw new Error('Unsupported transaction envelope type');
 		}
 		return {
 			sdkTransaction,
 			transaction: {
-				envelopeType: envelopeType === 0 ? 'tx-v0' : 'tx',
+				envelopeType: envelopeType === 'envelopeTypeTxV0' ? 'tx-v0' : 'tx',
 				feeBid: fullHistoryUint64(sdkTransaction.fee, 'feeBid'),
 				ledgerSequence: candidate.ledgerSequence,
 				operationCount: sdkTransaction.operations.length,
@@ -373,33 +374,38 @@ function decodeResult(
 ): DecodedResult {
 	try {
 		const decoded = xdr.TransactionResult.fromXDR(bytes);
-		const resultCode = decoded.result().switch().value;
+		const result = decoded.result;
+		const resultCode = xdr.TransactionResultCode.fromName(result.type).value;
 		const feeBump = transaction instanceof FeeBumpTransaction;
 		let operationResultCount = 0;
-		if (resultCode === 0 || resultCode === -1) {
+		if (result.type === 'txSuccess' || result.type === 'txFailed') {
 			if (feeBump) throw pairingError('Fee-bump envelope has a classic result');
-			operationResultCount = decoded.result().results().length;
-		} else if (resultCode === 1 || resultCode === -13) {
+			operationResultCount = result.results.length;
+		} else if (
+			result.type === 'txFeeBumpInnerSuccess' ||
+			result.type === 'txFeeBumpInnerFailed'
+		) {
 			if (!feeBump)
 				throw pairingError('Classic envelope has a fee-bump result');
-			const innerPair = decoded.result().innerResultPair();
+			const innerPair = result.innerResultPair;
 			if (
-				!innerPair.transactionHash().equals(transaction.innerTransaction.hash())
+				!Buffer.from(innerPair.transactionHash.toBytes()).equals(
+					transaction.innerTransaction.hash()
+				)
 			) {
 				throw pairingError(
 					'Fee-bump inner result hash does not match its envelope'
 				);
 			}
-			const innerResult = innerPair.result().result();
-			const innerCode = innerResult.switch().value;
-			if (innerCode === 0 || innerCode === -1) {
-				operationResultCount = innerResult.results().length;
+			const innerResult = innerPair.result.result;
+			if (innerResult.type === 'txSuccess' || innerResult.type === 'txFailed') {
+				operationResultCount = innerResult.results.length;
 			}
 		}
 		return {
 			canonical: {
 				feeCharged: fullHistoryUint64(
-					decoded.feeCharged().toString(),
+					decoded.feeCharged.toString(),
 					'feeCharged'
 				),
 				ledgerSequence: candidate.ledgerSequence,

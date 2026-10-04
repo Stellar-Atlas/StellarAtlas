@@ -11,8 +11,8 @@ describe('StellarFullHistoryOperationResultDecoder', () => {
 	it('decodes applied success/failure codes and marks omitted operations not applied', () => {
 		const result = xdr.TransactionResult.fromXDR(
 			new xdr.TransactionResult({
-				ext: new xdr.TransactionResultExt(0),
-				feeCharged: xdr.Int64.fromString('100'),
+				ext: xdr.TransactionResultExt.v0(),
+				feeCharged: 100n,
 				result: xdr.TransactionResultResult.txFailed([
 					xdr.OperationResult.opInner(
 						xdr.OperationResultTr.payment(xdr.PaymentResult.paymentSuccess())
@@ -60,8 +60,8 @@ describe('StellarFullHistoryOperationResultDecoder', () => {
 
 	it('marks every operation not applied when the transaction has no operation results', () => {
 		const result = new xdr.TransactionResult({
-			ext: new xdr.TransactionResultExt(0),
-			feeCharged: xdr.Int64.fromString('100'),
+			ext: xdr.TransactionResultExt.v0(),
+			feeCharged: 100n,
 			result: xdr.TransactionResultResult.txBadSeq()
 		});
 

@@ -190,11 +190,7 @@ func validateMetaSequence(metas xdr.LedgerCloseMetaBatchLedgerCloseMetasView, st
 		if viewErr != nil {
 			return links, fmt.Errorf("read ledger-close-meta %d: %w", index, viewErr)
 		}
-		versionView, err := meta.V()
-		if err != nil {
-			return links, fmt.Errorf("read ledger-close-meta %d version: %w", index, err)
-		}
-		version, err := versionView.Value()
+		version, err := meta.V()
 		if err != nil {
 			return links, fmt.Errorf("read ledger-close-meta %d version: %w", index, err)
 		}

@@ -10,8 +10,7 @@ export default {
 	): Result<xdr.StellarMessage, Error> {
 		try {
 			const auth = new xdr.Auth({ flags: flowControlInBytes ? 200 : 100 });
-			// @ts-ignore
-			const authMessage = new xdr.StellarMessage.auth(auth) as StellarMessage;
+			const authMessage = xdr.StellarMessage.auth(auth);
 			return ok(authMessage);
 		} catch (error) {
 			if (error instanceof Error)
@@ -30,7 +29,7 @@ export default {
 		overlayMinVersion: number,
 		versionStr: string,
 		listeningPort: number
-	): Result<Hello, Error> {
+	): Result<xdr.StellarMessage, Error> {
 		try {
 			const hello = new xdr.Hello({
 				ledgerVersion: ledgerVersion,
@@ -44,8 +43,7 @@ export default {
 				nonce: nonce
 			});
 
-			//@ts-ignore
-			return ok(new xdr.StellarMessage.hello(hello));
+			return ok(xdr.StellarMessage.hello(hello));
 		} catch (error) {
 			let msg = 'CreateHelloMessage failed';
 			if (error instanceof Error) msg += ': ' + error.message;

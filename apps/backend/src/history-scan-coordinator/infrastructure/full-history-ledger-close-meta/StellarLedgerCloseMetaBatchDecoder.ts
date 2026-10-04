@@ -51,10 +51,10 @@ export class StellarLedgerCloseMetaBatchDecoder implements FullHistoryLedgerClos
 		const xdrSha256 = sha256(xdrBytes);
 		const batch = this.#decodeXdr(xdrBytes);
 		const decodedRange = fullHistoryLedgerCloseMetaRange(
-			batch.startSequence(),
-			batch.endSequence()
+			batch.startSequence,
+			batch.endSequence
 		);
-		const ledgerCloseMetas = batch.ledgerCloseMeta();
+		const ledgerCloseMetas = batch.ledgerCloseMetas;
 		if (ledgerCloseMetas.length === 0) {
 			throw new FullHistoryLedgerCloseMetaValidationError(
 				'empty-batch',
@@ -141,7 +141,7 @@ function decodeLedger(
 ): FullHistoryDecodedLedgerCloseMeta {
 	const version = ledgerCloseMetaVersion(ledgerCloseMeta);
 	const sequence = fullHistoryLedgerCloseMetaSequence(
-		ledgerHeader(ledgerCloseMeta, version).header().ledgerSeq()
+		ledgerCloseMeta.value.ledgerHeader.header.ledgerSeq
 	);
 	if (sequence !== expectedSequence) {
 		throw new FullHistoryLedgerCloseMetaValidationError(
@@ -155,26 +155,18 @@ function decodeLedger(
 function ledgerCloseMetaVersion(
 	ledgerCloseMeta: xdr.LedgerCloseMeta
 ): FullHistoryLedgerCloseMetaVersion {
-	const version = ledgerCloseMeta.switch();
-	if (version === 0 || version === 1 || version === 2) return version;
+	switch (ledgerCloseMeta.type) {
+		case 'v0':
+			return 0;
+		case 'v1':
+			return 1;
+		case 'v2':
+			return 2;
+	}
 	throw new FullHistoryLedgerCloseMetaValidationError(
 		'unsupported-ledger-close-meta-version',
-		`LedgerCloseMeta version ${version} is not supported`
+		'LedgerCloseMeta version is not supported'
 	);
-}
-
-function ledgerHeader(
-	ledgerCloseMeta: xdr.LedgerCloseMeta,
-	version: FullHistoryLedgerCloseMetaVersion
-): xdr.LedgerHeaderHistoryEntry {
-	switch (version) {
-		case 0:
-			return ledgerCloseMeta.v0().ledgerHeader();
-		case 1:
-			return ledgerCloseMeta.v1().ledgerHeader();
-		case 2:
-			return ledgerCloseMeta.v2().ledgerHeader();
-	}
 }
 
 function sha256(value: Uint8Array) {

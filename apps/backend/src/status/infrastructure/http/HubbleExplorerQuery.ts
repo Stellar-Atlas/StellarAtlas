@@ -290,7 +290,7 @@ function fail(message: string): never {
 export function normalizeNativePoolId(value: string): string {
 	if (/^[a-fA-F0-9]{64}$/.test(value)) return value.toLowerCase();
 	if (StrKey.isValidLiquidityPool(value))
-		return StrKey.decodeLiquidityPool(value).toString('hex');
+		return Buffer.from(StrKey.decodeLiquidityPool(value)).toString('hex');
 	return fail(
 		'Pool id must be a 64-character hex hash or checksum-valid L-address'
 	);

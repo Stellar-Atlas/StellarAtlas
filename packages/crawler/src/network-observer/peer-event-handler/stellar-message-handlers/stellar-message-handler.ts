@@ -33,8 +33,8 @@ export class StellarMessageHandler {
 		},
 		Error
 	> {
-		switch (stellarMessage.switch()) {
-			case xdr.MessageType.scpMessage(): {
+		switch (stellarMessage.type) {
+			case 'scpMessage': {
 				if (!attemptLedgerClose)
 					return ok({
 						closedLedger: null,
@@ -42,7 +42,7 @@ export class StellarMessageHandler {
 					});
 
 				const result = this.scpEnvelopeHandler.handle(
-					stellarMessage.envelope(),
+					stellarMessage.value,
 					observation,
 					sender,
 					observedFromAddress
@@ -57,10 +57,10 @@ export class StellarMessageHandler {
 					peers: []
 				});
 			}
-			case xdr.MessageType.peers(): {
+			case 'peers': {
 				const result = this.handlePeersMessage(
 					sender,
-					stellarMessage.peers(),
+					stellarMessage.value,
 					observation.peerNodes
 				);
 
@@ -73,10 +73,10 @@ export class StellarMessageHandler {
 					peers: result.value.peers
 				});
 			}
-			case xdr.MessageType.scpQuorumset(): {
+			case 'scpQuorumset': {
 				const result = this.handleScpQuorumSetMessage(
 					sender,
-					stellarMessage.qSet(),
+					stellarMessage.value,
 					observation
 				);
 
@@ -89,10 +89,10 @@ export class StellarMessageHandler {
 					peers: []
 				});
 			}
-			case xdr.MessageType.dontHave(): {
+			case 'dontHave': {
 				const result = this.handleDontHaveMessage(
 					sender,
-					stellarMessage.dontHave(),
+					stellarMessage.value,
 					observation
 				);
 
@@ -105,10 +105,10 @@ export class StellarMessageHandler {
 					peers: []
 				});
 			}
-			case xdr.MessageType.errorMsg(): {
+			case 'errorMsg': {
 				const result = this.handleErrorMsg(
 					sender,
-					stellarMessage.error(),
+					stellarMessage.value,
 					observation
 				);
 				if (result.isErr()) {
@@ -122,7 +122,7 @@ export class StellarMessageHandler {
 			}
 			default:
 				this.logger.debug(
-					{ type: stellarMessage.switch().name },
+					{ type: stellarMessage.type },
 					'Unhandled Stellar message type'
 				);
 				return ok({
@@ -145,7 +145,7 @@ export class StellarMessageHandler {
 		const peerAddresses: NodeAddress[] = [];
 		peers.forEach((peer) => {
 			const ipResult = getIpFromPeerAddress(peer);
-			if (ipResult.isOk()) peerAddresses.push([ipResult.value, peer.port()]);
+			if (ipResult.isOk()) peerAddresses.push([ipResult.value, peer.port]);
 		});
 
 		peerNodeCollection.setPeerSuppliedPeerList(sender, true);
@@ -165,7 +165,9 @@ export class StellarMessageHandler {
 		quorumSetMessage: xdr.ScpQuorumSet,
 		observation: Observation
 	): Result<void, Error> {
-		const quorumSetHash = hash(quorumSetMessage.toXDR()).toString('base64');
+		const quorumSetHash = Buffer.from(hash(quorumSetMessage.toXdr())).toString(
+			'base64'
+		);
 		const quorumSetResult = getQuorumSetFromMessage(quorumSetMessage);
 		if (quorumSetResult.isErr()) {
 			return err(quorumSetResult.error);
@@ -195,21 +197,21 @@ export class StellarMessageHandler {
 		this.logger.info(
 			{
 				pk: truncate(sender),
-				type: dontHave.type().name
+				type: dontHave.type.name
 			},
 			"Don't have"
 		);
-		if (dontHave.type().value === xdr.MessageType.getScpQuorumset().value) {
+		if (dontHave.type.value === xdr.MessageType.getScpQuorumset.value) {
 			this.logger.info(
 				{
 					pk: truncate(sender),
-					hash: dontHave.reqHash().toString('base64')
+					hash: Buffer.from(dontHave.reqHash.toBytes()).toString('base64')
 				},
 				"Don't have"
 			);
 			this.quorumSetManager.peerNodeDoesNotHaveQuorumSet(
 				sender,
-				dontHave.reqHash().toString('base64'),
+				Buffer.from(dontHave.reqHash.toBytes()).toString('base64'),
 				observation
 			);
 		}
@@ -222,16 +224,16 @@ export class StellarMessageHandler {
 		error: xdr.Error,
 		observation: Observation
 	): Result<void, Error> {
-		switch (error.code()) {
-			case xdr.ErrorCode.errLoad():
+		switch (error.code) {
+			case xdr.ErrorCode.errLoad:
 				return this.onLoadTooHighReceived(sender, observation);
 			default:
 				this.logger.info(
 					{
 						pk: truncate(sender),
-						error: error.code().name
+						error: error.code.name
 					},
-					error.msg().toString()
+					error.msg.toString()
 				);
 				return ok(undefined);
 		}

@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { gunzipSync } from 'zlib';
 import { fileURLToPath } from 'node:url';
+import { xdr } from '@stellar/stellar-sdk';
 import {
 	ArchiveXdrError,
 	processLedgerHeaderHistoryEntryXDR,
@@ -66,6 +67,51 @@ it('should extract transaction result records from a real archive fixture', () =
 		transactionHash: expect.any(String),
 		transactionIndex: 0
 	});
+});
+
+it('preserves generalized-set hash and parallel-stage ordering across the SDK upgrade', () => {
+	const envelope = xdr.TransactionHistoryEntry.fromXDR(
+		firstXdrFrame(path.join(fixturesDir, 'transactions.xdr.gz'))
+	).txSet.txs[0]!;
+	const generalized = xdr.GeneralizedTransactionSet.v1TxSet(
+		new xdr.TransactionSetV1({
+			previousLedgerHash: Buffer.alloc(32, 7),
+			phases: [
+				xdr.TransactionPhase.v0Components([
+					xdr.TxSetComponent.txsetCompTxsMaybeDiscountedFee(
+						new xdr.TxSetComponentTxsMaybeDiscountedFee({
+							baseFee: null,
+							txs: [envelope]
+						})
+					)
+				]),
+				xdr.TransactionPhase.parallelTxsComponent(
+					new xdr.ParallelTxsComponent({
+						baseFee: 100n,
+						executionStages: [[[envelope], [envelope]]]
+					})
+				)
+			]
+		})
+	);
+	const entry = new xdr.TransactionHistoryEntry({
+		ledgerSeq: 60_000_000,
+		txSet: new xdr.TransactionSet({
+			previousLedgerHash: Buffer.alloc(32),
+			txs: []
+		}),
+		ext: xdr.TransactionHistoryEntryExt.generalizedTxSet(generalized)
+	});
+	const result = processTransactionHistoryEntryXDR(entry.toXDR());
+	// This digest was independently computed with SDK 16.2.0 from the same fixture.
+	expect(result.hash).toBe('keWIq3khB8PTS3Lf4bRkd3N/w8+Vh5yx8JJxGfLtB3c=');
+	expect(result.ledger).toBe(60_000_000);
+	expect(result.envelopes).toEqual(
+		[0, 1, 2].map((transactionIndex) => ({
+			envelopeXdr: envelope.toXDR('base64'),
+			transactionIndex
+		}))
+	);
 });
 
 it.each([

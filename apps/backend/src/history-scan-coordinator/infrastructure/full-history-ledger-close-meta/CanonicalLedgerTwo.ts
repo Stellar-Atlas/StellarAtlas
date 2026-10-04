@@ -102,20 +102,19 @@ function assertCanonicalLedgerTwo(bytes: Buffer): void {
 		throw new Error('Canonical ledger-two artifact digest is invalid');
 	}
 	const meta = decoded.ledgers[0]!.ledgerCloseMeta;
-	if (meta.switch() !== 0) {
+	if (meta.type !== 'v0') {
 		throw new Error('Canonical ledger two must use LedgerCloseMeta v0');
 	}
-	const value = meta.v0();
-	const ledgerHeader = value.ledgerHeader();
+	const value = meta.v0;
+	const ledgerHeader = value.ledgerHeader;
 	if (
-		Buffer.from(ledgerHeader.hash()).toString('hex') !== ledgerTwoHash ||
-		Buffer.from(ledgerHeader.header().previousLedgerHash()).toString('hex') !==
-			ledgerOneHash ||
-		ledgerHeader.header().ledgerSeq() !== 2 ||
-		value.txSet().txes().length !== 0 ||
-		value.txProcessing().length !== 0 ||
-		value.upgradesProcessing().length !== 2 ||
-		value.scpInfo().length !== 0
+		ledgerHeader.hash.toString() !== ledgerTwoHash ||
+		ledgerHeader.header.previousLedgerHash.toString() !== ledgerOneHash ||
+		ledgerHeader.header.ledgerSeq !== 2 ||
+		value.txSet.txs.length !== 0 ||
+		value.txProcessing.length !== 0 ||
+		value.upgradesProcessing.length !== 2 ||
+		value.scpInfo.length !== 0
 	) {
 		throw new Error('Canonical ledger-two contents are invalid');
 	}

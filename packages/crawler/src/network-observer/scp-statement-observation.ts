@@ -1,9 +1,5 @@
 import { hash, xdr } from '@stellar/stellar-sdk';
-import {
-	SCPStatement,
-	ScpStatementPledges,
-	ScpBallot
-} from 'node-connector';
+import { SCPStatement, ScpStatementPledges, ScpBallot } from 'node-connector';
 import { err, ok, Result } from 'neverthrow';
 
 export interface StellarValueSummary {
@@ -33,11 +29,11 @@ export function createScpStatementObservation(
 	observedFromAddress: string,
 	observedAt: Date
 ): Result<ScpStatementObservation, Error> {
-	const statementResult = SCPStatement.fromXdr(scpEnvelope.statement());
+	const statementResult = SCPStatement.fromXdr(scpEnvelope.statement);
 	if (statementResult.isErr()) return err(statementResult.error);
 
 	const statement = statementResult.value;
-	const statementXdr = scpEnvelope.statement().toXDR();
+	const statementXdr = scpEnvelope.statement.toXdr();
 
 	return ok({
 		nodeId: statement.nodeId,
@@ -45,11 +41,11 @@ export function createScpStatementObservation(
 		observedFromAddress,
 		observedFromPeer,
 		pledges: statement.pledges,
-		signature: scpEnvelope.signature().toString('base64'),
+		signature: Buffer.from(scpEnvelope.signature.toBytes()).toString('base64'),
 		slotIndex: statement.slotIndex,
-		statementHash: hash(statementXdr).toString('base64'),
+		statementHash: Buffer.from(hash(statementXdr)).toString('base64'),
 		statementType: statement.type,
-		statementXdr: statementXdr.toString('base64'),
+		statementXdr: Buffer.from(statementXdr).toString('base64'),
 		values: getStellarValues(statement.pledges)
 	});
 }
@@ -85,9 +81,11 @@ function decodeStellarValue(value: string): StellarValueSummary | null {
 	try {
 		const stellarValue = xdr.StellarValue.fromXDR(Buffer.from(value, 'base64'));
 		return {
-			closeTime: stellarValue.closeTime().toString(),
-			txSetHash: stellarValue.txSetHash().toString('base64'),
-			upgradeCount: stellarValue.upgrades().length,
+			closeTime: stellarValue.closeTime.toString(),
+			txSetHash: Buffer.from(stellarValue.txSetHash.toBytes()).toString(
+				'base64'
+			),
+			upgradeCount: stellarValue.upgrades.length,
 			value
 		};
 	} catch {

@@ -18,17 +18,20 @@ describe('canonical ledger two', () => {
 				startSequence: value.registration.firstAvailableLedger
 			}
 		});
-		const meta = decoded.ledgers[0]!.ledgerCloseMeta.v0();
-		expect(meta.ledgerHeader().header().ledgerSeq()).toBe(2);
-		expect(meta.txSet().txes()).toHaveLength(0);
-		expect(meta.txProcessing()).toHaveLength(0);
-		expect(meta.upgradesProcessing()).toHaveLength(2);
-		expect(meta.ledgerHeader().hash().toString('hex')).toBe(
+		const decodedMeta = decoded.ledgers[0]!.ledgerCloseMeta;
+		expect(decodedMeta.type).toBe('v0');
+		if (decodedMeta.type !== 'v0') throw new Error('Expected ledger-two V0');
+		const meta = decodedMeta.v0;
+		expect(meta.ledgerHeader.header.ledgerSeq).toBe(2);
+		expect(meta.txSet.txs).toHaveLength(0);
+		expect(meta.txProcessing).toHaveLength(0);
+		expect(meta.upgradesProcessing).toHaveLength(2);
+		expect(meta.ledgerHeader.hash.toString()).toBe(
 			'fe0f6bea5f341344fdb5bc6fc4ad719dd63071d9203e9a1e7f17c68ea1ecebde'
 		);
-		expect(
-			meta.ledgerHeader().header().previousLedgerHash().toString('hex')
-		).toBe('39c2a3cd4141b2853e70d84601faa44744660334b48f3228e0309342e3f4eb48');
+		expect(meta.ledgerHeader.header.previousLedgerHash.toString()).toBe(
+			'39c2a3cd4141b2853e70d84601faa44744660334b48f3228e0309342e3f4eb48'
+		);
 	});
 
 	it('refuses to apply pubnet evidence to another network', () => {

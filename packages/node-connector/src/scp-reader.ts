@@ -93,17 +93,17 @@ export class ScpReader {
 			})
 			.on('data', (stellarMessageJob) => {
 				const stellarMessage = stellarMessageJob.stellarMessage;
-				//console.log(stellarMessage.toXDR('base64'))
+				//console.log(stellarMessage.toXdr('base64'))
 
-				switch (stellarMessage.switch()) {
-					case xdr.MessageType.scpMessage():
+				switch (stellarMessage.type) {
+					case 'scpMessage':
 						this.translateSCPMessage(stellarMessage, nodeNames);
 						break;
 					default:
 						console.log(
-							'rcv StellarMessage of type ' + stellarMessage.switch().name //+
+							'rcv StellarMessage of type ' + stellarMessage.type //+
 							//': ' +
-							//	stellarMessage.toXDR('base64')
+							//	stellarMessage.toXdr('base64')
 						);
 						break;
 				}
@@ -125,30 +125,25 @@ export class ScpReader {
 		stellarMessage: xdr.StellarMessage,
 		nodeNames: Map<string, string>
 	) {
+		if (stellarMessage.type !== 'scpMessage') return;
 		const publicKey = StrKey.encodeEd25519PublicKey(
-			stellarMessage.envelope().statement().nodeId().value()
+			stellarMessage.envelope.statement.nodeId.value.toBytes()
 		).toString();
 		const name = nodeNames.get(publicKey);
-		const ledger = stellarMessage.envelope().statement().slotIndex().toString();
+		const ledger = stellarMessage.envelope.statement.slotIndex.toString();
 
-		if (
-			stellarMessage.envelope().statement().pledges().switch() ===
-			xdr.ScpStatementType.scpStNominate()
-		) {
+		if (stellarMessage.envelope.statement.pledges.type === 'scpStNominate') {
 			this.translateNominate(stellarMessage, ledger, publicKey, name);
 		} else if (
-			stellarMessage.envelope().statement().pledges().switch() ===
-			xdr.ScpStatementType.scpStPrepare()
+			stellarMessage.envelope.statement.pledges.type === 'scpStPrepare'
 		) {
 			this.translatePrepare(stellarMessage, ledger, name);
 		} else if (
-			stellarMessage.envelope().statement().pledges().switch() ===
-			xdr.ScpStatementType.scpStConfirm()
+			stellarMessage.envelope.statement.pledges.type === 'scpStConfirm'
 		) {
 			this.translateCommit(stellarMessage, ledger, name);
 		} else if (
-			stellarMessage.envelope().statement().pledges().switch() ===
-			xdr.ScpStatementType.scpStExternalize()
+			stellarMessage.envelope.statement.pledges.type === 'scpStExternalize'
 		) {
 			this.translateExternalize(stellarMessage, ledger, name);
 		}
@@ -159,34 +154,20 @@ export class ScpReader {
 		ledger: string,
 		name: string | undefined
 	) {
+		if (
+			stellarMessage.type !== 'scpMessage' ||
+			stellarMessage.envelope.statement.pledges.type !== 'scpStConfirm'
+		)
+			return;
 		const ballotValue = this.trimString(
-			stellarMessage
-				.envelope()
-				.statement()
-				.pledges()
-				.confirm()
-				.ballot()
-				.value()
-				.toString('hex')
+			Buffer.from(
+				stellarMessage.envelope.statement.pledges.confirm.ballot.value.toBytes()
+			).toString('hex')
 		);
-		const cCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.confirm()
-			.nCommit();
-		const hCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.confirm()
-			.nH();
-		const preparedCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.confirm()
-			.nPrepared();
+		const cCounter = stellarMessage.envelope.statement.pledges.confirm.nCommit;
+		const hCounter = stellarMessage.envelope.statement.pledges.confirm.nH;
+		const preparedCounter =
+			stellarMessage.envelope.statement.pledges.confirm.nPrepared;
 		console.log(
 			ledger +
 				': ' +
@@ -239,23 +220,18 @@ export class ScpReader {
 		ledger: string,
 		name: string | undefined
 	) {
+		if (
+			stellarMessage.type !== 'scpMessage' ||
+			stellarMessage.envelope.statement.pledges.type !== 'scpStExternalize'
+		)
+			return;
 		const ballotValue = this.trimString(
-			stellarMessage
-				.envelope()
-				.statement()
-				.pledges()
-				.externalize()
-				.commit()
-				.value()
-				.toString('hex')
+			Buffer.from(
+				stellarMessage.envelope.statement.pledges.externalize.commit.value.toBytes()
+			).toString('hex')
 		);
-		const ballotCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.externalize()
-			.commit()
-			.counter();
+		const ballotCounter =
+			stellarMessage.envelope.statement.pledges.externalize.commit.counter;
 		console.log(
 			ledger +
 				': ' +
@@ -267,12 +243,7 @@ export class ScpReader {
 				'>)'
 		);
 
-		const hCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.externalize()
-			.nH();
+		const hCounter = stellarMessage.envelope.statement.pledges.externalize.nH;
 		console.log(
 			ledger +
 				': ' +
@@ -306,30 +277,19 @@ export class ScpReader {
 		ledger: string,
 		name: string | undefined
 	) {
+		if (
+			stellarMessage.type !== 'scpMessage' ||
+			stellarMessage.envelope.statement.pledges.type !== 'scpStPrepare'
+		)
+			return;
 		const ballotValue = this.trimString(
-			stellarMessage
-				.envelope()
-				.statement()
-				.pledges()
-				.prepare()
-				.ballot()
-				.value()
-				.toString('hex')
+			Buffer.from(
+				stellarMessage.envelope.statement.pledges.prepare.ballot.value.toBytes()
+			).toString('hex')
 		);
-		const ballotCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.prepare()
-			.ballot()
-			.counter()
-			.toString();
-		const prepared = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.prepare()
-			.prepared();
+		const ballotCounter =
+			stellarMessage.envelope.statement.pledges.prepare.ballot.counter.toString();
+		const prepared = stellarMessage.envelope.statement.pledges.prepare.prepared;
 		console.log(
 			ledger +
 				': ' +
@@ -343,9 +303,9 @@ export class ScpReader {
 
 		if (prepared) {
 			const preparedBallotValue = this.trimString(
-				prepared.value().toString('hex')
+				Buffer.from(prepared.value.toBytes()).toString('hex')
 			);
-			const preparedBallotCounter = prepared.counter().toString();
+			const preparedBallotCounter = prepared.counter.toString();
 			console.log(
 				ledger +
 					': ' +
@@ -360,12 +320,7 @@ export class ScpReader {
 			//if prepared.value changes, ABORT is implied for all indices smaller than aCounter. aCounter is computed (see doc).
 		}
 
-		const hCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.prepare()
-			.nH();
+		const hCounter = stellarMessage.envelope.statement.pledges.prepare.nH;
 		if (hCounter !== 0 && hCounter !== undefined) {
 			console.log(
 				ledger +
@@ -379,12 +334,7 @@ export class ScpReader {
 			);
 		}
 
-		const cCounter = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.prepare()
-			.nC();
+		const cCounter = stellarMessage.envelope.statement.pledges.prepare.nC;
 		if (cCounter !== 0 && cCounter !== undefined) {
 			console.log(
 				ledger +
@@ -407,14 +357,14 @@ export class ScpReader {
 		publicKey: string,
 		name: string | undefined
 	) {
-		const nominateVotes = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.nominate()
-			.votes()
-			.map((vote: Buffer) => {
-				return this.trimString(vote.toString('hex'));
+		if (
+			stellarMessage.type !== 'scpMessage' ||
+			stellarMessage.envelope.statement.pledges.type !== 'scpStNominate'
+		)
+			return;
+		const nominateVotes =
+			stellarMessage.envelope.statement.pledges.nominate.votes.map((vote) => {
+				return this.trimString(Buffer.from(vote.toBytes()).toString('hex'));
 			});
 		if (this.isNewNominateVote(ledger, publicKey, nominateVotes)) {
 			console.log(
@@ -423,15 +373,14 @@ export class ScpReader {
 			this.registerNominateVotes(ledger, publicKey, nominateVotes);
 		}
 
-		const nominateAccepted = stellarMessage
-			.envelope()
-			.statement()
-			.pledges()
-			.nominate()
-			.accepted()
-			.map((accepted: Buffer) => {
-				return this.trimString(accepted.toString('hex'));
-			});
+		const nominateAccepted =
+			stellarMessage.envelope.statement.pledges.nominate.accepted.map(
+				(accepted) => {
+					return this.trimString(
+						Buffer.from(accepted.toBytes()).toString('hex')
+					);
+				}
+			);
 		if (this.isNewNominateAccepted(ledger, publicKey, nominateAccepted)) {
 			console.log(
 				ledger + ': ' + name + ':ACCEPT(NOMINATE([' + nominateAccepted + ']))'

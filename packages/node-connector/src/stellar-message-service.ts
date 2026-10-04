@@ -68,7 +68,7 @@ export function createSCPEnvelopeSignature(
 ): Result<Buffer, Error> {
 	try {
 		return createStatementXDRSignature(
-			scpStatement.toXDR(),
+			Buffer.from(scpStatement.toXdr()),
 			publicKey,
 			secretKey,
 			network
@@ -85,9 +85,9 @@ export function verifySCPEnvelopeSignature(
 ): Result<boolean, Error> {
 	try {
 		return verifyStatementXDRSignature(
-			scpEnvelope.statement().toXDR(),
-			scpEnvelope.statement().nodeId().value(),
-			scpEnvelope.signature(),
+			Buffer.from(scpEnvelope.statement.toXdr()),
+			Buffer.from(scpEnvelope.statement.nodeId.value.toBytes()),
+			Buffer.from(scpEnvelope.signature.toBytes()),
 			network
 		);
 	} catch (error) {
@@ -111,13 +111,13 @@ function getQuorumSetFromMessageRecursive(
 	scpQuorumSetMessage: xdr.ScpQuorumSet
 ): QuorumSetDTO {
 	return {
-		threshold: scpQuorumSetMessage.threshold(),
-		validators: scpQuorumSetMessage
-			.validators()
-			.map((validator) => StrKey.encodeEd25519PublicKey(validator.value())),
-		innerQuorumSets: scpQuorumSetMessage
-			.innerSets()
-			.map((innerSet) => getQuorumSetFromMessageRecursive(innerSet))
+		threshold: scpQuorumSetMessage.threshold,
+		validators: scpQuorumSetMessage.validators.map((validator) =>
+			StrKey.encodeEd25519PublicKey(validator.value.toBytes())
+		),
+		innerQuorumSets: scpQuorumSetMessage.innerSets.map((innerSet) =>
+			getQuorumSetFromMessageRecursive(innerSet)
+		)
 	};
 }
 
@@ -125,7 +125,7 @@ export function getIpFromPeerAddress(
 	peerAddress: xdr.PeerAddress
 ): Result<string, Error> {
 	try {
-		const peerAddressIp = peerAddress.ip().value();
+		const peerAddressIp = peerAddress.ip.value;
 		return ok(
 			peerAddressIp[0] +
 				'.' +

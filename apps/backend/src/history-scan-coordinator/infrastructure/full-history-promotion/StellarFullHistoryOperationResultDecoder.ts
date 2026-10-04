@@ -7,6 +7,7 @@ import {
 } from '../../domain/full-history/FullHistoryCanonicalOperationResult.js';
 import { FullHistoryPromotionError } from '../../domain/full-history-promotion/FullHistoryPromotionError.js';
 
+// Keep the persisted output contract stable across byte-equivalent SDK upgrades.
 export const STELLAR_FULL_HISTORY_OPERATION_RESULT_DECODER_VERSION =
 	'stellar-sdk-16/transaction-result-xdr-v1-operation-results';
 
@@ -37,15 +38,21 @@ function readAppliedResults(
 	transactionResult: xdr.TransactionResult,
 	feeBump: boolean
 ): readonly xdr.OperationResult[] {
-	const outer = transactionResult.result();
-	const outerCode = outer.switch().value;
+	const outer = transactionResult.result;
 	if (!feeBump) {
-		return outerCode === 0 || outerCode === -1 ? outer.results() : [];
+		return outer.type === 'txSuccess' || outer.type === 'txFailed'
+			? outer.results
+			: [];
 	}
-	if (outerCode !== 1 && outerCode !== -13) return [];
-	const inner = outer.innerResultPair().result().result();
-	const innerCode = inner.switch().value;
-	return innerCode === 0 || innerCode === -1 ? inner.results() : [];
+	if (
+		outer.type !== 'txFeeBumpInnerSuccess' &&
+		outer.type !== 'txFeeBumpInnerFailed'
+	)
+		return [];
+	const inner = outer.innerResultPair.result.result;
+	return inner.type === 'txSuccess' || inner.type === 'txFailed'
+		? inner.results
+		: [];
 }
 
 function decodeOperationResult(
@@ -69,11 +76,13 @@ function decodeOperationResult(
 		};
 	}
 
-	const operationResultCode = result.switch().value;
+	const operationResultCode = xdr.OperationResultCode.fromName(
+		result.type
+	).value;
 	if (!isFullHistoryOperationResultCode(operationResultCode)) {
 		throw pairingError('Top-level OperationResultCode is unsupported');
 	}
-	if (operationResultCode !== 0) {
+	if (result.type !== 'opInner') {
 		return {
 			...provenance,
 			operationResultCode,
@@ -82,7 +91,7 @@ function decodeOperationResult(
 		};
 	}
 
-	const operationSpecificResultCode = result.tr().value().switch().value;
+	const operationSpecificResultCode = result.tr.value.toXdrObject().code;
 	return {
 		...provenance,
 		operationResultCode,

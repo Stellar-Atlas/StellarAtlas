@@ -47,10 +47,7 @@ export class ScpEnvelopeHandler {
 		if (observedStatement.isErr()) return err(observedStatement.error);
 		observation.recordScpStatementObservation(observedStatement.value);
 
-		return this.scpStatementHandler.handle(
-			scpEnvelope.statement(),
-			observation
-		);
+		return this.scpStatementHandler.handle(scpEnvelope.statement, observation);
 	}
 
 	private verifySignature(
@@ -59,7 +56,7 @@ export class ScpEnvelopeHandler {
 	): Result<void, Error> {
 		const verifiedResult = verifySCPEnvelopeSignature(
 			scpEnvelope,
-			hash(Buffer.from(observation.network))
+			Buffer.from(hash(Buffer.from(observation.network)))
 		);
 		if (verifiedResult.isErr())
 			return err(new Error('Error verifying SCP Signature'));
@@ -75,7 +72,7 @@ export class ScpEnvelopeHandler {
 	) {
 		return !isLedgerSequenceValid(
 			observation.latestConfirmedClosedLedger,
-			BigInt(scpEnvelope.statement().slotIndex().toString())
+			scpEnvelope.statement.slotIndex
 		);
 	}
 
@@ -83,9 +80,11 @@ export class ScpEnvelopeHandler {
 		scpEnvelope: xdr.ScpEnvelope,
 		observation: Observation
 	): boolean {
-		if (observation.envelopeCache.has(scpEnvelope.signature().toString()))
-			return true;
-		observation.envelopeCache.set(scpEnvelope.signature().toString(), 1);
+		const signature = Buffer.from(scpEnvelope.signature.toBytes()).toString(
+			'base64'
+		);
+		if (observation.envelopeCache.has(signature)) return true;
+		observation.envelopeCache.set(signature, 1);
 		return false;
 	}
 }

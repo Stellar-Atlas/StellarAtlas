@@ -21,23 +21,26 @@ export class UniqueSCPStatementTransform extends Transform {
 		encoding: string,
 		next: TransformCallback
 	): void {
-		if (stellarMessage.switch() !== MessageType.scpMessage()) return next();
+		if (stellarMessage.type !== 'scpMessage') return next();
 
-		if (this.cache.has(stellarMessage.envelope().signature().toString())) {
+		const signatureKey = Buffer.from(
+			stellarMessage.envelope.signature.toBytes()
+		).toString();
+		if (this.cache.has(signatureKey)) {
 			console.log('cache hit');
 			return next();
 		}
 
-		this.cache.set(stellarMessage.envelope().signature().toString(), 1);
+		this.cache.set(signatureKey, 1);
 
 		//todo: if we use worker pool and 'async' next call, will the internal buffer fill up too fast and block reading?
 		if (
 			verifySCPEnvelopeSignature(
-				stellarMessage.envelope(),
-				hash(Buffer.from(Networks.PUBLIC))
+				stellarMessage.envelope,
+				Buffer.from(hash(Buffer.from(Networks.PUBLIC)))
 			)
 		)
-			return next(null, stellarMessage.envelope().statement().toXDR('base64'));
+			return next(null, stellarMessage.envelope.statement.toXdr('base64'));
 
 		return next();
 	}

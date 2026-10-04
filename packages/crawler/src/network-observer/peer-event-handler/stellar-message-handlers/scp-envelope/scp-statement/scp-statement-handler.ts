@@ -25,21 +25,21 @@ export class ScpStatementHandler {
 		Error
 	> {
 		const publicKeyResult = getPublicKeyStringFromBuffer(
-			scpStatement.nodeId().value()
+			Buffer.from(scpStatement.nodeId.value.toBytes())
 		);
 		if (publicKeyResult.isErr()) {
 			return err(publicKeyResult.error);
 		}
 
 		const publicKey = publicKeyResult.value;
-		const slotIndex = BigInt(scpStatement.slotIndex().toString());
+		const slotIndex = scpStatement.slotIndex;
 
 		this.logger.debug(
 			{
 				publicKey: publicKey,
 				slotIndex: slotIndex.toString()
 			},
-			'processing new scp statement: ' + scpStatement.pledges().switch().name
+			'processing new scp statement: ' + scpStatement.pledges.type
 		);
 
 		const peer = observation.peerNodes.getOrAdd(publicKey); //maybe we got a relayed message from a peer that we have not crawled yet
@@ -52,10 +52,7 @@ export class ScpStatementHandler {
 			observation
 		);
 
-		if (
-			scpStatement.pledges().switch().value !==
-			xdr.ScpStatementType.scpStExternalize().value
-		) {
+		if (scpStatement.pledges.type !== 'scpStExternalize') {
 			//only if node is externalizing, we mark the node as validating
 			return ok({
 				closedLedger: null

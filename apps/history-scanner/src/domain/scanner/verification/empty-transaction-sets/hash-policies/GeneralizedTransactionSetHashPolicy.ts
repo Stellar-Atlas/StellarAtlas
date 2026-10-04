@@ -5,18 +5,13 @@ import { xdr } from '@stellar/stellar-sdk';
 
 export class GeneralizedTransactionSetHashPolicy implements IHashCalculationPolicy {
 	calculateHash(previousLedgerHeaderHash: string): string {
-		// @ts-ignore
-		const emptyPhase = new xdr.TransactionPhase(0, []);
+		const emptyPhase = xdr.TransactionPhase.v0Components([]);
 		const transactionSetV1 = new xdr.TransactionSetV1({
 			previousLedgerHash: Buffer.from(previousLedgerHeaderHash, 'base64'),
 			phases: [emptyPhase, emptyPhase] //protocol 20 has two phases
 		});
 
-		const generalized = new xdr.GeneralizedTransactionSet(
-			//@ts-ignore
-			1,
-			transactionSetV1
-		);
+		const generalized = xdr.GeneralizedTransactionSet.v1TxSet(transactionSetV1);
 
 		const hash = createHash('sha256');
 		hash.update(generalized.toXDR());

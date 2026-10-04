@@ -34,17 +34,16 @@ export default {
 	): Result<Buffer, Error> {
 		try {
 			const lengthBuffer = Buffer.alloc(4);
-			const xdrMessage = message.toXDR();
+			const xdrMessage = message.toXdr();
 			lengthBuffer.writeUInt32BE(xdrMessage.length, 0);
 
 			return ok(Buffer.concat([lengthBuffer, xdrMessage]));
 		} catch (error) {
 			let msg: xdr.StellarMessage;
-			if (message instanceof AuthenticatedMessage)
-				msg = message.value().message();
+			if (message instanceof AuthenticatedMessage) msg = message.value.message;
 			else msg = message;
 
-			let errorMsg = 'ToXDR of ' + msg.switch().name + ' failed';
+			let errorMsg = 'ToXDR of ' + msg.type + ' failed';
 			if (error instanceof Error) errorMsg += ': ' + error.message;
 
 			return err(new Error(errorMsg));

@@ -77,38 +77,32 @@ export function processLedgerHeaderHistoryEntryXDR(
 			Buffer.from(ledgerHeaderHistoryEntryXDR)
 		)
 	);
-	const computedLedgerHeaderHash = hash(
-		ledgerHeaderHistoryEntry.header().toXDR()
-	);
-	if (!computedLedgerHeaderHash.equals(ledgerHeaderHistoryEntry.hash())) {
+	const header = ledgerHeaderHistoryEntry.header;
+	const computedLedgerHeaderHash = Buffer.from(hash(header.toXDR()));
+	if (
+		!computedLedgerHeaderHash.equals(ledgerHeaderHistoryEntry.hash.toBytes())
+	) {
 		throw new ArchiveXdrError(
 			'Ledger header history entry hash does not match its header XDR'
 		);
 	}
 	return {
-		closedAt: closeTimeToIso(
-			ledgerHeaderHistoryEntry.header().scpValue().closeTime()
+		closedAt: closeTimeToIso(header.scpValue.closeTime),
+		ledger: header.ledgerSeq,
+		transactionResultsHash: Buffer.from(
+			header.txSetResultHash.toBytes()
+		).toString('base64'),
+		transactionsHash: Buffer.from(header.scpValue.txSetHash.toBytes()).toString(
+			'base64'
 		),
-		ledger: ledgerHeaderHistoryEntry.header().ledgerSeq(),
-		transactionResultsHash: ledgerHeaderHistoryEntry
-			.header()
-			.txSetResultHash()
-			.toString('base64'),
-		transactionsHash: ledgerHeaderHistoryEntry
-			.header()
-			.scpValue()
-			.txSetHash()
-			.toString('base64'),
-		previousLedgerHeaderHash: ledgerHeaderHistoryEntry
-			.header()
-			.previousLedgerHash()
-			.toString('base64'),
+		previousLedgerHeaderHash: Buffer.from(
+			header.previousLedgerHash.toBytes()
+		).toString('base64'),
 		ledgerHeaderHash: computedLedgerHeaderHash.toString('base64'),
-		bucketListHash: ledgerHeaderHistoryEntry
-			.header()
-			.bucketListHash()
-			.toString('base64'),
-		protocolVersion: ledgerHeaderHistoryEntry.header().ledgerVersion()
+		bucketListHash: Buffer.from(header.bucketListHash.toBytes()).toString(
+			'base64'
+		),
+		protocolVersion: header.ledgerVersion
 	};
 }
 
@@ -139,20 +133,19 @@ export function processTransactionHistoryResultEntryXDR(
 				Buffer.from(transactionHistoryResultXDR)
 			)
 	);
-	const resultSetHash = hash(
-		transactionHistoryResultEntry.txResultSet().toXDR()
-	);
+	const resultSetHash = hash(transactionHistoryResultEntry.txResultSet.toXDR());
 	return {
-		ledger: transactionHistoryResultEntry.ledgerSeq(),
-		hash: resultSetHash.toString('base64'),
-		results: transactionHistoryResultEntry
-			.txResultSet()
-			.results()
-			.map((pair, transactionIndex) => ({
-				resultXdr: pair.result().toXDR().toString('base64'),
-				transactionHash: pair.transactionHash().toString('base64'),
+		ledger: transactionHistoryResultEntry.ledgerSeq,
+		hash: Buffer.from(resultSetHash).toString('base64'),
+		results: transactionHistoryResultEntry.txResultSet.results.map(
+			(pair, transactionIndex) => ({
+				resultXdr: pair.result.toXDR('base64'),
+				transactionHash: Buffer.from(pair.transactionHash.toBytes()).toString(
+					'base64'
+				),
 				transactionIndex
-			}))
+			})
+		)
 	};
 }
 
@@ -166,11 +159,11 @@ export function processTransactionHistoryEntryXDR(
 		transactionHistoryEntry
 	);
 	return {
-		ledger: transactionHistoryEntry.ledgerSeq(),
+		ledger: transactionHistoryEntry.ledgerSeq,
 		hash: transactionSetHash.toString('base64'),
 		envelopes: extractTransactionEnvelopes(transactionHistoryEntry).map(
 			(envelope, transactionIndex) => ({
-				envelopeXdr: envelope.toXDR().toString('base64'),
+				envelopeXdr: envelope.toXDR('base64'),
 				transactionIndex
 			})
 		)
@@ -197,36 +190,40 @@ function decodeArchiveXdr<Result>(label: string, decode: () => Result): Result {
 function hashTransactionHistoryEntry(
 	transactionHistoryEntry: xdr.TransactionHistoryEntry
 ): Buffer {
-	if (transactionHistoryEntry.ext().switch() === 1) {
-		return hash(transactionHistoryEntry.ext().generalizedTxSet().toXDR());
+	if (transactionHistoryEntry.ext.type === 'generalizedTxSet') {
+		return Buffer.from(
+			hash(transactionHistoryEntry.ext.generalizedTxSet.toXDR())
+		);
 	}
 
-	const transactionSet = transactionHistoryEntry.txSet();
-	return hash(
-		Buffer.concat([
-			transactionSet.previousLedgerHash(),
-			...transactionSet.txes().map((transaction) => transaction.toXDR())
-		])
+	const transactionSet = transactionHistoryEntry.txSet;
+	return Buffer.from(
+		hash(
+			Buffer.concat([
+				transactionSet.previousLedgerHash.toBytes(),
+				...transactionSet.txs.map((transaction) => transaction.toXDR())
+			])
+		)
 	);
 }
 
 function extractTransactionEnvelopes(
 	transactionHistoryEntry: xdr.TransactionHistoryEntry
 ): readonly xdr.TransactionEnvelope[] {
-	if (toSwitchNumber(transactionHistoryEntry.ext().switch()) === 1) {
+	if (transactionHistoryEntry.ext.type === 'generalizedTxSet') {
 		return extractGeneralizedTransactionEnvelopes(
-			transactionHistoryEntry.ext().generalizedTxSet()
+			transactionHistoryEntry.ext.generalizedTxSet
 		);
 	}
 
-	return transactionHistoryEntry.txSet().txes();
+	return transactionHistoryEntry.txSet.txs;
 }
 
 function extractGeneralizedTransactionEnvelopes(
 	generalizedTxSet: xdr.GeneralizedTransactionSet
 ): readonly xdr.TransactionEnvelope[] {
 	const envelopes: xdr.TransactionEnvelope[] = [];
-	for (const phase of generalizedTxSet.v1TxSet().phases()) {
+	for (const phase of generalizedTxSet.v1TxSet.phases) {
 		envelopes.push(...extractPhaseTransactionEnvelopes(phase));
 	}
 	return envelopes;
@@ -235,46 +232,29 @@ function extractGeneralizedTransactionEnvelopes(
 function extractPhaseTransactionEnvelopes(
 	phase: xdr.TransactionPhase
 ): readonly xdr.TransactionEnvelope[] {
-	const switchValue = toSwitchNumber(phase.switch());
-	if (switchValue === 0) {
-		return phase
-			.v0Components()
-			.flatMap((component) => extractComponentTransactionEnvelopes(component));
+	if (phase.type === 'v0Components') {
+		return phase.v0Components.flatMap((component) =>
+			extractComponentTransactionEnvelopes(component)
+		);
 	}
 
-	if (switchValue === 1) {
-		return phase
-			.parallelTxsComponent()
-			.executionStages()
-			.flatMap((stage) => stage.flatMap((batch) => batch));
+	if (phase.type === 'parallelTxsComponent') {
+		return phase.parallelTxsComponent.executionStages.flatMap((stage) =>
+			stage.flatMap((batch) => batch)
+		);
 	}
 
-	throw new Error(`Unsupported transaction phase switch ${switchValue}`);
+	throw new Error('Unsupported transaction phase');
 }
 
 function extractComponentTransactionEnvelopes(
 	component: xdr.TxSetComponent
 ): readonly xdr.TransactionEnvelope[] {
-	const switchValue = toSwitchNumber(component.switch());
-	if (switchValue !== 0) {
-		throw new Error(`Unsupported transaction component switch ${switchValue}`);
+	if (component.type !== 'txsetCompTxsMaybeDiscountedFee') {
+		throw new Error('Unsupported transaction component');
 	}
 
-	return component.txsMaybeDiscountedFee().txes();
-}
-
-function toSwitchNumber(value: unknown): number {
-	if (typeof value === 'number') return value;
-	if (
-		typeof value === 'object' &&
-		value !== null &&
-		'value' in value &&
-		typeof value.value === 'number'
-	) {
-		return value.value;
-	}
-
-	throw new Error(`Unsupported XDR switch value ${String(value)}`);
+	return component.txsMaybeDiscountedFee.txs;
 }
 
 //weird behaviour, di loads this worker file without referencing it

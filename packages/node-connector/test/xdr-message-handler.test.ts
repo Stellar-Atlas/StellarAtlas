@@ -11,10 +11,10 @@ test('parseAuthenticatedMessageXDR', () => {
 	expect(result.isOk()).toBeTruthy();
 	if (result.isOk()) {
 		//@ts-ignore
-		const messageType = xdr.MessageType.fromXDR(result.value.messageTypeXDR);
-		expect(messageType).toEqual(xdr.MessageType.scpMessage());
+		const messageType = xdr.MessageType.fromXdr(result.value.messageTypeXDR);
+		expect(messageType).toEqual(xdr.MessageType.scpMessage);
 		expect(
-			xdr.ScpEnvelope.fromXDR(result.value.stellarMessageXDR)
+			xdr.ScpEnvelope.fromXdr(result.value.stellarMessageXDR)
 		).toBeDefined();
 	}
 });

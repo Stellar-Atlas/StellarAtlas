@@ -37,43 +37,41 @@ function logConnection(publicKey: string, nodeInfo: NodeInfo): void {
 }
 
 function logScpMessage(stellarMessage: xdr.StellarMessage): void {
-	const statement = stellarMessage.envelope().statement();
+	if (stellarMessage.type !== 'scpMessage') return;
+	const statement = stellarMessage.envelope.statement;
 	const publicKey = StrKey.encodeEd25519PublicKey(
-		statement.nodeId().value()
+		statement.nodeId.value.toBytes()
 	).toString();
-	const pledgeType = statement.pledges().switch();
+	const pledgeType = statement.pledges.type;
 
 	console.log(
-		`${publicKey} sent StellarMessage of type ${pledgeType.name} for ledger ${statement.slotIndex().toString()}`
+		`${publicKey} sent StellarMessage of type ${pledgeType} for ledger ${statement.slotIndex.toString()}`
 	);
 
-	if (pledgeType !== xdr.ScpStatementType.scpStExternalize()) return;
+	if (statement.pledges.type !== 'scpStExternalize') return;
 
-	const value = statement.pledges().externalize().commit().value();
-	const closeTime = xdr.StellarValue.fromXDR(value)
-		.closeTime()
-		.toXDR()
-		.readBigUInt64BE();
+	const value = statement.pledges.externalize.commit.value.toBytes();
+	const closeTime = xdr.StellarValue.fromXdr(value).closeTime;
 
 	console.log(new Date(1000 * Number(closeTime)));
 }
 
 function logOtherMessage(stellarMessage: xdr.StellarMessage): void {
 	console.log(
-		`rcv StellarMessage of type ${stellarMessage.switch().name}: ${stellarMessage.toXDR('base64')}`
+		`rcv StellarMessage of type ${stellarMessage.type}: ${stellarMessage.toXdr('base64')}`
 	);
 
-	if (stellarMessage.switch().value !== 0) return;
+	if (stellarMessage.type !== 'errorMsg') return;
 
-	console.log(stellarMessage.error().msg().toString());
-	console.log(stellarMessage.error().code());
+	console.log(stellarMessage.error.msg.toString());
+	console.log(stellarMessage.error.code);
 }
 
 function handleData(stellarMessageJob: StellarMessageWork): void {
 	const stellarMessage = stellarMessageJob.stellarMessage;
 
-	switch (stellarMessage.switch()) {
-		case xdr.MessageType.scpMessage():
+	switch (stellarMessage.type) {
+		case 'scpMessage':
 			logScpMessage(stellarMessage);
 			break;
 		default:

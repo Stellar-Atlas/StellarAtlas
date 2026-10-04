@@ -2,7 +2,7 @@ import { mock } from 'jest-mock-extended';
 import { ScpStatementHandler } from '../scp-statement/scp-statement-handler.js';
 import { ScpEnvelopeHandler } from '../scp-envelope-handler.js';
 import { createDummyExternalizeScpEnvelope } from '@fixtures/createDummyExternalizeMessage.js';
-import { Keypair, Networks } from '@stellar/stellar-sdk';
+import { Keypair, Networks, xdr } from '@stellar/stellar-sdk';
 import { ok } from 'neverthrow';
 import { Observation } from '@network-observer/observation.js';
 import { LRUCache } from 'lru-cache';
@@ -114,8 +114,10 @@ describe('scp-envelope-handler', () => {
 	it('should not process scp envelope when processing SCP signature fails', () => {
 		const scpStatementHandler = mock<ScpStatementHandler>();
 		const handler = new ScpEnvelopeHandler(scpStatementHandler);
-		const scpEnvelope = createDummyExternalizeScpEnvelope();
-		scpEnvelope.signature(Buffer.alloc(20)); // invalid signature
+		const scpEnvelope = new xdr.ScpEnvelope({
+			statement: createDummyExternalizeScpEnvelope().statement,
+			signature: Buffer.alloc(20)
+		}); // invalid signature
 		const crawlState = createMockObservation();
 		const result = handler.handle(
 			scpEnvelope,
