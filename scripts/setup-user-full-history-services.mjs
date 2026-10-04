@@ -3,6 +3,10 @@ import { access, chmod, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import {
+	requiredProtocolVersion,
+	verifyStellarRuntimeVersions
+} from './check-stellar-runtime-versions.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const home = process.env.HOME ?? '/home/observe';
@@ -26,6 +30,10 @@ const startServices = process.argv.includes('--start');
 await verifyExecutable(join(horizonRoot, 'bin', 'horizon'));
 await verifyExecutable(join(dataRoot, 'stellar-core', 'bin', 'stellar-core'));
 await verifyExecutable(join(dataRoot, 'stellar-rpc', 'bin', 'stellar-rpc'));
+await verifyStellarRuntimeVersions(
+	dataRoot,
+	requiredProtocolVersion(process.argv.slice(2))
+);
 
 await createRuntimeDirectories();
 await installRuntimeConfiguration();
