@@ -4,6 +4,8 @@ export {
 	historyArchiveContentFailurePattern,
 	historyArchiveTransportFailurePattern,
 	historyArchiveInterruptedMessagePattern,
+	historyArchiveGenericFailureTypePattern,
+	historyArchiveBlankFailureMessagePattern,
 	type HistoryArchiveFailureAttributionInput
 } from './history-archive-failure-attribution.js';
 export { Node } from './node.js';

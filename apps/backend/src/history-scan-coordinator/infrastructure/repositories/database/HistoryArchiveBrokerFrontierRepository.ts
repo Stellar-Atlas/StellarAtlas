@@ -1,4 +1,5 @@
 import type { DataSource, EntityManager } from 'typeorm';
+import { admitDailyTransientSourceRetries } from './HistoryArchiveTransientSourceRetry.js';
 import { recoverMissingFrontierReady } from './HistoryArchiveMissingFrontierReady.js';
 import { withBoundedArchiveBrokerMaintenance } from './BoundedArchiveBrokerMaintenance.js';
 import {
@@ -197,6 +198,44 @@ export class HistoryArchiveBrokerFrontierRepository {
 			);
 			return await recoverMissingFrontierReady(manager, limit);
 		});
+	}
+
+	private nextTransientSourceSweepAt = 0;
+	async admitDailyTransientSourceRetries(limit: number): Promise<number> {
+		if (limit < 1 || Date.now() < this.nextTransientSourceSweepAt) return 0;
+		this.nextTransientSourceSweepAt = Date.now() + 1_000;
+		const result = await withBoundedArchiveBrokerMaintenance(
+			this.dataSource,
+			async (manager) => {
+				let nextSweepAt = 0;
+				const admitted = await admitDailyTransientSourceRetries(
+					manager,
+					limit,
+					(time) => {
+						nextSweepAt = time;
+					}
+				);
+				return { admitted, nextSweepAt };
+			},
+			{ admitted: 0, nextSweepAt: Date.now() + 60_000 },
+			this.onMaintenanceDeferred
+		).catch((error: unknown) => {
+			// Optional retry maintenance must never stop ordinary reservations.
+			const code =
+				typeof error === 'object' &&
+				error !== null &&
+				'code' in error &&
+				typeof error.code === 'string'
+					? error.code
+					: 'TRANSIENT_RETRY_UNAVAILABLE';
+			this.onMaintenanceDeferred?.(code);
+			return { admitted: 0, nextSweepAt: Date.now() + 60_000 };
+		});
+		this.nextTransientSourceSweepAt = Math.max(
+			this.nextTransientSourceSweepAt,
+			result.nextSweepAt
+		);
+		return result.admitted;
 	}
 
 	async ensurePrefetch(

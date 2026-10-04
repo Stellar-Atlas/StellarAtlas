@@ -47,6 +47,33 @@ describe('bounded source reason summary cache', () => {
 		now += 1;
 		expect((await cache.get('Root')).status).toBe('current');
 	});
+	it('re-reads a stale durable snapshot after fifteen seconds and keeps the old value until replacement', async () => {
+		let now = 0;
+		const stale: KnownArchiveFailureSummaryV1 = { ...summary, status: 'stale' };
+		const load = jest
+			.fn<Promise<KnownArchiveFailureSummaryV1>, [string]>()
+			.mockResolvedValueOnce(stale)
+			.mockResolvedValue(summary);
+		const cache = new KnownArchiveFailureSummaryCache(load, () => now);
+		expect(await cache.get('Root')).toEqual(stale);
+		now = 14_999;
+		expect(await cache.get('Root')).toEqual(stale);
+		expect(load).toHaveBeenCalledTimes(1);
+		now = 15_000;
+		expect(await cache.get('Root')).toEqual(summary);
+		expect(load).toHaveBeenCalledTimes(2);
+	});
+	it('re-reads a resolved unavailable snapshot after fifteen seconds', async () => {
+		let now = 0;
+		const load = jest
+			.fn<Promise<KnownArchiveFailureSummaryV1>, [string]>()
+			.mockResolvedValueOnce(unavailableArchiveFailureSummary)
+			.mockResolvedValue(summary);
+		const cache = new KnownArchiveFailureSummaryCache(load, () => now);
+		expect(await cache.get('Root')).toEqual(unavailableArchiveFailureSummary);
+		now = 15_000;
+		expect(await cache.get('Root')).toEqual(summary);
+	});
 	it('reports unavailable, not zero, without a successful snapshot', async () => {
 		const load = jest.fn(async () => {
 			throw new Error('unavailable');

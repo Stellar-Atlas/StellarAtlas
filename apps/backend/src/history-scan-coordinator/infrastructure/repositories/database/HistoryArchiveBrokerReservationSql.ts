@@ -2,6 +2,10 @@ import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObj
 import { historyArchiveRetryLaneDivisor } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
 import { historyArchiveInconclusiveTransportFailureSql } from './HistoryArchiveFailureAttributionSql.js';
 import {
+	currentTransientSourceFailureSql,
+	historyArchiveTransientSourceFailureSql
+} from './HistoryArchiveTransientSourceRetry.js';
+import {
 	historyArchiveCanonicalFirstAdmissionSql,
 	historyArchiveCanonicalFirstScopeCteSql
 } from './HistoryArchiveCanonicalFirst.js';
@@ -27,6 +31,12 @@ const brokerReservationSchedulableObjectSql = `
 	)
 `;
 
+const transientSourceRetrySql = `(
+	coalesce(object.status = 'failed' and object."httpStatus" between 500 and 599, false)
+	or (ready.priority = 0 and ready."dispatchToken" is not null and ${currentTransientSourceFailureSql})
+	or retained."objectRemoteId" is not null
+)`;
+
 // Round-robin within each priority across eligible roots; ledger order is local
 // to a root. Apply the same rounds before host caps so shared hosts stay fair.
 function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
@@ -42,16 +52,21 @@ function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
 		select ready."objectRemoteId",
 			ready."archiveUrlIdentity",
 			ready.priority as stored_priority,
-			ready.priority as priority,
+			case when ${transientSourceRetrySql} then 0 else ready.priority end as priority,
 			ready."dispatchToken",
 			ready."updatedAt",
 			object."hostIdentity",
 			object."checkpointLedger", object."objectOrder",
-			(object.status = 'failed' and ${historyArchiveInconclusiveTransportFailureSql('object')}) as is_retry,
+			${transientSourceRetrySql} as is_transient_source_retry,
+			(object.status = 'failed' and not ${transientSourceRetrySql}
+				and ${historyArchiveInconclusiveTransportFailureSql('object')}) as is_retry,
 			coalesce(active.active_count, 0) as active_count
 		from "history_archive_object_ready" ready
 		join "history_archive_object_queue" object
 			on object."remoteId" = ready."objectRemoteId"
+		left join history_archive_retained_remote_finding retained
+			on retained."objectRemoteId" = object."remoteId"
+			and retained."retainedOnly" and ${historyArchiveTransientSourceFailureSql('retained')}
 		left join active_hosts active
 			on active."hostIdentity" = object."hostIdentity"
 		where ready."publishedAt" is null
@@ -78,10 +93,10 @@ function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
 	), root_rounds as materialized (
 		select candidate.*,
 			min(candidate."updatedAt") over (
-				partition by candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
+				partition by candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
 			) as root_ready_at,
 			row_number() over (
-				partition by candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
+				partition by candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
 				order by candidate."checkpointLedger" asc nulls first,
 					candidate."objectOrder", candidate."updatedAt",
 					candidate."objectRemoteId"
@@ -102,30 +117,31 @@ function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
 			or not exists (select 1 from eligible where not is_retry)
 	), ranked as materialized (
 		select candidate."objectRemoteId", candidate.priority,
-			candidate.is_retry,
+			candidate.is_retry, candidate.is_transient_source_retry,
 			candidate.stored_priority, candidate."updatedAt",
 			candidate."archiveUrlIdentity", candidate.root_round, candidate.root_ready_at,
 			candidate."hostIdentity", candidate.active_count,
 			candidate."checkpointLedger", candidate."objectOrder",
 			row_number() over (
 				partition by candidate."hostIdentity"
-				order by candidate.is_retry desc, candidate.priority, candidate.root_round,
+				order by candidate.is_transient_source_retry desc, candidate.is_retry desc, candidate.priority, candidate.root_round,
 					candidate.root_ready_at, candidate."archiveUrlIdentity",
 					candidate."objectRemoteId"
 			) as host_rank
 		from retry_budgeted candidate
 	), selected as materialized (
 		select ranked."objectRemoteId", ranked.priority,
+			ranked.is_transient_source_retry,
 			ranked.stored_priority,
 			ranked."checkpointLedger", ranked."objectOrder",
 			(row_number() over (
-				order by ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
+				order by ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
 					ranked.active_count, ranked."archiveUrlIdentity", ranked.host_rank,
 					ranked."objectRemoteId"
 			))::integer as "selectedOrdinal"
 		from ranked
 		where ranked.active_count + ranked.host_rank <= $2::integer
-		order by ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
+		order by ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
 			ranked.active_count, ranked."archiveUrlIdentity", ranked.host_rank,
 			ranked."objectRemoteId"
 		limit $1::integer
@@ -163,6 +179,19 @@ function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
 			object."objectUrl",
 			object."checkpointLedger",
 			object."bucketHash"
+	), retry_lockable as materialized (
+		-- Completion uses ready-first, then this same queue unique-key order.
+		-- Only source-error retries stamp time; ordinary reservations never write queue rows.
+		select object."remoteId" from reserved
+		join selected on selected."objectRemoteId" = reserved."objectRemoteId"
+		join history_archive_object_queue object on object."remoteId" = reserved."remoteId"
+		where selected.is_transient_source_retry
+		order by object."archiveUrlIdentity", object."objectType", object."objectKey"
+		for update of object
+	), retry_attempts_recorded as (
+		update history_archive_object_queue object set "lastClaimedAt" = now()
+		from retry_lockable where object."remoteId" = retry_lockable."remoteId"
+		returning object."remoteId"
 	)
 	select reserved."dispatchToken", reserved."claimAttempt",
 		reserved."remoteId", reserved."archiveUrl", reserved."objectType",

@@ -7,6 +7,36 @@ import { materializeOrderedCheckpointPrefetch } from '../HistoryArchiveCheckpoin
 import { historyArchiveExecutionReconciliationLockName } from '../HistoryArchiveObjectExecutionReconciler.js';
 
 describe('HistoryArchiveBrokerFrontierRepository', () => {
+	it('backs off bounded retry timeouts while ordinary dispatch remains available', async () => {
+		const transaction = jest.fn().mockRejectedValue({ code: '57014' });
+		const repository = new HistoryArchiveBrokerFrontierRepository({
+			transaction
+		} as unknown as DataSource);
+		expect(await repository.admitDailyTransientSourceRetries(10)).toBe(0);
+		expect(await repository.admitDailyTransientSourceRetries(10)).toBe(0);
+		expect(transaction).toHaveBeenCalledTimes(1);
+	});
+	it('defers an unavailable retry sweep without blocking ordinary broker reservations', async () => {
+		const query = jest.fn().mockResolvedValue([]);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest
+			.fn()
+			.mockRejectedValueOnce({ code: '42P01' })
+			.mockImplementation(
+				async (work: (manager: EntityManager) => Promise<unknown>) =>
+					await work(manager)
+			);
+		const report = jest.fn();
+		const repository = new HistoryArchiveBrokerFrontierRepository(
+			{ transaction } as unknown as DataSource,
+			report
+		);
+		expect(await repository.admitDailyTransientSourceRetries(10)).toBe(0);
+		expect(report).toHaveBeenCalledWith('42P01');
+		expect(await repository.reserveJobs(1, 8)).toEqual([]);
+		expect(await repository.admitDailyTransientSourceRetries(10)).toBe(0);
+		expect(transaction).toHaveBeenCalledTimes(2);
+	});
 	it('admits independent ready objects without deleting a competing priority lane', () => {
 		expect(reserveBrokerJobsSql).toContain('from eligible candidate');
 		expect(reserveBrokerJobsSql).toContain(
@@ -18,10 +48,10 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		);
 		expect(reserveBrokerJobsSql).toContain('ranked."objectOrder"');
 		expect(reserveBrokerJobsSql).toContain(
-			'partition by candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"'
+			'partition by candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"'
 		);
 		expect(reserveBrokerJobsSql).toContain(
-			'order by ranked.is_retry desc, ranked.priority, ranked.root_round'
+			'order by ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round'
 		);
 		expect(reserveBrokerJobsSql).toContain(
 			'order by selected."selectedOrdinal"'

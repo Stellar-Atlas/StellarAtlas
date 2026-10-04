@@ -46,7 +46,10 @@ export class KnownArchiveFailureSummaryCache {
 			.then(() => this.load(root))
 			.then((value) => {
 				current.value = value;
-				current.expiresAt = this.now() + 300_000;
+				// Re-read stale durable snapshots soon after the background writer
+				// replaces them; retaining one must not hide fresh attribution for 5m.
+				current.expiresAt =
+					this.now() + (value.status === 'current' ? 300_000 : 15_000);
 				return value;
 			})
 			.catch(() => {

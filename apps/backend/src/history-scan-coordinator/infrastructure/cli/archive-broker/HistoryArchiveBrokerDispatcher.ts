@@ -196,6 +196,7 @@ export class HistoryArchiveBrokerDispatcher {
 				}
 				if (await this.replayOrphanedPublishedJobs(capacity)) continue;
 				const limit = Math.min(capacity, this.config.batchSize);
+				await this.repository.admitDailyTransientSourceRetries(limit);
 				let jobs = await this.repository.reserveJobs(
 					limit,
 					this.config.maximumPerHost,
