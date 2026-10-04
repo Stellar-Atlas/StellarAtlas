@@ -8,13 +8,11 @@ import type {
 	PublicConfiguredServiceStatus,
 	PublicFullHistoryStatus,
 	PublicDataQualityStatus,
-	PublicStatusLevel,
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
 import { formatInteger } from '@format/formatters';
 import { useLocalDateTimeFormatter } from '../local-date-time';
-import { formatCanonicalEvidenceSelection } from '../canonical-history-copy';
 import { StatCard } from '../stat-card';
 import {
 	assessArchiveStatusHealth,
@@ -23,18 +21,14 @@ import {
 } from '@domain/history-archive-health';
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { getArchiveDownloadActivity } from './archive-download-activity';
-import {
-	compatibilityIndexStatus,
-	platformMonitoringStatus
-} from './status-dashboard-health';
+import { platformMonitoringStatus } from './status-dashboard-health';
+import { CompatibilityIndexPanel } from './compatibility-index-panel';
 import { formatArchiveWorkerCapacity } from './archive-worker-table-model';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
 import { resolveArchiveRuntimeActivity } from './archive-runtime-activity';
 import { ArchiveRuntimeStatusPanel } from './archive-runtime-status-panel';
 import { RecentScanLogs } from './recent-scan-logs';
 import { LedgerCloseMetaStatusRow } from './ledger-close-meta-status-row';
-import { LedgerCloseMetaStateStatusRows } from './ledger-close-meta-state-status-rows';
-import { HistoricalBackfillStatusRow } from './historical-backfill-status-row';
 import {
 	buildStatusHeadlineCards,
 	combineStatusLevels,
@@ -211,6 +205,15 @@ export function StatusDashboard({
 					</div>
 				</section>
 
+				<ArchiveRuntimeStatusPanel
+					checkedAt={formatDateTime(workers.generatedAt)}
+					detail={archiveVerifierDetail}
+					state={archiveScannerHealth}
+					value={archiveRuntimeHeadline}
+				/>
+
+				<ArchiveWorkerStatusTable workers={workers} />
+
 				<section
 					className="panel"
 					aria-label="Source lake and parsed analytics"
@@ -236,39 +239,6 @@ export function StatusDashboard({
 					</p>
 				</section>
 
-				<section className="panel" aria-label="Compatibility indexes">
-					<div className="panel-heading">
-						<div>
-							<strong>Compatibility indexes</strong>
-							<span>
-								Separate proof-linked indexes used by older local-history APIs
-							</span>
-						</div>
-						<StatusPill status={compatibilityIndexStatus(fullHistory)} />
-					</div>
-					<p className="muted-copy">
-						These retained index records are not the parsed analytics dataset.
-						Index failures remain unresolved below; they do not establish
-						whether the source-lake or analytics importer is running.
-					</p>
-					<div className="status-list">
-						<CanonicalHistoryStatusRow fullHistory={fullHistory} />
-						<LedgerCloseMetaStateStatusRows fullHistory={fullHistory} />
-						<HistoricalBackfillStatusRow
-							backfill={fullHistory.historicalBackfill}
-						/>
-					</div>
-				</section>
-
-				<ArchiveRuntimeStatusPanel
-					checkedAt={formatDateTime(workers.generatedAt)}
-					detail={archiveVerifierDetail}
-					state={archiveScannerHealth}
-					value={archiveRuntimeHeadline}
-				/>
-
-				<ArchiveWorkerStatusTable workers={workers} />
-
 				{archiveEvidenceAvailable ? (
 					<StatusArchiveEvidenceTables
 						events={archiveEvents}
@@ -283,101 +253,12 @@ export function StatusDashboard({
 					/>
 				)}
 
+				<CompatibilityIndexPanel fullHistory={fullHistory} />
+
 				<RecentScanLogs available={scanLogsAvailable} scanLogs={scanLogs} />
 			</div>
 		</div>
 	);
-}
-
-function CanonicalHistoryStatusRow({
-	fullHistory
-}: {
-	readonly fullHistory: PublicFullHistoryStatus;
-}): React.JSX.Element {
-	const formatDateTime = useLocalDateTimeFormatter();
-	const coverage = fullHistory.canonicalCoverage;
-	if (coverage === null) {
-		return (
-			<StatusRow
-				detail={
-					fullHistory.status === 'unavailable'
-						? 'Canonical index telemetry is unavailable; indexed coverage has not been reported.'
-						: 'No proof-gated checkpoint has been promoted into the local index.'
-				}
-				label="Proof-linked canonical index"
-				status="unavailable"
-				value={
-					fullHistory.status === 'unavailable'
-						? 'Telemetry unavailable'
-						: 'Not indexed'
-				}
-			/>
-		);
-	}
-	const promotion = fullHistory.canonicalPromotion;
-	const promotionStatus: PublicStatusLevel =
-		promotion !== null &&
-		['promoting', 'running', 'waiting-for-proof'].includes(promotion.state)
-			? 'ok'
-			: 'unavailable';
-	const promotionLabel = describeCanonicalPromotion(
-		fullHistory,
-		formatDateTime
-	);
-	const evidence = coverage.latestEvidence;
-	const evidenceDetail =
-		evidence === null
-			? 'latest proof details loading'
-			: `latest checkpoint ${formatInteger(Number(evidence.checkpointLedger))} selected by proof ${evidence.checkpointProofId} v${evidence.proofVersion} from ${evidence.archiveUrlIdentity}`;
-	return (
-		<StatusRow
-			detail={`${formatInteger(coverage.ledgerCount)} proof-gated ledgers; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${evidenceDetail}; ${formatCanonicalEvidenceSelection(coverage.archiveSourceCount)}; ${promotionLabel}. This index coverage is not source-lake or parsed analytics coverage.`}
-			label="Proof-linked canonical index"
-			pillText={canonicalPromotionPill(fullHistory)}
-			status={promotionStatus}
-			value={`${formatInteger(Number(coverage.firstLedger))} - ${formatInteger(Number(coverage.lastLedger))}`}
-		/>
-	);
-}
-
-function describeCanonicalPromotion(
-	fullHistory: PublicFullHistoryStatus,
-	formatDateTime: (value: string) => string
-): string {
-	const promotion = fullHistory.canonicalPromotion;
-	if (promotion === null) return 'continuous promotion has not started';
-	if (promotion.state === 'waiting-for-proof') {
-		const checkpoint =
-			promotion.checkpointLedger === null
-				? 'the first verified checkpoint'
-				: `verified checkpoint ${formatInteger(Number(promotion.checkpointLedger))}`;
-		return `waiting for ${checkpoint}; heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
-	}
-	if (promotion.state === 'promoting') {
-		const checkpoint =
-			promotion.checkpointLedger === null
-				? 'next checkpoint'
-				: `checkpoint ${formatInteger(Number(promotion.checkpointLedger))}`;
-		return `promoting ${checkpoint}; heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
-	}
-	if (promotion.state === 'running') {
-		return `continuous promotion active; heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
-	}
-	if (promotion.state === 'failed') {
-		return `continuous promotion stopped after ${promotion.lastErrorCode ?? 'an internal failure'}`;
-	}
-	return `continuous promotion ${promotion.state}; last heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
-}
-
-function canonicalPromotionPill(fullHistory: PublicFullHistoryStatus): string {
-	const state = fullHistory.canonicalPromotion?.state;
-	if (state === 'waiting-for-proof') return 'Waiting for proof';
-	if (state === 'promoting') return 'Promoting';
-	if (state === 'running') return 'Active';
-	if (state === 'failed') return 'Promotion failed';
-	if (state === 'stale') return 'Heartbeat stale';
-	if (state === 'stopped') return 'Stopped';
-	return 'Not started';
 }
 
 function ArchiveEvidenceDeferredPanel({

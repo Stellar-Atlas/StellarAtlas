@@ -13,23 +13,7 @@ export function platformMonitoringStatus(
 export function compatibilityIndexStatus(
 	history: PublicFullHistoryStatus
 ): PublicStatusLevel {
-	const state = history.ledgerCloseMetaState;
-	const linkage = state.canonicalLinkage;
-	const lifecycle = linkage.lifecycle;
-	const linkageInconsistent =
-		lifecycle.total > 0 &&
-		lifecycle.failed === 0 &&
-		lifecycle.checking === 0 &&
-		lifecycle.pending === 0 &&
-		(lifecycle.complete !== lifecycle.total ||
-			linkage.matchedLedgerCount !== linkage.expectedLedgerCount);
-	const knownFailure =
-		history.canonicalPromotion?.state === 'failed' ||
-		history.canonicalPromotion?.state === 'stale' ||
-		history.historicalBackfill?.state === 'failed' ||
-		state.imports.lifecycle.failed > 0 ||
-		lifecycle.failed > 0 ||
-		linkageInconsistent;
+	const knownFailure = compatibilityIndexIssueCount(history) > 0;
 	const promotionAvailable =
 		history.canonicalPromotion !== null &&
 		['promoting', 'running', 'waiting-for-proof'].includes(
@@ -40,4 +24,27 @@ export function compatibilityIndexStatus(
 		: history.canonicalCoverage === null || !promotionAvailable
 			? 'unavailable'
 			: history.status;
+}
+
+/** Count affected components, not failed rows or queued work. */
+export function compatibilityIndexIssueCount(
+	history: PublicFullHistoryStatus
+): number {
+	const state = history.ledgerCloseMetaState;
+	const linkage = state.canonicalLinkage;
+	const lifecycle = linkage.lifecycle;
+	const linkageInconsistent =
+		lifecycle.total > 0 &&
+		lifecycle.failed === 0 &&
+		lifecycle.checking === 0 &&
+		lifecycle.pending === 0 &&
+		(lifecycle.complete !== lifecycle.total ||
+			linkage.matchedLedgerCount !== linkage.expectedLedgerCount);
+	return [
+		history.canonicalPromotion?.state === 'failed' ||
+			history.canonicalPromotion?.state === 'stale',
+		state.imports.lifecycle.failed > 0,
+		lifecycle.failed > 0 || linkageInconsistent,
+		history.historicalBackfill?.state === 'failed'
+	].filter(Boolean).length;
 }

@@ -108,7 +108,7 @@ function CanonicalStateLinkageRow({
 						: active
 							? 'Recorded checking'
 							: waiting
-								? 'Queued'
+								? 'Recorded queued'
 								: inconsistent
 									? 'Inconsistent'
 									: 'Linked'

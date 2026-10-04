@@ -103,6 +103,11 @@ describe('archive runtime presentation', () => {
 		const indexes = section(markup, 'Compatibility indexes');
 		expect(indexes).toContain('status-pill warning');
 		expect(indexes).toContain('Promotion failed');
+		expect(indexes).toContain('<details>');
+		expect(indexes).toContain('1 component needs attention');
+		expect(
+			markup.indexOf('aria-label="Archive verification runtime"')
+		).toBeLessThan(markup.indexOf('aria-label="Compatibility indexes"'));
 		expect(section(markup, 'Archive verification runtime')).toContain(
 			'status-pill good'
 		);
