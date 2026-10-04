@@ -6,17 +6,28 @@ import { OrganizationMeasurementAverage } from '@network-scan/domain/organizatio
 import { OrganizationMeasurementEvent } from '@network-scan/domain/organization/OrganizationMeasurementEvent.js';
 import { saveOrganizationMeasurement } from './OrganizationTomlEvidencePersistence.js';
 import { findOrganizationTomlEvidenceAt } from './OrganizationTomlEvidenceRead.js';
+import { organizationObservedAvailabilitySql } from './OrganizationObservedAvailabilitySql.js';
 
 export interface OrganizationMeasurementAverageRecord {
 	organizationId: string;
 	isSubQuorumAvailableAvg: string;
+	observedDays?: number;
+	observedScans?: number;
 }
 export function organizationMeasurementAverageFromDatabaseRecord(
 	record: OrganizationMeasurementAverageRecord
 ): OrganizationMeasurementAverage {
 	return {
 		organizationId: record.organizationId,
-		isSubQuorumAvailableAvg: Number(record.isSubQuorumAvailableAvg)
+		isSubQuorumAvailableAvg: Number(record.isSubQuorumAvailableAvg),
+		...(record.observedDays === undefined || record.observedScans === undefined
+			? {}
+			: {
+					coverage: {
+						observedDays: Number(record.observedDays),
+						observedScans: Number(record.observedScans)
+					}
+				})
 	};
 }
 
@@ -67,25 +78,10 @@ export class TypeOrmOrganizationMeasurementRepository implements OrganizationMea
 		at: Date,
 		xDays: number
 	): Promise<OrganizationMeasurementAverage[]> {
-		const from = new Date(at.getTime());
-		from.setDate(at.getDate() - xDays);
+		const from = new Date(at.getTime() - xDays * 86_400_000);
 
 		const result = await this.baseRepository.query(
-			`WITH update_count AS (SELECT count(*) AS nr_of_updates
-                                   FROM "network_scan" NetworkScan
-                                   WHERE "time" >= $1
-                                     and "time" <= $2
-                                     AND completed = true)
-             SELECT "organizationIdValue"                          as "organizationId",
-                    ROUND(100.0 * avg("isSubQuorumAvailable"::int), 2) as "isSubQuorumAvailableAvg",
-                    ROUND(avg("index"::int), 2)                        as "indexAvg",
-                    count(*)                                           as "msCount"
-             FROM "organization_measurement" "OrganizationMeasurement"
-             join organization o on "OrganizationMeasurement"."organizationId" = o.id
-             WHERE "time" >= $1
-               and "time" <= $2
-             GROUP BY "organizationIdValue"
-             having count(*) >= (select nr_of_updates from update_count)`,
+			organizationObservedAvailabilitySql,
 			[from, at]
 		);
 

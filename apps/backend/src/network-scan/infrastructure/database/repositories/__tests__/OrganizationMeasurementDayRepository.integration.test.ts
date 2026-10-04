@@ -69,18 +69,29 @@ describe('test queries', () => {
 			time
 		);
 		await versionedOrganizationRepository.save([idA], time);
-		const a = new OrganizationMeasurementDay('12/12/2020', idA);
-		a.crawlCount = 2;
-		a.isSubQuorumAvailableCount = 2;
-		const b = new OrganizationMeasurementDay('12/13/2020', idA);
-		b.crawlCount = 2;
-		b.isSubQuorumAvailableCount = 2;
-		await repo.save([a, b]);
+		const scanRepository = container.get<NetworkScanRepository>(
+			NETWORK_TYPES.NetworkScanRepository
+		);
+		const measurementRepository =
+			container.get<OrganizationMeasurementRepository>(
+				NETWORK_TYPES.OrganizationMeasurementRepository
+			);
+		for (const date of ['2020-12-12T00:00:00Z', '2020-12-13T00:00:00Z']) {
+			const scan = new NetworkScan(new Date(date));
+			scan.completed = true;
+			scan.measurement = new NetworkMeasurement(scan.time);
+			scan.measurement.nrOfActiveValidators = 3;
+			await scanRepository.save([scan]);
+			const measurement = new OrganizationMeasurement(scan.time, idA);
+			measurement.isSubQuorumAvailable = true;
+			await measurementRepository.save([measurement]);
+		}
 
 		const averages = await repo.findXDaysAverageAt(new Date('12/13/2020'), 2);
 		expect(averages.length).toEqual(1);
 		expect(averages[0].isSubQuorumAvailableAvg).toEqual(100);
 		expect(averages[0].organizationId).toEqual(idA.organizationId.value);
+		expect(averages[0].coverage).toEqual({ observedDays: 2, observedScans: 2 });
 	});
 
 	test('rollup is idempotent for affected days', async () => {

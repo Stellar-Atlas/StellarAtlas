@@ -20,6 +20,25 @@ const { OrganizationTable } = await import('../organization-table');
 const { OrganizationDetail } = await import('../organization-detail');
 
 describe('organization inventory presentation', () => {
+	it('labels observed coverage without inventing uptime for monitoring gaps', () => {
+		const org = organization({
+			subQuorum30DaysAvailability: 42.39,
+			subQuorumAvailable: true,
+			availability30DaysCoverage: { observedDays: 25, observedScans: 2991 }
+		});
+		expect(organizationInventoryAvailability(org, 'current', '30d')).toEqual({
+			value: '42.4%',
+			tone: 'warning',
+			detail: '25 observed days · monitoring gaps excluded'
+		});
+		expect(
+			organizationInventoryAvailability(
+				{ ...org, has30DayStats: false },
+				'current',
+				'30d'
+			).value
+		).toBe('Collecting');
+	});
 	it('preserves measured availability instead of inflating 99.29 percent to 100', () => {
 		const org = organization({ subQuorum24HoursAvailability: 99.29 });
 		expect(organizationInventoryAvailability(org, 'current', '24h').value).toBe(

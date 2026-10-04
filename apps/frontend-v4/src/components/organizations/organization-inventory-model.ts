@@ -3,7 +3,10 @@ import type {
 	PublicKnownOrganizationRecordScope,
 	PublicKnownOrganizationScope
 } from '@api/known-network-types';
-import type { DisplayMetric } from '@domain/availability';
+import {
+	organizationAvailabilityCoverageDetail,
+	type DisplayMetric
+} from '@domain/availability';
 import { getOrganizationTags, type NodeTag } from '@domain/network';
 import { formatPercent } from '@format/formatters';
 
@@ -26,7 +29,12 @@ export function organizationInventoryAvailability(
 	return {
 		value: formatPercent(value),
 		tone: scope === 'archived' ? 'muted' : value >= 99.5 ? 'good' : 'warning',
-		detail: scope === 'archived' ? 'Historical measurement' : undefined
+		detail:
+			window === '30d' && organization.availability30DaysCoverage
+				? organizationAvailabilityCoverageDetail(organization)
+				: scope === 'archived'
+					? 'Historical measurement'
+					: undefined
 	};
 }
 

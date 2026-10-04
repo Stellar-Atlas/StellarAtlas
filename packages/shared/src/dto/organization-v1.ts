@@ -61,6 +61,8 @@ export interface OrganizationV1 {
 	has24HourStats: boolean;
 	subQuorum24HoursAvailability: number;
 	subQuorum30DaysAvailability: number;
+	/** Sample coverage, not continuous monitoring or inferred uptime. */
+	availability30DaysCoverage?: { observedDays: number; observedScans: number };
 	homeDomain: string;
 	dateDiscovered: string;
 	hasReliableUptime: boolean;
@@ -137,6 +139,16 @@ export const OrganizationV1Schema: JSONSchemaType<OrganizationV1> = {
 		},
 		subQuorum30DaysAvailability: {
 			type: 'number'
+		},
+		availability30DaysCoverage: {
+			type: 'object',
+			nullable: true,
+			properties: {
+				observedDays: { type: 'integer', minimum: 1 },
+				observedScans: { type: 'integer', minimum: 1 }
+			},
+			required: ['observedDays', 'observedScans'],
+			additionalProperties: false
 		},
 		subQuorumAvailable: {
 			type: 'boolean'

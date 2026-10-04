@@ -48,6 +48,9 @@ export class OrganizationV1DTOMapper {
 			subQuorum24HoursAvailability:
 				measurement24HourAverage?.isSubQuorumAvailableAvg || 0,
 			has30DayStats: measurement30DayAverage !== undefined,
+			...(measurement30DayAverage?.coverage === undefined
+				? {}
+				: { availability30DaysCoverage: measurement30DayAverage.coverage }),
 			subQuorum30DaysAvailability:
 				measurement30DayAverage?.isSubQuorumAvailableAvg || 0,
 			hasReliableUptime: ReliableUptimePolicy.hasReliableUptime(

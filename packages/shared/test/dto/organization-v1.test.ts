@@ -3,6 +3,20 @@ import * as addFormats from 'ajv-formats';
 import { OrganizationV1Schema } from '../../src/dto/organization-v1';
 
 describe('OrganizationV1', () => {
+	test('accepts additive observed coverage but rejects invented negative sample counts', () => {
+		const organization = createDummyOrganizationV1();
+		organization.availability30DaysCoverage = {
+			observedDays: 25,
+			observedScans: 2991
+		};
+		const validate = compileValidation();
+		expect(validate(organization)).toBe(true);
+		organization.availability30DaysCoverage = {
+			observedDays: 25,
+			observedScans: -1
+		};
+		expect(validate(organization)).toBe(false);
+	});
 	test('fromV1', () => {
 		const organizationV1 = createDummyOrganizationV1();
 		const validate = compileValidation();

@@ -20,12 +20,15 @@ const isPartialCurrentWindow = (
 
 export const hasEvaluatedOrganization30DayAvailability = (
 	organization: PublicOrganization
-): boolean =>
-	organization.has30DayStats &&
-	!isPartialCurrentWindow(
-		organization.subQuorum30DaysAvailability,
-		organization.subQuorumAvailable
-	);
+): boolean => organization.has30DayStats;
+
+export function organizationAvailabilityCoverageDetail(
+	organization: PublicOrganization
+): string | undefined {
+	const coverage = organization.availability30DaysCoverage;
+	if (!coverage) return undefined;
+	return `${coverage.observedDays} observed ${coverage.observedDays === 1 ? 'day' : 'days'} · monitoring gaps excluded`;
+}
 
 export const formatNode24HourActive = (node: PublicNode): DisplayMetric => {
 	if (!node.statistics.has24HourStats) {
@@ -94,16 +97,8 @@ export const formatNode30DayValidating = (node: PublicNode): DisplayMetric => {
 export const formatOrganization24HourAvailability = (
 	organization: PublicOrganization
 ): DisplayMetric => {
-	if (
-		organization.subQuorumAvailable &&
-		organization.subQuorum24HoursAvailability >= 90
-	) {
-		return {
-			detail: 'Current subquorum is available',
-			tone: 'good',
-			value: '100%'
-		};
-	}
+	if (!organization.has24HourStats)
+		return { tone: 'muted', value: 'Collecting' };
 
 	return {
 		tone:
@@ -127,6 +122,7 @@ export const formatOrganization30DayAvailability = (
 	}
 
 	return {
+		detail: organizationAvailabilityCoverageDetail(organization),
 		tone: value >= 99.5 ? 'good' : 'warning',
 		value: formatPercent(value)
 	};

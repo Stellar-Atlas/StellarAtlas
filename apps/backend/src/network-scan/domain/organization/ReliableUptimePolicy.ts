@@ -8,6 +8,8 @@ export class ReliableUptimePolicy {
 	): boolean {
 		if (!measurement30DayAverage) return false;
 		return (
+			(measurement30DayAverage.coverage === undefined ||
+				measurement30DayAverage.coverage.observedDays >= 30) &&
 			measurement30DayAverage.isSubQuorumAvailableAvg >= 99 &&
 			organization.validators.value.length >= 3
 		);

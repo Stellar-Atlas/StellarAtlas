@@ -1,7 +1,30 @@
 import type { OrganizationV1 } from 'shared';
-import { formatOrganization30DayAvailability } from '../availability';
+import {
+	formatOrganization24HourAvailability,
+	formatOrganization30DayAvailability,
+	hasEvaluatedOrganization30DayAvailability
+} from '../availability';
 
 describe('organization availability display', () => {
+	it('never rounds a currently healthy organization history up to perfect uptime', () => {
+		expect(
+			formatOrganization24HourAvailability(
+				createOrganization({ subQuorum24HoursAvailability: 94.65 })
+			)
+		).toEqual({ tone: 'warning', value: '94.7%' });
+	});
+	it('keeps a measured low rate visible after current recovery and labels coverage', () => {
+		const organization = createOrganization({
+			subQuorum30DaysAvailability: 42.39,
+			availability30DaysCoverage: { observedDays: 25, observedScans: 2991 }
+		});
+		expect(hasEvaluatedOrganization30DayAvailability(organization)).toBe(true);
+		expect(formatOrganization30DayAvailability(organization)).toEqual({
+			tone: 'warning',
+			value: '42.4%',
+			detail: '25 observed days · monitoring gaps excluded'
+		});
+	});
 	it('shows collecting when the 30-day window has not been evaluated', () => {
 		expect(
 			formatOrganization30DayAvailability(

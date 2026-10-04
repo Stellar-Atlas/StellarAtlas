@@ -8,6 +8,7 @@ import {
 } from './TypeOrmOrganizationMeasurementRepository.js';
 import type { OrganizationMeasurementDayRepository } from '@network-scan/domain/organization/OrganizationMeasurementDayRepository.js';
 import { OrganizationId } from '@network-scan/domain/organization/OrganizationId.js';
+import { organizationObservedAvailabilitySql } from './OrganizationObservedAvailabilitySql.js';
 
 @injectable()
 export class TypeOrmOrganizationMeasurementDayRepository implements OrganizationMeasurementDayRepository {
@@ -23,21 +24,11 @@ export class TypeOrmOrganizationMeasurementDayRepository implements Organization
 		at: Date,
 		xDays: number
 	): Promise<OrganizationMeasurementAverage[]> {
-		const from = new Date(at.getTime());
-		from.setDate(at.getDate() - xDays);
+		const from = new Date(at.getTime() - xDays * 86_400_000);
 
 		const result = await this.baseRepository.query(
-			`select "organizationIdValue"                                              as "organizationId",
-					ROUND(100.0 * (sum("isSubQuorumAvailableCount"::int::decimal) / sum("crawlCount")),
-						  2)                                                      as "isSubQuorumAvailableAvg",
-					ROUND((sum("indexSum"::int::decimal) / sum("crawlCount")), 2) as "indexAvg"
-			 FROM "organization_measurement_day" "OrganizationMeasurementDay"
-			 join "organization" "Organization" on "Organization"."id" = "OrganizationMeasurementDay"."organizationId"
-			 WHERE time >= date_trunc('day', $1::TIMESTAMP)
-			   and time <= date_trunc('day', $2::TIMESTAMP)
-			 GROUP BY "organizationIdValue"
-			 having count("organizationId") >= $3`, //needs at least a record every day in the range, or the average is NA
-			[from, at, xDays]
+			organizationObservedAvailabilitySql,
+			[from, at]
 		);
 
 		return result.map((record: OrganizationMeasurementAverageRecord) =>
