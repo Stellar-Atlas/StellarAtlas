@@ -202,8 +202,10 @@ function serviceTone(
 	return 'danger';
 }
 
-function archiveRuntimeTone(state: ArchiveHealthState): HeadlineTone {
-	if (state === 'verified') return 'good';
+/** Scanner health is separate from the outcome of archive-source proof checks. */
+export function archiveRuntimeTone(state: ArchiveHealthState): HeadlineTone {
+	if (state === 'verified' || state === 'checking' || state === 'waiting')
+		return 'good';
 	if (state === 'integrity_failure') return 'danger';
 	if (state === 'scanner_issue' || state === 'remote_retry') return 'warning';
 	return undefined;

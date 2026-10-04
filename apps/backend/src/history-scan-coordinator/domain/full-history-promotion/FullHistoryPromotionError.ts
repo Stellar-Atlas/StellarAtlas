@@ -6,6 +6,7 @@ export type FullHistoryPromotionErrorReason =
 	| 'invalid-proof'
 	| 'invalid-source-evidence'
 	| 'ledger-range-mismatch'
+	| 'parsed-projection-missing'
 	| 'transaction-pairing-mismatch'
 	| 'xdr-bound-exceeded'
 	| 'xdr-decode-failed';
@@ -31,7 +32,7 @@ export interface FullHistoryLedgerObservationCount {
 export class FullHistoryLedgerObservationsMissingError extends FullHistoryPromotionError {
 	constructor(readonly diagnostic: FullHistoryLedgerObservationCount) {
 		super(
-			'candidate-incomplete',
+			'parsed-projection-missing',
 			'Exact checkpoint ledger observations are incomplete'
 		);
 	}

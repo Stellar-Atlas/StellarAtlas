@@ -19,10 +19,16 @@ export interface FullHistoryPromotionLoopConfig {
 
 export interface FullHistoryPromotionLoopDependencies {
 	readonly emit: (event: FullHistoryPromotionLoopEvent) => void;
+	readonly heartbeat?: () => Promise<void>;
 	readonly promoteNext: () => Promise<PromoteNextFullHistoryCheckpointResult>;
 	readonly shouldStop: () => boolean;
 	readonly wait: (milliseconds: number) => Promise<void>;
 }
+
+// Missing legacy projections cannot be repaired by repeating promotion. Keep
+// the failure visible while avoiding frequent candidate scans; liveness is separate.
+const projectionRetryMinimumMs = 5 * 60_000;
+const dependencyHeartbeatIntervalMs = 30_000;
 
 export type FullHistoryPromotionLoopErrorCode =
 	| `canonical-${FullHistoryCanonicalErrorReason}`
@@ -52,6 +58,8 @@ export async function runFullHistoryPromotionLoop(
 ): Promise<void> {
 	while (!dependencies.shouldStop()) {
 		let cycleFailed = false;
+		let projectionBlocked = false;
+		let retryInMs = config.errorBackoffMs;
 		let shouldWait = false;
 		for (
 			let promoted = 0;
@@ -65,12 +73,17 @@ export async function runFullHistoryPromotionLoop(
 			} catch (error) {
 				if (dependencies.shouldStop()) return;
 				cycleFailed = true;
+				projectionBlocked =
+					error instanceof FullHistoryLedgerObservationsMissingError;
+				if (projectionBlocked) {
+					retryInMs = Math.max(retryInMs, projectionRetryMinimumMs);
+				}
 				dependencies.emit({
 					errorCode: fullHistoryPromotionLoopErrorCode(error),
 					...(error instanceof FullHistoryLedgerObservationsMissingError
 						? { missingLedgerObservations: error.diagnostic }
 						: {}),
-					retryInMs: config.errorBackoffMs,
+					retryInMs,
 					status: 'cycle-failed'
 				});
 				break;
@@ -88,10 +101,27 @@ export async function runFullHistoryPromotionLoop(
 			!dependencies.shouldStop() &&
 			(cycleFailed || shouldWait || config.pollIntervalMs > 0)
 		) {
-			await dependencies.wait(
-				cycleFailed ? config.errorBackoffMs : config.pollIntervalMs
-			);
+			if (projectionBlocked) {
+				await waitForProjectionRetry(retryInMs, dependencies);
+			} else {
+				await dependencies.wait(
+					cycleFailed ? retryInMs : config.pollIntervalMs
+				);
+			}
 		}
+	}
+}
+
+async function waitForProjectionRetry(
+	milliseconds: number,
+	dependencies: FullHistoryPromotionLoopDependencies
+): Promise<void> {
+	let remaining = milliseconds;
+	while (remaining > 0 && !dependencies.shouldStop()) {
+		const interval = Math.min(remaining, dependencyHeartbeatIntervalMs);
+		await dependencies.wait(interval);
+		remaining -= interval;
+		if (!dependencies.shouldStop()) await dependencies.heartbeat?.();
 	}
 }
 

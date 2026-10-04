@@ -2,6 +2,7 @@ import type { EntityManager } from 'typeorm';
 import type { HistoryArchiveSourceSummaryV1 } from 'shared';
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
+import { queryHistoryArchiveSummary } from './HistoryArchiveSummaryReadQuery.js';
 
 type SourceSummaryRow = {
 	readonly activeObjects?: NumericValue;
@@ -49,9 +50,11 @@ export async function getSourceSummariesFromRollup(
 	manager: EntityManager,
 	archiveUrlIdentity: string | null
 ): Promise<readonly HistoryArchiveSourceSummaryV1[]> {
-	const rows = (await manager.query(sourceSummarySql, [
-		archiveUrlIdentity
-	])) as readonly SourceSummaryRow[];
+	const rows = await queryHistoryArchiveSummary<SourceSummaryRow>(
+		manager,
+		sourceSummarySql,
+		[archiveUrlIdentity]
+	);
 
 	return rows.map(mapSourceSummaryRow);
 }

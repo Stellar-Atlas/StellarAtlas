@@ -26,6 +26,8 @@ export interface FullHistoryPromotionRuntimeRepository {
 		networkPassphrase: string
 	): Promise<FullHistoryPromotionRuntimeView | null>;
 	markAttempt(networkPassphrase: string, instanceId: string): Promise<void>;
+	/** Refresh liveness without changing the blocker, attempt, or success evidence. */
+	heartbeat(networkPassphrase: string, instanceId: string): Promise<void>;
 	recordFailure(
 		networkPassphrase: string,
 		instanceId: string,

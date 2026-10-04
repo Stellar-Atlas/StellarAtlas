@@ -90,7 +90,7 @@ describe('checkpoint candidate metadata admission', () => {
 					target
 				)
 			).rejects.toMatchObject({
-				reason: 'candidate-incomplete',
+				reason: 'parsed-projection-missing',
 				diagnostic: {
 					checkpointLedger,
 					ledgerObjectRemoteId: objects[1]!.remoteId,

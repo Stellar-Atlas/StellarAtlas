@@ -30,6 +30,7 @@ import {
 import { formatArchiveWorkerCapacity } from './archive-worker-table-model';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
 import { resolveArchiveRuntimeActivity } from './archive-runtime-activity';
+import { ArchiveRuntimeStatusPanel } from './archive-runtime-status-panel';
 import { RecentScanLogs } from './recent-scan-logs';
 import { LedgerCloseMetaStatusRow } from './ledger-close-meta-status-row';
 import { LedgerCloseMetaStateStatusRows } from './ledger-close-meta-state-status-rows';
@@ -42,7 +43,6 @@ import {
 } from './status-dashboard-headlines';
 import {
 	ArchiveHealthPill,
-	ArchiveHealthRow,
 	StatusPill,
 	StatusRow,
 	statusLabel
@@ -260,23 +260,12 @@ export function StatusDashboard({
 					</div>
 				</section>
 
-				<section className="panel">
-					<div className="panel-heading">
-						<div>
-							<strong>Archive verification runtime</strong>
-							<span>{formatDateTime(workers.generatedAt)}</span>
-						</div>
-						<ArchiveHealthPill state={archiveScannerHealth} />
-					</div>
-					<div className="status-list">
-						<ArchiveHealthRow
-							detail={archiveVerifierDetail}
-							label="Current checks"
-							state={archiveScannerHealth}
-							value={archiveRuntimeHeadline}
-						/>
-					</div>
-				</section>
+				<ArchiveRuntimeStatusPanel
+					checkedAt={formatDateTime(workers.generatedAt)}
+					detail={archiveVerifierDetail}
+					state={archiveScannerHealth}
+					value={archiveRuntimeHeadline}
+				/>
 
 				<ArchiveWorkerStatusTable workers={workers} />
 

@@ -108,6 +108,8 @@ export async function runContinuousFullHistoryPromotionCli(
 		runtimeStarted = true;
 		await runFullHistoryPromotionLoop(config, {
 			emit: (event) => writeEvent(stdout, event),
+			heartbeat: () =>
+				runtimeRepository.heartbeat(config.networkPassphrase, instanceId),
 			promoteNext: async () => {
 				try {
 					await runtimeRepository.markAttempt(

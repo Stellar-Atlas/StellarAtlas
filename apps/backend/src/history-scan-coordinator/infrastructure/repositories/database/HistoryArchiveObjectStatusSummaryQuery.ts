@@ -14,6 +14,7 @@ import {
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 import { getCheckpointCoverage } from './HistoryArchiveObjectCheckpointCoverageQuery.js';
 import { getHistoryArchiveTransitionReconciliation } from './HistoryArchiveTransitionReconciliationQuery.js';
+import { queryHistoryArchiveSummary } from './HistoryArchiveSummaryReadQuery.js';
 
 type SourceRow = {
 	readonly listingGapCount?: NumericValue;
@@ -268,9 +269,11 @@ function lowercaseEvidenceHealth(
 async function getStatusSourceSummaries(
 	manager: EntityManager
 ): Promise<readonly HistoryArchiveStatusSourceV1[]> {
-	const rows = (await manager.query(sourceStatusSummarySql, [
-		historyArchiveStatusSourceLimit
-	])) as readonly SourceRow[];
+	const rows = await queryHistoryArchiveSummary<SourceRow>(
+		manager,
+		sourceStatusSummarySql,
+		[historyArchiveStatusSourceLimit]
+	);
 	const sources = await attachArchiveScanCoverage(
 		manager,
 		rows.map(mapSourceRow)

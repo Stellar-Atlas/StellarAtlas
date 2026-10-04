@@ -145,13 +145,62 @@ describe('continuous full-history promotion loop', () => {
 		);
 		expect(events).toEqual([
 			{
-				errorCode: 'promotion-candidate-incomplete',
+				errorCode: 'promotion-parsed-projection-missing',
 				missingLedgerObservations: diagnostic,
-				retryInMs: 30_000,
+				retryInMs: 300_000,
 				status: 'cycle-failed'
 			}
 		]);
 		expect(JSON.stringify(events)).not.toContain('operator:secret');
+	});
+
+	it('keeps dependency-blocked liveness fresh without attempting promotion during backoff', async () => {
+		const events: FullHistoryPromotionLoopEvent[] = [];
+		const waits: number[] = [];
+		const heartbeat = jest.fn(async () => undefined);
+		let calls = 0;
+		let stopped = false;
+		await runFullHistoryPromotionLoop(
+			{
+				errorBackoffMs: 30_000,
+				maximumCheckpointsPerCycle: 1,
+				networkPassphrase: 'test',
+				pollIntervalMs: 1_000
+			},
+			{
+				emit: (event) => events.push(event),
+				heartbeat,
+				promoteNext: async () => {
+					calls += 1;
+					if (calls === 1)
+						throw new FullHistoryLedgerObservationsMissingError({
+							checkpointLedger: 127,
+							ledgerObjectRemoteId: 'source',
+							expectedLedgerCount: 64,
+							observedLedgerCount: 0
+						});
+					return {
+						checkpointLedger: 127,
+						nextLedger: '64',
+						status: 'proof-pending'
+					};
+				},
+				shouldStop: () => stopped,
+				wait: async (milliseconds) => {
+					waits.push(milliseconds);
+					if (milliseconds === 1_000) stopped = true;
+					else expect(calls).toBe(1);
+				}
+			}
+		);
+		expect(calls).toBe(2);
+		expect(heartbeat).toHaveBeenCalledTimes(10);
+		expect(waits).toEqual([...Array<number>(10).fill(30_000), 1_000]);
+		expect(events.map((event) => event.status)).toEqual([
+			'cycle-failed',
+			'proof-pending'
+		]);
+		expect(events[0]?.errorCode).toBe('promotion-parsed-projection-missing');
 	});
 
 	it('does not back off or report a failure after shutdown starts', async () => {

@@ -3,6 +3,7 @@ import type { EntityManager } from 'typeorm';
 import type { HistoryArchiveCheckpointCoverageV1 } from 'shared';
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
+import { queryHistoryArchiveSummary } from './HistoryArchiveSummaryReadQuery.js';
 
 type CheckpointCoverageRow = {
 	readonly activeArchiveCheckpoints?: NumericValue;
@@ -50,9 +51,11 @@ export async function getCheckpointCoverage(
 		scope === 'public-sources'
 			? publicCheckpointCoverageSql
 			: checkpointCoverageSql;
-	const [row] = (await manager.query(sql, [
-		archiveUrlIdentity
-	])) as readonly CheckpointCoverageRow[];
+	const [row] = await queryHistoryArchiveSummary<CheckpointCoverageRow>(
+		manager,
+		sql,
+		[archiveUrlIdentity]
+	);
 
 	return {
 		activeArchiveCheckpoints: numberField(row, 'activeArchiveCheckpoints'),

@@ -216,7 +216,7 @@ describe('PromoteFullHistoryCheckpoint with exact Postgres evidence', () => {
 			[seeded.sourceIds.ledger]
 		);
 		await expect(promoter.promote(seeded.target)).rejects.toMatchObject({
-			reason: 'candidate-incomplete'
+			reason: 'parsed-projection-missing'
 		});
 		expect(await canonicalCounts(seeded.proofId)).toMatchObject({ batches: 0 });
 	});

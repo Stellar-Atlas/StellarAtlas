@@ -87,6 +87,17 @@ export class TypeOrmFullHistoryPromotionRuntimeRepository implements FullHistory
 		);
 	}
 
+	async heartbeat(
+		networkPassphrase: string,
+		instanceId: string
+	): Promise<void> {
+		await this.updateOwned(
+			networkPassphrase,
+			instanceId,
+			`"heartbeat_at" = now()`
+		);
+	}
+
 	async recordFailure(
 		networkPassphrase: string,
 		instanceId: string,
