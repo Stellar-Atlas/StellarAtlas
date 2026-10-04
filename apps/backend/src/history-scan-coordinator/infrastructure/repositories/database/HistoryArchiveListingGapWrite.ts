@@ -21,7 +21,7 @@ export async function persistHistoryArchiveListingGap(
 			join history_archive_state_snapshot state
 				on state."archiveUrlIdentity" = object."archiveUrlIdentity"
 			where object."remoteId" = $1::uuid and object.status = 'failed'
-				and object."objectType" = 'checkpoint-state' and object."httpStatus" in (403, 404)
+				and object."objectType" = 'checkpoint-state' and object."httpStatus" in (403, 404, 410)
 				and object."failureChannel" in ('archive_evidence', 'archive_availability')
 				and object."archiveUrlIdentity" = $2::text
 				and object."checkpointLedger" = $3::integer

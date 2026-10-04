@@ -19,7 +19,7 @@ const downloadPermit = { acquire: async () => () => undefined };
 
 describe('ArchiveObjectCategoryVerifier', () => {
 	it.each([403, 404])(
-		'preserves checkpoint HTTP %s when bounded public listings do not establish a gap',
+		'does not run unleased listings for checkpoint HTTP %s',
 		async (status) => {
 			const fetcher = jest
 				.spyOn(globalThis, 'fetch')
@@ -64,12 +64,74 @@ describe('ArchiveObjectCategoryVerifier', () => {
 					failureChannel: 'archive_availability'
 				});
 				expect(failure.listingGap).toBeUndefined();
-				expect(fetcher).toHaveBeenCalled();
-				expect(acquire).toHaveBeenCalledTimes(2);
+				expect(fetcher).not.toHaveBeenCalled();
+				expect(acquire).toHaveBeenCalledTimes(1);
 			} finally {
 				fetcher.mockRestore();
 				await verifier.close();
 			}
+		}
+	);
+
+	it.each([404, 410])(
+		'uses the shared HTTP client for a leased %s listing pass',
+		async (status) => {
+			const httpService = mock<HttpService>();
+			httpService.get
+				.mockResolvedValue(
+					err(
+						new HttpError('Unavailable', undefined, {
+							data: 'AccessDenied',
+							headers: {},
+							status: 403,
+							statusText: 'Forbidden'
+						})
+					)
+				)
+				.mockResolvedValueOnce(
+					err(
+						new HttpError('Missing', undefined, {
+							data: {},
+							headers: {},
+							status,
+							statusText: 'Missing'
+						})
+					)
+				);
+			const acquire = jest.fn(async () => () => undefined);
+			const verifier = new ArchiveObjectCategoryVerifier(
+				httpService,
+				mock<ScanCoordinatorService>(),
+				mock<HistoryArchiveStateValidator>(),
+				mock<ExceptionLogger>(),
+				1,
+				() => undefined,
+				flushProgress,
+				{ acquire }
+			);
+			const root = `https://storage.googleapis.com/leased-${status}`;
+			const failure = (
+				await verifier.verifyCheckpointState(
+					createObjectJob({
+						allowListingDiscovery: true,
+						archiveUrl: root,
+						objectType: 'checkpoint-state',
+						objectUrl: root + '/history/00/00/00/history-0000003f.json'
+					})
+				)
+			)._unsafeUnwrapErr();
+			expect(failure.httpStatus).toBe(status);
+			expect(failure.listingGap).toBeUndefined();
+			expect(failure.listingCapability?.status).toBe('inconclusive');
+			expect(httpService.get.mock.calls.length).toBeGreaterThan(1);
+			expect(httpService.get.mock.calls.length).toBeLessThanOrEqual(13);
+			expect(httpService.get.mock.calls[1]?.[1]).toMatchObject({
+				maxContentLength: 65536,
+				maxRedirects: 0,
+				requestTimeoutMs: 5000
+			});
+			expect(acquire).toHaveBeenCalledTimes(2);
+			await verifier.close();
 		}
 	);
 

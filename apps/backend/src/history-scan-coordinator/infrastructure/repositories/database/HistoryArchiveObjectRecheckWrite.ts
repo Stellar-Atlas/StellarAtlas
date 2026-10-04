@@ -77,11 +77,20 @@ const selectReadyObjectSql = `
 	for update
 `;
 
+// A new explicit request can confirm an old ambiguous, unpublished token.
+// Never retag an already published execution or change its fence.
+const confirmUnpublishedManualRecheckSql = `
+	update "history_archive_object_ready"
+	set "recheckRequestedAt" = $2, "dispatchToken" = coalesce("dispatchToken", gen_random_uuid()),
+		"updatedAt" = now()
+	where "objectRemoteId" = $1 and "publishedAt" is null and "claimAttempt" is null
+`;
+
 const insertReadyObjectSql = `
 	insert into "history_archive_object_ready" (
 		"objectRemoteId", "archiveUrlIdentity", priority, "availableAt", "dispatchToken",
-		"createdAt", "updatedAt"
-	) values ($1, $2, $3, $4, gen_random_uuid(), $4, $4)
+		"recheckRequestedAt", "createdAt", "updatedAt"
+	) values ($1, $2, $3, $4, gen_random_uuid(), $4, $4, $4)
 	on conflict do nothing
 	returning "objectRemoteId"
 `;
@@ -126,6 +135,10 @@ export async function requestHistoryArchiveObjectRecheck(
 
 		const ready = await findReadyObject(manager, target.remoteId);
 		if (ready?.objectRemoteId === target.remoteId) {
+			await manager.query(confirmUnpublishedManualRecheckSql, [
+				target.remoteId,
+				requestedAt
+			]);
 			return alreadyQueued(target.remoteId, eligibleAt);
 		}
 		if (ready !== undefined) {

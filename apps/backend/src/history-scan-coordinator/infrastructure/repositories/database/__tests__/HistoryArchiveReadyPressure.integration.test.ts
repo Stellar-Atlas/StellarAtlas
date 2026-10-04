@@ -5,7 +5,7 @@ import {
 } from '@test-support/DisposablePostgres.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import {
-	historyArchiveMaximumWatermark,
+	historyArchiveMinimumWatermark,
 	calculateHistoryArchivePlanningPressure
 } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
@@ -29,7 +29,7 @@ describe('saturated archive pressure in disposable PostgreSQL', () => {
 			create table full_history_promotion_runtime (network_passphrase_hash bytea, checkpoint_ledger bigint, state text, last_outcome text, last_error_code text);
 			create table full_history_watermark (network_passphrase_hash bytea, first_ledger bigint);
 			create table full_history_historical_backfill_job (id uuid, network_passphrase_hash bytea, first_checkpoint_ledger bigint, last_checkpoint_ledger bigint, state text, created_at timestamptz);
-			create table history_archive_object_claim_slot (slot integer, "objectRemoteId" uuid);
+			create table if not exists history_archive_object_claim_slot (slot integer, "objectRemoteId" uuid);
 			create table history_archive_object_ready ("objectRemoteId" uuid primary key, "archiveUrlIdentity" text not null default '', priority smallint not null default 2, "publishedAt" timestamptz, "dispatchToken" uuid, "availableAt" timestamptz);
 			create table if not exists history_archive_checkpoint_content_observation ("archiveUrlIdentity" text, "checkpointLedger" integer, "contentDigest" text, "checkpointStateObjectRemoteId" uuid, "createdAt" timestamptz);
 			create table if not exists history_archive_checkpoint_content ("contentDigest" text, "bucketSetDigest" text);
@@ -48,11 +48,12 @@ describe('saturated archive pressure in disposable PostgreSQL', () => {
 		await resetKnownEvidence(db);
 	});
 	it.each([
-		[historyArchiveMaximumWatermark - 1, false],
-		[historyArchiveMaximumWatermark, true],
-		[historyArchiveMaximumWatermark + 5, true]
+		[127, false],
+		[128, false],
+		[129, true],
+		[565, true]
 	])(
-		'reports saturation truthfully with %i ready objects',
+		'reports bounded pressure truthfully with %i ready objects',
 		async (count, capped) => {
 			const objects = Array.from({ length: count as number }, (_, i) => {
 				const object = createEvidenceObject(
@@ -76,16 +77,17 @@ describe('saturated archive pressure in disposable PostgreSQL', () => {
 				recentCompletions: null;
 			}[];
 			expect(row).toEqual({
-				outstandingObjects: Math.min(
-					count as number,
-					historyArchiveMaximumWatermark
-				),
+				outstandingObjects: Math.min(count as number, 129),
 				outstandingObjectsCapped: capped,
-				pressureUnavailable: false,
+				pressureUnavailable: capped,
 				recentCompletions: null
 			});
 			const pressure = calculateHistoryArchivePlanningPressure(row!);
-			expect(pressure.availableSlots).toBe(0);
+			expect(pressure.availableSlots).toBe(
+				capped
+					? 0
+					: Math.max(0, historyArchiveMinimumWatermark - (count as number))
+			);
 			if (capped) expect(pressure.outstandingObjectsCapped).toBe(true);
 		}
 	);
@@ -111,6 +113,32 @@ describe('saturated archive pressure in disposable PostgreSQL', () => {
 			outstandingObjectsCapped: true,
 			pressureUnavailable: true,
 			recentCompletions: null
+		});
+		expect(calculateHistoryArchivePlanningPressure(row).availableSlots).toBe(0);
+	});
+	it('reports unknown rather than free capacity for a cooled bounded prefix', async () => {
+		const objects = Array.from({ length: 130 }, (_, i) => {
+			const object = createEvidenceObject(
+				`https://cooled-${i}.example`,
+				'root',
+				'history-archive-state',
+				'pending'
+			);
+			object.checkpointLedger = null;
+			return object;
+		});
+		await db.getRepository(HistoryArchiveObject).save(objects);
+		await db.query(`insert into history_archive_object_ready
+			("objectRemoteId","archiveUrlIdentity",priority,"availableAt","dispatchToken")
+			select "remoteId","archiveUrlIdentity",0,now(),gen_random_uuid() from history_archive_object_queue`);
+		await db.query(`insert into history_archive_root_failure_control
+			("archiveUrlIdentity",scope,"failureKind","blockedUntil")
+			select "archiveUrlIdentity",'*','auth',now()+interval '1 hour' from history_archive_object_queue`);
+		const [row] = await db.query(buildHistoryArchiveReadyPressureSql(2));
+		expect(row).toMatchObject({
+			outstandingObjects: 0,
+			outstandingObjectsCapped: true,
+			pressureUnavailable: true
 		});
 		expect(calculateHistoryArchivePlanningPressure(row).availableSlots).toBe(0);
 	});

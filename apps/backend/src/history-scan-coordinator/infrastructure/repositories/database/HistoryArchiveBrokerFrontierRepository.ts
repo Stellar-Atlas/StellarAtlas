@@ -1,5 +1,10 @@
 import type { DataSource, EntityManager } from 'typeorm';
-import { admitDailyTransientSourceRetries } from './HistoryArchiveTransientSourceRetry.js';
+import { historyArchiveRootControlAllowedSql } from './HistoryArchiveRootFailureControl.js';
+import { maintainHistoryArchiveAdaptiveProbes } from './HistoryArchiveAdaptiveProbeMaintenance.js';
+import {
+	admitDailyTransientSourceRetries,
+	historyArchiveManualOrAutomaticSourceRetrySql
+} from './HistoryArchiveTransientSourceRetry.js';
 import { recoverMissingFrontierReady } from './HistoryArchiveMissingFrontierReady.js';
 import { withBoundedArchiveBrokerMaintenance } from './BoundedArchiveBrokerMaintenance.js';
 import {
@@ -35,12 +40,14 @@ export interface HistoryArchiveBrokerJob {
 		readonly objectType: HistoryArchiveObjectType;
 		readonly objectUrl: string;
 		readonly remoteId: string;
+		readonly allowListingDiscovery?: boolean;
 	};
 	readonly priority: HistoryArchiveBrokerPriority;
 	readonly selectedOrdinal: number;
 }
 
 interface BrokerJobRow {
+	readonly allowListingDiscovery?: boolean;
 	readonly archiveUrl: string;
 	readonly bucketHash: string | null;
 	readonly checkpointLedger: number | string | null;
@@ -56,6 +63,11 @@ interface BrokerJobRow {
 
 const findPublishedBrokerJobsSql = `
 	select published."dispatchToken", published."claimAttempt",
+		exists (select 1 from history_archive_root_failure_control control
+			where control."archiveUrlIdentity"=published."archiveUrlIdentity"
+				and control.scope='checkpoint-state' and control."failureKind"='missing'
+				and control."consecutiveFailures">=3 and control."probeExecutionId"=published."dispatchToken"
+				and (control."listingCheckedAt" is null or control."listingCheckedAt"<=now()-interval '24 hours')) as "allowListingDiscovery",
 		published.priority,
 		(row_number() over (
 			order by published.priority, published."updatedAt",
@@ -68,13 +80,15 @@ const findPublishedBrokerJobsSql = `
 		select ready."dispatchToken", ready."claimAttempt",
 			ready.priority,
 			ready."updatedAt", ready."objectRemoteId",
-			object."remoteId", object."archiveUrl", object."objectType",
+			object."remoteId", object."archiveUrl", object."archiveUrlIdentity", object."objectType",
 			object."objectKey", object."objectUrl",
 			object."checkpointLedger", object."bucketHash"
 		from "history_archive_object_ready" ready
 		join "history_archive_object_queue" object
 			on object."remoteId" = ready."objectRemoteId"
 		where ready."publishedAt" is not null
+			and ${historyArchiveManualOrAutomaticSourceRetrySql('object', 'ready')}
+			and ${historyArchiveRootControlAllowedSql('object', 'ready')}
 			and ready."dispatchToken" is not null
 			and ready."claimAttempt" is not null
                         and ready."claimAttempt" = object.attempts + 1
@@ -105,6 +119,7 @@ const requeueOrphanedPublishedBrokerJobsSql = `
 		update "history_archive_object_ready" ready
 		set "publishedAt" = null,
 			"dispatchToken" = null,
+			"recheckRequestedAt" = null,
 			"claimAttempt" = null,
 			"updatedAt" = now()
 		from orphaned
@@ -154,7 +169,8 @@ function mapBrokerJob(row: BrokerJobRow): HistoryArchiveBrokerJob {
 			objectKey: row.objectKey,
 			objectType: row.objectType,
 			objectUrl: row.objectUrl,
-			remoteId: row.remoteId
+			remoteId: row.remoteId,
+			allowListingDiscovery: row.allowListingDiscovery === true
 		},
 		priority: requirePriority(row.priority),
 		selectedOrdinal: requirePositiveInteger(
@@ -289,6 +305,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 		canonicalFirstRoot: string | null = null
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
+		await this.maintainAdaptiveProbes(limit);
 		return await this.dataSource.transaction(async (manager) => {
 			await this.takeDispatcherLock(manager);
 			// Ephemeral fairness only: no sequence/table write per dispatch. The
@@ -308,6 +325,20 @@ export class HistoryArchiveBrokerFrontierRepository {
 			])) as readonly BrokerJobRow[];
 			return mapAndOrderBrokerJobs(rows);
 		});
+	}
+
+	private nextAdaptiveMaintenanceAt = 0;
+	private async maintainAdaptiveProbes(limit: number): Promise<void> {
+		if (Date.now() < this.nextAdaptiveMaintenanceAt) return;
+		this.nextAdaptiveMaintenanceAt = Date.now() + 1_000;
+		const result = await withBoundedArchiveBrokerMaintenance(
+			this.dataSource,
+			(manager) =>
+				maintainHistoryArchiveAdaptiveProbes(manager, Math.min(limit, 16)),
+			-1,
+			this.onMaintenanceDeferred
+		).catch(() => -1);
+		if (result < 0) this.nextAdaptiveMaintenanceAt = Date.now() + 60_000;
 	}
 
 	async findPublishedJobs(

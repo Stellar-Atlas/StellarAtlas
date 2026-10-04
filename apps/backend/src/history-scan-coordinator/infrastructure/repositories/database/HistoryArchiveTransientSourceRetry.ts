@@ -59,6 +59,22 @@ export function historyArchiveAllowsAutomaticSourceRetrySql(
 		and ${alias}."httpStatus" not in (408, 425, 429), false)`;
 }
 
+/** Tokens identify executions, not user intent. Only an explicit, unconsumed
+ * manual request may bypass the definitive-source-failure automatic retry gate. */
+export function historyArchiveManualOrAutomaticSourceRetrySql(
+	objectAlias: string,
+	readyAlias: string
+): string {
+	if (!/^[a-z_][a-z0-9_]*$/i.test(readyAlias))
+		throw new Error('Invalid ready SQL alias');
+	return `(${historyArchiveAllowsAutomaticSourceRetrySql(objectAlias)} or (
+		${readyAlias}."recheckRequestedAt" is not null
+		and ${readyAlias}."dispatchToken" is not null
+		and (${readyAlias}."claimAttempt" is null
+			or ${readyAlias}."claimAttempt" = ${objectAlias}.attempts + 1)
+	))`;
+}
+
 export const currentTransientSourceFailureSql = `(object.status = 'failed'
 	and ${historyArchiveTransientSourceFailureSql('object')})`;
 
@@ -137,7 +153,8 @@ export const admitTransientSourceRetriesSql = `
 						and finding."retainedOnly" and ${historyArchiveTransientSourceFailureSql('finding')}))
 	), promoted as (
 		update history_archive_object_ready ready set priority = 0,
-			"availableAt" = now(), "dispatchToken" = gen_random_uuid(), "updatedAt" = now()
+			"availableAt" = now(), "dispatchToken" = gen_random_uuid(),
+			"recheckRequestedAt" = null, "updatedAt" = now()
 		from eligible join ready_lockable on ready_lockable."objectRemoteId" = eligible."remoteId"
 		where ready."objectRemoteId" = ready_lockable."objectRemoteId"
 		returning ready."objectRemoteId"

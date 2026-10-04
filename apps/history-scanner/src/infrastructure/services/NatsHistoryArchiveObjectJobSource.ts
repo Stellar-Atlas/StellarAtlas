@@ -53,6 +53,11 @@ function requireString(value: unknown, field: string): string {
 
 function parseJob(value: unknown): HistoryArchiveObjectJobDTO {
 	if (!isRecord(value)) throw new Error('Invalid archive broker job');
+	if (
+		value.allowListingDiscovery !== undefined &&
+		typeof value.allowListingDiscovery !== 'boolean'
+	)
+		throw new Error('Invalid archive broker field: job.allowListingDiscovery');
 	const objectType = requireString(value.objectType, 'job.objectType');
 	if (!objectTypes.has(objectType))
 		throw new Error('Invalid archive broker field: job.objectType');
@@ -64,6 +69,7 @@ function parseJob(value: unknown): HistoryArchiveObjectJobDTO {
 		throw new Error('Invalid archive broker field: job.claimAttempt');
 
 	return {
+		allowListingDiscovery: value.allowListingDiscovery === true,
 		archiveUrl: requireString(value.archiveUrl, 'job.archiveUrl'),
 		bucketHash: requireNullableString(value.bucketHash, 'job.bucketHash'),
 		checkpointLedger: requireNullableNumber(

@@ -102,6 +102,10 @@ export interface HistoryArchiveObjectTransitionCompletion {
 }
 
 export interface HistoryArchiveObjectFailure {
+	readonly listingCapability?: {
+		readonly status: 'supported' | 'unsupported' | 'inconclusive';
+		readonly observedAt: string;
+	};
 	readonly listingGap?: HistoryArchiveListingGapDTO;
 	readonly claimAttempt: number;
 	readonly errorMessage: string;

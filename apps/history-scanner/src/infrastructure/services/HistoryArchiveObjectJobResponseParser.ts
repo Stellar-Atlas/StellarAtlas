@@ -16,6 +16,8 @@ export function parseHistoryArchiveObjectJobDTO(
 	}
 
 	if (
+		(response.allowListingDiscovery !== undefined &&
+			typeof response.allowListingDiscovery !== 'boolean') ||
 		typeof response.archiveUrl !== 'string' ||
 		typeof response.claimAttempt !== 'number' ||
 		!Number.isSafeInteger(response.claimAttempt) ||
@@ -57,6 +59,7 @@ export function parseHistoryArchiveObjectJobDTO(
 	}
 
 	return ok({
+		allowListingDiscovery: response.allowListingDiscovery === true,
 		archiveUrl: response.archiveUrl,
 		bucketHash: bucketHash ?? null,
 		checkpointLedger: checkpointLedger ?? null,

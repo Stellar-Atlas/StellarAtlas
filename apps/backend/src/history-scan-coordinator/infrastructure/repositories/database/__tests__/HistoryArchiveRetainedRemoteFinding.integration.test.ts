@@ -37,9 +37,10 @@ describe('retained unresolved source findings (PostgreSQL)', () => {
 		);
 		await database.query(`
 			create table history_archive_object_ready (
-				"objectRemoteId" uuid primary key, "dispatchToken" uuid, "claimAttempt" integer
+				"objectRemoteId" uuid primary key, "dispatchToken" uuid, "claimAttempt" integer,
+				"publishedAt" timestamptz
 			);
-			create table history_archive_object_claim_slot (
+			create table if not exists history_archive_object_claim_slot (
 				slot integer primary key, "objectRemoteId" uuid, "claimAttempt" integer,
 				"claimedAt" timestamptz, "updatedAt" timestamptz
 			);

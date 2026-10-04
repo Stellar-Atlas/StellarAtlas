@@ -80,7 +80,7 @@ function harness(
 	};
 }
 
-it.each([403, 404])(
+it.each([403, 404, 410])(
 	'records a four-category gap after object HTTP %s only from complete bounded listings',
 	async (observedHttpStatus) => {
 		const h = harness();
@@ -261,7 +261,7 @@ it('requires the failed URL to match the declared archive root and exact checkpo
 	expect(h.resolver).not.toHaveBeenCalled();
 });
 
-it.each([401, 200, 410, 429, 500])(
+it.each([401, 200, 429, 500])(
 	'does not probe listing capability for original HTTP %s',
 	async (observedHttpStatus) => {
 		const h = harness();

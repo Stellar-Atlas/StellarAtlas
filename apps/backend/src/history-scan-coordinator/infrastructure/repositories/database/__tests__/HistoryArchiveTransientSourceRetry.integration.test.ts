@@ -29,6 +29,7 @@ describe('bounded daily transient-source retry sweep', () => {
 			"objectRemoteId" uuid primary key, "archiveUrlIdentity" text not null,
 			priority smallint not null, "availableAt" timestamptz not null,
 			"dispatchToken" uuid, "claimAttempt" integer, "publishedAt" timestamptz,
+			"recheckRequestedAt" timestamptz,
 			"createdAt" timestamptz not null default now(), "updatedAt" timestamptz not null
 		)`);
 		await db.query(historyArchiveTransientSourceRetrySchemaSql);

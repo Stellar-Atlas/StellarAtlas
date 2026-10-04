@@ -1,4 +1,6 @@
 import { DataSource } from 'typeorm';
+import { historyArchiveRootFailureControlSchemaSql } from '../HistoryArchiveRootFailureControl.js';
+import { HistoryArchiveManualRecheckIntentMigration1791088200000 } from '../../../database/migrations/1791088200000-HistoryArchiveManualRecheckIntentMigration.js';
 import { HistoryArchiveCheckpointScanCoverageMigration1788831000000 } from '../../../database/migrations/1788831000000-HistoryArchiveCheckpointScanCoverageMigration.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
@@ -26,6 +28,7 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 		url
 	});
 	await dataSource.initialize();
+	await dataSource.query(historyArchiveRootFailureControlSchemaSql);
 	const queryRunner = dataSource.createQueryRunner();
 	await new HistoryArchiveCheckpointScanCoverageMigration1788831000000().up(
 		queryRunner
@@ -42,6 +45,9 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 		await new HistoryArchiveReadyQueueMigration1785270000000().up(queryRunner);
 		await new HistoryArchiveClaimLeaseMigration1785340000000().up(queryRunner);
 		await new HistoryArchiveBrokerFrontierMigration1785440000000().up(
+			queryRunner
+		);
+		await new HistoryArchiveManualRecheckIntentMigration1791088200000().up(
 			queryRunner
 		);
 		await queryRunner.commitTransaction();
@@ -174,6 +180,7 @@ export function bucketObject(
 export async function resetHistoryArchiveObjectQueue(
 	dataSource: DataSource
 ): Promise<void> {
+	await dataSource.query('truncate history_archive_root_failure_control');
 	await dataSource.query(
 		'truncate history_archive_checkpoint_scan_bitmap, history_archive_checkpoint_scan_summary, history_archive_checkpoint_scan_seed_state'
 	);

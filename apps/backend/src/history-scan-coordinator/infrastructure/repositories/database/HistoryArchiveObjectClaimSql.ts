@@ -2,7 +2,10 @@ import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObj
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 import { historyArchiveRetryLaneDivisor } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
 import { historyArchiveRetainedInconclusiveRetrySql } from './HistoryArchiveInconclusiveRetrySql.js';
-import { historyArchiveAllowsAutomaticSourceRetrySql } from './HistoryArchiveTransientSourceRetry.js';
+import {
+	historyArchiveAllowsAutomaticSourceRetrySql,
+	historyArchiveManualOrAutomaticSourceRetrySql
+} from './HistoryArchiveTransientSourceRetry.js';
 import { historyArchiveHostScanAllowedSql } from '../../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 
 const claimGateKeySql =
@@ -192,7 +195,9 @@ export const historyArchiveObjectClaimSql = `
 		left join active_by_host host_activity
 			on host_activity."hostIdentity" = candidate."hostIdentity"
 		where ready."availableAt" <= now()
+			and ${historyArchiveRootControlAllowedSql('candidate')}
 			and ${historyArchiveHostScanAllowedSql('candidate')}
+			and ${historyArchiveManualOrAutomaticSourceRetrySql('candidate', 'ready')}
 			and candidate."objectType" = any($1)
 			and (
 				${pendingReadySql}
@@ -235,6 +240,12 @@ export const historyArchiveObjectClaimSql = `
 				hashtextextended(selected."hostIdentity", 104729)
 			) as locked
 		from selected
+	), root_control_lockable as materialized (
+		select control.* from history_archive_root_failure_control control
+		where exists (select 1 from host_gate where host_gate.locked
+			and control."archiveUrlIdentity"=host_gate."archiveUrlIdentity"
+			and control.scope in ('*',host_gate."objectType"))
+		order by control."archiveUrlIdentity",control.scope for update of control
 	), claimed as (
 		update "history_archive_object_queue" candidate
 		set status = 'scanning',
@@ -255,7 +266,21 @@ export const historyArchiveObjectClaimSql = `
 		from host_gate
 		where host_gate.locked
 			and candidate.id = host_gate.id
+			and not exists (select 1 from root_control_lockable control
+				where control."archiveUrlIdentity"=host_gate."archiveUrlIdentity"
+					and control.scope in ('*',host_gate."objectType")
+					and (control."blockedUntil">now() or control."probeLeaseUntil">now()))
 		returning candidate.*
+	), root_probes_leased as (
+		update history_archive_root_failure_control control set
+			"probeExecutionId"=gen_random_uuid(),"probeLeaseUntil"=now()+interval '2 minutes',
+			version=control.version+1,"updatedAt"=now()
+		from claimed,root_control_lockable locked
+		where control."archiveUrlIdentity"=claimed."archiveUrlIdentity"
+			and control.scope in ('*',claimed."objectType")
+			and locked."archiveUrlIdentity"=control."archiveUrlIdentity" and locked.scope=control.scope
+			and (control."blockedUntil" is not null or coalesce(jsonb_array_length(control."adaptiveProbeState"->'unknown'),0)>0)
+		returning control."archiveUrlIdentity"
 	), occupied_slot as (
 		update "history_archive_object_claim_slot" slot
 		set "objectRemoteId" = claimed."remoteId",
@@ -288,3 +313,4 @@ export const historyArchiveObjectClaimSql = `
 	left join host_gate on true
 	left join committed_claim on true
 `;
+import { historyArchiveRootControlAllowedSql } from './HistoryArchiveRootFailureControl.js';

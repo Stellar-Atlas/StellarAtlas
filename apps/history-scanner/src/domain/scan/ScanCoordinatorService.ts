@@ -10,6 +10,7 @@ import {
 import type { HistoryArchiveObjectTypeDTO } from 'history-scanner-dto';
 import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
 import type { HistoryArchiveListingGapDTO } from 'history-scanner-dto';
+import type { HistoryArchiveListingCapabilityDTO } from 'history-scanner-dto';
 import type {
 	HistoryArchiveContentReuseRequestV1,
 	HistoryArchiveContentReuseV1,
@@ -28,6 +29,7 @@ export interface ScanJobProgressDTO {
 }
 
 export interface HistoryArchiveObjectJobDTO {
+	readonly allowListingDiscovery?: boolean;
 	readonly archiveUrl: string;
 	readonly bucketHash: string | null;
 	readonly checkpointLedger: number | null;
@@ -53,6 +55,7 @@ export interface HistoryArchiveObjectCompletionDTO extends HistoryArchiveObjectP
 }
 
 export interface HistoryArchiveObjectFailureDTO {
+	readonly listingCapability?: HistoryArchiveListingCapabilityDTO;
 	readonly listingGap?: HistoryArchiveListingGapDTO;
 	readonly claimAttempt?: number;
 	readonly executionId?: string;

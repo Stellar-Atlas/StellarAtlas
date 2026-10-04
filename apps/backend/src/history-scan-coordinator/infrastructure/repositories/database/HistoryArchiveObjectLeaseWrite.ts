@@ -1,4 +1,5 @@
 import { resolveVerifiedRemoteFindingsSql } from './HistoryArchiveRetainedRemoteFindingSql.js';
+import { clearRootFailureOnVerifiedCteSql } from './HistoryArchiveRootFailureControl.js';
 import type { Repository } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type {
@@ -278,7 +279,8 @@ export const historyArchiveObjectVerifiedBatchSql = `
         with input as materialized (
                 ${historyArchiveCompletionInputSql}
         ), eligible as materialized (
-                select input.*
+                select input.*,coalesce((select ready."publishedAt" from history_archive_object_ready ready
+                  where ready."objectRemoteId"=input."remoteId"),object."claimedAt") as "attemptStartedAt"
                 from input
                 join "history_archive_object_queue" object
                         on object."remoteId" = input."remoteId"
@@ -386,6 +388,7 @@ export const historyArchiveObjectVerifiedBatchSql = `
                         object."archiveUrlIdentity", object."objectType", object."checkpointLedger",
                         eligible."claimAttempt",
                         eligible."executionId",
+                        eligible."attemptStartedAt",
                         eligible.scheduler
         ), claim_slots_cleared as (
                 update "history_archive_object_claim_slot" slot
@@ -403,7 +406,7 @@ export const historyArchiveObjectVerifiedBatchSql = `
                 using broker_ready_lockable lockable
                 where ready."objectRemoteId" = lockable."objectRemoteId"
                 returning ready."objectRemoteId"
-        )
+        ), ${clearRootFailureOnVerifiedCteSql}
         select updated."remoteId", updated."archiveUrlIdentity", updated."objectType", updated."checkpointLedger"
         from updated
 `;

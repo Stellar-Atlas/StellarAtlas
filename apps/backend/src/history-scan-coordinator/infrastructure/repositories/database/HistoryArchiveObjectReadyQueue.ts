@@ -1,4 +1,5 @@
 import type { EntityManager } from 'typeorm';
+import { historyArchiveRootControlAllowedSql } from './HistoryArchiveRootFailureControl.js';
 import { historyArchiveMaximumWatermark } from '../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	historyArchiveHostScanAllowedSql,
@@ -366,6 +367,7 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 		)
 		${canonicalAdmission}
 		and ${historyArchiveHostScanAllowedSql('object')}
+		and (queued."publishedAt" is not null or ${historyArchiveRootControlAllowedSql('object')})
 		-- Admission cannot use capacity beyond this ceiling. Stop once full;
 		-- callers expose saturation instead of claiming an exact global total.
 		limit ${historyArchiveMaximumWatermark}::integer
@@ -451,6 +453,7 @@ export async function requeueFailedHistoryArchiveBrokerReadyRow(
 	await manager.query(
 		`update "history_archive_object_ready"
                  set "dispatchToken" = null,
+                     "recheckRequestedAt" = null,
                      "claimAttempt" = null,
                      "publishedAt" = null,
                      "availableAt" = coalesce($4::timestamptz, now()),

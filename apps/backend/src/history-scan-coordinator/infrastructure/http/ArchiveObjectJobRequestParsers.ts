@@ -1,5 +1,8 @@
 import type express from 'express';
-import { isHistoryArchiveListingGapDTO } from 'history-scanner-dto';
+import {
+	isHistoryArchiveListingGapDTO,
+	isHistoryArchiveListingCapabilityDTO
+} from 'history-scanner-dto';
 import {
 	isArchiveMetadataDTO,
 	isHistoryArchiveObjectFailureChannelDTO
@@ -198,10 +201,20 @@ export function parseArchiveObjectFailure(
 		res.status(400).json({ error: 'listingGap is invalid' });
 		return null;
 	}
+	if (
+		body.listingCapability !== undefined &&
+		!isHistoryArchiveListingCapabilityDTO(body.listingCapability)
+	) {
+		res.status(400).json({ error: 'listingCapability is invalid' });
+		return null;
+	}
 	return {
 		claimAttempt,
 		...schedulerFields,
 		...(body.listingGap === undefined ? {} : { listingGap: body.listingGap }),
+		...(body.listingCapability === undefined
+			? {}
+			: { listingCapability: body.listingCapability }),
 		errorMessage: body.errorMessage,
 		errorType: body.errorType,
 		failureChannel: body.failureChannel,

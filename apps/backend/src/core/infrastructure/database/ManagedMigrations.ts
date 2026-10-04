@@ -198,6 +198,10 @@ export const managedMigrations = [
 	HistoryArchiveListingGapMigration1788735600000,
 	HistoryArchiveCheckpointScanCoverageMigration1788831000000,
 	HistoryArchiveFailureSummarySnapshotMigration1788832000000,
-	HistoryArchiveTransientSourceRetryMigration1791072000000
+	HistoryArchiveTransientSourceRetryMigration1791072000000,
+	HistoryArchiveManualRecheckIntentMigration1791088200000,
+	HistoryArchiveRootFailureControlMigration1791096000000
 ] as const;
 import { HistoryArchiveTransientSourceRetryMigration1791072000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791072000000-HistoryArchiveTransientSourceRetryMigration.js';
+import { HistoryArchiveManualRecheckIntentMigration1791088200000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791088200000-HistoryArchiveManualRecheckIntentMigration.js';
+import { HistoryArchiveRootFailureControlMigration1791096000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791096000000-HistoryArchiveRootFailureControlMigration.js';

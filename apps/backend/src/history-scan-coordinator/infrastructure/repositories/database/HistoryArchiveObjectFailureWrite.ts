@@ -17,6 +17,10 @@ import { isHistoryArchiveInconclusiveTransportFailure } from 'shared';
 import { historyArchiveInconclusiveMaximumAttempts } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
 import { persistHistoryArchiveListingGap } from './HistoryArchiveListingGapWrite.js';
 import {
+	classifyRootFailure,
+	recordRootFailureSql
+} from './HistoryArchiveRootFailureControl.js';
+import {
 	recordAcceptedHistoryArchiveCheckpointScans,
 	type HistoryArchiveCheckpointScanTerminalRow
 } from './HistoryArchiveCheckpointScanCoverageWrite.js';
@@ -75,10 +79,29 @@ export async function markHistoryArchiveObjectFailed(
 					claimAttempt: failure.claimAttempt
 				});
 		}
-		const result = await query
-			.returning(['archiveUrlIdentity', 'objectType', 'checkpointLedger'])
-			.execute();
-		if ((result.affected ?? 0) === 0) return false;
+		const [updateSql, parameters] = query
+			.returning(
+				`"archiveUrlIdentity", "objectType", "checkpointLedger", "httpStatus",
+			coalesce((select ready."publishedAt" from history_archive_object_ready ready
+				where ready."objectRemoteId"="history_archive_object_queue"."remoteId"),"claimedAt") as "attemptStartedAt",
+			(select ready."dispatchToken" from history_archive_object_ready ready
+				where ready."objectRemoteId"="history_archive_object_queue"."remoteId") as "executionId"`
+			)
+			.getQueryAndParameters();
+		const classification = classifyRootFailure(failure);
+		const rows = (await manager.query(
+			recordRootFailureSql(updateSql, `$${parameters.length + 1}`),
+			[
+				...parameters,
+				JSON.stringify({
+					kind: classification?.kind ?? null,
+					rootWide: classification?.rootWide ?? false,
+					retryAfterSeconds: failure.retryAfterSeconds ?? null,
+					listingStatus: failure.listingCapability?.status ?? null
+				})
+			]
+		)) as readonly HistoryArchiveCheckpointScanTerminalRow[];
+		if (rows.length === 0) return false;
 		const listingRanges =
 			failure.listingGap === undefined
 				? []
@@ -89,7 +112,7 @@ export async function markHistoryArchiveObjectFailed(
 					);
 		await recordAcceptedHistoryArchiveCheckpointScans(
 			manager,
-			result.raw as readonly HistoryArchiveCheckpointScanTerminalRow[],
+			rows,
 			listingRanges
 		);
 		if (failure.scheduler !== 'broker') {
