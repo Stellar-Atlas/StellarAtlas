@@ -188,11 +188,18 @@ export function knownArchiveFailurePageSql(
 			select candidate."createdAt", candidate."remoteId"
 			from requested_roots requested_root
 			cross join lateral (
-				select archive_object."createdAt", archive_object."remoteId"
-				from history_archive_object_queue archive_object
-				where ${knownArchiveFailureCandidateFilterSql(kind)}
-				order by archive_object."createdAt" desc,
-					archive_object."remoteId" desc
+				-- Select failed objects before ordering. Otherwise LIMIT can make
+				-- PostgreSQL walk the full chronological object index looking for
+				-- rare failures, fetching millions of healthy objects first.
+				with failed_candidates as materialized (
+					select archive_object."createdAt", archive_object."remoteId"
+					from history_archive_object_queue archive_object
+					where ${knownArchiveFailureCandidateFilterSql(kind)}
+				)
+				select failed_candidates."createdAt", failed_candidates."remoteId"
+				from failed_candidates
+				order by failed_candidates."createdAt" desc,
+					failed_candidates."remoteId" desc
 				limit $7
 			) candidate
 			order by candidate."createdAt" desc, candidate."remoteId" desc
