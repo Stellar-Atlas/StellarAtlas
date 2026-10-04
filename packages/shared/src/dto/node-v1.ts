@@ -10,6 +10,8 @@ export interface NodeGeoDataV1 {
 }
 
 export interface NodeStatisticsV1 {
+	availability24HoursCoverage?: { observedDays: number; observedScans: number };
+	availability30DaysCoverage?: { observedDays: number; observedScans: number };
 	active30DaysPercentage: number;
 	overLoaded30DaysPercentage: number;
 	validating30DaysPercentage: number;
@@ -211,6 +213,22 @@ export const NodeV1Schema: JSONSchemaType<NodeV1> = {
 		},
 		NodeStatisticsV1: {
 			properties: {
+				availability24HoursCoverage: {
+					type: 'object',
+					properties: {
+						observedDays: { type: 'integer', minimum: 1 },
+						observedScans: { type: 'integer', minimum: 1 }
+					},
+					required: ['observedDays', 'observedScans']
+				},
+				availability30DaysCoverage: {
+					type: 'object',
+					properties: {
+						observedDays: { type: 'integer', minimum: 1 },
+						observedScans: { type: 'integer', minimum: 1 }
+					},
+					required: ['observedDays', 'observedScans']
+				},
 				active24HoursPercentage: {
 					default: 0,
 					type: 'number'

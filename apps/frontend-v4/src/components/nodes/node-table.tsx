@@ -196,6 +196,9 @@ export function NodeTable({
 										>
 											{validating24Hours?.value ?? 'No snapshot'}
 										</span>
+										{validating24Hours?.detail ? (
+											<small>{validating24Hours.detail}</small>
+										) : null}
 									</td>
 									<td>
 										<span

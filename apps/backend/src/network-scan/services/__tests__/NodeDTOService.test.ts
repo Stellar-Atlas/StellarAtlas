@@ -9,6 +9,7 @@ import Organization from '../../domain/organization/Organization.js';
 import { OrganizationValidators } from '../../domain/organization/OrganizationValidators.js';
 import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage.js';
 import { NodeV1DTOMapper } from '../../mappers/NodeV1DTOMapper.js';
+import type { NetworkScanRepository } from '../../domain/network/scan/NetworkScanRepository.js';
 
 describe('NodeDTOService', () => {
 	it('should return a list of NodeDTOs', async () => {
@@ -18,7 +19,8 @@ describe('NodeDTOService', () => {
 		const nodeDTOService = new NodeDTOService(
 			nodeMeasurementRepository,
 			nodeMeasurementDayRepository,
-			nodeMapper
+			nodeMapper,
+			mock<NetworkScanRepository>()
 		);
 
 		const time = new Date();
@@ -105,7 +107,8 @@ describe('NodeDTOService', () => {
 		const nodeDTOService = new NodeDTOService(
 			nodeMeasurementRepository,
 			nodeMeasurementDayRepository,
-			nodeMapper
+			nodeMapper,
+			mock<NetworkScanRepository>()
 		);
 
 		const time = new Date();
@@ -131,7 +134,8 @@ describe('NodeDTOService', () => {
 		const nodeDTOService = new NodeDTOService(
 			nodeMeasurementRepository,
 			nodeMeasurementDayRepository,
-			nodeMapper
+			nodeMapper,
+			mock<NetworkScanRepository>()
 		);
 
 		const time = new Date();
@@ -142,6 +146,68 @@ describe('NodeDTOService', () => {
 
 		const result = await nodeDTOService.getNodeDTOs(time, [nodeA], []);
 		expect(result.isErr()).toBe(true);
+	});
+
+	it('anchors known-page statistics to a completed scan and shares them across request times', async () => {
+		const day = mock<NodeMeasurementRepository>();
+		const month = mock<NodeMeasurementDayRepository>();
+		const scans = mock<NetworkScanRepository>();
+		const mapper = mock<NodeV1DTOMapper>();
+		const scanTime = new Date('2026-10-04T03:00:00Z');
+		const generatedAt = new Date('2026-10-04T03:01:00Z');
+		const nextRequest = new Date('2026-10-04T03:02:00Z');
+		scans.findLatestSuccessfulScanTime.mockResolvedValue(scanTime);
+		day.findXDaysAverageAt.mockResolvedValue([]);
+		month.findXDaysAverageAt.mockResolvedValue([]);
+		const service = new NodeDTOService(day, month, mapper, scans);
+		const node = Node.create(scanTime, createDummyPublicKey(), {
+			ip: 'localhost',
+			port: 1234
+		});
+		await Promise.all([
+			service.getCurrentNodeDTOs(generatedAt, [node], []),
+			service.getCurrentNodeDTOs(nextRequest, [node], [])
+		]);
+		expect(day.findXDaysAverageAt).toHaveBeenCalledTimes(1);
+		expect(month.findXDaysAverageAt).toHaveBeenCalledTimes(1);
+		expect(month.findXDaysAverageAt).toHaveBeenCalledWith(scanTime, 30);
+		expect(mapper.toNodeV1DTO).toHaveBeenCalledWith(
+			generatedAt,
+			node,
+			undefined,
+			undefined,
+			undefined
+		);
+		expect(mapper.toNodeV1DTO).toHaveBeenCalledWith(
+			nextRequest,
+			node,
+			undefined,
+			undefined,
+			undefined
+		);
+		scans.findLatestSuccessfulScanTime.mockResolvedValue(
+			new Date('2026-10-04T03:03:00Z')
+		);
+		await service.getCurrentNodeDTOs(nextRequest, [node], []);
+		expect(month.findXDaysAverageAt).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not query availability without completed scan evidence', async () => {
+		const day = mock<NodeMeasurementRepository>();
+		const month = mock<NodeMeasurementDayRepository>();
+		const scans = mock<NetworkScanRepository>();
+		scans.findLatestSuccessfulScanTime.mockResolvedValue(undefined);
+		const service = new NodeDTOService(
+			day,
+			month,
+			mock<NodeV1DTOMapper>(),
+			scans
+		);
+		expect((await service.getCurrentNodeDTOs(new Date(), [], [])).isOk()).toBe(
+			true
+		);
+		expect(day.findXDaysAverageAt).not.toHaveBeenCalled();
+		expect(month.findXDaysAverageAt).not.toHaveBeenCalled();
 	});
 
 	function createNodeMeasurementAverage(

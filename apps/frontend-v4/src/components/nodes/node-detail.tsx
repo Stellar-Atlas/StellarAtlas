@@ -173,14 +173,24 @@ export function NodeDetail({
 				<dl className="details">
 					<div>
 						<dt>24H active</dt>
-						<dd className={`metric-text ${active24Hours.tone}`}>
-							{active24Hours.value}
+						<dd>
+							<span className={`metric-text ${active24Hours.tone}`}>
+								{active24Hours.value}
+							</span>
+							{active24Hours.detail ? (
+								<small>{active24Hours.detail}</small>
+							) : null}
 						</dd>
 					</div>
 					<div>
 						<dt>24H validating</dt>
-						<dd className={`metric-text ${validating24Hours.tone}`}>
-							{validating24Hours.value}
+						<dd>
+							<span className={`metric-text ${validating24Hours.tone}`}>
+								{validating24Hours.value}
+							</span>
+							{validating24Hours.detail ? (
+								<small>{validating24Hours.detail}</small>
+							) : null}
 						</dd>
 					</div>
 					<div>

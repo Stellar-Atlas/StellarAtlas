@@ -47,7 +47,7 @@ export class GetKnownNode {
 			}
 
 			const organizations = await this.organizationRepository.findAllKnown();
-			const nodeDtosOrError = await this.nodeDTOService.getNodeDTOs(
+			const nodeDtosOrError = await this.nodeDTOService.getCurrentNodeDTOs(
 				generatedAt,
 				[node],
 				organizations

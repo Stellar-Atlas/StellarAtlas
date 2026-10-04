@@ -28,6 +28,35 @@ const { NodeDetail } = await import('../node-detail');
 const { NodeArchiveActions } = await import('../node-archive-actions');
 
 describe('node detail evidence-independent navigation', () => {
+	it('renders observed coverage beside both daily and monthly metrics', () => {
+		const base = nodeFixture('observed');
+		const node = {
+			...base,
+			statistics: {
+				...base.statistics,
+				has24HourStats: true,
+				has30DayStats: true,
+				active30DaysPercentage: 42.39,
+				validating30DaysPercentage: 0,
+				availability24HoursCoverage: { observedDays: 2, observedScans: 144 },
+				availability30DaysCoverage: { observedDays: 25, observedScans: 2991 }
+			}
+		};
+		const html = renderToStaticMarkup(
+			createElement(NodeDetail, {
+				node,
+				network: networkFixture([node]),
+				knownNode: knownNodeFixture(node),
+				organization: null,
+				archiveEvidence: null
+			})
+		);
+		expect(html).toContain('144 observed scans');
+		expect(html).toContain('25 observed days');
+		expect(html).toContain('42.4%');
+		expect(html).toContain('0.0%');
+		expect(html).toContain('monitoring gaps excluded');
+	});
 	it('renders status, directional validator and organization lists, then unavailable evidence without a modal', () => {
 		const node = nodeFixture('selected', { quorumSet: quorum('trusted') });
 		const network = networkFixture(

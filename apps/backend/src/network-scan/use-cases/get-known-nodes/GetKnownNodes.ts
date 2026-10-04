@@ -56,7 +56,7 @@ export class GetKnownNodes {
 			);
 			const nodeDtosByPublicKey = new Map<string, NodeV1>();
 			if (snapshotNodes.length > 0) {
-				const nodeDtosOrError = await this.nodeDTOService.getNodeDTOs(
+				const nodeDtosOrError = await this.nodeDTOService.getCurrentNodeDTOs(
 					generatedAt,
 					snapshotNodes,
 					organizations
@@ -114,7 +114,7 @@ export class GetKnownNodes {
 				this.organizationRepository.findAllKnown()
 			]);
 			const nodeIdentities = await this.nodeRepository.findAllKnownIdentities();
-			const nodesOrError = await this.nodeDTOService.getNodeDTOs(
+			const nodesOrError = await this.nodeDTOService.getCurrentNodeDTOs(
 				generatedAt,
 				nodes,
 				organizations

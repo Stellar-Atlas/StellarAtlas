@@ -205,7 +205,7 @@ function loadRollup(container: Container) {
 
 function loadServices(container: Container, config: Config) {
 	container.bind(NetworkDTOService).toSelf();
-	container.bind(NodeDTOService).toSelf();
+	container.bind(NodeDTOService).toSelf().inSingletonScope();
 	container.bind(OrganizationDTOService).toSelf();
 	container.bind<Archiver>('JSONArchiver').toDynamicValue(() => {
 		if (

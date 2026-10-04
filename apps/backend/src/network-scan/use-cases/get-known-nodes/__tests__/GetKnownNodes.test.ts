@@ -59,7 +59,9 @@ describe('GetKnownNodes', () => {
 			total: 2
 		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([activeDto, archivedDto]));
+		nodeDTOService.getCurrentNodeDTOs.mockResolvedValue(
+			ok([activeDto, archivedDto])
+		);
 
 		const result = await new GetKnownNodes(
 			nodeRepository,
@@ -107,7 +109,7 @@ describe('GetKnownNodes', () => {
 			lastSeen: archivedAt.toISOString(),
 			lastMeasurementAt: null
 		});
-		expect(nodeDTOService.getNodeDTOs).toHaveBeenCalledWith(
+		expect(nodeDTOService.getCurrentNodeDTOs).toHaveBeenCalledWith(
 			expect.any(Date),
 			[activeNode, archivedNode],
 			[]
@@ -151,7 +153,7 @@ describe('GetKnownNodes', () => {
 			total: 1
 		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([listenerDto]));
+		nodeDTOService.getCurrentNodeDTOs.mockResolvedValue(ok([listenerDto]));
 
 		const result = await new GetKnownNodes(
 			nodeRepository,
@@ -178,7 +180,7 @@ describe('GetKnownNodes', () => {
 				scope: 'listener'
 			})
 		]);
-		expect(nodeDTOService.getNodeDTOs).toHaveBeenCalledWith(
+		expect(nodeDTOService.getCurrentNodeDTOs).toHaveBeenCalledWith(
 			expect.any(Date),
 			[listener],
 			[]
@@ -210,7 +212,7 @@ describe('GetKnownNodes', () => {
 			total: 1
 		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([]));
+		nodeDTOService.getCurrentNodeDTOs.mockResolvedValue(ok([]));
 
 		const result = await new GetKnownNodes(
 			nodeRepository,
@@ -238,16 +240,13 @@ describe('GetKnownNodes', () => {
 				}
 			]
 		});
-		expect(nodeDTOService.getNodeDTOs).not.toHaveBeenCalled();
+		expect(nodeDTOService.getCurrentNodeDTOs).not.toHaveBeenCalled();
 	});
 
 	it('passes organization-id matches into repository-native filtering', async () => {
 		const start = new Date('2020-01-01T00:00:00.000Z');
 		const node = createDummyNode('127.0.0.1', 11625, start);
-		const organizationId = OrganizationId.create(
-			'org.example',
-			'ORG-EXAMPLE'
-		);
+		const organizationId = OrganizationId.create('org.example', 'ORG-EXAMPLE');
 		if (organizationId.isErr()) throw organizationId.error;
 		const organization = Organization.create(
 			organizationId.value,
@@ -303,7 +302,7 @@ describe('GetKnownNodes', () => {
 			}
 		]);
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([nodeDto]));
+		nodeDTOService.getCurrentNodeDTOs.mockResolvedValue(ok([nodeDto]));
 
 		const result = await new GetKnownNodes(
 			nodeRepository,
@@ -341,7 +340,7 @@ describe('GetKnownNodes', () => {
 			total: 1
 		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(err(error));
+		nodeDTOService.getCurrentNodeDTOs.mockResolvedValue(err(error));
 
 		const result = await new GetKnownNodes(
 			nodeRepository,

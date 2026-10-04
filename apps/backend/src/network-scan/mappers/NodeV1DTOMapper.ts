@@ -53,6 +53,12 @@ export class NodeV1DTOMapper {
 			statistics: {
 				has24HourStats: !!measurement24HourAverage,
 				has30DayStats: !!measurement30DayAverage,
+				...(measurement24HourAverage?.coverage === undefined
+					? {}
+					: { availability24HoursCoverage: measurement24HourAverage.coverage }),
+				...(measurement30DayAverage?.coverage === undefined
+					? {}
+					: { availability30DaysCoverage: measurement30DayAverage.coverage }),
 				active24HoursPercentage: measurement24HourAverage?.activeAvg ?? 0,
 				validating24HoursPercentage:
 					measurement24HourAverage?.validatingAvg ?? 0,

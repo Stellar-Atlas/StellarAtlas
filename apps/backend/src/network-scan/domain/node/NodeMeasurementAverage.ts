@@ -6,4 +6,5 @@ export interface NodeMeasurementAverage {
 	overLoadedAvg: number;
 	indexAvg: number;
 	historyArchiveErrorAvg: number;
+	coverage?: { observedDays: number; observedScans: number };
 }

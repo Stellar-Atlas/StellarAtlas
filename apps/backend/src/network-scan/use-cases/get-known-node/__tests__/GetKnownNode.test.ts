@@ -21,7 +21,7 @@ describe('GetKnownNode', () => {
 		const exceptionLogger = mock<ExceptionLogger>();
 		nodeRepository.findOneByPublicKey.mockResolvedValue(node);
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([nodeDto]));
+		nodeDTOService.getCurrentNodeDTOs.mockResolvedValue(ok([nodeDto]));
 
 		const result = await new GetKnownNode(
 			nodeRepository,
@@ -40,7 +40,7 @@ describe('GetKnownNode', () => {
 			scope: 'current-validator',
 			lastSeen: start.toISOString()
 		});
-		expect(nodeDTOService.getNodeDTOs).toHaveBeenCalledWith(
+		expect(nodeDTOService.getCurrentNodeDTOs).toHaveBeenCalledWith(
 			expect.any(Date),
 			[node],
 			[]
@@ -79,7 +79,7 @@ describe('GetKnownNode', () => {
 			scope: 'public-key-only',
 			lastSeen: measuredAt.toISOString()
 		});
-		expect(nodeDTOService.getNodeDTOs).not.toHaveBeenCalled();
+		expect(nodeDTOService.getCurrentNodeDTOs).not.toHaveBeenCalled();
 		expect(nodeRepository.findKnownIdentityByPublicKey).toHaveBeenCalledWith(
 			shellNode.publicKey.value
 		);
@@ -115,7 +115,7 @@ describe('GetKnownNode', () => {
 		const error = new Error('mapping failed');
 		nodeRepository.findOneByPublicKey.mockResolvedValue(node);
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(err(error));
+		nodeDTOService.getCurrentNodeDTOs.mockResolvedValue(err(error));
 
 		const result = await new GetKnownNode(
 			nodeRepository,

@@ -170,6 +170,34 @@ describe('NodeV1DTOMapper', () => {
 		expect(parsedNode.historyArchiveHasError).toBe(false);
 	});
 
+	test('exposes observed coverage without turning a measured zero into unknown', () => {
+		nodeMeasurement24HourAverage.coverage = {
+			observedDays: 1,
+			observedScans: 3
+		};
+		nodeMeasurement30DayAverage.coverage = {
+			observedDays: 5,
+			observedScans: 11
+		};
+		nodeMeasurement30DayAverage.validatingAvg = 0;
+		const dto = new NodeV1DTOMapper().toNodeV1DTO(
+			time,
+			node,
+			nodeMeasurement24HourAverage,
+			nodeMeasurement30DayAverage
+		);
+		expect(dto.statistics.availability24HoursCoverage).toEqual({
+			observedDays: 1,
+			observedScans: 3
+		});
+		expect(dto.statistics.availability30DaysCoverage).toEqual({
+			observedDays: 5,
+			observedScans: 11
+		});
+		expect(dto.statistics.has30DayStats).toBe(true);
+		expect(dto.statistics.validating30DaysPercentage).toBe(0);
+	});
+
 	test('toNodeSnapshotV1DTO', () => {
 		nodeV1DTO.organizationId = null;
 		nodeV1DTO.statistics = {

@@ -8,6 +8,10 @@ import {
 import { NodeMeasurementAverage } from '@network-scan/domain/node/NodeMeasurementAverage.js';
 import type { NodeMeasurementDayRepository } from '@network-scan/domain/node/NodeMeasurementDayRepository.js';
 import PublicKey from '@network-scan/domain/node/PublicKey.js';
+import {
+	nodeAvailabilityWindow,
+	nodeObservedAvailabilitySql
+} from './NodeObservedAvailabilitySql.js';
 
 export interface NodeMeasurementV2StatisticsRecord {
 	time: string;
@@ -66,27 +70,9 @@ export class TypeOrmNodeMeasurementDayRepository implements NodeMeasurementDayRe
 		at: Date,
 		xDays: number
 	): Promise<NodeMeasurementAverage[]> {
-		const from = new Date(at.getTime());
-		from.setDate(at.getDate() - xDays);
-
 		const result = await this.baseRepository.query(
-			`select "publicKeyValue"                                                                  as "publicKey",
-					ROUND(avg(100.0 * ("isActiveCount"::decimal / nullif("crawlCount", 0))), 2)     as "activeAvg",
-					ROUND(avg(100.0 * ("isValidatingCount"::decimal / nullif("crawlCount", 0))), 2) as "validatingAvg",
-					ROUND(avg(100.0 * ("isFullValidatorCount"::decimal / nullif("crawlCount", 0))),
-						  2)                                                                  as "fullValidatorAvg",
-					ROUND(avg(100.0 * ("isOverloadedCount"::decimal / nullif("crawlCount", 0))), 2) as "overLoadedAvg",
-					ROUND(avg(100.0 * ("historyArchiveErrorCount"::decimal / nullif("crawlCount", 0))),
-						  2)                                                                  as "historyArchiveErrorAvg",
-					ROUND(avg("indexSum"::decimal / nullif("crawlCount", 0)), 2)                  as "indexAvg"
-			 FROM "node_measurement_day_v2" "NodeMeasurementDay"
-			 JOIN node n on "NodeMeasurementDay"."nodeId" = n.id
-			 WHERE time >= date_trunc('day', $1::TIMESTAMP)
-			   and time <= date_trunc('day', $2::TIMESTAMP)
-			 GROUP BY "publicKeyValue"
-			 having count("nodeId") >= $3
-			    and bool_and("crawlCount" > 0)`, //needs at least a record every day in the range, or the average is NA
-			[from, at, xDays]
+			nodeObservedAvailabilitySql,
+			nodeAvailabilityWindow(at, xDays)
 		);
 
 		return result.map((record: NodeMeasurementAverageRecord) =>

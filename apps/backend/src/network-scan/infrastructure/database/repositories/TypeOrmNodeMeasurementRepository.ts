@@ -5,6 +5,10 @@ import type { NodeMeasurementRepository } from '@network-scan/domain/node/NodeMe
 import { NodeMeasurementAverage } from '@network-scan/domain/node/NodeMeasurementAverage.js';
 import { NodeMeasurementEvent } from '@network-scan/domain/node/NodeMeasurementEvent.js';
 import PublicKey from '@network-scan/domain/node/PublicKey.js';
+import {
+	nodeAvailabilityWindow,
+	nodeObservedAvailabilitySql
+} from './NodeObservedAvailabilitySql.js';
 
 export interface NodeMeasurementAverageRecord {
 	publicKey: string;
@@ -14,6 +18,8 @@ export interface NodeMeasurementAverageRecord {
 	overLoadedAvg: string;
 	indexAvg: string;
 	historyArchiveErrorAvg: string;
+	observedDays?: string | number;
+	observedScans?: string | number;
 }
 
 export function nodeMeasurementAverageFromDatabaseRecord(
@@ -26,7 +32,15 @@ export function nodeMeasurementAverageFromDatabaseRecord(
 		fullValidatorAvg: Number(record.fullValidatorAvg),
 		overLoadedAvg: Number(record.overLoadedAvg),
 		indexAvg: Number(record.indexAvg),
-		historyArchiveErrorAvg: Number(record.historyArchiveErrorAvg)
+		historyArchiveErrorAvg: Number(record.historyArchiveErrorAvg),
+		...(record.observedDays === undefined || record.observedScans === undefined
+			? {}
+			: {
+					coverage: {
+						observedDays: Number(record.observedDays),
+						observedScans: Number(record.observedScans)
+					}
+				})
 	};
 }
 
@@ -140,30 +154,9 @@ export class TypeOrmNodeMeasurementRepository implements NodeMeasurementReposito
 		at: Date,
 		xDays: number
 	): Promise<NodeMeasurementAverage[]> {
-		const from = new Date(at.getTime());
-		from.setDate(at.getDate() - xDays);
-
 		const result = await this.baseRepository.query(
-			`WITH crawl_count AS (SELECT count(*) AS nr_of_updates
-				                     FROM "network_scan" "NetworkScan" 
-				                     WHERE "time" >= $1 
-				                       and "time" <= $2
-				                       AND completed = true)
-				SELECT "publicKeyValue"                      as "publicKey",
-				       ROUND(100.0 * avg("isActive"::int), 2)        as "activeAvg",
-				       ROUND(100.0 * avg("isValidating"::int), 2)    as "validatingAvg",
-				       ROUND(100.0 * avg("isOverLoaded"::int), 2)    as "overLoadedAvg",
-				       ROUND(100.0 * avg("isFullValidator"::int), 2) as "fullValidatorAvg",
-				       ROUND(avg("index"::int), 2)                   as "indexAvg",
-					   ROUND(100.0 * avg("historyArchiveHasError"::int), 2) as "historyArchiveErrorAvg",
-					   count(*)                                      as "msCount"
-				FROM "node_measurement_v2" "NodeMeasurementV2"
-				JOIN "node" "Node" ON "Node"."id" = "NodeMeasurementV2"."nodeId"
-				WHERE "time" >= $1
-				  and "time" <= $2
-				GROUP BY "publicKeyValue"
-				having count(*) >= (select nr_of_updates from crawl_count)`,
-			[from, at]
+			nodeObservedAvailabilitySql,
+			nodeAvailabilityWindow(at, xDays)
 		);
 
 		return result.map((record: NodeMeasurementAverageRecord) =>

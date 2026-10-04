@@ -34,6 +34,20 @@ describe('test queries', () => {
 		await kernel.close();
 	});
 
+	async function healthyScans(day: string, count: number) {
+		const scans = Array.from({ length: count }, (_, index) => {
+			const time = new Date(new Date(day).getTime() + (index + 1) * 60_000);
+			const scan = new NetworkScan(time);
+			scan.completed = true;
+			scan.measurement = new NetworkMeasurement(time);
+			scan.measurement.nrOfActiveValidators = 1;
+			return scan;
+		});
+		await container
+			.get<NetworkScanRepository>(NETWORK_TYPES.NetworkScanRepository)
+			.save(scans);
+	}
+
 	test('findBetween', async () => {
 		const idA = createDummyNode();
 		const idB = createDummyNode();
@@ -63,17 +77,19 @@ describe('test queries', () => {
 		b.crawlCount = 2;
 		b.isValidatingCount = 2;
 		await nodeMeasurementDayRepository.save([a, b]);
+		await healthyScans('2020-12-12T00:00:00Z', 2);
+		await healthyScans('2020-12-13T00:00:00Z', 2);
 
 		const averages = await nodeMeasurementDayRepository.findXDaysAverageAt(
-			new Date('12/13/2020'),
-			2
+			new Date('2020-12-14T00:00:00Z'),
+			3
 		);
 		expect(averages.length).toEqual(1);
 		expect(averages[0].validatingAvg).toEqual(100);
 		expect(averages[0].publicKey).toEqual(idA.publicKey.value);
 	});
 
-	test('findXDaysAverageAt normalizes mixed crawl density by day', async () => {
+	test('findXDaysAverageAt weights mixed crawl density by observed samples', async () => {
 		const node = createDummyNode();
 		await nodeRepository.save([node], new Date('12/12/2020'));
 		const sparseDay = new NodeMeasurementDay(node, '12/12/2020');
@@ -83,16 +99,19 @@ describe('test queries', () => {
 		denseDay.crawlCount = 100;
 		denseDay.isOverloadedCount = 0;
 		await nodeMeasurementDayRepository.save([sparseDay, denseDay]);
+		await healthyScans('2020-12-12T00:00:00Z', 1);
+		await healthyScans('2020-12-13T00:00:00Z', 100);
 
 		const averages = await nodeMeasurementDayRepository.findXDaysAverageAt(
-			new Date('12/13/2020'),
-			2
+			new Date('2020-12-14T00:00:00Z'),
+			3
 		);
 		const average = averages.find(
 			(candidate) => candidate.publicKey === node.publicKey.value
 		);
 
-		expect(average?.overLoadedAvg).toEqual(50);
+		expect(average?.overLoadedAvg).toEqual(0.99);
+		expect(average?.coverage).toEqual({ observedDays: 2, observedScans: 101 });
 	});
 
 	test('findXDaysActiveButNotValidating', async () => {

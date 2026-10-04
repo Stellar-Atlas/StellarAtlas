@@ -8,18 +8,50 @@ import { NETWORK_TYPES } from '../infrastructure/di/di-types.js';
 import { inject, injectable } from 'inversify';
 import { NodeV1DTOMapper } from '../mappers/NodeV1DTOMapper.js';
 import { NodeV1 } from 'shared';
+import type { NetworkScanRepository } from '../domain/network/scan/NetworkScanRepository.js';
+import { NodeAvailabilityCache } from './NodeAvailabilityCache.js';
 
 @injectable()
 export class NodeDTOService {
+	private readonly availability = new NodeAvailabilityCache();
+
 	constructor(
 		@inject(NETWORK_TYPES.NodeMeasurementRepository)
 		private nodeMeasurementRepository: NodeMeasurementRepository,
 		@inject(NETWORK_TYPES.NodeMeasurementDayRepository)
 		private nodeMeasurementDayRepository: NodeMeasurementDayRepository,
-		private nodeMapper: NodeV1DTOMapper
+		private nodeMapper: NodeV1DTOMapper,
+		@inject(NETWORK_TYPES.NetworkScanRepository)
+		private networkScanRepository: NetworkScanRepository
 	) {}
+
+	public async getCurrentNodeDTOs(
+		time: Date,
+		nodes: Node[],
+		organizations: Organization[]
+	): Promise<Result<NodeV1[], Error>> {
+		try {
+			// Known inventory routes have a response generation time, not a scan
+			// timestamp. Resolve the small indexed watermark, never another inventory.
+			const statisticsAt =
+				await this.networkScanRepository.findLatestSuccessfulScanTime();
+			return this.mapNodeDTOs(time, statisticsAt ?? null, nodes, organizations);
+		} catch (error) {
+			return err(mapUnknownToError(error));
+		}
+	}
+
 	public async getNodeDTOs(
 		time: Date,
+		nodes: Node[],
+		organizations: Organization[]
+	): Promise<Result<NodeV1[], Error>> {
+		return this.mapNodeDTOs(time, time, nodes, organizations);
+	}
+
+	private async mapNodeDTOs(
+		time: Date,
+		statisticsAt: Date | null,
 		nodes: Node[],
 		organizations: Organization[]
 	): Promise<Result<NodeV1[], Error>> {
@@ -34,19 +66,28 @@ export class NodeDTOService {
 				});
 			});
 
-			const measurement24HourAverages =
-				await this.nodeMeasurementRepository.findXDaysAverageAt(time, 1); //24 hours can be calculated 'live' quickly
+			const averages =
+				statisticsAt === null
+					? { day: [], month: [] }
+					: await this.availability.get(statisticsAt, async () => ({
+							day: await this.nodeMeasurementRepository.findXDaysAverageAt(
+								statisticsAt,
+								1
+							),
+							month: await this.nodeMeasurementDayRepository.findXDaysAverageAt(
+								statisticsAt,
+								30
+							)
+						}));
 
 			const measurement24HourAveragesMap = new Map(
-				measurement24HourAverages.map((avg) => {
+				averages.day.map((avg) => {
 					return [avg.publicKey, avg];
 				})
 			);
 
-			const measurement30DayAverages =
-				await this.nodeMeasurementDayRepository.findXDaysAverageAt(time, 30);
 			const measurement30DayAveragesMap = new Map(
-				measurement30DayAverages.map((avg) => {
+				averages.month.map((avg) => {
 					return [avg.publicKey, avg];
 				})
 			);
