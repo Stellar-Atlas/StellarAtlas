@@ -1,4 +1,5 @@
 import type { EntityManager } from 'typeorm';
+import { historyArchiveHostScanAllowedSql } from '../../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 import { historyArchiveInconclusiveTransportFailureSql } from './HistoryArchiveFailureAttributionSql.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
@@ -37,6 +38,7 @@ interface CandidateBatch {
 const dailyDueSql = `
 	(object."lastClaimedAt" is null or object."lastClaimedAt" < $1::timestamptz)
 	and object."dependencyReady"
+	and ${historyArchiveHostScanAllowedSql('object')}
 	and object."executionDisposition" <> 'superseded'
 	and (object."transitionEffectsRequiredAt" is null
 		or object."transitionEffectsCompletedAt" is not null)
@@ -47,6 +49,16 @@ export function historyArchiveTransientSourceFailureSql(alias: string): string {
 	return `(coalesce(${alias}."httpStatus" between 500 and 599, false) or ${inconclusive})`;
 }
 
+/** A retained transport failure must never override a newer definitive HTTP result. */
+export function historyArchiveAllowsAutomaticSourceRetrySql(
+	alias: string
+): string {
+	if (!/^[a-z_][a-z0-9_]*$/i.test(alias))
+		throw new Error('Invalid retry SQL alias');
+	return `not coalesce(${alias}."httpStatus" between 400 and 499
+		and ${alias}."httpStatus" not in (408, 425, 429), false)`;
+}
+
 export const currentTransientSourceFailureSql = `(object.status = 'failed'
 	and ${historyArchiveTransientSourceFailureSql('object')})`;
 
@@ -54,7 +66,7 @@ export const currentTransientSourceFailureSql = `(object.status = 'failed'
 // (status, objectOrder, objectKey, archiveUrlIdentity) index, never the 214M queue.
 export const currentTransientSourceRetryCandidatesSql = `
 	with scanned as materialized (
-		select object."remoteId", object."archiveUrlIdentity", object."objectOrder",
+		select object."remoteId", object."archiveUrlIdentity", object."hostIdentity", object."objectOrder",
 			object."objectKey", object.status, object."httpStatus", object."lastClaimedAt",
 			object."errorType", object."errorMessage", object."executionDisposition",
 			object."dependencyReady", object."transitionEffectsRequiredAt",
@@ -94,6 +106,7 @@ export const retainedTransientSourceRetryCandidatesSql = `
 		from scanned finding join history_archive_object_queue object
 			on object."remoteId" = finding."objectRemoteId"
 		where finding."retainedOnly" and ${historyArchiveTransientSourceFailureSql('finding')}
+			and ${historyArchiveAllowsAutomaticSourceRetrySql('object')}
 			and object.status <> 'scanning' and ${dailyDueSql}
 		order by object."remoteId" limit $3::integer
 	)
@@ -117,6 +130,7 @@ export const admitTransientSourceRetriesSql = `
 		from candidates join history_archive_object_queue object
 			on object."remoteId" = candidates."remoteId"
 		where object.status <> 'scanning' and ${dailyDueSql.replaceAll('$1', '$2')}
+			and ${historyArchiveAllowsAutomaticSourceRetrySql('object')}
 			and (${currentTransientSourceFailureSql}
 				or exists (select 1 from history_archive_retained_remote_finding finding
 					where finding."objectRemoteId" = object."remoteId"

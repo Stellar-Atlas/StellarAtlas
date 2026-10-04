@@ -196,12 +196,16 @@ describe('HistoryArchiveObjectClaimSql', () => {
 		expect(historyArchiveReadyPressureSql).toContain(
 			'from "history_archive_object_queue"'
 		);
-		expect(historyArchiveReadyPressureSql).toContain('"verifiedAt" >=');
+		expect(historyArchiveReadyPressureSql).not.toContain('"verifiedAt" >=');
+		expect(historyArchiveReadyPressureSql).toContain('join lateral');
+		expect(historyArchiveReadyPressureSql).toContain(
+			'null::integer as "recentCompletions"'
+		);
 		expect(historyArchiveReadyPressureSql).not.toContain(
 			'from "history_archive_object_event"'
 		);
-		expect(historyArchiveReadyPressureSql).not.toContain(
-			'candidate."executionDisposition"'
+		expect(historyArchiveReadyPressureSql).toContain(
+			'candidate."remoteId" = queued."objectRemoteId"'
 		);
 	});
 });

@@ -24,25 +24,18 @@ export async function retryHttpRequestIfNeeded<Args extends unknown[]>(
 
 function retryNeeded(result: Result<HttpResponse, HttpError>) {
 	if (result.isErr()) {
-		return true;
-		/*if (
-			result.error.code &&
-			[
-				'ETIMEDOUT',
-				'ECONNABORTED',
-				'TIMEOUT',
-				'ERR_REQUEST_ABORTED',
-				'ECONNRESET',
-				'ENOTFOUND'
-			].includes(result.error.code)
-		) {
-			return true;
-		}
-
 		const status = result.error.response?.status;
-		if ((status && status >= 500 && status < 600) || status === 408) {
-			return true;
-		}*/
+		// A missing/forbidden object is not made available by immediate retries.
+		// Request timeout, too-early and rate limiting remain transient responses.
+		if (status !== undefined) {
+			return (
+				status === 408 ||
+				status === 425 ||
+				status === 429 ||
+				(status >= 500 && status < 600)
+			);
+		}
+		return result.error.code !== 'ERR_CANCELED';
 	}
 
 	return false;

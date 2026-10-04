@@ -41,8 +41,8 @@ export class ArchiveObjectHistoryStateVerifier {
 		const response = await this.httpService
 			.get(urlResult.value, {
 				responseType: 'json',
-				connectionTimeoutMs: 5_000,
-				socketTimeoutMs: 10_000
+				requestTimeoutMs: 30_000,
+				socketTimeoutMs: 30_000
 			})
 			.finally(releaseDownloadPermit);
 		if (response.isErr()) return err(mapArchiveObjectHttpError(response.error));

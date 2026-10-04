@@ -130,7 +130,10 @@ export interface HistoryArchiveObjectPlanPromotionResult {
 	readonly availableSlots: number;
 	readonly outstandingObjects: number;
 	readonly promotedObjects: number;
-	readonly recentCompletions: number;
+	/** True marks outstandingObjects as a saturated lower bound, not a total. */
+	readonly outstandingObjectsCapped?: boolean;
+	readonly pressureUnavailable?: boolean;
+	readonly recentCompletions: number | null;
 	readonly watermark: number;
 }
 
@@ -140,7 +143,10 @@ export interface HistoryArchiveObjectExecutionReconciliationResult {
 	readonly cursorAdvances: number;
 	readonly outstandingObjects: number;
 	readonly preservedObjects: number;
-	readonly recentCompletions: number;
+	/** True marks outstandingObjects as a saturated lower bound, not a total. */
+	readonly outstandingObjectsCapped?: boolean;
+	readonly pressureUnavailable?: boolean;
+	readonly recentCompletions: number | null;
 	readonly watermark: number;
 }
 

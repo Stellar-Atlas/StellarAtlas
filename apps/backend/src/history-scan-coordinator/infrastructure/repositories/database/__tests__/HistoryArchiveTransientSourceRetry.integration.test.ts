@@ -279,6 +279,34 @@ describe('bounded daily transient-source retry sweep', () => {
 		expect(job?.executionId).toBeTruthy();
 	});
 
+	it.each([400, 401, 403, 404, 410, 422])(
+		'does not resurrect retained timeouts after current HTTP %i',
+		async (status) => {
+			const object = await seed(
+				'old-timeout',
+				null,
+				'HttpError',
+				'SB Connection time-out'
+			);
+			await db.query(
+				`update history_archive_object_queue set "failureChannel"='scanner_issue',
+			"httpStatus"=$2,"errorType"='ERR_BAD_REQUEST',"errorMessage"='definitive HTTP response'
+			where "remoteId"=$1`,
+				[object.remoteId, status]
+			);
+			await sweep();
+			await sweep();
+			expect(await sweep()).toBe(0);
+			expect(await readyIds()).toEqual([]);
+			const [admission] = (await db.query(admitTransientSourceRetriesSql, [
+				JSON.stringify([object]),
+				new Date()
+			])) as { count: number }[];
+			expect(admission?.count).toBe(0);
+			expect((await current(object.remoteId)).httpStatus).toBe(status);
+		}
+	);
+
 	it('skips a completing ready row without waiting or resurrecting a newly verified failure', async () => {
 		const object = await seed('completing');
 		await sweep();

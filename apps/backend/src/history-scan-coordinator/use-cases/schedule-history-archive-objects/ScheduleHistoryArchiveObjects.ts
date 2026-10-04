@@ -6,6 +6,7 @@ import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { buildRootHistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import { historyArchiveScanEnabled } from '../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 
 export interface ScheduleHistoryArchiveObjectsResult {
 	readonly discoveredArchiveUrlCount: number;
@@ -27,6 +28,7 @@ export class ScheduleHistoryArchiveObjects {
 	): Promise<Result<ScheduleHistoryArchiveObjectsResult, Error>> {
 		try {
 			const rootObjects = historyArchiveUrls
+				.filter(historyArchiveScanEnabled)
 				.map(buildRootHistoryArchiveObject)
 				.filter((object) => object !== null);
 			const scheduledCount =
@@ -37,6 +39,8 @@ export class ScheduleHistoryArchiveObjects {
 				app: 'history-scan-coordinator',
 				discoveredArchiveUrlCount: historyArchiveUrls.length,
 				outstandingObjects: promotion.outstandingObjects,
+				outstandingObjectsCapped: promotion.outstandingObjectsCapped === true,
+				pressureUnavailable: promotion.pressureUnavailable === true,
 				promotedObjects: promotion.promotedObjects,
 				schedulingScope: 'discovered-roots',
 				watermark: promotion.watermark,

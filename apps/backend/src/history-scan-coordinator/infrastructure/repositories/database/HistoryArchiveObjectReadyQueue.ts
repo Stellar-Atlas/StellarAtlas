@@ -1,4 +1,9 @@
 import type { EntityManager } from 'typeorm';
+import { historyArchiveMaximumWatermark } from '../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import {
+	historyArchiveHostScanAllowedSql,
+	historyArchiveReadyUrlScanAllowedSql
+} from '../../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 import {
 	historyArchiveCanonicalFirstAdmissionSql,
 	historyArchiveCanonicalFirstScopeCteSql
@@ -281,8 +286,34 @@ export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority(),
 	runtimeTargetCtesAvailable = false,
-	canonicalFirstRootSql?: string
+	canonicalFirstRootSql?: string,
+	maximumCandidateChecks?: number
 ): string {
+	const readySource =
+		maximumCandidateChecks === undefined
+			? '"history_archive_object_ready"'
+			: 'ready_probe_candidates';
+	const boundedCandidates =
+		maximumCandidateChecks === undefined
+			? ''
+			: `
+	ready_probe_candidates as materialized (
+		select queued.* from "history_archive_object_ready" queued
+		where ${historyArchiveReadyUrlScanAllowedSql('queued')}
+			and (
+				queued."publishedAt" is not null
+				or queued."dispatchToken" is not null
+				or (queued."availableAt" <= now() and (
+					queued.priority <= ${maximumPriority}::smallint
+					or exists (
+						select 1 from canonical_runtime_archive_roots runtime_root
+						where runtime_root."archiveUrlIdentity" = queued."archiveUrlIdentity"
+					)
+				))
+			)
+		order by queued.priority, queued."availableAt", queued."objectRemoteId"
+		limit ${maximumCandidateChecks + 1}::integer
+	),`;
 	const canonicalScopeCte =
 		canonicalFirstRootSql === undefined
 			? ''
@@ -296,15 +327,22 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 				)}`;
 	return `
 	${runtimeTargetCtesAvailable ? canonicalRuntimeArchiveRootsCteSql : canonicalRuntimePriorityCtesSql}${canonicalScopeCte},
+	${boundedCandidates}
 	active as (
 		select count(*)::integer as count
 		from "history_archive_object_claim_slot" slot
 		where slot."objectRemoteId" is not null
 	), ready as (
-		select count(*)::integer as count
-		from "history_archive_object_ready" queued
-		join "history_archive_object_queue" object
-			on object."remoteId" = queued."objectRemoteId"
+		select count(*)::integer as count from (
+		select 1
+		from ${readySource} queued
+		-- Keep a point lookup per ready key; a flattened join may scan all
+		-- durable evidence just to count the compact execution queue.
+		join lateral (
+			select candidate.* from "history_archive_object_queue" candidate
+			where candidate."remoteId" = queued."objectRemoteId"
+			limit 1
+		) object on true
 		where (
 			queued."publishedAt" is not null
 			or queued."dispatchToken" is not null
@@ -327,6 +365,11 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 			)
 		)
 		${canonicalAdmission}
+		and ${historyArchiveHostScanAllowedSql('object')}
+		-- Admission cannot use capacity beyond this ceiling. Stop once full;
+		-- callers expose saturation instead of claiming an exact global total.
+		limit ${historyArchiveMaximumWatermark}::integer
+		) bounded_ready
 	)
 `;
 }
@@ -338,22 +381,27 @@ export function buildHistoryArchiveReadyPressureSql(
 	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority(),
 	canonicalFirstRootSql?: string
 ): string {
+	// An unknown remainder must never be interpreted as admission capacity.
+	// Existing ready-queue cleanup/consumption advances this ordered prefix.
+	const maximumCandidateChecks = 128;
 	return `
 	with ${buildHistoryArchiveOutstandingReadyCountCtesSql(
 		maximumPriority,
 		false,
-		canonicalFirstRootSql
-	)}, recent_events as (
-		select 1
-		from "history_archive_object_queue"
-		where status = 'verified'
-			and "verifiedAt" >=
-				now() - make_interval(mins => $2::integer)
-		limit $1::integer
-	)
+		canonicalFirstRootSql,
+		maximumCandidateChecks
+	)}
 	select
 		(active.count + ready.count)::integer as "outstandingObjects",
-		(select count(*)::integer from recent_events) as "recentCompletions"
+		(ready.count >= ${historyArchiveMaximumWatermark}::integer
+			or (select count(*) from ready_probe_candidates) > ${maximumCandidateChecks})
+			as "outstandingObjectsCapped",
+		((select count(*) from ready_probe_candidates) > ${maximumCandidateChecks}
+			and active.count + ready.count < ${historyArchiveMaximumWatermark}::integer)
+			as "pressureUnavailable",
+		-- The fixed admission watermark does not use historical throughput.
+		-- No maintained time-window counter exists here: null means not sampled.
+		null::integer as "recentCompletions"
 	from active, ready
 `;
 }

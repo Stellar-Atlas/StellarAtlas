@@ -2,6 +2,8 @@ import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObj
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 import { historyArchiveRetryLaneDivisor } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
 import { historyArchiveRetainedInconclusiveRetrySql } from './HistoryArchiveInconclusiveRetrySql.js';
+import { historyArchiveAllowsAutomaticSourceRetrySql } from './HistoryArchiveTransientSourceRetry.js';
+import { historyArchiveHostScanAllowedSql } from '../../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 
 const claimGateKeySql =
 	"hashtextextended('history_archive_object_claim_gate', 104729)";
@@ -119,6 +121,7 @@ export function historyArchiveAutomaticFailedRetrySql(
 ): string {
 	return `${objectAlias}."nextAttemptAt" is not null
 	and ${objectAlias}."nextAttemptAt" <= now()
+	and ${historyArchiveAllowsAutomaticSourceRetrySql(objectAlias)}
 	and (
 		${historyArchiveRetainedInconclusiveRetrySql(objectAlias)}
 		or
@@ -189,6 +192,7 @@ export const historyArchiveObjectClaimSql = `
 		left join active_by_host host_activity
 			on host_activity."hostIdentity" = candidate."hostIdentity"
 		where ready."availableAt" <= now()
+			and ${historyArchiveHostScanAllowedSql('candidate')}
 			and candidate."objectType" = any($1)
 			and (
 				${pendingReadySql}

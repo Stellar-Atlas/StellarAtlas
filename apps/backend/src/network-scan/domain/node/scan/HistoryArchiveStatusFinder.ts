@@ -1,6 +1,7 @@
 import { injectable } from 'inversify';
 import { HistoryService } from './history/HistoryService.js';
 import { queue } from 'async';
+import { historyArchiveScanEnabled } from 'shared';
 
 @injectable()
 export class HistoryArchiveStatusFinder {
@@ -27,12 +28,15 @@ export class HistoryArchiveStatusFinder {
 			10
 		);
 
-		publicKeyToHistoryArchiveMap.forEach((historyArchiveUrl, publicKey) =>
+		publicKeyToHistoryArchiveMap.forEach((historyArchiveUrl, publicKey) => {
+			// Skip before HTTP work. Absence is not a successful archive check,
+			// and the stored historical evidence is left untouched.
+			if (!historyArchiveScanEnabled(historyArchiveUrl)) return;
 			q.push({
 				publicKey: publicKey,
 				url: historyArchiveUrl
-			})
-		);
+			});
+		});
 
 		if (q.length() === 0) return upToDateNodes;
 

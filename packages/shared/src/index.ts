@@ -239,6 +239,10 @@ export { default as StellarCoreConfigurationGenerator } from './stellar-core-con
 export { mapUnknownToError } from './utilities/mapUnknownToError.js';
 export { asyncSleep } from './utilities/asyncSleep.js';
 export {
+	excludedHistoryArchiveHosts,
+	historyArchiveScanEnabled
+} from './history-archive-scan-policy.js';
+export {
 	appendHistoryArchiveRootPath,
 	normalizeHistoryArchiveRootUrl
 } from './history-archive-url.js';

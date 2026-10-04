@@ -81,22 +81,39 @@ export const historyArchiveThroughputSampleCap = Math.ceil(
 
 export interface HistoryArchivePlanningPressure {
 	readonly availableSlots: number;
+	/** True means outstandingObjects is a lower bound, not an exact total. */
+	readonly outstandingObjectsCapped?: boolean;
+	readonly pressureUnavailable?: boolean;
 	readonly outstandingObjects: number;
-	readonly recentCompletions: number;
+	readonly recentCompletions: number | null;
 	readonly watermark: number;
 }
 
 export function calculateHistoryArchivePlanningPressure(input: {
 	readonly outstandingObjects: number;
-	readonly recentCompletions: number;
+	readonly outstandingObjectsCapped?: boolean;
+	readonly pressureUnavailable?: boolean;
+	readonly recentCompletions: number | null;
 }): HistoryArchivePlanningPressure {
 	const outstandingObjects = normalizeCount(input.outstandingObjects);
-	const recentCompletions = normalizeCount(input.recentCompletions);
+	const recentCompletions =
+		input.recentCompletions === null
+			? null
+			: normalizeCount(input.recentCompletions);
 	const watermark = historyArchiveMinimumWatermark;
 
 	return {
-		availableSlots: Math.max(0, watermark - outstandingObjects),
+		availableSlots:
+			input.pressureUnavailable === true
+				? 0
+				: Math.max(0, watermark - outstandingObjects),
 		outstandingObjects,
+		...(input.outstandingObjectsCapped === true
+			? { outstandingObjectsCapped: true }
+			: {}),
+		...(input.pressureUnavailable === true
+			? { pressureUnavailable: true }
+			: {}),
 		recentCompletions,
 		watermark
 	};

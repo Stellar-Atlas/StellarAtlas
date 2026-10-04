@@ -80,7 +80,7 @@ describe('history archive producer watermarks in disposable PostgreSQL', () => {
 		expect(counts.queued + counts.planned).toBe(79 * 2);
 	});
 
-	it('keeps the runnable queue bounded when measured throughput is high', async () => {
+	it('keeps the runnable queue bounded without scanning historical throughput', async () => {
 		const plans = createProductionPlans(300);
 		await repository.planObjects(plans);
 		await dataSource.query(`
@@ -100,7 +100,7 @@ describe('history archive producer watermarks in disposable PostgreSQL', () => {
 
 		expect(promotion).toMatchObject({
 			promotedObjects: 48,
-			recentCompletions: 300,
+			recentCompletions: null,
 			watermark: 48
 		});
 	});

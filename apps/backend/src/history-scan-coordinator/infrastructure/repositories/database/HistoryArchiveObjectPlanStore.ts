@@ -5,9 +5,7 @@ import { getHistoryArchiveBrokerMaximumPriority } from '@history-scan-coordinato
 import {
 	calculateHistoryArchivePlanningPressure,
 	historyArchiveMaximumWatermark,
-	historyArchivePerRootFrontier,
-	historyArchiveThroughputSampleCap,
-	historyArchiveThroughputWindowMinutes
+	historyArchivePerRootFrontier
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectStateRefreshQuery.js';
 import {
@@ -135,19 +133,32 @@ export async function promoteHistoryArchiveObjectPlans(
 			[promotionLockName]
 		)) as readonly { readonly locked?: boolean }[];
 		if (lock?.locked !== true) return emptyPromotionResult();
+		await manager.query(`set local lock_timeout = '500ms'`);
+		await manager.query(`set local statement_timeout = '5s'`);
+		await manager.query(`set local jit = off`);
 		await assertPromotionIndexesReady(manager);
 
 		const [counts] = (await manager.query(
-			buildHistoryArchiveReadyPressureSql(maximumPriority),
-			[historyArchiveThroughputSampleCap, historyArchiveThroughputWindowMinutes]
+			buildHistoryArchiveReadyPressureSql(maximumPriority)
 		)) as readonly {
 			readonly outstandingObjects: number | string;
-			readonly recentCompletions: number | string;
+			readonly outstandingObjectsCapped: boolean;
+			readonly pressureUnavailable: boolean;
+			readonly recentCompletions: number | string | null;
 		}[];
 		const pressure = calculateHistoryArchivePlanningPressure({
 			outstandingObjects: Number(counts?.outstandingObjects ?? 0),
-			recentCompletions: Number(counts?.recentCompletions ?? 0)
+			outstandingObjectsCapped: counts?.outstandingObjectsCapped === true,
+			pressureUnavailable: counts?.pressureUnavailable === true,
+			recentCompletions:
+				counts?.recentCompletions == null
+					? null
+					: Number(counts.recentCompletions)
 		});
+		await manager.query(`set local statement_timeout = '30s'`);
+		if (pressure.pressureUnavailable === true) {
+			return { ...pressure, promotedObjects: 0 };
+		}
 		const maximumWatermarkHeadroom = Math.max(
 			0,
 			historyArchiveMaximumWatermark - pressure.outstandingObjects

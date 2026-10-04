@@ -7,12 +7,14 @@ import { isObject, isString } from 'shared';
 const sharedHttpAgent = new HttpAgent({
 	keepAlive: true,
 	maxFreeSockets: 32,
-	maxSockets: 64
+	maxSockets: 64,
+	maxTotalSockets: 64
 });
 const sharedHttpsAgent = new HttpsAgent({
 	keepAlive: true,
 	maxFreeSockets: 32,
-	maxSockets: 64
+	maxSockets: 64,
+	maxTotalSockets: 64
 });
 import {
 	HttpError,
@@ -105,12 +107,15 @@ export class AxiosHttpService implements HttpService {
 	): Promise<Result<HttpResponse, HttpError>> {
 		let connectionTimeout: NodeJS.Timeout | undefined;
 		let connectionTimeoutMs: number;
+		let deadlineExceeded = false;
 		const socketTimeoutMs =
 			httpOptions && httpOptions.socketTimeoutMs
 				? httpOptions.socketTimeoutMs
 				: 2000;
 
-		if (httpOptions && httpOptions.connectionTimeoutMs) {
+		if (httpOptions?.requestTimeoutMs !== undefined) {
+			connectionTimeoutMs = httpOptions.requestTimeoutMs;
+		} else if (httpOptions && httpOptions.connectionTimeoutMs) {
 			connectionTimeoutMs = httpOptions.connectionTimeoutMs;
 		} else {
 			connectionTimeoutMs = socketTimeoutMs; //BC, should be removed in the future;
@@ -120,8 +125,14 @@ export class AxiosHttpService implements HttpService {
 			const source = axios.CancelToken.source();
 			if (connectionTimeoutMs > 0) {
 				connectionTimeout = setTimeout(() => {
-					source.cancel('SB Connection time-out');
-					// Timeout Logic
+					deadlineExceeded = true;
+					const phase =
+						httpOptions?.responseType === 'stream'
+							? 'response headers'
+							: 'complete response';
+					source.cancel(
+						`HTTP request deadline exceeded after ${connectionTimeoutMs}ms waiting for ${phase}`
+					);
 				}, connectionTimeoutMs);
 			}
 			const requestConfig =
@@ -136,6 +147,16 @@ export class AxiosHttpService implements HttpService {
 			return ok(this.mapAxiosResponseToHttpResponse(axiosResponse));
 		} catch (error) {
 			if (connectionTimeout) clearTimeout(connectionTimeout);
+			if (deadlineExceeded) {
+				return err(
+					new HttpError(
+						axios.isCancel(error)
+							? error.message
+							: 'HTTP request deadline exceeded',
+						'ETIMEDOUT'
+					)
+				);
+			}
 			return err(this.mapErrorToHttpError(error, url));
 		}
 	}

@@ -1,9 +1,11 @@
 import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObjectReadyQueue.js';
+import { historyArchiveHostScanAllowedSql } from '../../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 import { historyArchiveRetryLaneDivisor } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
 import { historyArchiveInconclusiveTransportFailureSql } from './HistoryArchiveFailureAttributionSql.js';
 import {
 	currentTransientSourceFailureSql,
-	historyArchiveTransientSourceFailureSql
+	historyArchiveTransientSourceFailureSql,
+	historyArchiveAllowsAutomaticSourceRetrySql
 } from './HistoryArchiveTransientSourceRetry.js';
 import {
 	historyArchiveCanonicalFirstAdmissionSql,
@@ -27,6 +29,7 @@ const brokerReservationSchedulableObjectSql = `
 			object.status = 'failed'
 			and object."nextAttemptAt" is not null
 			and object."nextAttemptAt" <= now()
+			and ${historyArchiveAllowsAutomaticSourceRetrySql('object')}
 		)
 	)
 `;
@@ -67,9 +70,11 @@ function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
 		left join history_archive_retained_remote_finding retained
 			on retained."objectRemoteId" = object."remoteId"
 			and retained."retainedOnly" and ${historyArchiveTransientSourceFailureSql('retained')}
+			and ${historyArchiveAllowsAutomaticSourceRetrySql('object')}
 		left join active_hosts active
 			on active."hostIdentity" = object."hostIdentity"
 		where ready."publishedAt" is null
+			and ${historyArchiveHostScanAllowedSql('object')}
 			and ready."availableAt" <= now()
 			and (
 				ready."dispatchToken" is not null
