@@ -15,6 +15,7 @@ export const archiveHealthVocabulary = [
 ] as const;
 
 export type ArchiveHealthState = (typeof archiveHealthVocabulary)[number];
+export type ArchiveScannerHealthState = ArchiveHealthState | 'idle';
 export type ArchiveHealthTone = 'good' | 'warning' | 'danger';
 
 type ArchiveEvidenceClass =
@@ -55,6 +56,8 @@ export interface AssessArchiveStatusHealthInput {
 export interface AssessArchiveScannerHealthInput {
 	readonly activeChecks: number;
 	readonly configuredWorkers: number;
+	readonly freshWorkers: number;
+	readonly missingWorkers: number;
 	readonly proofComplete: boolean;
 	readonly staleChecks: number;
 	readonly telemetryAvailable: boolean;
@@ -134,15 +137,18 @@ export function assessArchiveStatusHealth({
 export function assessArchiveScannerHealth({
 	activeChecks,
 	configuredWorkers,
+	freshWorkers,
+	missingWorkers,
 	proofComplete,
 	staleChecks,
 	telemetryAvailable,
 	waitingChecks,
 	workerStatus
-}: AssessArchiveScannerHealthInput): ArchiveHealthState {
+}: AssessArchiveScannerHealthInput): ArchiveScannerHealthState {
 	if (!telemetryAvailable) return 'unknown';
 	if (
 		workerStatus !== 'ok' ||
+		missingWorkers > 0 ||
 		staleChecks > 0 ||
 		(waitingChecks > 0 && configuredWorkers === 0)
 	) {
@@ -150,6 +156,7 @@ export function assessArchiveScannerHealth({
 	}
 	if (activeChecks > 0) return 'checking';
 	if (waitingChecks > 0) return 'waiting';
+	if (configuredWorkers > 0 && freshWorkers >= configuredWorkers) return 'idle';
 	if (proofComplete) return 'verified';
 	return 'unknown';
 }

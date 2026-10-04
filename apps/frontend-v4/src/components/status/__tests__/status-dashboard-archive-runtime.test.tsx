@@ -46,10 +46,24 @@ describe('archive runtime presentation', () => {
 		expect(markup).not.toContain('Verified');
 	});
 
+	it('shows ready workers while archive evidence is unavailable, without claiming proof', () => {
+		const { headline, runtime, markup } = renderRuntime(
+			{ activeWorkers: 0 },
+			false
+		);
+		expect(headline).toContain('stat-card good');
+		expect(headline).toContain('Ready for work');
+		expect(runtime.match(/status-pill good/g)).toHaveLength(2);
+		expect(runtime).toContain('Ready');
+		expect(runtime).not.toContain('Verified');
+		expect(markup).toContain('Archive evidence unavailable');
+	});
+
 	it.each([
 		{ status: 'degraded' as const },
 		{ status: 'unavailable' as const },
 		{ staleWorkers: 1 },
+		{ missingWorkers: 1 },
 		{ activeWorkers: 0, configuredWorkerProcesses: 0 }
 	])('does not paint an unhealthy runtime green: %p', (workers) => {
 		const { headline, runtime } = renderRuntime(workers);
@@ -133,7 +147,11 @@ function renderRuntime(
 		/<article class="stat-card[^"]*"><span>Archive verification runtime<\/span>[\s\S]*?<\/article>/
 	)?.[0];
 	if (headline === undefined) throw new Error('Expected runtime headline');
-	return { headline, runtime: section(markup, 'Archive verification runtime') };
+	return {
+		headline,
+		runtime: section(markup, 'Archive verification runtime'),
+		markup
+	};
 }
 
 function section(markup: string, label: string): string {
@@ -170,6 +188,8 @@ function statusProps(): StatusDashboardProps {
 				...message.payload.workers.archiveWorkers,
 				activeWorkers: 2,
 				configuredWorkerProcesses: 4,
+				freshWorkers: 4,
+				missingWorkers: 0,
 				lastHeartbeatAt: generatedAt,
 				registeredWorkers: 4,
 				staleWorkers: 0,

@@ -1,6 +1,6 @@
 import {
 	archiveHealthLabel,
-	type ArchiveHealthState
+	type ArchiveScannerHealthState
 } from '@domain/history-archive-health';
 import { archiveRuntimeTone } from './status-dashboard-headlines';
 import { StatusPill, StatusRow } from './status-ui';
@@ -13,13 +13,18 @@ export function ArchiveRuntimeStatusPanel({
 }: {
 	readonly checkedAt: string;
 	readonly detail: string;
-	readonly state: ArchiveHealthState;
+	readonly state: ArchiveScannerHealthState;
 	readonly value: string;
 }): React.JSX.Element {
 	const tone = archiveRuntimeTone(state) ?? 'neutral';
 	const status =
 		tone === 'good' ? 'ok' : tone === 'warning' ? 'degraded' : 'unavailable';
-	const label = state === 'verified' ? 'Idle' : archiveHealthLabel(state);
+	const label =
+		state === 'idle'
+			? 'Ready'
+			: state === 'verified'
+				? 'Idle'
+				: archiveHealthLabel(state);
 	return (
 		<section className="panel" aria-label="Archive verification runtime">
 			<div className="panel-heading">

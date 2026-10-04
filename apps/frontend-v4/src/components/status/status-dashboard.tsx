@@ -96,6 +96,8 @@ export function StatusDashboard({
 	const archiveScannerHealth = assessArchiveScannerHealth({
 		activeChecks: observedActiveChecks,
 		configuredWorkers: workers.archiveWorkers.configuredWorkerProcesses,
+		freshWorkers: workers.archiveWorkers.freshWorkers,
+		missingWorkers: workers.archiveWorkers.missingWorkers,
 		proofComplete:
 			archiveEvidenceAvailable &&
 			checkpointStatusProofIsComplete(archiveSummary),

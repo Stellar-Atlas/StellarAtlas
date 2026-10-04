@@ -1,7 +1,7 @@
 import type { PublicStatusLevel } from '@api/types';
 import type {
 	ArchiveHealthAssessment,
-	ArchiveHealthState
+	ArchiveScannerHealthState
 } from '@domain/history-archive-health';
 import { formatInteger } from '@format/formatters';
 
@@ -26,7 +26,7 @@ interface BuildStatusHeadlineCardsInput {
 	readonly archiveFinding: ArchiveSourceFindingPresentation;
 	readonly archiveRuntime: {
 		readonly detail: string;
-		readonly state: ArchiveHealthState;
+		readonly state: ArchiveScannerHealthState;
 		readonly value: string;
 	};
 	readonly network: {
@@ -42,7 +42,7 @@ interface BuildStatusHeadlineCardsInput {
 export function describeArchiveRuntimeHeadline(input: {
 	readonly activeChecks: number;
 	readonly staleChecks: number;
-	readonly state: ArchiveHealthState;
+	readonly state: ArchiveScannerHealthState;
 }): string {
 	if (input.state === 'scanner_issue' && input.staleChecks > 0) {
 		return `${formatInteger(input.staleChecks)} stale checks`;
@@ -52,6 +52,7 @@ export function describeArchiveRuntimeHeadline(input: {
 		return `${formatInteger(input.activeChecks)} checks active`;
 	}
 	if (input.state === 'waiting') return 'Checks queued';
+	if (input.state === 'idle') return 'Ready for work';
 	if (input.state === 'verified') return 'Scanner idle';
 	return 'Scanner state unknown';
 }
@@ -203,8 +204,15 @@ function serviceTone(
 }
 
 /** Scanner health is separate from the outcome of archive-source proof checks. */
-export function archiveRuntimeTone(state: ArchiveHealthState): HeadlineTone {
-	if (state === 'verified' || state === 'checking' || state === 'waiting')
+export function archiveRuntimeTone(
+	state: ArchiveScannerHealthState
+): HeadlineTone {
+	if (
+		state === 'verified' ||
+		state === 'checking' ||
+		state === 'waiting' ||
+		state === 'idle'
+	)
 		return 'good';
 	if (state === 'integrity_failure') return 'danger';
 	if (state === 'scanner_issue' || state === 'remote_retry') return 'warning';

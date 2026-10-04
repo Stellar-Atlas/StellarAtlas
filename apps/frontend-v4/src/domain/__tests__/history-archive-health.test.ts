@@ -143,6 +143,8 @@ describe('history archive health', () => {
 			assessArchiveScannerHealth({
 				activeChecks: 4,
 				configuredWorkers: 24,
+				freshWorkers: 24,
+				missingWorkers: 0,
 				proofComplete: false,
 				staleChecks: 0,
 				telemetryAvailable: true,
@@ -154,6 +156,8 @@ describe('history archive health', () => {
 			assessArchiveScannerHealth({
 				activeChecks: 4,
 				configuredWorkers: 24,
+				freshWorkers: 23,
+				missingWorkers: 1,
 				proofComplete: false,
 				staleChecks: 1,
 				telemetryAvailable: true,
