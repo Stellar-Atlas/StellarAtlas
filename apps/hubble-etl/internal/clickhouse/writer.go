@@ -21,6 +21,9 @@ type BatchIdentity struct {
 type WriterLimits struct {
 	MaximumRows  int
 	MaximumBytes int
+	// Recovery is opt-in; ordinary importer tokens and timestamps stay unchanged.
+	RecoveryNamespace  string
+	RecoveryIngestedAt time.Time
 }
 
 type BatchWriter struct {
@@ -55,11 +58,18 @@ func NewBatchWriter(
 	if limits.MaximumRows < 1 || limits.MaximumBytes < 1024 {
 		return nil, fmt.Errorf("invalid ClickHouse writer limits")
 	}
+	if limits.RecoveryNamespace != "" && (!tokenPattern.MatchString(limits.RecoveryNamespace) || len(limits.RecoveryNamespace) > 64 || limits.RecoveryIngestedAt.IsZero()) {
+		return nil, fmt.Errorf("recovery requires a bounded namespace and fixed ingestion timestamp")
+	}
+	ingestedAt := time.Now().UTC()
+	if limits.RecoveryNamespace != "" {
+		ingestedAt = limits.RecoveryIngestedAt.UTC()
+	}
 	return &BatchWriter{
 		client:     client,
 		identity:   identity,
 		limits:     limits,
-		ingestedAt: time.Now().UTC(),
+		ingestedAt: ingestedAt,
 		tables:     make(map[string]*tableBuffer, len(schema.Datasets())),
 	}, nil
 }
@@ -125,6 +135,18 @@ func (w *BatchWriter) TotalRows() uint64 {
 	return w.totalRows
 }
 
+func (w *BatchWriter) ExpectedRows() map[string]uint64 {
+	result := make(map[string]uint64, len(schema.Datasets()))
+	for _, dataset := range schema.Datasets() {
+		if table := w.tables[dataset.Name]; table != nil {
+			result[dataset.Name] = table.nextRow
+		} else {
+			result[dataset.Name] = 0
+		}
+	}
+	return result
+}
+
 func (w *BatchWriter) flushTable(
 	ctx context.Context,
 	dataset string,
@@ -134,6 +156,9 @@ func (w *BatchWriter) flushTable(
 		return nil
 	}
 	token := w.identity.ID + ":" + dataset + ":" + strconv.FormatUint(table.chunk, 10)
+	if w.limits.RecoveryNamespace != "" {
+		token += ":recovery:" + w.limits.RecoveryNamespace
+	}
 	if err := w.client.Insert(ctx, dataset, token, table.body.Bytes()); err != nil {
 		return err
 	}

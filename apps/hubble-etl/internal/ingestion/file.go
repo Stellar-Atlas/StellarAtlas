@@ -24,13 +24,14 @@ type Request struct {
 }
 
 type Receipt struct {
-	BatchID      string `json:"batchId"`
-	EndLedger    uint32 `json:"endLedger"`
-	LedgerCount  uint32 `json:"ledgerCount"`
-	RowCount     uint64 `json:"rowCount"`
-	Skipped      bool   `json:"skipped"`
-	SourceSHA256 string `json:"sourceSha256"`
-	StartLedger  uint32 `json:"startLedger"`
+	BatchID      string            `json:"batchId"`
+	EndLedger    uint32            `json:"endLedger"`
+	LedgerCount  uint32            `json:"ledgerCount"`
+	RowCount     uint64            `json:"rowCount"`
+	Skipped      bool              `json:"skipped"`
+	SourceSHA256 string            `json:"sourceSha256"`
+	StartLedger  uint32            `json:"startLedger"`
+	DatasetRows  map[string]uint64 `json:"datasetRows,omitempty"`
 }
 
 func File(
@@ -66,6 +67,13 @@ func File(
 		SourceSHA256: request.SourceSHA256,
 		StartLedger:  batch.Start,
 		EndLedger:    batch.End,
+	}
+	if request.WriterLimits.RecoveryNamespace != "" {
+		// A recovery is deliberately not an automatic retry: partial/completed
+		// recovery data requires operator review, never a blind second replay.
+		if err := client.VerifyBatchRows(ctx, identity, nil); err != nil {
+			return receipt, fmt.Errorf("recovery requires an empty batch: %w", err)
+		}
 	}
 	writer, err := clickhouse.NewBatchWriter(
 		client,
@@ -116,12 +124,21 @@ func File(
 	if err := writer.Flush(ctx); err != nil {
 		return receipt, err
 	}
+	if request.WriterLimits.RecoveryNamespace != "" {
+		if err := client.VerifyBatchRows(ctx, identity, writer.ExpectedRows()); err != nil {
+			return receipt, fmt.Errorf("recovery verification failed; completion withheld: %w", err)
+		}
+	}
 	status.Status = "complete"
 	status.Error = ""
 	status.RowCount = writer.TotalRows()
 	status.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	if err := client.RecordBatch(ctx, status); err != nil {
 		return receipt, err
+	}
+	var datasetRows map[string]uint64
+	if request.WriterLimits.RecoveryNamespace != "" {
+		datasetRows = writer.ExpectedRows()
 	}
 	return Receipt{
 		BatchID:      request.BatchID,
@@ -130,6 +147,7 @@ func File(
 		EndLedger:    batch.End,
 		LedgerCount:  uint32(batch.LedgerCount),
 		RowCount:     writer.TotalRows(),
+		DatasetRows:  datasetRows,
 	}, nil
 }
 
