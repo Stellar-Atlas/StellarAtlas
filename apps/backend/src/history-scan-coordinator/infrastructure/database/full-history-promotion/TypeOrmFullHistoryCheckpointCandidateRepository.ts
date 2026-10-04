@@ -2,6 +2,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import type {
 	FullHistoryCandidateSourceObject,
 	FullHistoryCandidateSources,
+	FullHistoryCandidateProof,
 	FullHistoryCheckpointCandidate,
 	FullHistoryPromotionTarget
 } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidate.js';
@@ -84,6 +85,54 @@ interface TransactionBoundsRow {
 
 export class TypeOrmFullHistoryCheckpointCandidateRepository implements FullHistoryCheckpointCandidateRepository {
 	constructor(private readonly dataSource: DataSource) {}
+
+	/** Reload proof metadata without requiring the optional legacy parsed projection. */
+	async loadProof(
+		target: FullHistoryPromotionTarget
+	): Promise<FullHistoryCandidateProof> {
+		validateTarget(target);
+		return this.dataSource.transaction('REPEATABLE READ', async (manager) => {
+			await manager.query(
+				"set transaction read only; set local statement_timeout = '5s'"
+			);
+			const rows = (await manager.query(fullHistoryProofSql, [
+				target.archiveUrlIdentity,
+				target.checkpointLedger
+			])) as ProofRow[];
+			if (rows.length !== 1)
+				throw promotionError(
+					'invalid-proof',
+					'Checkpoint proof is missing or ambiguous'
+				);
+			const proof = rows[0]!;
+			const networkPassphrase = readNetworkPassphrase(proof.details);
+			validateProof(
+				proof,
+				target,
+				target.checkpointLedger === 63 ? 63 : 64,
+				networkPassphrase
+			);
+			const ids = readProofSourceIds(proof);
+			const sources = mapSources(
+				(await manager.query(fullHistorySourceObjectsSql, [
+					Object.values(ids)
+				])) as SourceObjectRow[],
+				ids,
+				target
+			);
+			return {
+				archiveUrlIdentity: proof.archiveUrlIdentity,
+				checkpointLedger: fullHistoryLedgerSequence(
+					BigInt(proof.checkpointLedger)
+				),
+				evaluatedAt: toDate(proof.evaluatedAt, 'proof.evaluatedAt'),
+				id: assertInteger(proof.id, 'proof.id', 1),
+				networkPassphrase,
+				sources,
+				version: assertInteger(proof.proofVersion, 'proof.version', 1, 32_767)
+			};
+		});
+	}
 
 	async load(
 		target: FullHistoryPromotionTarget

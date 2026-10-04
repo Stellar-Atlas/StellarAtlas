@@ -8,6 +8,35 @@ import { TypeOrmFullHistoryPromotionRuntimeRepository } from '../../database/ful
 import { PromoteNextFullHistoryCheckpoint } from '../../../use-cases/promote-next-full-history-checkpoint/PromoteNextFullHistoryCheckpoint.js';
 import { PromoteFullHistoryCheckpoint } from '../../../use-cases/promote-full-history-checkpoint/PromoteFullHistoryCheckpoint.js';
 import { WorkerThreadFullHistoryCheckpointDecoder } from '../full-history-operation-backfill/WorkerThreadFullHistoryCheckpointDecoder.js';
+import { VerifiedArchiveFullHistoryCheckpointCandidateRepository } from '../../full-history-promotion/VerifiedArchiveFullHistoryCheckpointCandidateRepository.js';
+import { RemoteHistoryArchiveRepairObjectArtifactRepository } from '../../repositories/filesystem/RemoteHistoryArchiveRepairObjectArtifactRepository.js';
+import { PostgresHistoryArchiveRepairArtifactWorkPermit } from '../../repositories/database/PostgresHistoryArchiveRepairArtifactWorkPermit.js';
+import type { FullHistoryCheckpointCandidateRepository } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidateRepository.js';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+function candidateRepository(
+	dataSource: DataSource
+): FullHistoryCheckpointCandidateRepository {
+	const parsed = new TypeOrmFullHistoryCheckpointCandidateRepository(
+		dataSource
+	);
+	if (process.env.FULL_HISTORY_PROMOTION_RAW_FALLBACK_ENABLED !== 'true')
+		return parsed;
+	return new VerifiedArchiveFullHistoryCheckpointCandidateRepository(
+		parsed,
+		new RemoteHistoryArchiveRepairObjectArtifactRepository({
+			workPermit: new PostgresHistoryArchiveRepairArtifactWorkPermit(
+				dataSource
+			),
+			stagingDirectory: join(tmpdir(), 'stellaratlas-promotion-raw-recovery'),
+			maxConcurrentDownloads: 1,
+			maxCompressedBytes: 64 * 1024 ** 2,
+			maxUncompressedBytes: 64 * 1024 ** 2,
+			timeoutMs: 20_000
+		})
+	);
+}
 
 export function createFullHistoryPromotionDataSource(poolSize = 2): DataSource {
 	const options = AppDataSource.options;
@@ -29,7 +58,7 @@ export function composeFullHistoryCheckpointPromoter(
 	dataSource: DataSource
 ): PromoteFullHistoryCheckpoint {
 	return new PromoteFullHistoryCheckpoint(
-		new TypeOrmFullHistoryCheckpointCandidateRepository(dataSource),
+		candidateRepository(dataSource),
 		new WorkerThreadFullHistoryCheckpointDecoder(1),
 		new TypeOrmFullHistoryCanonicalRepository(dataSource)
 	);
@@ -47,7 +76,7 @@ export function composeNextFullHistoryCheckpointPromoter(
 			canonicalRepository
 		),
 		new PromoteFullHistoryCheckpoint(
-			new TypeOrmFullHistoryCheckpointCandidateRepository(dataSource),
+			candidateRepository(dataSource),
 			new WorkerThreadFullHistoryCheckpointDecoder(1),
 			canonicalRepository
 		)
