@@ -33,6 +33,7 @@ import {
 	lockHistoryArchiveRootTransitions
 } from './HistoryArchiveRootTransitionLock.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveStaleBucketProofRecoverySql } from './HistoryArchiveStaleBucketProofRecoverySql.js';
 
 export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 	readonly archiveUrlIdentity: string;
@@ -169,7 +170,8 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                 -- proofReconciledAt watermark when their evidence changes.
                 -- Recovery seeding only repairs a missing proof row, an
                 -- interrupted pending proof, or terminal missing-object evidence
-                -- that can advance through a canonical substitution.
+                -- that can advance through a canonical substitution, or a
+                -- bucket proof whose last valid completion lost its wake.
                 and not exists (
                         select 1
                         from "history_archive_checkpoint_substitution" substitution
@@ -196,6 +198,7 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                                         cursor."nextHistoricalCheckpointLedger" - 64
                                 and (
                                         proof.status = 'pending'
+                                        or ${historyArchiveStaleBucketProofRecoverySql('proof')}
                                         or (
                                                 proof.status = 'not-evaluable'
                                                 and proof."failureKind" in (
