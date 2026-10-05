@@ -73,3 +73,22 @@ func TestDatabaseNameIsValidated(t *testing.T) {
 		t.Fatal("expected invalid database name to fail")
 	}
 }
+
+func TestOnlyTransactionsHaveBoundedFutureMergeInputs(t *testing.T) {
+	t.Parallel()
+	const cap = "max_bytes_to_merge_at_max_space_in_pool = 34359738368"
+	for _, dataset := range Datasets() {
+		sql, err := TableSQL("stellar_hubble_v2", dataset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(sql, cap); got != (dataset.Name == "history_transactions") {
+			t.Fatalf("%s unexpected future merge input cap: %s", dataset.Name, sql)
+		}
+		if !strings.Contains(sql, "ENGINE = ReplacingMergeTree(_ingested_at)") ||
+			!strings.Contains(sql, "non_replicated_deduplication_window = 65536") ||
+			!strings.Contains(sql, "`_batch_id`, `_row_number`)") {
+			t.Fatalf("%s must preserve version, retry deduplication and row identity", dataset.Name)
+		}
+	}
+}

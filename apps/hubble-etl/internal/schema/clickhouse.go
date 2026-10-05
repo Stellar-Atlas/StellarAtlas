@@ -107,14 +107,20 @@ func TableSQL(database string, dataset Dataset) (string, error) {
 		}
 		orderFields = append(orderFields, quote(field))
 	}
+	settings := "index_granularity = 8192, non_replicated_deduplication_window = 65536"
+	if dataset.Name == "history_transactions" {
+		// Bound optional wide-row rewrites; existing tables need the explicit
+		// operator ALTER documented in the transaction merge-budget runbook.
+		settings += ", max_bytes_to_merge_at_max_space_in_pool = 34359738368"
+	}
 	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
 %s
 ) ENGINE = ReplacingMergeTree(_ingested_at)
 PARTITION BY intDiv(_ledger_sequence, 1048576)
 ORDER BY (%s)
-SETTINGS index_granularity = 8192, non_replicated_deduplication_window = 65536`,
+SETTINGS %s`,
 		quote(database), quote(dataset.Name), strings.Join(definitions, ",\n"),
-		strings.Join(orderFields, ", ")), nil
+		strings.Join(orderFields, ", "), settings), nil
 }
 
 func SkippingIndexSQL(database string, dataset Dataset) ([]string, error) {
