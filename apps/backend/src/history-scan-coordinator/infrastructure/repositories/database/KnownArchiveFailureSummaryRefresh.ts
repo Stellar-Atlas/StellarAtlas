@@ -4,7 +4,10 @@ import type { KnownArchiveFailureSummaryV1 } from 'shared';
 import { historyArchivePublicSourcePredicateSql } from './HistoryArchivePublicSourceScopeSql.js';
 import { queryKnownArchiveFailureSummary } from './KnownArchiveFailureSummaryQuery.js';
 
-/** Only trusted current roots with remote findings are grouped. Zero uses existing rollups. */
+/** Only trusted current roots with remote findings are grouped. Zero uses existing rollups.
+ * Failed aggregates keep their last good snapshot and a durable per-root cooldown;
+ * they must not repeatedly compete with verification for cold-table reads.
+ */
 export const nextArchiveFailureSummaryRootSql = `
 	select root."archiveUrlIdentity"
 	from (select "archiveUrlIdentity" from history_archive_state_snapshot
@@ -15,7 +18,7 @@ export const nextArchiveFailureSummaryRootSql = `
 		select sum("retainedObjects") from history_archive_retained_remote_summary retained
 		where retained."archiveUrlIdentity" = root."archiveUrlIdentity"),0) > 0
 		and (snapshot."lastAttemptAt" is null or snapshot."lastAttemptAt" <= now() -
-			case when snapshot."lastErrorCode" is not null then interval '30 seconds'
+			case when snapshot."lastErrorCode" is not null then interval '5 minutes'
 				when snapshot.summary->>'attributionVersion' is distinct from '1' then interval '0 seconds'
 				else interval '5 minutes' end)
 	order by snapshot."lastAttemptAt" nulls first, root."archiveUrlIdentity"
@@ -85,16 +88,22 @@ export function startArchiveFailureSummaryRefreshLoop(
 ): () => void {
 	let stopped = false;
 	let timer: NodeJS.Timeout | undefined;
+	let infrastructureFailureDelay = 300_000;
 	const run = async (): Promise<void> => {
 		let delay = 30_000;
 		try {
 			const completed = await refresh();
+			infrastructureFailureDelay = 300_000;
 			if (completed !== null) {
 				delay = 1_000;
 				if (completed.errorCode !== null) report({ code: completed.errorCode });
 			}
 		} catch (error: unknown) {
 			report(error);
+			// No durable attempt could be recorded. Back off this writer rather
+			// than repeatedly retrying a failed selector or snapshot write.
+			delay = infrastructureFailureDelay;
+			infrastructureFailureDelay = Math.min(delay * 2, 900_000);
 		}
 		if (!stopped) {
 			timer = setTimeout(() => void run(), delay);

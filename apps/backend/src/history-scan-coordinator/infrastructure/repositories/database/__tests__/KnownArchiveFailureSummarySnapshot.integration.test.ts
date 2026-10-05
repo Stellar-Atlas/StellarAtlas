@@ -128,6 +128,66 @@ describe('shared exact failure-summary snapshots', () => {
 		});
 		expect(await refresh(db, async () => summary())).toBeNull();
 	});
+	it('persists a five-minute error cooldown while preserving last-good data and allowing healthy roots', async () => {
+		const lastGood = summary();
+		await refresh(db, async () => lastGood);
+		await db.query(
+			'update history_archive_failure_summary_snapshot set "lastAttemptAt"=now()-interval \'6 minutes\''
+		);
+		await refresh(db, async () => {
+			throw { code: '57014' };
+		});
+		await db.query(
+			'update history_archive_failure_summary_snapshot set "lastAttemptAt"=now()-interval \'299 seconds\''
+		);
+		await db.query(
+			'update history_archive_evidence_root_summary set "remoteFailureObjects"=5 where "archiveUrlIdentity"=$1',
+			[other]
+		);
+		const load = jest.fn(async () => summary());
+		expect(await refresh(db, load)).toEqual({ root: other, errorCode: null });
+		expect(await refresh(db, load)).toBeNull();
+		expect(load).toHaveBeenCalledTimes(1);
+		expect((await read(db.manager, [root])).get(root)).toMatchObject({
+			status: 'stale',
+			computedAt: lastGood.computedAt,
+			groups: lastGood.groups,
+			remoteFailureCount: lastGood.remoteFailureCount
+		});
+		await db.query(
+			'update history_archive_failure_summary_snapshot set "lastAttemptAt"=now()-interval \'301 seconds\' where "archiveUrlIdentity"=$1',
+			[root]
+		);
+		expect(await refresh(db, load)).toEqual({ root, errorCode: null });
+		expect((await read(db.manager, [root])).get(root)?.status).toBe('current');
+	});
+	it('does not bypass the error cooldown when no valid last-good attribution exists', async () => {
+		await refresh(db, async () => {
+			throw { code: '57014' };
+		});
+		await db.query(
+			'update history_archive_failure_summary_snapshot set "lastAttemptAt"=now()-interval \'299 seconds\''
+		);
+		const load = jest.fn(async () => summary());
+		expect(await refresh(db, load)).toBeNull();
+		expect(load).not.toHaveBeenCalled();
+		expect((await read(db.manager, [root])).get(root)?.status).toBe(
+			'unavailable'
+		);
+	});
+	it('keeps the existing five-minute successful refresh interval', async () => {
+		await refresh(db, async () => summary());
+		const load = jest.fn(async () => summary());
+		await db.query(
+			'update history_archive_failure_summary_snapshot set "lastAttemptAt"=now()-interval \'299 seconds\''
+		);
+		expect(await refresh(db, load)).toBeNull();
+		await db.query(
+			'update history_archive_failure_summary_snapshot set "lastAttemptAt"=now()-interval \'301 seconds\''
+		);
+		expect(await refresh(db, load)).toEqual({ root, errorCode: null });
+		expect(load).toHaveBeenCalledTimes(1);
+	});
 	it('marks count-changed snapshots stale and missing snapshots unavailable without cold aggregation', async () => {
 		await refresh(db, async () => summary());
 		const values = await attach(db.manager, [

@@ -41,4 +41,45 @@ describe('single-flight due-source failure summary refresh', () => {
 		expect(refresh).toHaveBeenCalledTimes(2);
 		stop();
 	});
+	it('backs off infrastructure errors from five to fifteen minutes and resets after recovery', async () => {
+		const error = { code: '08006' };
+		const refresh = jest
+			.fn()
+			.mockRejectedValueOnce(error)
+			.mockRejectedValueOnce(error)
+			.mockRejectedValueOnce(error)
+			.mockRejectedValueOnce(error)
+			.mockResolvedValueOnce({ root: 'Healthy', errorCode: null })
+			.mockRejectedValueOnce(error)
+			.mockResolvedValue(null);
+		const report = jest.fn();
+		const stop = startArchiveFailureSummaryRefreshLoop(refresh, report);
+		for (const [delay, calls] of [
+			[300_000, 1],
+			[600_000, 2],
+			[900_000, 3],
+			[900_000, 4]
+		]) {
+			await jest.advanceTimersByTimeAsync(delay - 1);
+			expect(refresh).toHaveBeenCalledTimes(calls);
+			await jest.advanceTimersByTimeAsync(1);
+			expect(refresh).toHaveBeenCalledTimes(calls + 1);
+		}
+		await jest.advanceTimersByTimeAsync(1_000);
+		expect(refresh).toHaveBeenCalledTimes(6);
+		await jest.advanceTimersByTimeAsync(299_999);
+		expect(refresh).toHaveBeenCalledTimes(6);
+		await jest.advanceTimersByTimeAsync(1);
+		expect(refresh).toHaveBeenCalledTimes(7);
+		expect(report).toHaveBeenCalledTimes(5);
+		stop();
+	});
+	it('cancels the infrastructure-error backoff on shutdown', async () => {
+		const refresh = jest.fn().mockRejectedValue({ code: '08006' });
+		const stop = startArchiveFailureSummaryRefreshLoop(refresh, jest.fn());
+		await jest.advanceTimersByTimeAsync(1);
+		stop();
+		await jest.advanceTimersByTimeAsync(900_000);
+		expect(refresh).toHaveBeenCalledTimes(1);
+	});
 });
