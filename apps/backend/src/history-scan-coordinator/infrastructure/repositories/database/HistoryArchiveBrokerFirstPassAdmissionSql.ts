@@ -29,16 +29,30 @@ export function historyArchiveBrokerFirstPassAdmissionSql(
 			and ready.priority<=$3::smallint
 			and fresh.status='pending' and fresh.attempts=0
 		group by ready."archiveUrlIdentity",ready.priority,fresh."objectType"
+	), fresh_age_scopes as materialized (
+		select scope."archiveUrlIdentity",scope.priority,
+			bool_or(not exists (
+				select 1 from history_archive_root_failure_control control
+				where control."archiveUrlIdentity"=scope."archiveUrlIdentity"
+					and control.scope in ('*',scope."objectType")
+					and (control."blockedUntil" is not null
+						or coalesce(jsonb_array_length(control."adaptiveProbeState"->'unknown'),0)>0)
+			)) as has_uncontrolled_scope
+		from ready_scopes scope
+		group by scope."archiveUrlIdentity",scope.priority
 	), fresh_root_minimum as materialized (
 		select scope.*,oldest."updatedAt" as first_pass_root_ready_at
-		from (select distinct "archiveUrlIdentity",priority from ready_scopes) scope
+		from fresh_age_scopes scope
 		left join lateral (
 			select lane."updatedAt" from history_archive_object_ready lane
 			cross join lateral (
 				${eligibleSql} and ${scope} and control.scope is null
 					and ready."objectRemoteId"=lane."objectRemoteId" limit 1
 			) eligible_oldest
-			where lane."archiveUrlIdentity"=scope."archiveUrlIdentity"
+			-- Controlled admissions never consume this age. Avoid walking their
+			-- entire ready prefix looking for a categorically impossible NULL control.
+			where scope.has_uncontrolled_scope
+				and lane."archiveUrlIdentity"=scope."archiveUrlIdentity"
 				and lane.priority=scope.priority and lane."publishedAt" is null
 			order by lane."updatedAt",lane."objectRemoteId" limit 1
 		) oldest on true
