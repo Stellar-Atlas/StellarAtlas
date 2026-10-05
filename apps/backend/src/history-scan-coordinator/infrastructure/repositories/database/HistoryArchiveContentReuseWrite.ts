@@ -1,4 +1,5 @@
 import type { EntityManager } from 'typeorm';
+import { resolveReusableCompletionsSql } from './HistoryArchiveContentCompletionReferenceSql.js';
 import {
 	historyArchiveContentDerivationVersionV1,
 	type HistoryArchiveContentReuseRequestV1,
@@ -156,36 +157,47 @@ export async function prepareHistoryArchiveContentCompletions(
 							sourceObjectRemoteId: progress.contentReuse!.sourceObjectRemoteId
 						}))
 					)
-				])) as readonly (ArtifactRow & {
+				])) as readonly {
+					readonly activeClaim: boolean;
+					readonly artifactId: string | null;
 					readonly objectType: HistoryArchiveObjectType;
+					readonly objectUrl: string;
 					readonly remoteId: string;
-				})[]);
+					readonly verificationFacts: unknown;
+				}[]);
 	const rowsByRemoteId = new Map(rows.map((row) => [row.remoteId, row]));
 
-	return updates.map(({ progress, remoteId }) => {
-		const reuse = progress.contentReuse;
-		if (reuse === undefined) {
-			return { prepared: { progress, reuse: null }, remoteId };
+	return updates.flatMap<PreparedHistoryArchiveContentCompletion>(
+		({ progress, remoteId }) => {
+			const reuse = progress.contentReuse;
+			if (reuse === undefined) {
+				return [{ prepared: { progress, reuse: null }, remoteId }];
+			}
+			const row = rowsByRemoteId.get(remoteId);
+			if (row === undefined || !row.activeClaim) return [];
+			if (row.artifactId === null) {
+				throw new Error(
+					'Content reuse artifact does not match the active claim'
+				);
+			}
+			return [
+				{
+					prepared: {
+						progress: {
+							...progress,
+							verificationFacts: rehydrateSourceUrl(
+								row.objectType,
+								row.verificationFacts,
+								row.objectUrl
+							)
+						},
+						reuse
+					},
+					remoteId
+				}
+			];
 		}
-		const row = rowsByRemoteId.get(remoteId);
-		if (row === undefined) {
-			throw new Error('Content reuse artifact does not match the active claim');
-		}
-		return {
-			prepared: {
-				progress: {
-					...progress,
-					verificationFacts: rehydrateSourceUrl(
-						row.objectType,
-						row.verificationFacts,
-						row.objectUrl
-					)
-				},
-				reuse
-			},
-			remoteId
-		};
-	});
+	);
 }
 
 export async function recordHistoryArchiveContentEvidenceBatch(
@@ -510,58 +522,6 @@ const findReusableContentSql = `
 	)
 	order by artifact."createdAt", artifact.id
 	limit 1
-`;
-
-const resolveReusableCompletionsSql = `
-        with input as materialized (
-                select *
-                from jsonb_to_recordset($1::jsonb) as input(
-                        "remoteId" uuid,
-                        "executionId" uuid,
-                        "claimAttempt" integer,
-                        "artifactId" uuid,
-                        "sourceObjectRemoteId" uuid,
-                        "contentDigest" text,
-                        "contentRepresentation" text,
-                        "derivationVersion" integer
-                )
-        )
-        select input."remoteId",
-                artifact.id as "artifactId",
-                artifact."sourceObjectRemoteId",
-                artifact."verificationFacts",
-                object."objectType",
-                object."objectUrl"
-        from input
-        join "history_archive_object_queue" object
-                on object."remoteId" = input."remoteId"
-        join "history_archive_object_ready" ready
-                on ready."objectRemoteId" = object."remoteId"
-                and ready."dispatchToken" = input."executionId"
-                and ready."claimAttempt" = input."claimAttempt"
-                and ready."publishedAt" is not null
-        join "history_archive_content_artifact" artifact
-                on artifact.id = input."artifactId"
-                and artifact."sourceObjectRemoteId" =
-                        input."sourceObjectRemoteId"
-                and artifact."objectType" = object."objectType"
-                and artifact."objectKey" = object."objectKey"
-                and artifact."checkpointLedger" is not distinct from
-                        object."checkpointLedger"
-                and artifact."contentDigest" = input."contentDigest"
-                and artifact."contentRepresentation" =
-                        input."contentRepresentation"
-                and artifact."derivationVersion" =
-                        input."derivationVersion"
-        where exists (
-                select 1
-                from "history_archive_content_observation" observation
-                where observation."artifactId" = artifact.id
-                        and observation."objectRemoteId" =
-                                artifact."sourceObjectRemoteId"
-                        and observation."claimAttempt" =
-                                artifact."sourceClaimAttempt"
-        )
 `;
 
 const completionObjectsBatchSql = `

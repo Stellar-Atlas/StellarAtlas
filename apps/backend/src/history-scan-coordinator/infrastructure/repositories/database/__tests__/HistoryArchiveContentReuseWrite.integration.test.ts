@@ -10,6 +10,7 @@ import { HistoryArchiveContentReuseMigration1785520000000 } from '../../../datab
 import {
 	findReusableHistoryArchiveContent,
 	prepareHistoryArchiveContentCompletion,
+	prepareHistoryArchiveContentCompletions,
 	recordHistoryArchiveContentEvidence
 } from '../HistoryArchiveContentReuseWrite.js';
 
@@ -215,6 +216,125 @@ describe('history archive content reuse in PostgreSQL', () => {
 		await expect(
 			dataSource.query(`truncate history_archive_content_observation`)
 		).rejects.toThrow(/append-only/);
+
+		// The successful transaction committed, but its HTTP response was lost.
+		// Normal completion removes the ready claim before a client can retry.
+		await dataSource.query(
+			`delete from history_archive_object_ready where "objectRemoteId" = $1`,
+			[targetRemoteId]
+		);
+		await expect(
+			prepareHistoryArchiveContentCompletions(dataSource.manager, [
+				{ remoteId: targetRemoteId, progress }
+			])
+		).resolves.toEqual([]);
+
+		const activeRemoteId = '792c1cc4-ae76-42e3-b610-2903a8c8d5ac';
+		const activeExecutionId = '40adf94d-6e0f-4d20-8db8-114653577b7e';
+		await insertObject(dataSource, {
+			attempts: 0,
+			facts: null,
+			remoteId: activeRemoteId,
+			status: 'pending',
+			url: targetUrl
+		});
+		await dataSource.query(
+			`insert into history_archive_object_ready (
+				"objectRemoteId", "dispatchToken", "claimAttempt", "publishedAt"
+			 ) values ($1::uuid, $2::uuid, 1, now())`,
+			[activeRemoteId, activeExecutionId]
+		);
+		const activeProgress = { ...progress, executionId: activeExecutionId };
+		const mixed = await prepareHistoryArchiveContentCompletions(
+			dataSource.manager,
+			[
+				{ remoteId: targetRemoteId, progress },
+				{ remoteId: activeRemoteId, progress: activeProgress }
+			]
+		);
+		expect(mixed.map((item) => item.remoteId)).toEqual([activeRemoteId]);
+		expect(mixed[0]?.prepared.progress.verificationFacts).toMatchObject({
+			content: { digest },
+			ledgerCategory: { sourceUrl: targetUrl }
+		});
+
+		// Neither a different token, attempt, nor an unpublished claim authorizes
+		// this artifact. They are stale results, not accepted verification writes.
+		for (const stale of [
+			{ ...activeProgress, executionId: targetExecutionId },
+			{ ...activeProgress, claimAttempt: 2 }
+		]) {
+			await expect(
+				prepareHistoryArchiveContentCompletions(dataSource.manager, [
+					{ remoteId: activeRemoteId, progress: stale }
+				])
+			).resolves.toEqual([]);
+		}
+		await dataSource.query(
+			`update history_archive_object_ready
+			set "publishedAt" = null where "objectRemoteId" = $1`,
+			[activeRemoteId]
+		);
+		await expect(
+			prepareHistoryArchiveContentCompletions(dataSource.manager, [
+				{ remoteId: activeRemoteId, progress: activeProgress }
+			])
+		).resolves.toEqual([]);
+		await dataSource.query(
+			`update history_archive_object_ready
+			set "publishedAt" = now() where "objectRemoteId" = $1`,
+			[activeRemoteId]
+		);
+
+		// A live claim with a bad artifact remains an error, including when an
+		// unrelated stale replay shares its batch. Do not turn either into success.
+		for (const invalid of [
+			{ ...activeProgress.contentReuse, contentDigest: '0'.repeat(64) },
+			{ ...activeProgress.contentReuse, sourceObjectRemoteId: targetRemoteId },
+			{ ...activeProgress.contentReuse, artifactId: activeRemoteId }
+		]) {
+			await expect(
+				prepareHistoryArchiveContentCompletions(dataSource.manager, [
+					{ remoteId: targetRemoteId, progress },
+					{
+						remoteId: activeRemoteId,
+						progress: { ...activeProgress, contentReuse: invalid }
+					}
+				])
+			).rejects.toThrow(
+				'Content reuse artifact does not match the active claim'
+			);
+		}
+		for (const changed of [
+			{ key: 'ledger:0000007f', checkpoint: 63, type: 'ledger' },
+			{ key: objectKey, checkpoint: 127, type: 'ledger' },
+			{ key: objectKey, checkpoint: 63, type: 'transactions' }
+		]) {
+			await dataSource.query(
+				`update history_archive_object_queue
+				set "objectKey" = $2, "checkpointLedger" = $3, "objectType" = $4
+				where "remoteId" = $1`,
+				[activeRemoteId, changed.key, changed.checkpoint, changed.type]
+			);
+			await expect(
+				prepareHistoryArchiveContentCompletions(dataSource.manager, [
+					{ remoteId: activeRemoteId, progress: activeProgress }
+				])
+			).rejects.toThrow(
+				'Content reuse artifact does not match the active claim'
+			);
+		}
+		expect(
+			await dataSource.query(
+				`select status, attempts, "verificationFacts"
+			from history_archive_object_queue where "remoteId" = $1`,
+				[activeRemoteId]
+			)
+		).toEqual([{ status: 'pending', attempts: 0, verificationFacts: null }]);
+		expect(
+			await dataSource.query(`select count(*)::int as count
+			from history_archive_content_observation`)
+		).toEqual([{ count: 2 }]);
 	});
 });
 
