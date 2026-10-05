@@ -3,6 +3,7 @@ import type {
 	HistoryArchivePublicVerificationFactsV1,
 	HistoryArchivePublicCategorySummaryV1
 } from 'shared';
+import { isHistoryArchiveContentReuseV1 } from 'shared';
 import {
 	historyArchiveWorkerStages,
 	type HistoryArchiveObjectFailureChannelDTO
@@ -23,17 +24,27 @@ export function mapPublicVerificationFacts(
 ): HistoryArchivePublicVerificationFactsV1 | null {
 	if (!isRecord(value)) return null;
 	const facts: MutablePublicFacts = {};
+	const reference = value.contentReference;
+	const compact =
+		isRecord(reference) &&
+		isCount(reference.claimAttempt) &&
+		reference.claimAttempt > 0 &&
+		isRecord(value.content) &&
+		isHistoryArchiveContentReuseV1({
+			...reference,
+			contentDigest: value.content.digest
+		});
 	const content = mapContent(value.content);
 	if (content !== null) facts.content = content;
 	const bucketObject = mapBucketObject(value.bucketObject);
 	if (bucketObject !== null) facts.bucketObject = bucketObject;
 	const checkpoint = mapCheckpointFact(value.checkpointHistoryArchiveStateFact);
 	if (checkpoint !== null) facts.checkpointHistoryArchiveStateFact = checkpoint;
-	const ledgerCategory = mapCategory(value.ledgerCategory);
+	const ledgerCategory = mapCategory(value.ledgerCategory, compact);
 	if (ledgerCategory !== null) facts.ledgerCategory = ledgerCategory;
-	const resultsCategory = mapCategory(value.resultsCategory);
+	const resultsCategory = mapCategory(value.resultsCategory, compact);
 	if (resultsCategory !== null) facts.resultsCategory = resultsCategory;
-	const transactionsCategory = mapCategory(value.transactionsCategory);
+	const transactionsCategory = mapCategory(value.transactionsCategory, compact);
 	if (transactionsCategory !== null) {
 		facts.transactionsCategory = transactionsCategory;
 	}
@@ -208,9 +219,28 @@ function mapCheckpointFact(
 }
 
 function mapCategory(
-	value: unknown
+	value: unknown,
+	compact: boolean
 ): HistoryArchivePublicCategorySummaryV1 | null {
 	if (!isRecord(value) || !isCount(value.entryCount)) return null;
+	// Only server-derived compact rows reach this mapper. The database validates
+	// these summaries against the same immutable artifact as their source facts.
+	const summary = value.sharedSummary;
+	if (
+		compact &&
+		!Array.isArray(value.ledgers) &&
+		isRecord(summary) &&
+		isCount(summary.ledgerCount) &&
+		(summary.firstLedger === null || isLedger(summary.firstLedger)) &&
+		(summary.lastLedger === null || isLedger(summary.lastLedger))
+	) {
+		return {
+			entryCount: value.entryCount,
+			firstLedger: summary.firstLedger,
+			lastLedger: summary.lastLedger,
+			ledgerCount: summary.ledgerCount
+		};
+	}
 	if (!Array.isArray(value.ledgers) || value.ledgers.length > 10_000) {
 		return {
 			entryCount: value.entryCount,

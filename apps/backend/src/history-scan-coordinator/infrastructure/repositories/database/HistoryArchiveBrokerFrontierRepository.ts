@@ -1,4 +1,5 @@
 import type { DataSource, EntityManager } from 'typeorm';
+import { HistoryArchiveBrokerCandidateProjection } from './HistoryArchiveBrokerCandidateProjection.js';
 import { historyArchiveRootControlAllowedSql } from './HistoryArchiveRootFailureControl.js';
 import { maintainHistoryArchiveAdaptiveProbes } from './HistoryArchiveAdaptiveProbeMaintenance.js';
 import {
@@ -18,6 +19,7 @@ import {
 } from './HistoryArchiveObjectReadyQueue.js';
 import {
 	reserveBrokerJobsSql,
+	historyArchiveBrokerCandidateProjectionEnabled,
 	reserveBrokerSingleSlotRetrySql
 } from './HistoryArchiveBrokerReservationSql.js';
 export { reserveBrokerJobsSql } from './HistoryArchiveBrokerReservationSql.js';
@@ -201,6 +203,8 @@ function mapAndOrderBrokerJobs(
 }
 
 export class HistoryArchiveBrokerFrontierRepository {
+	private readonly candidateProjection =
+		new HistoryArchiveBrokerCandidateProjection();
 	private preferRetryOnSingleSlot = false;
 	constructor(
 		private readonly dataSource: DataSource,
@@ -305,6 +309,16 @@ export class HistoryArchiveBrokerFrontierRepository {
 		canonicalFirstRoot: string | null = null
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
+		if (historyArchiveBrokerCandidateProjectionEnabled)
+			await withBoundedArchiveBrokerMaintenance(
+				this.dataSource,
+				async (manager) => {
+					await this.candidateProjection.maintain(manager, limit);
+					return true;
+				},
+				false,
+				this.onMaintenanceDeferred
+			);
 		await this.maintainAdaptiveProbes(limit);
 		return await this.dataSource.transaction(async (manager) => {
 			await this.takeDispatcherLock(manager);

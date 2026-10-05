@@ -44,7 +44,12 @@ const transientSourceRetrySql = `(
 
 // Round-robin within each priority across eligible roots; ledger order is local
 // to a root. Apply the same rounds before host caps so shared hosts stay fair.
-function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
+export function buildReserveBrokerJobsSql(
+	preferRetryOnSingleSlot: boolean,
+	candidateRelation:
+		| 'history_archive_broker_candidate'
+		| 'history_archive_object_queue' = 'history_archive_broker_candidate'
+): string {
 	return `
 	with ${historyArchiveCanonicalFirstScopeCteSql('$4::text')}, active_hosts as materialized (
 		select object."hostIdentity", count(*)::integer as active_count
@@ -68,7 +73,7 @@ function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
 				and ${historyArchiveInconclusiveTransportFailureSql('object')}) as is_retry,
 			coalesce(active.active_count, 0) as active_count
 		from "history_archive_object_ready" ready
-		join "history_archive_object_queue" object
+		join "${candidateRelation}" object
 			on object."remoteId" = ready."objectRemoteId"
 		left join history_archive_retained_remote_finding retained
 			on retained."objectRemoteId" = object."remoteId"
@@ -260,5 +265,18 @@ function buildReserveBrokerJobsSql(preferRetryOnSingleSlot: boolean): string {
 `;
 }
 
-export const reserveBrokerJobsSql = buildReserveBrokerJobsSql(false);
-export const reserveBrokerSingleSlotRetrySql = buildReserveBrokerJobsSql(true);
+// Enable only after the additive projection migration and bounded ready-only
+// bootstrap have completed. Old binaries and rollback keep the original path.
+export const historyArchiveBrokerCandidateProjectionEnabled =
+	process.env.HISTORY_ARCHIVE_BROKER_CANDIDATE_PROJECTION_ENABLED === 'true';
+const brokerCandidateRelation = historyArchiveBrokerCandidateProjectionEnabled
+	? 'history_archive_broker_candidate'
+	: 'history_archive_object_queue';
+export const reserveBrokerJobsSql = buildReserveBrokerJobsSql(
+	false,
+	brokerCandidateRelation
+);
+export const reserveBrokerSingleSlotRetrySql = buildReserveBrokerJobsSql(
+	true,
+	brokerCandidateRelation
+);

@@ -1,4 +1,5 @@
 import { resolveVerifiedRemoteFindingsSql } from './HistoryArchiveRetainedRemoteFindingSql.js';
+import { contentFactsForStorage } from './HistoryArchiveCompactContentFacts.js';
 import { clearRootFailureOnVerifiedCteSql } from './HistoryArchiveRootFailureControl.js';
 import type { Repository } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
@@ -65,7 +66,7 @@ export async function markHistoryArchiveObjectsVerified(
 					hasVerificationFacts: progress.verificationFacts !== undefined,
 					remoteId,
 					scheduler: progress.scheduler ?? 'legacy',
-					verificationFacts: progress.verificationFacts ?? null,
+					verificationFacts: contentFactsForStorage(prepared) ?? null,
 					workerStage: progress.workerStage ?? null
 				};
 			})

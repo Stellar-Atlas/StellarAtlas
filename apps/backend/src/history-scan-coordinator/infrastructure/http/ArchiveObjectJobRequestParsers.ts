@@ -101,6 +101,12 @@ export function parseArchiveObjectProgress(
 		progress.contentReuse = body.contentReuse;
 	}
 	if ('verificationFacts' in body) {
+		if (hasReservedContentFacts(body.verificationFacts)) {
+			res
+				.status(400)
+				.json({ error: 'Shared content references are server-managed' });
+			return null;
+		}
 		if (
 			body.verificationFacts !== null &&
 			(typeof body.verificationFacts !== 'object' ||
@@ -201,6 +207,12 @@ export function parseArchiveObjectFailure(
 		res.status(400).json({ error: 'listingGap is invalid' });
 		return null;
 	}
+	if (hasReservedContentFacts(body.verificationFacts)) {
+		res
+			.status(400)
+			.json({ error: 'Shared content references are server-managed' });
+		return null;
+	}
 	if (
 		body.listingCapability !== undefined &&
 		!isHistoryArchiveListingCapabilityDTO(body.listingCapability)
@@ -249,4 +261,14 @@ export function parseClaimAttempt(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasReservedContentFacts(value: unknown): boolean {
+	return (
+		isRecord(value) &&
+		('contentReference' in value ||
+			['ledgerCategory', 'transactionsCategory', 'resultsCategory'].some(
+				(key) => isRecord(value[key]) && 'sharedSummary' in value[key]
+			))
+	);
 }

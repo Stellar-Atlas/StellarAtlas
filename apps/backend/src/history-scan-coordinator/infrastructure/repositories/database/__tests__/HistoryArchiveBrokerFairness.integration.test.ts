@@ -27,6 +27,7 @@ describe('broker per-root reservation rounds', () => {
 			"objectRemoteId" uuid primary key, "archiveUrlIdentity" text not null,
 			priority smallint not null, "availableAt" timestamptz not null,
 			"dispatchToken" uuid, "claimAttempt" integer, "publishedAt" timestamptz,
+			"recheckRequestedAt" timestamptz,
 			"updatedAt" timestamptz not null
 		)`);
 		repository = new HistoryArchiveBrokerFrontierRepository(db);

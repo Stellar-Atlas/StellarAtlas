@@ -20,6 +20,9 @@ import { HistoryArchiveClaimLeaseMigration1785340000000 } from '../../../databas
 import { HistoryArchiveRepairActionIndexMigration1785370000000 } from '../../../database/migrations/1785370000000-HistoryArchiveRepairActionIndexMigration.js';
 import { HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000 } from '../../../database/migrations/1785510000000-HistoryArchiveCheckpointProofRefreshQueueMigration.js';
 import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
+import { HistoryArchiveContentReuseMigration1785520000000 } from '../../../database/migrations/1785520000000-HistoryArchiveContentReuseMigration.js';
+import { HistoryArchiveCompactContentFactsMigration1791186000000 } from '../../../database/migrations/1791186000000-HistoryArchiveCompactContentFactsMigration.js';
+import { historyArchiveRootFailureControlSchemaSql } from '../HistoryArchiveRootFailureControl.js';
 
 export const proofArchiveUrl = 'https://proof.example/archive';
 export const proofBucketHash = 'a'.repeat(64);
@@ -53,6 +56,20 @@ export async function createProofDataSource(url: string): Promise<{
 	await new HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000().up(
 		queryRunner
 	);
+	await new HistoryArchiveContentReuseMigration1785520000000().up(queryRunner);
+	await new HistoryArchiveCompactContentFactsMigration1791186000000().up(
+		queryRunner
+	);
+	// Fixture resets only: production append-only triggers remain fully enabled.
+	await queryRunner.query(`
+		alter table history_archive_content_artifact disable trigger "TR_history_archive_content_artifact_no_truncate";
+		alter table history_archive_content_observation disable trigger "TR_history_archive_content_observation_no_truncate";
+		alter table history_archive_object_ready
+			add column if not exists "dispatchToken" uuid,
+			add column if not exists "claimAttempt" integer,
+			add column if not exists "publishedAt" timestamptz;
+	`);
+	await queryRunner.query(historyArchiveRootFailureControlSchemaSql);
 	await queryRunner.release();
 	await createCanonicalFrontierTestSchema(dataSource);
 	return {

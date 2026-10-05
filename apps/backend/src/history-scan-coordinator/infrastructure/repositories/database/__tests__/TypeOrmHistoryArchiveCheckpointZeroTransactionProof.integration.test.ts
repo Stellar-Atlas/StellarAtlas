@@ -172,9 +172,8 @@ describe('archive proof for zero-transaction ledger category frames', () => {
 function protocol26EmptyTransactionSetHash(
 	previousLedgerHeaderHash: string
 ): string {
-	const classicPhase = new xdr.TransactionPhase(0, []);
-	const parallelPhase = new xdr.TransactionPhase(
-		1,
+	const classicPhase = xdr.TransactionPhase.v0Components([]);
+	const parallelPhase = xdr.TransactionPhase.parallelTxsComponent(
 		new xdr.ParallelTxsComponent({ baseFee: null, executionStages: [] })
 	);
 	const transactionSet = new xdr.TransactionSetV1({
@@ -182,6 +181,6 @@ function protocol26EmptyTransactionSetHash(
 		previousLedgerHash: Buffer.from(previousLedgerHeaderHash, 'base64')
 	});
 	return createHash('sha256')
-		.update(new xdr.GeneralizedTransactionSet(1, transactionSet).toXDR())
+		.update(xdr.GeneralizedTransactionSet.v1TxSet(transactionSet).toXDR())
 		.digest('base64');
 }

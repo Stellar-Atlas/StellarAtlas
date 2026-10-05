@@ -11,14 +11,14 @@ export function toHistoryArchiveCheckpointProofRefreshParams(
 	];
 }
 
-export const ledgerFactsJsonSql = `
-	coalesce("verificationFacts"->'ledgerCategory'->'ledgers', '[]'::jsonb)
-`;
+function categoryLedgersSql(
+	objectType: 'ledger' | 'transactions' | 'results'
+): string {
+	return `history_archive_category_ledgers(object."remoteId", object.attempts,
+		'${objectType}', object."objectKey", object."checkpointLedger",
+		object."objectUrl", object."verificationFacts")`;
+}
 
-export const transactionsFactsJsonSql = `
-	coalesce("verificationFacts"->'transactionsCategory'->'ledgers', '[]'::jsonb)
-`;
-
-export const resultsFactsJsonSql = `
-	coalesce("verificationFacts"->'resultsCategory'->'ledgers', '[]'::jsonb)
-`;
+export const ledgerFactsJsonSql = categoryLedgersSql('ledger');
+export const transactionsFactsJsonSql = categoryLedgersSql('transactions');
+export const resultsFactsJsonSql = categoryLedgersSql('results');

@@ -180,7 +180,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			source."checkpointLedger",
 			source."objectType",
 			source.entry_count,
-			bool_and(source.source_matches) as source_matches,
+			bool_and(source.source_matches and source.facts is not null) as source_matches,
 			bool_and(source.ledger_header_hashes_verified)
 				as ledger_header_hashes_verified,
 			jsonb_array_length(source.facts) as raw_fact_count,
