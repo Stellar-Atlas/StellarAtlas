@@ -42,7 +42,7 @@ export function contentFactsForStorage(
 	const sequences = [...new Set(ledgers.map((fact) => fact.ledger))].toSorted(
 		(left, right) => left - right
 	);
-	return {
+	const compact: HistoryArchiveCompactContentFacts = {
 		content: facts.content,
 		contentReference: {
 			artifactId: reuse.artifactId,
@@ -60,4 +60,10 @@ export function contentFactsForStorage(
 			}
 		}
 	};
+	// References add overhead for small categories. Persist them only when they
+	// actually reduce the serialized UTF-8 payload; existing references still read.
+	return Buffer.byteLength(JSON.stringify(compact), 'utf8') <
+		Buffer.byteLength(JSON.stringify(facts), 'utf8')
+		? compact
+		: facts;
 }

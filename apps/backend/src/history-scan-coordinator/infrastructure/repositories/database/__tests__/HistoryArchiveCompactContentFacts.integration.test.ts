@@ -22,7 +22,6 @@ import {
 	refreshAndLoadProof
 } from './HistoryArchiveCheckpointProofFixture.js';
 import type { TypeOrmHistoryArchiveCheckpointProofRepository } from '../TypeOrmHistoryArchiveCheckpointProofRepository.js';
-
 jest.setTimeout(90_000);
 type Category = 'ledger' | 'transactions' | 'results';
 interface ReuseFixture {
@@ -30,7 +29,6 @@ interface ReuseFixture {
 	readonly source: HistoryArchiveObject;
 	readonly prepared: PreparedContentCompletion;
 }
-
 describe('compact shared category facts in PostgreSQL', () => {
 	let postgres: DisposablePostgres;
 	let db: DataSource;
@@ -122,9 +120,9 @@ describe('compact shared category facts in PostgreSQL', () => {
 		}
 		fixtures.push(await createReuse('ledger', proofCheckpointLedger - 64));
 	}
-
-	it('writes only compact cache-hit facts, retains exact observations and verifies the whole checkpoint plus predecessor', async () => {
+	it('writes smaller compact facts and verifies them with an existing compact predecessor', async () => {
 		await completeAll();
+		await compactLegacyObjects([fixtures[3]!.target.remoteId]);
 		expect(await refreshAndLoadProof(db, proofs)).toMatchObject({
 			status: 'verified',
 			proofFactsComplete: true,
@@ -188,7 +186,6 @@ describe('compact shared category facts in PostgreSQL', () => {
 			proofFactsComplete: false
 		});
 	});
-
 	it('does not interpret missing references or missing zero-entry arrays as empty verified categories', async () => {
 		await completeAll();
 		const target = fixtures[1]!.target;
@@ -216,29 +213,34 @@ describe('compact shared category facts in PostgreSQL', () => {
 		});
 	});
 
-	it('proves genuine compact zero-entry categories but not a missing zero-entry observation', async () => {
+	it('keeps new empty categories full and still proves existing compact empty categories', async () => {
 		await initializeFixtures(true);
 		await completeAll();
+		for (const fixture of fixtures.slice(1, 3)) {
+			expect(await storedFacts(fixture.target.remoteId)).toEqual(
+				fixture.prepared.progress.verificationFacts
+			);
+		}
+		await compactLegacyObjects(
+			fixtures.slice(1, 3).map((f) => f.target.remoteId)
+		);
 		expect(await refreshAndLoadProof(db, proofs)).toMatchObject({
 			status: 'verified',
 			proofFactsComplete: true,
 			transactionFactCount: 0,
 			resultFactCount: 0
 		});
-		// A fresh attempt has no accepted observation. No append-only evidence is removed.
 		await db.query(
 			`update history_archive_object_queue set attempts=2,
 			"verificationFacts"=jsonb_set("verificationFacts",'{contentReference,claimAttempt}','2') where "remoteId"=$1`,
 			[fixtures[1]!.target.remoteId]
 		);
 		expect(await resolved(fixtures[1]!.target.remoteId)).toBeNull();
-		// Remove only the derived test proof, never source content evidence.
 		await db.query(`delete from history_archive_checkpoint_proof`);
 		expect(await refreshAndLoadProof(db, proofs)).toMatchObject({
 			proofFactsComplete: false
 		});
 	});
-
 	it('rejects a compact completion whose source artifact lacks its original observation', async () => {
 		const fixture = fixtures[0]!;
 		const source = fixture.source;
@@ -469,6 +471,15 @@ describe('compact shared category facts in PostgreSQL', () => {
 				remoteId: f.target.remoteId,
 				progress: f.prepared.progress
 			}))
+		);
+	}
+	async function compactLegacyObjects(ids: string[]): Promise<void> {
+		await db.query(
+			`update history_archive_object_queue object set "verificationFacts"=
+			history_archive_compact_content_facts(artifact."verificationFacts", object."objectType", object."objectUrl", artifact.id, artifact."sourceObjectRemoteId", artifact."derivationVersion", object.attempts)
+			from history_archive_content_observation observation join history_archive_content_artifact artifact on artifact.id=observation."artifactId"
+			where object."remoteId"=observation."objectRemoteId" and object.attempts=observation."claimAttempt" and object."remoteId"=any($1::uuid[])`,
+			[ids]
 		);
 	}
 	async function storedFacts(id: string): Promise<Record<string, unknown>> {
