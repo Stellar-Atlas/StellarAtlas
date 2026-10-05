@@ -1,4 +1,10 @@
 import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObjectReadyQueue.js';
+import { historyArchiveBrokerFirstPassAdmissionSql } from './HistoryArchiveBrokerFirstPassAdmissionSql.js';
+import {
+	getHistoryArchiveRetryPhase,
+	type HistoryArchiveRetryPhase,
+	historyArchiveNeverAttemptedSql
+} from './HistoryArchiveFirstPassPolicy.js';
 import { historyArchiveRootControlAllowedSql } from './HistoryArchiveRootFailureControl.js';
 import { historyArchiveHostScanAllowedSql } from '../../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 import { historyArchiveRetryLaneDivisor } from '../../../domain/history-archive-object/HistoryArchiveInconclusiveRetry.js';
@@ -48,28 +54,27 @@ export function buildReserveBrokerJobsSql(
 	preferRetryOnSingleSlot: boolean,
 	candidateRelation:
 		| 'history_archive_broker_candidate'
-		| 'history_archive_object_queue' = 'history_archive_broker_candidate'
+		| 'history_archive_object_queue' = 'history_archive_broker_candidate',
+	phase: HistoryArchiveRetryPhase = getHistoryArchiveRetryPhase()
 ): string {
-	return `
-	with ${historyArchiveCanonicalFirstScopeCteSql('$4::text')}, active_hosts as materialized (
-		select object."hostIdentity", count(*)::integer as active_count
-		from "history_archive_object_ready" ready
-		join "history_archive_object_queue" object
-			on object."remoteId" = ready."objectRemoteId"
-		where ready."publishedAt" is not null
-		group by object."hostIdentity"
-	), eligible as materialized (
+	const firstPass = phase === 'first-pass';
+	const neverAttempted = historyArchiveNeverAttemptedSql('object');
+	const transientRetry = firstPass
+		? `(not ${neverAttempted} and ${transientSourceRetrySql})`
+		: transientSourceRetrySql;
+	const eligibleSql = `
 		select ready."objectRemoteId",
 			ready."archiveUrlIdentity",
 			ready.priority as stored_priority,
-			case when ${transientSourceRetrySql} then 0 else ready.priority end as priority,
+			case when ${transientRetry} then 0 else ready.priority end as priority,
+			${firstPass ? neverAttempted : 'false'} as is_first_pass,
 			ready."dispatchToken",
 			ready."updatedAt",
 			object."hostIdentity",
 			object."checkpointLedger", object."objectOrder",object."objectType",
 			control.scope as control_scope,
-			${transientSourceRetrySql} as is_transient_source_retry,
-			(object.status = 'failed' and not ${transientSourceRetrySql}
+			${transientRetry} as is_transient_source_retry,
+			(object.status = 'failed' and not ${transientRetry}
 				and ${historyArchiveInconclusiveTransportFailureSql('object')}) as is_retry,
 			coalesce(active.active_count, 0) as active_count
 		from "history_archive_object_ready" ready
@@ -91,7 +96,7 @@ export function buildReserveBrokerJobsSql(
 		where ready."publishedAt" is null
 			and ${historyArchiveRootControlAllowedSql('object')}
 			and ${historyArchiveHostScanAllowedSql('object')}
-			and ${historyArchiveManualOrAutomaticSourceRetrySql('object', 'ready')}
+			and ${historyArchiveManualOrAutomaticSourceRetrySql('object', 'ready', phase)}
 			and ready."availableAt" <= now()
 			and (
 				ready."dispatchToken" is not null
@@ -112,18 +117,31 @@ export function buildReserveBrokerJobsSql(
 				ready."dispatchToken" is not null
 				or ${historyArchiveCheckpointNotFoundCooldownSql('object')}
 			)
-	), root_probe_ranked as materialized (
+	`;
+	const admission =
+		firstPass && candidateRelation === 'history_archive_broker_candidate'
+			? historyArchiveBrokerFirstPassAdmissionSql(eligibleSql)
+			: `eligible as materialized (select source.*,null::timestamptz as first_pass_root_ready_at from (${eligibleSql}) source)`;
+	return `
+	with ${historyArchiveCanonicalFirstScopeCteSql('$4::text')}, active_hosts as materialized (
+		select object."hostIdentity", count(*)::integer as active_count
+		from "history_archive_object_ready" ready
+		join "history_archive_object_queue" object
+			on object."remoteId" = ready."objectRemoteId"
+		where ready."publishedAt" is not null
+		group by object."hostIdentity"
+	), ${admission}, root_probe_ranked as materialized (
 		select eligible.*,row_number() over (
 			partition by "archiveUrlIdentity",control_scope
-			order by priority,"checkpointLedger" asc nulls first,"objectOrder","objectRemoteId"
+			order by is_first_pass desc,priority,"checkpointLedger" asc nulls first,"objectOrder","objectRemoteId"
 		) as probe_rank from eligible
 	), root_rounds as materialized (
 		select candidate.*,
-			min(candidate."updatedAt") over (
-				partition by candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
+			min(coalesce(candidate.first_pass_root_ready_at,candidate."updatedAt")) over (
+				partition by candidate.is_first_pass,candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
 			) as root_ready_at,
 			row_number() over (
-				partition by candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
+				partition by candidate.is_first_pass,candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"
 				order by candidate."checkpointLedger" asc nulls first,
 					candidate."objectOrder", candidate."updatedAt",
 					candidate."objectRemoteId"
@@ -132,7 +150,7 @@ export function buildReserveBrokerJobsSql(
 		where candidate.control_scope is null or candidate.probe_rank=1
 	), retry_ranked as materialized (
 		select root_rounds.*, row_number() over (
-			partition by is_retry order by priority, root_round, root_ready_at,
+			partition by is_retry order by is_first_pass desc,priority, root_round, root_ready_at,
 				"archiveUrlIdentity", "objectRemoteId"
 		) as retry_rank
 		from root_rounds
@@ -145,14 +163,14 @@ export function buildReserveBrokerJobsSql(
 			or not exists (select 1 from eligible where not is_retry)
 	), ranked as materialized (
 		select candidate."objectRemoteId", candidate.priority,
-			candidate.is_retry, candidate.is_transient_source_retry,
+			candidate.is_retry, candidate.is_transient_source_retry,candidate.is_first_pass,
 			candidate.stored_priority, candidate."updatedAt",
 			candidate."archiveUrlIdentity", candidate.root_round, candidate.root_ready_at,
 			candidate."hostIdentity", candidate.active_count,
 			candidate."checkpointLedger", candidate."objectOrder",candidate."objectType",candidate.control_scope,
 			row_number() over (
 				partition by candidate."hostIdentity"
-				order by candidate.is_transient_source_retry desc, candidate.is_retry desc, candidate.priority, candidate.root_round,
+				order by candidate.is_first_pass desc,candidate.is_transient_source_retry desc, candidate.is_retry desc, candidate.priority, candidate.root_round,
 					candidate.root_ready_at, candidate."archiveUrlIdentity",
 					candidate."objectRemoteId"
 			) as host_rank
@@ -164,13 +182,13 @@ export function buildReserveBrokerJobsSql(
 			ranked."checkpointLedger", ranked."objectOrder",ranked."objectType",ranked.control_scope,
 			ranked."archiveUrlIdentity",
 			(row_number() over (
-				order by ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
+				order by ranked.is_first_pass desc,ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
 					ranked.active_count, ranked."archiveUrlIdentity", ranked.host_rank,
 					ranked."objectRemoteId"
 			))::integer as "selectedOrdinal"
 		from ranked
 		where ranked.active_count + ranked.host_rank <= $2::integer
-		order by ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
+		order by ranked.is_first_pass desc,ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round, ranked.root_ready_at,
 			ranked.active_count, ranked."archiveUrlIdentity", ranked.host_rank,
 			ranked."objectRemoteId"
 		limit $1::integer

@@ -4,6 +4,8 @@ import { HistoryArchiveCheckpointScanCoverageMigration1788831000000 } from '../.
 import { HistoryArchiveListingGapMigration1788735600000 } from '../../../database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
 import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '../../../database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
 import { HistoryArchiveCompactPlanningMigration1785530000000 } from '../../../database/migrations/1785530000000-HistoryArchiveCompactPlanningMigration.js';
+import { HistoryArchiveCheckpointSubstitutionMigration1788139000000 } from '../../../database/migrations/1788139000000-HistoryArchiveCheckpointSubstitutionMigration.js';
+import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '../../../database/migrations/1788494000000-HistoryArchiveSharedBucketSetShadowMigration.js';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
@@ -57,6 +59,16 @@ export async function createKnownEvidenceDataSource(
 	const migrationRunner = dataSource.createQueryRunner();
 	await migrationRunner.connect();
 	try {
+		await new HistoryArchiveCheckpointSubstitutionMigration1788139000000().up(
+			migrationRunner
+		);
+		await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
+			migrationRunner
+		);
+		await migrationRunner.query(`create table if not exists history_archive_checkpoint_bucket_dependency (
+			"archiveUrlIdentity" text not null, "checkpointLedger" integer not null,
+			"bucketHash" text not null, "createdAt" timestamptz not null default now(),
+			primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash"))`);
 		await new HistoryArchiveCheckpointScanCoverageMigration1788831000000().up(
 			migrationRunner
 		);
@@ -96,6 +108,11 @@ export async function resetKnownEvidence(
 ): Promise<void> {
 	await dataSource.query('truncate history_archive_root_failure_control');
 	await dataSource.query('truncate history_archive_object_claim_slot');
+	await dataSource.query('truncate history_archive_checkpoint_substitution');
+	await dataSource.query(`truncate history_archive_checkpoint_content_conflict,
+		history_archive_checkpoint_content_observation, history_archive_checkpoint_content,
+		history_archive_checkpoint_bucket_set_member, history_archive_checkpoint_bucket_set,
+		history_archive_checkpoint_bucket_dependency`);
 	await dataSource.query(
 		'truncate history_archive_checkpoint_scan_bitmap, history_archive_checkpoint_scan_summary, history_archive_checkpoint_scan_seed_state'
 	);

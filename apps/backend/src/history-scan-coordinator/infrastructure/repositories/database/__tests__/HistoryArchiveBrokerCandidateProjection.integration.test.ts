@@ -207,6 +207,7 @@ describe('transactional broker candidate projection', () => {
 			'Subplan Name'?: string;
 			'Relation Name'?: string;
 			'Actual Loops'?: number;
+			'Actual Rows'?: number;
 			Plans?: Plan[];
 		};
 		const probeCount = async (sql: string) =>
@@ -230,7 +231,11 @@ describe('transactional broker candidate projection', () => {
 					.filter(
 						(node) => node['Relation Name'] === 'history_archive_object_queue'
 					)
-					.reduce((total, node) => total + (node['Actual Loops'] ?? 0), 0);
+					.reduce(
+						(total, node) =>
+							total + (node['Actual Loops'] ?? 0) * (node['Actual Rows'] ?? 0),
+						0
+					);
 			});
 		expect(await probeCount(originalSql)).toBeGreaterThanOrEqual(256);
 		expect(await probeCount(projectionSql)).toBe(0);

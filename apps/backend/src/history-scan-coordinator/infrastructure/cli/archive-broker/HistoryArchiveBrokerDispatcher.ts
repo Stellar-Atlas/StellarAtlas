@@ -15,6 +15,7 @@ import {
 } from 'nats';
 import type { Logger } from 'logger';
 import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
+import { ArchiveBrokerFrontierMaintenance } from './ArchiveBrokerFrontierMaintenance.js';
 import {
 	compareHistoryArchiveBrokerJobs,
 	HistoryArchiveBrokerFrontierRepository,
@@ -29,7 +30,6 @@ import {
 interface PostgresNotification {
 	readonly channel: string;
 }
-
 interface PostgresNotificationClient {
 	connect(): Promise<void>;
 	end(): Promise<void>;
@@ -40,13 +40,11 @@ interface PostgresNotificationClient {
 	on(event: 'error', listener: (error: Error) => void): this;
 	query(sql: string): Promise<unknown>;
 }
-
 const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
 	Client: new (config: {
 		readonly connectionString: string;
 	}) => PostgresNotificationClient;
 };
-
 const orphanedPublishedReplayAgeMs = 30_000;
 const orphanedPublishedReplayIntervalMs = 15_000;
 const brokerStreamRetentionHeadroomFactor = 2;
@@ -54,12 +52,10 @@ const brokerStreamRetentionHeadroomFactor = 2;
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }
-
 function isNotFound(error: unknown): boolean {
 	if (!isRecord(error)) return false;
 	return error.code === '404' || error.status === 404;
 }
-
 function assertPublishableBrokerJob(job: HistoryArchiveBrokerJob): void {
 	if (job.priority !== 0 && job.priority !== 1 && job.priority !== 2)
 		throw new Error('Invalid archive broker publish priority');
@@ -174,6 +170,7 @@ export class HistoryArchiveBrokerDispatcher {
 	private readonly wakeWaiters = new Set<() => void>();
 	private stopping = false;
 	private readonly reportConsumerState;
+	private readonly frontierMaintenance: ArchiveBrokerFrontierMaintenance;
 
 	constructor(
 		private readonly repository: HistoryArchiveBrokerFrontierRepository,
@@ -181,6 +178,12 @@ export class HistoryArchiveBrokerDispatcher {
 		private readonly logger: Logger
 	) {
 		this.reportConsumerState = createArchiveBrokerConsumerStateReporter(logger);
+		this.frontierMaintenance = new ArchiveBrokerFrontierMaintenance(
+			repository,
+			config,
+			logger,
+			() => this.signalWork()
+		);
 	}
 
 	async run(): Promise<void> {
@@ -204,7 +207,7 @@ export class HistoryArchiveBrokerDispatcher {
 					this.config.canonicalFirstRoot
 				);
 				if (jobs.length === 0) {
-					await this.repository.ensurePrefetch(this.config.canonicalFirstRoot);
+					await this.frontierMaintenance.run();
 					jobs = await this.repository.reserveJobs(
 						limit,
 						this.config.maximumPerHost,
@@ -268,12 +271,8 @@ export class HistoryArchiveBrokerDispatcher {
 		}
 		this.nextOrphanedPublishedReplayAt =
 			now + orphanedPublishedReplayIntervalMs;
-		// Recovery is independent of queue emptiness; another root's work must not
-		// starve a current checkpoint whose executable ready row was lost.
-		// A newly advertised checkpoint may not have any object row yet. Materialize
-		// it through the existing bounded maintenance transaction before ready repair.
-		await this.repository.ensurePrefetch(this.config.canonicalFirstRoot);
-		await this.repository.recoverMissingFrontierReady(this.config.batchSize);
+		// Only an empty broker permits invalidating unconsumed published tokens.
+		// Run that cleanup before optional frontier maintenance can time out.
 		if (availableCapacity === this.config.highWatermark) {
 			const requeued = await this.repository.requeueOrphanedPublishedJobs(
 				new Date(now - orphanedPublishedReplayAgeMs),
@@ -281,6 +280,8 @@ export class HistoryArchiveBrokerDispatcher {
 			);
 			if (requeued > 0) return true;
 		}
+		// Do not put optional frontier I/O ahead of already-admitted fresh work.
+		void this.frontierMaintenance.run();
 		const jobs = await this.repository.findPublishedJobs(
 			this.config.highWatermark,
 			this.config.maximumPriority,
@@ -295,6 +296,7 @@ export class HistoryArchiveBrokerDispatcher {
 	async close(): Promise<void> {
 		this.stopping = true;
 		this.signalWork();
+		await this.frontierMaintenance.close();
 		const readyListener = this.readyListener;
 		this.readyListener = null;
 		if (readyListener !== null)

@@ -35,10 +35,11 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(report).toHaveBeenCalledWith('42P01');
 		expect(await repository.reserveJobs(1, 8)).toEqual([]);
 		expect(await repository.admitDailyTransientSourceRetries(10)).toBe(0);
-		expect(transaction).toHaveBeenCalledTimes(2);
+		// Retry maintenance, independent adaptive maintenance, then reservation.
+		expect(transaction).toHaveBeenCalledTimes(3);
 	});
 	it('admits independent ready objects without deleting a competing priority lane', () => {
-		expect(reserveBrokerJobsSql).toContain('from eligible candidate');
+		expect(reserveBrokerJobsSql).toContain('from root_probe_ranked candidate');
 		expect(reserveBrokerJobsSql).toContain(
 			'ranked.active_count + ranked.host_rank <= $2::integer'
 		);
@@ -48,10 +49,10 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		);
 		expect(reserveBrokerJobsSql).toContain('ranked."objectOrder"');
 		expect(reserveBrokerJobsSql).toContain(
-			'partition by candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"'
+			'partition by candidate.is_first_pass,candidate.is_transient_source_retry, candidate.is_retry, candidate.priority, candidate."archiveUrlIdentity"'
 		);
 		expect(reserveBrokerJobsSql).toContain(
-			'order by ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round'
+			'order by ranked.is_first_pass desc,ranked.is_transient_source_retry desc, ranked.is_retry desc, ranked.priority, ranked.root_round'
 		);
 		expect(reserveBrokerJobsSql).toContain(
 			'order by selected."selectedOrdinal"'
@@ -75,7 +76,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(reserveBrokerJobsSql).toContain('"updatedAt" = now()');
 	});
 
-	it('trusts materialized cohort admission while retaining mutable object guards', () => {
+	it('trusts materialized cohort admission while retaining mutable and exact recovery guards', () => {
 		expect(reserveBrokerJobsSql).toContain(
 			'object."executionDisposition" = \'executable\''
 		);
@@ -83,8 +84,11 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(reserveBrokerJobsSql).not.toContain(
 			'chain_cursor."nextHistoricalCheckpointLedger"'
 		);
-		expect(reserveBrokerJobsSql).not.toContain(
+		expect(reserveBrokerJobsSql).toContain(
 			'history_archive_checkpoint_bucket_set_member'
+		);
+		expect(reserveBrokerJobsSql).toContain(
+			'recovery_cursor."nextHistoricalCheckpointLedger" - 64'
 		);
 	});
 

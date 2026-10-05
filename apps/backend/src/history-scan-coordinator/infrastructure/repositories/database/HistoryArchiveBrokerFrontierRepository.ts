@@ -1,4 +1,8 @@
 import type { DataSource, EntityManager } from 'typeorm';
+import {
+	getHistoryArchiveRetryPhase,
+	type HistoryArchiveRetryPhase
+} from './HistoryArchiveFirstPassPolicy.js';
 import { HistoryArchiveBrokerCandidateProjection } from './HistoryArchiveBrokerCandidateProjection.js';
 import { historyArchiveRootControlAllowedSql } from './HistoryArchiveRootFailureControl.js';
 import { maintainHistoryArchiveAdaptiveProbes } from './HistoryArchiveAdaptiveProbeMaintenance.js';
@@ -18,9 +22,8 @@ import {
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import {
-	reserveBrokerJobsSql,
-	historyArchiveBrokerCandidateProjectionEnabled,
-	reserveBrokerSingleSlotRetrySql
+	buildReserveBrokerJobsSql,
+	historyArchiveBrokerCandidateProjectionEnabled
 } from './HistoryArchiveBrokerReservationSql.js';
 export { reserveBrokerJobsSql } from './HistoryArchiveBrokerReservationSql.js';
 import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpointPrefetch.js';
@@ -63,7 +66,10 @@ interface BrokerJobRow {
 	readonly selectedOrdinal: number | string;
 }
 
-const findPublishedBrokerJobsSql = `
+function buildFindPublishedBrokerJobsSql(
+	phase: HistoryArchiveRetryPhase
+): string {
+	return `
 	select published."dispatchToken", published."claimAttempt",
 		exists (select 1 from history_archive_root_failure_control control
 			where control."archiveUrlIdentity"=published."archiveUrlIdentity"
@@ -89,7 +95,7 @@ const findPublishedBrokerJobsSql = `
 		join "history_archive_object_queue" object
 			on object."remoteId" = ready."objectRemoteId"
 		where ready."publishedAt" is not null
-			and ${historyArchiveManualOrAutomaticSourceRetrySql('object', 'ready')}
+			and ${historyArchiveManualOrAutomaticSourceRetrySql('object', 'ready', phase)}
 			and ${historyArchiveRootControlAllowedSql('object', 'ready')}
 			and ready."dispatchToken" is not null
 			and ready."claimAttempt" is not null
@@ -102,6 +108,7 @@ const findPublishedBrokerJobsSql = `
 		published."objectRemoteId"
 	limit $1::integer
 `;
+}
 
 const requeueOrphanedPublishedBrokerJobsSql = `
 	with orphaned as materialized (
@@ -186,9 +193,11 @@ export function compareHistoryArchiveBrokerJobs(
 	left: HistoryArchiveBrokerJob,
 	right: HistoryArchiveBrokerJob
 ): number {
-	if (left.priority !== right.priority) return left.priority - right.priority;
+	// The database ordinal includes first-pass precedence as well as priority.
+	// Re-sorting by numeric priority would move allowed recoveries ahead of fresh work.
 	if (left.selectedOrdinal !== right.selectedOrdinal)
 		return left.selectedOrdinal - right.selectedOrdinal;
+	if (left.priority !== right.priority) return left.priority - right.priority;
 	return left.executionId < right.executionId
 		? -1
 		: left.executionId > right.executionId
@@ -206,6 +215,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 	private readonly candidateProjection =
 		new HistoryArchiveBrokerCandidateProjection();
 	private preferRetryOnSingleSlot = false;
+	private readonly reservationSql = new Map<string, string>();
 	constructor(
 		private readonly dataSource: DataSource,
 		private readonly onMaintenanceDeferred?: (code: string) => void
@@ -325,10 +335,20 @@ export class HistoryArchiveBrokerFrontierRepository {
 			// Ephemeral fairness only: no sequence/table write per dispatch. The
 			// existing dispatcher mutex serializes reservations in this process.
 			const singleSlot = Math.floor(limit) === 1;
-			const sql =
-				singleSlot && this.preferRetryOnSingleSlot
-					? reserveBrokerSingleSlotRetrySql
-					: reserveBrokerJobsSql;
+			const preferRetry = singleSlot && this.preferRetryOnSingleSlot;
+			const phase = getHistoryArchiveRetryPhase();
+			const cacheKey = `${phase}:${preferRetry}`;
+			let sql = this.reservationSql.get(cacheKey);
+			if (sql === undefined) {
+				sql = buildReserveBrokerJobsSql(
+					preferRetry,
+					historyArchiveBrokerCandidateProjectionEnabled
+						? 'history_archive_broker_candidate'
+						: 'history_archive_object_queue',
+					phase
+				);
+				this.reservationSql.set(cacheKey, sql);
+			}
 			if (singleSlot)
 				this.preferRetryOnSingleSlot = !this.preferRetryOnSingleSlot;
 			const rows = (await manager.query(sql, [
@@ -362,7 +382,14 @@ export class HistoryArchiveBrokerFrontierRepository {
 		publishedBefore: Date | null = null
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
-		const rows = (await this.dataSource.query(findPublishedBrokerJobsSql, [
+		const phase = getHistoryArchiveRetryPhase();
+		const cacheKey = `published:${phase}`;
+		let sql = this.reservationSql.get(cacheKey);
+		if (sql === undefined) {
+			sql = buildFindPublishedBrokerJobsSql(phase);
+			this.reservationSql.set(cacheKey, sql);
+		}
+		const rows = (await this.dataSource.query(sql, [
 			Math.floor(limit),
 			requirePriority(maximumPriority),
 			publishedBefore

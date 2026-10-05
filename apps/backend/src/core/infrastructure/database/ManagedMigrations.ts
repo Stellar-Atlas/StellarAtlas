@@ -202,10 +202,12 @@ export const managedMigrations = [
 	HistoryArchiveManualRecheckIntentMigration1791088200000,
 	HistoryArchiveRootFailureControlMigration1791096000000,
 	HistoryArchiveBrokerCandidateProjectionMigration1791182400000,
-	HistoryArchiveCompactContentFactsMigration1791186000000
+	HistoryArchiveCompactContentFactsMigration1791186000000,
+	HistoryArchiveBrokerFirstPassIndexesMigration1791201600000
 ] as const;
 import { HistoryArchiveTransientSourceRetryMigration1791072000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791072000000-HistoryArchiveTransientSourceRetryMigration.js';
 import { HistoryArchiveManualRecheckIntentMigration1791088200000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791088200000-HistoryArchiveManualRecheckIntentMigration.js';
 import { HistoryArchiveRootFailureControlMigration1791096000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791096000000-HistoryArchiveRootFailureControlMigration.js';
 import { HistoryArchiveBrokerCandidateProjectionMigration1791182400000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791182400000-HistoryArchiveBrokerCandidateProjectionMigration.js';
 import { HistoryArchiveCompactContentFactsMigration1791186000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791186000000-HistoryArchiveCompactContentFactsMigration.js';
+import { HistoryArchiveBrokerFirstPassIndexesMigration1791201600000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791201600000-HistoryArchiveBrokerFirstPassIndexesMigration.js';

@@ -51,6 +51,25 @@ describe('dispatcher current-frontier recovery', () => {
 		expect(repository.ensurePrefetch).not.toHaveBeenCalled();
 		expect(repository.recoverMissingFrontierReady).not.toHaveBeenCalled();
 	});
+	it('releases empty-broker orphan slots before timeout-prone frontier maintenance', async () => {
+		const repository = mock<HistoryArchiveBrokerFrontierRepository>();
+		repository.requeueOrphanedPublishedJobs.mockResolvedValue(2);
+		repository.ensurePrefetch.mockRejectedValue(new Error('statement timeout'));
+		const dispatcher = new HistoryArchiveBrokerDispatcher(
+			repository,
+			config,
+			mock<Logger>()
+		);
+		await expect(dispatcher['replayOrphanedPublishedJobs'](120)).resolves.toBe(
+			true
+		);
+		expect(repository.requeueOrphanedPublishedJobs).toHaveBeenCalledWith(
+			expect.any(Date),
+			120
+		);
+		expect(repository.ensurePrefetch).not.toHaveBeenCalled();
+		expect(repository.recoverMissingFrontierReady).not.toHaveBeenCalled();
+	});
 
 	it('materializes an unqueued frontier before reserving a nonempty unrelated root', async () => {
 		const repository = mock<HistoryArchiveBrokerFrontierRepository>();

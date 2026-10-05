@@ -18,6 +18,7 @@ import {
 
 jest.setTimeout(60_000);
 const root = 'https://retry.example/history';
+const previousPhase = process.env.HISTORY_ARCHIVE_RETRY_PHASE;
 describe('bounded daily transient-source retry sweep', () => {
 	let postgres: DisposablePostgres;
 	let db: DataSource;
@@ -35,10 +36,14 @@ describe('bounded daily transient-source retry sweep', () => {
 		await db.query(historyArchiveTransientSourceRetrySchemaSql);
 	});
 	afterAll(async () => {
+		if (previousPhase === undefined)
+			delete process.env.HISTORY_ARCHIVE_RETRY_PHASE;
+		else process.env.HISTORY_ARCHIVE_RETRY_PHASE = previousPhase;
 		if (db?.isInitialized) await db.destroy();
 		if (postgres) await postgres.stop();
 	});
 	beforeEach(async () => {
+		process.env.HISTORY_ARCHIVE_RETRY_PHASE = 'recheck';
 		await db.query(
 			'truncate history_archive_object_ready, history_archive_transient_source_retry_sweep'
 		);
@@ -96,21 +101,21 @@ describe('bounded daily transient-source retry sweep', () => {
 		);
 	});
 
-	it('immediately admits explicit500–599, timeout/cancelled/blank, never403/404/integrity or meaningful unknown errors', async () => {
+	it('after catch-up admits HTTP failures and transient errors without altering evidence', async () => {
 		const admitted = await Promise.all([
 			seed('500'),
 			seed('599', 599),
+			seed('403', 403),
+			seed('404', 404),
 			seed('timeout', null, 'HttpError', 'SB Connection time-out'),
 			seed('cancelled', null, 'HttpError', 'cancelled'),
 			seed('blank', null, 'HttpError', 'HttpError:')
 		]);
 		await Promise.all([
-			seed('403', 403),
-			seed('404', 404),
 			seed('integrity', null, 'BUCKET_HASH_MISMATCH', null),
 			seed('unknown', null, 'HttpError', 'a meaningful unexplained failure')
 		]);
-		expect(await sweep()).toBe(5);
+		expect(await sweep()).toBe(7);
 		expect(await readyIds()).toEqual(admitted.map((o) => o.remoteId).sort());
 		for (const object of admitted) {
 			const persisted = await current(object.remoteId);
@@ -281,7 +286,7 @@ describe('bounded daily transient-source retry sweep', () => {
 	});
 
 	it.each([400, 401, 403, 404, 410, 422])(
-		'does not resurrect retained timeouts after current HTTP %i',
+		'rechecks current HTTP %i after catch-up without replacing it with an old timeout',
 		async (status) => {
 			const object = await seed(
 				'old-timeout',
@@ -298,7 +303,7 @@ describe('bounded daily transient-source retry sweep', () => {
 			await sweep();
 			await sweep();
 			expect(await sweep()).toBe(0);
-			expect(await readyIds()).toEqual([]);
+			expect(await readyIds()).toEqual([object.remoteId]);
 			const [admission] = (await db.query(admitTransientSourceRetriesSql, [
 				JSON.stringify([object]),
 				new Date()

@@ -2,6 +2,11 @@ import type { EntityManager } from 'typeorm';
 import { historyArchiveHostScanAllowedSql } from '../../../domain/history-archive-object/HistoryArchiveScanPolicy.js';
 import { historyArchiveInconclusiveTransportFailureSql } from './HistoryArchiveFailureAttributionSql.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
+import {
+	getHistoryArchiveRetryPhase,
+	historyArchiveFirstPassAllowedSql,
+	type HistoryArchiveRetryPhase
+} from './HistoryArchiveFirstPassPolicy.js';
 
 /** A singleton cursor, not another per-object job/attempt log. */
 export const historyArchiveTransientSourceRetrySchemaSql = `
@@ -49,34 +54,40 @@ export function historyArchiveTransientSourceFailureSql(alias: string): string {
 	return `(coalesce(${alias}."httpStatus" between 500 and 599, false) or ${inconclusive})`;
 }
 
-/** A retained transport failure must never override a newer definitive HTTP result. */
+/** HTTP evidence is not retired permanently. The phase/manual/frontier policy
+ * below controls dispatch; post-catch-up rechecks may revisit 4xx as well. */
 export function historyArchiveAllowsAutomaticSourceRetrySql(
 	alias: string
 ): string {
 	if (!/^[a-z_][a-z0-9_]*$/i.test(alias))
 		throw new Error('Invalid retry SQL alias');
-	return `not coalesce(${alias}."httpStatus" between 400 and 499
-		and ${alias}."httpStatus" not in (408, 425, 429), false)`;
+	return 'true';
 }
 
-/** Tokens identify executions, not user intent. Only an explicit, unconsumed
- * manual request may bypass the definitive-source-failure automatic retry gate. */
+/** Tokens identify executions, not user intent. Pending retries do not become
+ * first-pass work merely because their status or dispatch token changed. */
 export function historyArchiveManualOrAutomaticSourceRetrySql(
 	objectAlias: string,
-	readyAlias: string
+	readyAlias: string,
+	phase: HistoryArchiveRetryPhase = getHistoryArchiveRetryPhase()
 ): string {
 	if (!/^[a-z_][a-z0-9_]*$/i.test(readyAlias))
 		throw new Error('Invalid ready SQL alias');
-	return `(${historyArchiveAllowsAutomaticSourceRetrySql(objectAlias)} or (
-		${readyAlias}."recheckRequestedAt" is not null
-		and ${readyAlias}."dispatchToken" is not null
-		and (${readyAlias}."claimAttempt" is null
-			or ${readyAlias}."claimAttempt" = ${objectAlias}.attempts + 1)
-	))`;
+	return historyArchiveFirstPassAllowedSql(objectAlias, readyAlias, phase);
 }
 
 export const currentTransientSourceFailureSql = `(object.status = 'failed'
 	and ${historyArchiveTransientSourceFailureSql('object')})`;
+
+// Definitive HTTP failures remain evidence while first-pass work runs. They are
+// eligible for bounded rechecks only in the explicit post-catch-up phase.
+const currentAutomaticSourceFailureSql = `(object.status = 'failed' and (
+	${historyArchiveTransientSourceFailureSql('object')}
+	or coalesce(object."httpStatus" between 400 and 499, false)))`;
+
+const retainedAutomaticSourceFailureSql = `(
+	${historyArchiveTransientSourceFailureSql('finding')}
+	or coalesce(finding."httpStatus" between 400 and 499, false))`;
 
 // LIMIT precedes HTTP filtering. The keyset/order exactly follows the existing
 // (status, objectOrder, objectKey, archiveUrlIdentity) index, never the 214M queue.
@@ -96,7 +107,7 @@ export const currentTransientSourceRetryCandidatesSql = `
 		limit 4096
 	), candidates as materialized (
 		select object."remoteId", object."archiveUrlIdentity", object."objectOrder", object."objectKey"
-		from scanned object where ${currentTransientSourceFailureSql}
+		from scanned object where ${currentAutomaticSourceFailureSql}
 			and ${dailyDueSql}
 		order by object."objectOrder", object."objectKey", object."archiveUrlIdentity"
 		limit $5::integer
@@ -121,7 +132,7 @@ export const retainedTransientSourceRetryCandidatesSql = `
 		select object."remoteId", object."archiveUrlIdentity", object."objectOrder", object."objectKey"
 		from scanned finding join history_archive_object_queue object
 			on object."remoteId" = finding."objectRemoteId"
-		where finding."retainedOnly" and ${historyArchiveTransientSourceFailureSql('finding')}
+		where finding."retainedOnly" and ${retainedAutomaticSourceFailureSql}
 			and ${historyArchiveAllowsAutomaticSourceRetrySql('object')}
 			and object.status <> 'scanning' and ${dailyDueSql}
 		order by object."remoteId" limit $3::integer
@@ -147,10 +158,10 @@ export const admitTransientSourceRetriesSql = `
 			on object."remoteId" = candidates."remoteId"
 		where object.status <> 'scanning' and ${dailyDueSql.replaceAll('$1', '$2')}
 			and ${historyArchiveAllowsAutomaticSourceRetrySql('object')}
-			and (${currentTransientSourceFailureSql}
+			and (${currentAutomaticSourceFailureSql}
 				or exists (select 1 from history_archive_retained_remote_finding finding
 					where finding."objectRemoteId" = object."remoteId"
-						and finding."retainedOnly" and ${historyArchiveTransientSourceFailureSql('finding')}))
+						and finding."retainedOnly" and ${retainedAutomaticSourceFailureSql}))
 	), promoted as (
 		update history_archive_object_ready ready set priority = 0,
 			"availableAt" = now(), "dispatchToken" = gen_random_uuid(),
@@ -180,7 +191,7 @@ export async function admitDailyTransientSourceRetries(
 	limit: number,
 	deferUntil?: (time: number) => void
 ): Promise<number> {
-	if (limit < 1) return 0;
+	if (limit < 1 || getHistoryArchiveRetryPhase() === 'first-pass') return 0;
 	await manager.query(`insert into history_archive_transient_source_retry_sweep
 		(singleton) values (true) on conflict do nothing`);
 	const [state] = (await manager.query(`select *

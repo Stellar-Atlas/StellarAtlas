@@ -63,6 +63,32 @@ describe('shouldReplayOrphanedPublishedJobs', () => {
 });
 
 describe('publishHistoryArchiveBrokerJobs', () => {
+	it('publishes authoritative first-pass order before a lower-numbered recovery priority', async () => {
+		const fresh = {
+			...createJob('fresh'),
+			priority: 2 as const,
+			selectedOrdinal: 1
+		};
+		const recovery = {
+			...createJob('recovery'),
+			priority: 0 as const,
+			selectedOrdinal: 2
+		};
+		const publish = jest
+			.fn()
+			.mockResolvedValue({ stream: 'archive', seq: 1, duplicate: false });
+		const resetPublished = jest.fn().mockResolvedValue(undefined);
+		await publishHistoryArchiveBrokerJobs(
+			{ publish },
+			{ resetPublished },
+			'archive.jobs',
+			[recovery, fresh]
+		);
+		expect(
+			publish.mock.calls.map((call) => (call[2] as { msgID: string }).msgID)
+		).toEqual(['fresh', 'recovery']);
+	});
+
 	it('keeps successful reservations published and resets only rejected messages', async () => {
 		const acceptedId = '00000000-0000-0000-0000-000000000001';
 		const rejectedId = '00000000-0000-0000-0000-000000000002';
@@ -72,13 +98,14 @@ describe('publishHistoryArchiveBrokerJobs', () => {
 				payload: Uint8Array,
 				_options?: { msgID?: string }
 			) => {
-			const envelope = JSON.parse(Buffer.from(payload).toString()) as {
-				executionId: string;
-			};
-			if (envelope.executionId === rejectedId) {
-				throw new Error('NATS rejected');
+				const envelope = JSON.parse(Buffer.from(payload).toString()) as {
+					executionId: string;
+				};
+				if (envelope.executionId === rejectedId) {
+					throw new Error('NATS rejected');
+				}
 			}
-		});
+		);
 		const resetPublished = jest.fn().mockResolvedValue(undefined);
 
 		await expect(

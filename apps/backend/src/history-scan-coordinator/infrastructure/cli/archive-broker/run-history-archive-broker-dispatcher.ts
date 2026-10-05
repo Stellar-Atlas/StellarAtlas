@@ -6,6 +6,7 @@ import { HistoryArchiveBrokerFrontierRepository } from '../../repositories/datab
 import { HistoryArchiveBrokerDispatcher } from './HistoryArchiveBrokerDispatcher.js';
 import { getHistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
 import { createArchiveMaintenanceReporter } from './ArchiveMaintenanceReporter.js';
+import { shareArchiveBrokerClose } from './ArchiveBrokerFrontierMaintenance.js';
 
 const options = AppDataSource.options;
 if (options.type !== 'postgres')
@@ -30,12 +31,7 @@ const dispatcher = new HistoryArchiveBrokerDispatcher(
 	logger
 );
 
-let closing = false;
-const close = async (): Promise<void> => {
-	if (closing) return;
-	closing = true;
-	await dispatcher.close();
-};
+const close = shareArchiveBrokerClose(() => dispatcher.close());
 process.once('SIGINT', () => void close());
 process.once('SIGTERM', () => void close());
 
