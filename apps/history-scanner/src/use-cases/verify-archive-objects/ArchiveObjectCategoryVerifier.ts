@@ -1,18 +1,17 @@
 import { createGunzip } from 'node:zlib';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { err, ok, type Result } from 'neverthrow';
 import { Url, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
-import {
-	normalizeHistoryArchiveRootUrl,
-	type HistoryArchiveObjectVerificationFactsV1
-} from 'shared';
+import { normalizeHistoryArchiveRootUrl } from 'shared';
 import type { HistoryArchiveWorkerStageDTO } from 'history-scanner-dto';
 import { Category } from '../../domain/history-archive/Category.js';
 import { hashBucketList } from '../../domain/history-archive/hashBucketList.js';
 import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { discoverArchiveObjectListingGap } from './ArchiveObjectListingDiscovery.js';
-import { mapHashFacts } from './ArchiveObjectCategoryHashFacts.js';
+import { createCategoryVerificationFacts } from './ArchiveObjectCategoryHashFacts.js';
+import type { ArchiveObjectReplayInput } from './ArchiveObjectCompressedReplay.js';
 import type { CategoryVerificationData } from '../../domain/scanner/CategoryScanner.js';
 import { CategoryXDRProcessor } from '../../domain/scanner/CategoryXDRProcessor.js';
 import { HasherPool } from '../../domain/scanner/HasherPool.js';
@@ -238,6 +237,9 @@ export class ArchiveObjectCategoryVerifier {
 			});
 		}
 		const persistParsedHistory = this.shouldPersistParsedHistory(job, category);
+		const fallback: { value: ArchiveObjectReplayInput | null } = {
+			value: null
+		};
 
 		if (
 			this.contentReuseEnabled &&
@@ -247,24 +249,42 @@ export class ArchiveObjectCategoryVerifier {
 			const reuseResult = await this.contentReuseVerifier.tryReuse(
 				job,
 				executionId,
-				releaseDownloadPermit
+				releaseDownloadPermit,
+				(input) => {
+					fallback.value = input;
+				}
 			);
 			if (reuseResult.isErr()) return err(reuseResult.error);
 			if (reuseResult.value !== null) return ok(reuseResult.value);
 			releaseDownloadPermit = undefined;
 		}
+		const replay = fallback.value?.compressed;
+		if (replay !== undefined) releaseDownloadPermit = () => undefined;
 
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr())
 			return err(mapArchiveObjectLocalError(urlResult.error));
 
 		releaseDownloadPermit ??= await this.downloadPermit.acquire();
-		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
-		const response = await this.httpService.get(urlResult.value, {
-			responseType: 'stream',
-			connectionTimeoutMs: 10_000,
-			socketTimeoutMs: 60_000
-		});
+		if (replay === undefined)
+			this.reportProgress(
+				job.remoteId,
+				workerStages.fetching,
+				fallback.value?.bytesDownloaded ?? 0,
+				null
+			);
+		const response =
+			replay === undefined
+				? await this.httpService.get(urlResult.value, {
+						responseType: 'stream',
+						connectionTimeoutMs: 10_000,
+						socketTimeoutMs: 60_000
+					})
+				: ok({
+						data: Readable.from(replay),
+						headers: {},
+						status: fallback.value!.httpStatus
+					});
 		if (response.isErr()) {
 			releaseDownloadPermit();
 			return err(mapArchiveObjectHttpError(response.error));
@@ -278,11 +298,24 @@ export class ArchiveObjectCategoryVerifier {
 				httpStatus: response.value.status
 			});
 		}
-		const bytesTotal = readArchiveObjectContentLength(response.value.headers);
-		this.reportProgress(job.remoteId, workerStages.downloading, 0, bytesTotal);
-
-		let bytesDownloaded = 0;
-		let activeWorkerStage = workerStages.downloading;
+		const responseBytesTotal = readArchiveObjectContentLength(
+			response.value.headers
+		);
+		let bytesDownloaded = fallback.value?.bytesDownloaded ?? 0;
+		const bytesTotal =
+			replay !== undefined
+				? fallback.value!.bytesTotal
+				: responseBytesTotal === null
+					? null
+					: bytesDownloaded + responseBytesTotal;
+		let activeWorkerStage =
+			replay === undefined ? workerStages.downloading : workerStages.processing;
+		this.reportProgress(
+			job.remoteId,
+			activeWorkerStage,
+			bytesDownloaded,
+			bytesTotal
+		);
 		const byteCounter = createArchiveObjectDownloadCounter(
 			(bytes) => {
 				bytesDownloaded += bytes;
@@ -339,7 +372,7 @@ export class ArchiveObjectCategoryVerifier {
 			);
 			await pipeline([
 				response.value.data,
-				byteCounter,
+				...(replay === undefined ? [byteCounter] : []),
 				createGunzip(),
 				contentDigest,
 				new XdrStreamReader(),
@@ -441,57 +474,6 @@ function createCategoryVerificationData(): CategoryVerificationData {
 		expectedHashesPerLedger: new Map(),
 		protocolVersions: new Map()
 	};
-}
-
-function createCategoryVerificationFacts(
-	objectType: string,
-	data: CategoryVerificationData,
-	entryCount: number,
-	sourceUrl: string
-): HistoryArchiveObjectVerificationFactsV1 {
-	if (objectType === 'ledger') {
-		return {
-			ledgerCategory: {
-				entryCount,
-				headerHashesVerified: true,
-				ledgers: Array.from(data.expectedHashesPerLedger.entries())
-					.map(([ledger, expectedHashes]) => ({
-						bucketListHash: expectedHashes.bucketListHash,
-						ledger,
-						ledgerHeaderHash:
-							data.calculatedLedgerHeaderHashes.get(ledger) ?? null,
-						previousLedgerHeaderHash: expectedHashes.previousLedgerHeaderHash,
-						protocolVersion: data.protocolVersions.get(ledger) ?? null,
-						transactionResultSetHash: expectedHashes.txSetResultHash,
-						transactionSetHash: expectedHashes.txSetHash
-					}))
-					.sort((left, right) => left.ledger - right.ledger),
-				sourceUrl
-			}
-		};
-	}
-
-	if (objectType === 'transactions') {
-		return {
-			transactionsCategory: {
-				entryCount,
-				ledgers: mapHashFacts(data.calculatedTxSetHashes),
-				sourceUrl
-			}
-		};
-	}
-
-	if (objectType === 'results') {
-		return {
-			resultsCategory: {
-				entryCount,
-				ledgers: mapHashFacts(data.calculatedTxSetResultHashes),
-				sourceUrl
-			}
-		};
-	}
-
-	return { scpCategory: { entryCount, sourceUrl } };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -23,6 +23,10 @@ import { XdrContentDigestTransform } from './ArchiveObjectContentDigest.js';
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import {
+	ArchiveObjectCompressedReplay,
+	type ArchiveObjectReplayInput
+} from './ArchiveObjectCompressedReplay.js';
+import {
 	isReadableArchiveObject,
 	mapArchiveObjectHttpError,
 	mapArchiveObjectLocalError
@@ -55,7 +59,8 @@ export class ArchiveObjectContentReuseVerifier {
 	async tryReuse(
 		job: HistoryArchiveObjectJobDTO,
 		executionId: string,
-		releaseDownloadPermit?: () => void
+		releaseDownloadPermit?: () => void,
+		onMiss?: (input: ArchiveObjectReplayInput) => void
 	): Promise<
 		Result<
 			HistoryArchiveObjectProgressDTO | null,
@@ -115,10 +120,13 @@ export class ArchiveObjectContentReuseVerifier {
 			}
 		);
 		const contentDigest = new XdrContentDigestTransform();
+		const replay =
+			onMiss === undefined ? null : new ArchiveObjectCompressedReplay();
 		try {
 			await pipeline([
 				response.value.data,
 				byteCounter,
+				...(replay === null ? [] : [replay]),
 				createGunzip(),
 				contentDigest,
 				new Writable({
@@ -128,6 +136,7 @@ export class ArchiveObjectContentReuseVerifier {
 				})
 			]);
 		} catch (error) {
+			replay?.discard();
 			return err(
 				classifyCategoryVerificationFailure(error, response.value.status)
 			);
@@ -136,6 +145,16 @@ export class ArchiveObjectContentReuseVerifier {
 		}
 
 		const digestFact = contentDigest.toFact();
+		const miss = () => {
+			const compressed = replay?.takeCapturedBytes();
+			onMiss?.({
+				compressed,
+				bytesDownloaded,
+				bytesTotal,
+				httpStatus: response.value.status
+			});
+			return ok(null);
+		};
 		const lookup = await this.scanCoordinator.getHistoryArchiveContentReuse({
 			claimAttempt: job.claimAttempt,
 			contentDigest: digestFact.digest,
@@ -148,16 +167,17 @@ export class ArchiveObjectContentReuseVerifier {
 		});
 		if (lookup.isErr()) {
 			this.exceptionLogger.captureException(lookup.error);
-			return ok(null);
+			return miss();
 		}
-		if (lookup.value === null) return ok(null);
+		if (lookup.value === null) return miss();
 		const reusable = lookup.value;
 		if (!isExactReusableContent(job, digestFact.digest, reusable)) {
 			this.exceptionLogger.captureException(
 				new Error('Coordinator returned mismatched reusable archive content')
 			);
-			return ok(null);
+			return miss();
 		}
+		replay?.discard();
 		this.reportProgress(
 			job.remoteId,
 			workerStages.verified,
