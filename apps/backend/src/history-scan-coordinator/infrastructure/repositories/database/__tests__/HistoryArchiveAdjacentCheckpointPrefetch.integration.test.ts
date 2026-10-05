@@ -23,6 +23,7 @@ describe('bounded adjacent checkpoint-state discovery', () => {
 	let postgres: DisposablePostgres;
 	let db: DataSource;
 	const excludedBefore = process.env.HISTORY_ARCHIVE_EXCLUDED_HOSTS;
+	const enabledBefore = process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
 	beforeAll(async () => {
 		postgres = await startDisposablePostgres();
 		db = new DataSource({
@@ -43,6 +44,7 @@ describe('bounded adjacent checkpoint-state discovery', () => {
 		if (postgres) await postgres.stop();
 	});
 	beforeEach(async () => {
+		process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED = 'true';
 		delete process.env.HISTORY_ARCHIVE_EXCLUDED_HOSTS;
 		await db.query(`truncate history_archive_object_ready,history_archive_root_failure_control,
 			history_archive_object_host_throttle,history_archive_object_claim_slot,
@@ -50,6 +52,9 @@ describe('bounded adjacent checkpoint-state discovery', () => {
 			history_archive_checkpoint_proof,history_archive_object_queue restart identity cascade`);
 	});
 	afterEach(() => {
+		if (enabledBefore === undefined)
+			delete process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
+		else process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED = enabledBefore;
 		if (excludedBefore === undefined)
 			delete process.env.HISTORY_ARCHIVE_EXCLUDED_HOSTS;
 		else process.env.HISTORY_ARCHIVE_EXCLUDED_HOSTS = excludedBefore;
@@ -111,6 +116,22 @@ describe('bounded adjacent checkpoint-state discovery', () => {
 		await db.getRepository(HistoryArchiveObject).save(object);
 		return object;
 	}
+	it.each([undefined, 'false', '1', 'TRUE', ' true '])(
+		'makes no database call unless explicitly enabled (%s)',
+		async (enabled) => {
+			if (enabled === undefined)
+				delete process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
+			else process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED = enabled;
+			const transaction = jest.fn();
+			expect(
+				await prefetchAdjacentCheckpointStates(
+					{ transaction } as unknown as DataSource,
+					null
+				)
+			).toBe(0);
+			expect(transaction).not.toHaveBeenCalled();
+		}
+	);
 	it('commits lookahead before legacy maintenance times out, and repeated forced refill is a no-op', async () => {
 		const root = await seed();
 		let transactions = 0;

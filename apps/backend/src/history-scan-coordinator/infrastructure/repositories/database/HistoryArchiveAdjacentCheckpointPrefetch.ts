@@ -21,6 +21,8 @@ export async function prefetchAdjacentCheckpointStates(
 	archiveUrlIdentity: string | null,
 	reportDeferred?: (code: string) => void
 ): Promise<number> {
+	if (process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED !== 'true')
+		return 0;
 	return withBoundedArchiveBrokerMaintenance(
 		dataSource,
 		async (manager) => {

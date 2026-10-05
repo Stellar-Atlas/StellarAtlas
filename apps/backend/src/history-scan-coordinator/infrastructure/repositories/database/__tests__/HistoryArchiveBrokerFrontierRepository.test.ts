@@ -7,6 +7,15 @@ import { materializeOrderedCheckpointPrefetch } from '../HistoryArchiveCheckpoin
 import { historyArchiveExecutionReconciliationLockName } from '../HistoryArchiveObjectExecutionReconciler.js';
 
 describe('HistoryArchiveBrokerFrontierRepository', () => {
+	const adjacentBefore = process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
+	beforeEach(() => {
+		delete process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
+	});
+	afterEach(() => {
+		if (adjacentBefore === undefined)
+			delete process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
+		else process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED = adjacentBefore;
+	});
 	it('backs off bounded retry timeouts while ordinary dispatch remains available', async () => {
 		const transaction = jest.fn().mockRejectedValue({ code: '57014' });
 		const repository = new HistoryArchiveBrokerFrontierRepository({
@@ -196,9 +205,6 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 	it('advances the durable compact cursor before activating frontier dependencies', async () => {
 		const query = jest
 			.fn()
-			.mockResolvedValueOnce(undefined)
-			.mockResolvedValueOnce([{ locked: true }])
-			.mockResolvedValueOnce([{ planned: 0, ready: 0 }])
 			.mockResolvedValueOnce(undefined)
 			.mockResolvedValueOnce([{ locked: true }])
 			.mockResolvedValueOnce([{ advanced: 1, planned: 1, ready: 1 }])
