@@ -1,4 +1,6 @@
 import type { DataSource, EntityManager } from 'typeorm';
+import type { ArchiveBrokerExecutionSnapshot } from '../../cli/archive-broker/ArchiveBrokerExecutionSnapshot.js';
+import { reconcileHistoryArchivePhaseSuppressedReservations } from './HistoryArchivePhaseSuppressedReservation.js';
 import {
 	getHistoryArchiveRetryPhase,
 	type HistoryArchiveRetryPhase
@@ -417,6 +419,23 @@ export class HistoryArchiveBrokerFrontierRepository {
 		});
 	}
 
+	async reconcilePhaseSuppressedPublishedJobs(
+		publishedBefore: Date,
+		limit: number,
+		readSnapshot: () => Promise<ArchiveBrokerExecutionSnapshot | null>
+	): Promise<number> {
+		return this.dataSource.transaction(async (manager) => {
+			await manager.query("set local statement_timeout='2s'");
+			await manager.query("set local lock_timeout='250ms'");
+			await this.takeDispatcherLock(manager);
+			return reconcileHistoryArchivePhaseSuppressedReservations(
+				manager,
+				publishedBefore,
+				limit,
+				readSnapshot
+			);
+		});
+	}
 	async resetPublished(executionIds: readonly string[]): Promise<void> {
 		if (executionIds.length === 0) return;
 		await this.dataSource.transaction(async (manager) => {

@@ -16,6 +16,7 @@ import {
 import type { Logger } from 'logger';
 import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
 import { ArchiveBrokerFrontierMaintenance } from './ArchiveBrokerFrontierMaintenance.js';
+import { reconcileSuppressedPublications } from './ArchiveBrokerExecutionSnapshot.js';
 import {
 	compareHistoryArchiveBrokerJobs,
 	HistoryArchiveBrokerFrontierRepository,
@@ -185,7 +186,6 @@ export class HistoryArchiveBrokerDispatcher {
 			() => this.signalWork()
 		);
 	}
-
 	async run(): Promise<void> {
 		await this.initialize();
 		await this.initializeReadyListener();
@@ -255,7 +255,6 @@ export class HistoryArchiveBrokerDispatcher {
 			}
 		}
 	}
-
 	private async replayOrphanedPublishedJobs(
 		availableCapacity: number
 	): Promise<boolean> {
@@ -280,6 +279,13 @@ export class HistoryArchiveBrokerDispatcher {
 			);
 			if (requeued > 0) return true;
 		}
+		const reclaimed = await reconcileSuppressedPublications(
+			this.repository,
+			() => this.requireManager(),
+			this.config,
+			new Date(now - orphanedPublishedReplayAgeMs)
+		);
+		if (reclaimed > 0) return true;
 		// Do not put optional frontier I/O ahead of already-admitted fresh work.
 		void this.frontierMaintenance.run();
 		const jobs = await this.repository.findPublishedJobs(
@@ -292,7 +298,6 @@ export class HistoryArchiveBrokerDispatcher {
 		await this.publish(jobs);
 		return true;
 	}
-
 	async close(): Promise<void> {
 		this.stopping = true;
 		this.signalWork();
@@ -309,7 +314,6 @@ export class HistoryArchiveBrokerDispatcher {
 		this.manager = null;
 		if (connection !== null) await connection.drain();
 	}
-
 	private async initializeReadyListener(): Promise<void> {
 		const connectionString = process.env.ACTIVE_DATABASE_URL;
 		if (!connectionString)
@@ -334,13 +338,11 @@ export class HistoryArchiveBrokerDispatcher {
 			throw error;
 		}
 	}
-
 	private signalWork(): void {
 		this.wakeVersion++;
 		const waiters = [...this.wakeWaiters];
 		for (const resolve of waiters) resolve();
 	}
-
 	private async waitForWork(observedWakeVersion: number): Promise<void> {
 		if (this.stopping || this.wakeVersion !== observedWakeVersion) return;
 		await new Promise<void>((resolve) => {
@@ -355,7 +357,6 @@ export class HistoryArchiveBrokerDispatcher {
 			if (this.stopping || this.wakeVersion !== observedWakeVersion) finish();
 		});
 	}
-
 	private async initialize(): Promise<void> {
 		const connection = await connect({
 			name: 'stellaratlas-history-archive-dispatcher',
@@ -387,7 +388,6 @@ export class HistoryArchiveBrokerDispatcher {
 			throw error;
 		}
 	}
-
 	private listenForCapacity(connection: NatsConnection): void {
 		const subscription = connection.subscribe(
 			this.config.capacitySignalSubject
