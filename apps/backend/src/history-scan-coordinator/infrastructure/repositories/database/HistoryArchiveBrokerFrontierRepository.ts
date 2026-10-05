@@ -30,10 +30,10 @@ import {
 export { reserveBrokerJobsSql } from './HistoryArchiveBrokerReservationSql.js';
 import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpointPrefetch.js';
 import { materializeCompactCheckpointPlanResult } from './HistoryArchiveCompactPlanning.js';
+import { prefetchAdjacentCheckpointStates } from './HistoryArchiveAdjacentCheckpointPrefetch.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 
 const maximumArchiveSourceFrontierRows = 4_096;
-
 export type { HistoryArchiveBrokerPriority } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 
 export interface HistoryArchiveBrokerJob {
@@ -273,17 +273,25 @@ export class HistoryArchiveBrokerFrontierRepository {
 	async ensurePrefetch(
 		archiveUrlIdentity: string | null = null
 	): Promise<number> {
-		return await withBoundedArchiveBrokerMaintenance(
+		const adjacent = await prefetchAdjacentCheckpointStates(
 			this.dataSource,
-			async (manager) => {
-				if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
-				return await this.materializeFrontier(manager, archiveUrlIdentity);
-			},
-			0,
+			archiveUrlIdentity,
 			this.onMaintenanceDeferred
 		);
+		return (
+			adjacent +
+			(await withBoundedArchiveBrokerMaintenance(
+				this.dataSource,
+				async (manager) => {
+					if (!(await this.tryTakeExecutionReconciliationLock(manager)))
+						return 0;
+					return await this.materializeFrontier(manager, archiveUrlIdentity);
+				},
+				0,
+				this.onMaintenanceDeferred
+			))
+		);
 	}
-
 	async ensureFrontier(
 		archiveUrlIdentity: string | null = null
 	): Promise<number> {
@@ -313,7 +321,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 		);
 		return readyObjects;
 	}
-
 	async reserveJobs(
 		limit: number,
 		maximumPerHost: number,
@@ -362,7 +369,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 			return mapAndOrderBrokerJobs(rows);
 		});
 	}
-
 	private nextAdaptiveMaintenanceAt = 0;
 	private async maintainAdaptiveProbes(limit: number): Promise<void> {
 		if (Date.now() < this.nextAdaptiveMaintenanceAt) return;
@@ -376,7 +382,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 		).catch(() => -1);
 		if (result < 0) this.nextAdaptiveMaintenanceAt = Date.now() + 60_000;
 	}
-
 	async findPublishedJobs(
 		limit: number,
 		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority,
@@ -398,7 +403,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 		])) as readonly BrokerJobRow[];
 		return mapAndOrderBrokerJobs(rows);
 	}
-
 	async requeueOrphanedPublishedJobs(
 		publishedBefore: Date,
 		limit: number

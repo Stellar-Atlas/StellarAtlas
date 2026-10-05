@@ -2,6 +2,8 @@ import { HistoryArchiveSharedBucketSetShadowMigration1788494000000 } from '../..
 import type { DataSource } from 'typeorm';
 import { HistoryArchiveCheckpointScanCoverageMigration1788831000000 } from '../../../database/migrations/1788831000000-HistoryArchiveCheckpointScanCoverageMigration.js';
 import { HistoryArchiveListingGapMigration1788735600000 } from '../../../database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
+import { historyArchiveRootFailureControlSchemaSql } from '../HistoryArchiveRootFailureControl.js';
+import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 
 export async function createCanonicalFrontierTestSchema(
 	dataSource: DataSource
@@ -15,6 +17,9 @@ export async function createCanonicalFrontierTestSchema(
 		await new HistoryArchiveSharedBucketSetShadowMigration1788494000000().up(
 			sharedRunner
 		);
+		await new HistoryArchiveObjectHostThrottleMigration1784410000000().up(
+			sharedRunner
+		);
 	} finally {
 		await sharedRunner.release();
 	}
@@ -22,7 +27,7 @@ export async function createCanonicalFrontierTestSchema(
 		create table if not exists "history_archive_object_ready" (
 			"objectRemoteId" uuid primary key references
 				"history_archive_object_queue" ("remoteId") on delete cascade,
-			"archiveUrlIdentity" text not null unique,
+			"archiveUrlIdentity" text not null,
 			priority smallint not null check (priority between 0 and 2),
 			"availableAt" timestamptz not null default now(),
 			"createdAt" timestamptz not null default now(),
@@ -32,6 +37,10 @@ export async function createCanonicalFrontierTestSchema(
                         "publishedAt" timestamptz
 		)
 	`);
+	await dataSource.query(historyArchiveRootFailureControlSchemaSql);
+	await dataSource.query(`create table if not exists history_archive_object_claim_slot (
+		slot integer primary key, "objectRemoteId" uuid, "claimAttempt" integer,
+		"claimedAt" timestamptz, "updatedAt" timestamptz)`);
 	await dataSource.query(`
 		create table if not exists "history_archive_state_snapshot" (
 			"archiveUrlIdentity" text primary key,
