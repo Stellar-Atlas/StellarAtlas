@@ -74,7 +74,7 @@ func TestDatabaseNameIsValidated(t *testing.T) {
 	}
 }
 
-func TestOnlyTransactionsHaveBoundedFutureMergeInputs(t *testing.T) {
+func TestOnlyWideTransactionTablesHaveBoundedFutureMergeInputs(t *testing.T) {
 	t.Parallel()
 	const cap = "max_bytes_to_merge_at_max_space_in_pool = 34359738368"
 	for _, dataset := range Datasets() {
@@ -82,7 +82,8 @@ func TestOnlyTransactionsHaveBoundedFutureMergeInputs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := strings.Contains(sql, cap); got != (dataset.Name == "history_transactions") {
+		wideTransactionTable := dataset.Name == "history_transactions" || dataset.Name == "ledger_transactions"
+		if got := strings.Contains(sql, cap); got != wideTransactionTable {
 			t.Fatalf("%s unexpected future merge input cap: %s", dataset.Name, sql)
 		}
 		if !strings.Contains(sql, "ENGINE = ReplacingMergeTree(_ingested_at)") ||

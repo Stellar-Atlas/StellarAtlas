@@ -9,7 +9,7 @@ import (
 
 // selectPendingBatches preserves catalog order and immutable digest checks.
 // Priority changes admission order only; it never bypasses normal ingestion.
-func selectPendingBatches(batches []catalog.Batch, completed map[string]string, priorityID string, maximum int) ([]catalog.Batch, int, error) {
+func selectPendingBatches(batches []catalog.Batch, completed map[string]string, priorityID string, maximum int, minimumStart uint32) ([]catalog.Batch, int, error) {
 	pending := make([]catalog.Batch, 0, len(batches))
 	completedCount, priorityIndex := 0, -1
 	priorityFound := priorityID == ""
@@ -21,6 +21,14 @@ func selectPendingBatches(batches []catalog.Batch, completed map[string]string, 
 				return nil, 0, fmt.Errorf("batch %s changed immutable digest from %s to %s", batch.ID, digest, batch.SourceSHA256)
 			}
 			completedCount++
+			continue
+		}
+		if batch.StartLedger < minimumStart {
+			if batch.EndLedger >= minimumStart || priority {
+				return nil, 0, fmt.Errorf("batch %s crosses or conflicts with the minimum start ledger %d", batch.ID, minimumStart)
+			}
+			// Admission only: do not count deferred failures as completed or
+			// alter their existing publication/failure manifest.
 			continue
 		}
 		if priority {

@@ -6,7 +6,6 @@ import (
 
 	"github.com/guregu/null"
 	"github.com/stellar/go-stellar-sdk/processors/token_transfer"
-	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-etl/v2/internal/toid"
 	"github.com/stellar/stellar-etl/v2/internal/transform"
@@ -90,17 +89,20 @@ func legacyTokenTransfer(
 	}
 	asset, assetType, assetCode, assetIssuer := legacyEventAsset(event)
 	var toMuxed, toMuxedID null.String
-	if eventMeta.ToMuxedInfo != nil {
-		muxed := strkey.MuxedAccount{}
-		muxed.SetAccountID(to.String)
-		muxed.SetID(eventMeta.ToMuxedInfo.GetId())
-		address, err := muxed.Address()
+	// Destination memos are a union: text/hash are not numeric muxed IDs.
+	// Use the checked XDR constructor, which also permits the valid zero key.
+	if info, ok := eventMeta.GetToMuxedInfo().GetContent().(*token_transfer.MuxedInfo_Id); ok {
+		muxed, err := xdr.MuxedAccountFromAccountId(to.String, info.Id)
+		if err != nil {
+			return transform.TokenTransferOutput{}, fmt.Errorf("invalid numeric muxed recipient: %w", err)
+		}
+		address, err := muxed.GetAddress()
 		if err != nil {
 			return transform.TokenTransferOutput{}, err
 		}
 		toMuxed = null.StringFrom(address)
 		toMuxedID = null.StringFrom(
-			strconv.FormatUint(eventMeta.ToMuxedInfo.GetId(), 10),
+			strconv.FormatUint(info.Id, 10),
 		)
 	}
 	return transform.TokenTransferOutput{

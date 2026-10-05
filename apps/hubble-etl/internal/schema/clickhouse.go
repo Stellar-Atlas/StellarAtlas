@@ -108,7 +108,7 @@ func TableSQL(database string, dataset Dataset) (string, error) {
 		orderFields = append(orderFields, quote(field))
 	}
 	settings := "index_granularity = 8192, non_replicated_deduplication_window = 65536"
-	if dataset.Name == "history_transactions" {
+	if dataset.Name == "history_transactions" || dataset.Name == "ledger_transactions" {
 		// Bound optional wide-row rewrites; existing tables need the explicit
 		// operator ALTER documented in the transaction merge-budget runbook.
 		settings += ", max_bytes_to_merge_at_max_space_in_pool = 34359738368"

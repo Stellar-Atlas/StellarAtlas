@@ -8,7 +8,29 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/schema"
 )
+
+func TestRecoveryUsesPhysicalAndPrimaryLedgerBounds(t *testing.T) {
+	for _, dataset := range schema.Datasets() {
+		predicate := batchLedgerPredicate(dataset)
+		if !strings.Contains(predicate, "_ledger_sequence BETWEEN {start:UInt32} AND {end:UInt32}") {
+			t.Fatalf("%s lost partition bound", dataset.Name)
+		}
+		column := "ledger_sequence"
+		if dataset.Name == "history_ledgers" {
+			column = "sequence"
+		}
+		if dataset.Name == "history_trades" {
+			if strings.Count(predicate, "BETWEEN") != 1 {
+				t.Fatal("trade primary key is already the metadata ledger")
+			}
+		} else if !strings.Contains(predicate, quoted(column)+" BETWEEN") {
+			t.Fatalf("%s lacks actual ledger key: %s", dataset.Name, predicate)
+		}
+	}
+}
 
 func TestRecoveryRowIdentityGate(t *testing.T) {
 	for _, tc := range []struct {

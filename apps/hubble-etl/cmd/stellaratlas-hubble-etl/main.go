@@ -20,16 +20,17 @@ import (
 const publicNetworkPassphrase = "Public Global Stellar Network ; September 2015"
 
 type config struct {
-	client            *clickhouse.Client
-	databaseURL       string
-	maximumBatches    int
-	priorityBatchID   string
-	networkPassphrase string
-	once              bool
-	storageRoot       string
-	workers           int
-	pressureGuard     *backfill.PressureGuard
-	readinessGuard    *backfill.WarehouseReadinessGuard
+	client             *clickhouse.Client
+	databaseURL        string
+	maximumBatches     int
+	minimumStartLedger uint32
+	priorityBatchID    string
+	networkPassphrase  string
+	once               bool
+	storageRoot        string
+	workers            int
+	pressureGuard      *backfill.PressureGuard
+	readinessGuard     *backfill.WarehouseReadinessGuard
 }
 
 func main() {
@@ -69,6 +70,12 @@ func run() int {
 		fmt.Println(`{"status":"ready"}`)
 		return 0
 	}
+	if cfg.minimumStartLedger > 0 {
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+			"event": "admission-ledger-bound", "minimumStartLedger": cfg.minimumStartLedger,
+			"reason": "Earlier incomplete batches remain unpublished and require separate recovery",
+		})
+	}
 	if err := runBackfill(ctx, cfg); err != nil && ctx.Err() == nil {
 		fmt.Fprintln(os.Stderr, "stellaratlas-hubble-etl:", err)
 		return 1
@@ -98,6 +105,10 @@ func loadConfig() (config, error) {
 	if err != nil {
 		return result, fmt.Errorf("HUBBLE_ETL_MAX_BATCHES: %w", err)
 	}
+	minimumStartLedger, err := strconv.ParseUint(env("HUBBLE_ETL_MIN_START_LEDGER", "0"), 10, 32)
+	if err != nil {
+		return result, fmt.Errorf("HUBBLE_ETL_MIN_START_LEDGER must be an unsigned 32-bit ledger number")
+	}
 	once, err := strconv.ParseBool(env("HUBBLE_ETL_ONCE", "false"))
 	if err != nil {
 		return result, fmt.Errorf("HUBBLE_ETL_ONCE: %w", err)
@@ -114,12 +125,13 @@ func loadConfig() (config, error) {
 				_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"event": event, "reason": reason})
 			},
 		},
-		client:            client,
-		databaseURL:       os.Getenv("ACTIVE_DATABASE_URL"),
-		maximumBatches:    maximumBatches,
-		priorityBatchID:   strings.TrimSpace(os.Getenv("HUBBLE_ETL_PRIORITY_BATCH_ID")),
-		networkPassphrase: env("FULL_HISTORY_NETWORK_PASSPHRASE", publicNetworkPassphrase),
-		once:              once,
+		client:             client,
+		databaseURL:        os.Getenv("ACTIVE_DATABASE_URL"),
+		maximumBatches:     maximumBatches,
+		minimumStartLedger: uint32(minimumStartLedger),
+		priorityBatchID:    strings.TrimSpace(os.Getenv("HUBBLE_ETL_PRIORITY_BATCH_ID")),
+		networkPassphrase:  env("FULL_HISTORY_NETWORK_PASSPHRASE", publicNetworkPassphrase),
+		once:               once,
 		storageRoot: env(
 			"FULL_HISTORY_DATA_ROOT",
 			"/home/observe/stellarbeat-data/full-history/typed",
@@ -135,15 +147,16 @@ func loadConfig() (config, error) {
 func runBackfill(ctx context.Context, cfg config) error {
 	for {
 		summary, err := backfill.Cycle(ctx, backfill.Config{
-			Client:            cfg.client,
-			DatabaseURL:       cfg.databaseURL,
-			MaximumBatches:    cfg.maximumBatches,
-			PriorityBatchID:   cfg.priorityBatchID,
-			NetworkPassphrase: cfg.networkPassphrase,
-			StorageRoot:       cfg.storageRoot,
-			WorkerCount:       cfg.workers,
-			PressureGuard:     cfg.pressureGuard,
-			ReadinessGuard:    cfg.readinessGuard,
+			Client:             cfg.client,
+			DatabaseURL:        cfg.databaseURL,
+			MaximumBatches:     cfg.maximumBatches,
+			MinimumStartLedger: cfg.minimumStartLedger,
+			PriorityBatchID:    cfg.priorityBatchID,
+			NetworkPassphrase:  cfg.networkPassphrase,
+			StorageRoot:        cfg.storageRoot,
+			WorkerCount:        cfg.workers,
+			PressureGuard:      cfg.pressureGuard,
+			ReadinessGuard:     cfg.readinessGuard,
 			OnProgress: func(summary backfill.Summary) {
 				_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
 					"event":           "batch-completed",

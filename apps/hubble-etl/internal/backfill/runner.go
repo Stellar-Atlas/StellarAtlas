@@ -14,18 +14,19 @@ import (
 )
 
 type Config struct {
-	Client            *clickhouse.Client
-	DatabaseURL       string
-	NetworkPassphrase string
-	StorageRoot       string
-	WorkerCount       int
-	DecodeLimits      lcmbatch.Limits
-	WriterLimits      clickhouse.WriterLimits
-	MaximumBatches    int
-	PriorityBatchID   string
-	PressureGuard     *PressureGuard
-	ReadinessGuard    *WarehouseReadinessGuard
-	OnProgress        func(Summary)
+	Client             *clickhouse.Client
+	DatabaseURL        string
+	NetworkPassphrase  string
+	StorageRoot        string
+	WorkerCount        int
+	DecodeLimits       lcmbatch.Limits
+	WriterLimits       clickhouse.WriterLimits
+	MaximumBatches     int
+	MinimumStartLedger uint32
+	PriorityBatchID    string
+	PressureGuard      *PressureGuard
+	ReadinessGuard     *WarehouseReadinessGuard
+	OnProgress         func(Summary)
 }
 
 type Failure struct {
@@ -83,7 +84,7 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		return summary, fmt.Errorf("read warehouse completion state: %w", err)
 	}
 	pending, completedCount, err := selectPendingBatches(
-		batches, completed, config.PriorityBatchID, config.MaximumBatches,
+		batches, completed, config.PriorityBatchID, config.MaximumBatches, config.MinimumStartLedger,
 	)
 	if err != nil {
 		return summary, err

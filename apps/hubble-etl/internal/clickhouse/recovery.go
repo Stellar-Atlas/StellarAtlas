@@ -38,7 +38,7 @@ func (c *Client) VerifyBatchRows(ctx context.Context, identity BatchIdentity, ex
 		query := "SELECT count() AS rows, uniqExact(_row_number) AS distinct_rows," +
 			" min(_row_number) AS min_row, max(_row_number) AS max_row," +
 			" countIf(_source_sha256 != {digest:String}) AS wrong_source FROM " + quoted(c.database) + "." + quoted(dataset.Name) +
-			" PREWHERE _ledger_sequence BETWEEN {start:UInt32} AND {end:UInt32} WHERE _batch_id={batch:UUID}" +
+			" PREWHERE " + batchLedgerPredicate(dataset) + " WHERE _batch_id={batch:UUID}" +
 			" SETTINGS max_threads=1,max_execution_time=30,max_memory_usage=200000000,output_format_json_quote_64bit_integers=1 FORMAT JSONEachRow"
 		body, err := c.execute(ctx, query, url.Values{
 			"param_batch": {identity.ID}, "param_digest": {identity.SourceSHA256},
@@ -56,6 +56,18 @@ func (c *Client) VerifyBatchRows(ctx context.Context, identity BatchIdentity, ex
 		}
 	}
 	return nil
+}
+
+// Keep the physical partition bound and the dataset's actual ledger key. The
+// metadata ledger column alone cannot prune ledger-sequence primary indexes.
+func batchLedgerPredicate(dataset schema.Dataset) string {
+	predicate := "_ledger_sequence BETWEEN {start:UInt32} AND {end:UInt32}"
+	for _, column := range dataset.OrderBy {
+		if column == "ledger_sequence" || column == "sequence" {
+			return predicate + " AND " + quoted(column) + " BETWEEN {start:UInt32} AND {end:UInt32}"
+		}
+	}
+	return predicate
 }
 
 func validateBatchRowStats(stats batchRowStats, expected uint64) error {
