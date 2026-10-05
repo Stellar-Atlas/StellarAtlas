@@ -22,6 +22,9 @@ export interface ExplorerLiveTransactionFeed {
 }
 
 export interface GetExplorerRecentTransactionsConfig {
+	readonly fetchParsedTransactions?: (
+		limit: number
+	) => Promise<ExplorerLiveTransactionFeed>;
 	readonly fetchLiveTransactions: (
 		limit: number
 	) => Promise<ExplorerLiveTransactionFeed>;
@@ -36,11 +39,21 @@ export class GetExplorerRecentTransactions {
 			!Number.isSafeInteger(config.freshnessWindowMs) ||
 			config.freshnessWindowMs <= 0
 		) {
-			throw new RangeError('Explorer transaction freshness window must be positive');
+			throw new RangeError(
+				'Explorer transaction freshness window must be positive'
+			);
 		}
 	}
 
 	async execute(limit: number): Promise<ExplorerRecentTransactionsV1> {
+		if (this.config.fetchParsedTransactions !== undefined) {
+			const parsed = await this.config
+				.fetchParsedTransactions(limit)
+				.catch(() => null);
+			if (parsed !== null && parsed.records.length > 0) {
+				return this.selectParsedFeed(parsed, limit);
+			}
+		}
 		const local = await this.config.getLocalTransactions.execute(limit);
 		const assessedAt = this.readNow();
 		const localDataThrough = normalizeDateTime(
@@ -95,6 +108,70 @@ export class GetExplorerRecentTransactions {
 				'stale',
 				'live_network_unavailable'
 			);
+		}
+	}
+
+	private async selectParsedFeed(
+		parsed: ExplorerLiveTransactionFeed,
+		limit: number
+	): Promise<ExplorerRecentTransactionsV1> {
+		const parsedThrough = latestRecordTime(parsed.records);
+		const parsedResult = (
+			reason: ExplorerTransactionFeedSelectionReasonV1
+		): ExplorerRecentTransactionsV1 => {
+			const now = this.readNow();
+			return {
+				dataThrough: parsedThrough,
+				freshness: classifyFreshness(
+					parsedThrough,
+					now,
+					this.config.freshnessWindowMs
+				),
+				freshnessThresholdMs: this.config.freshnessWindowMs,
+				generatedAt: now.toISOString(),
+				limit,
+				records: parsed.records.map(mapTransaction),
+				selectionReason: reason,
+				source: 'local_history',
+				truncated: parsed.truncated
+			};
+		};
+		if (
+			classifyFreshness(
+				parsedThrough,
+				this.readNow(),
+				this.config.freshnessWindowMs
+			) === 'fresh'
+		) {
+			return parsedResult('local_history_current');
+		}
+		try {
+			const live = await this.config.fetchLiveTransactions(limit);
+			const liveThrough = latestRecordTime(live.records);
+			if (
+				liveThrough === null ||
+				Date.parse(liveThrough) <= Date.parse(parsedThrough!)
+			) {
+				return parsedResult('local_history_newer');
+			}
+			const now = this.readNow();
+			return {
+				dataThrough: liveThrough,
+				freshness: classifyFreshness(
+					liveThrough,
+					now,
+					this.config.freshnessWindowMs
+				),
+				freshnessThresholdMs: this.config.freshnessWindowMs,
+				generatedAt: now.toISOString(),
+				limit,
+				records: live.records.map(mapTransaction),
+				selectionReason: 'local_history_behind',
+				source: 'live_network',
+				truncated: live.truncated
+			};
+		} catch {
+			return parsedResult('live_network_unavailable');
 		}
 	}
 

@@ -23,6 +23,7 @@ type config struct {
 	client             *clickhouse.Client
 	databaseURL        string
 	maximumBatches     int
+	recentBatches      int
 	minimumStartLedger uint32
 	priorityBatchID    string
 	networkPassphrase  string
@@ -105,6 +106,13 @@ func loadConfig() (config, error) {
 	if err != nil {
 		return result, fmt.Errorf("HUBBLE_ETL_MAX_BATCHES: %w", err)
 	}
+	recentBatches, err := nonNegativeInt(env("HUBBLE_ETL_RECENT_BATCHES", "0"))
+	if err != nil {
+		return result, fmt.Errorf("HUBBLE_ETL_RECENT_BATCHES: %w", err)
+	}
+	if err := backfill.ValidateBatchScheduling(maximumBatches, recentBatches); err != nil {
+		return result, fmt.Errorf("HUBBLE_ETL batch admission: %w", err)
+	}
 	minimumStartLedger, err := strconv.ParseUint(env("HUBBLE_ETL_MIN_START_LEDGER", "0"), 10, 32)
 	if err != nil {
 		return result, fmt.Errorf("HUBBLE_ETL_MIN_START_LEDGER must be an unsigned 32-bit ledger number")
@@ -128,6 +136,7 @@ func loadConfig() (config, error) {
 		client:             client,
 		databaseURL:        os.Getenv("ACTIVE_DATABASE_URL"),
 		maximumBatches:     maximumBatches,
+		recentBatches:      recentBatches,
 		minimumStartLedger: uint32(minimumStartLedger),
 		priorityBatchID:    strings.TrimSpace(os.Getenv("HUBBLE_ETL_PRIORITY_BATCH_ID")),
 		networkPassphrase:  env("FULL_HISTORY_NETWORK_PASSPHRASE", publicNetworkPassphrase),
@@ -150,6 +159,7 @@ func runBackfill(ctx context.Context, cfg config) error {
 			Client:             cfg.client,
 			DatabaseURL:        cfg.databaseURL,
 			MaximumBatches:     cfg.maximumBatches,
+			RecentBatches:      cfg.recentBatches,
 			MinimumStartLedger: cfg.minimumStartLedger,
 			PriorityBatchID:    cfg.priorityBatchID,
 			NetworkPassphrase:  cfg.networkPassphrase,

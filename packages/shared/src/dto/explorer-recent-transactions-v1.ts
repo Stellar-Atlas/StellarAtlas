@@ -2,6 +2,7 @@ export type ExplorerTransactionFeedFreshnessV1 = 'fresh' | 'stale' | 'unknown';
 
 export type ExplorerTransactionFeedSelectionReasonV1 =
 	| 'local_history_current'
+	| 'local_history_newer'
 	| 'local_history_empty'
 	| 'local_history_behind'
 	| 'live_network_unavailable';

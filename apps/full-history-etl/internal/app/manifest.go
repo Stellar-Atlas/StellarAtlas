@@ -107,7 +107,7 @@ func newManifest(config Config, evidence ShardEvidence, descriptors []output.Des
 			ParquetWriter:                    "github.com/xitongsys/parquet-go@v1.6.2",
 			CanonicalLedgerCloseMetaEncoding: "xdr+zstd",
 			PartitionColumns:                 []string{"ledger_sequence"},
-			StellarSDK:                       "github.com/stellar/go-stellar-sdk@v0.6.0",
+			StellarSDK:                       "github.com/stellar/go-stellar-sdk@v0.7.3",
 			StellarXDRCommit:                 strings.TrimSpace(xdr.CommitHash),
 		},
 		Limits: ManifestLimits{

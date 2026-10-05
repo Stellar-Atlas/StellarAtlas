@@ -22,6 +22,7 @@ type Config struct {
 	DecodeLimits       lcmbatch.Limits
 	WriterLimits       clickhouse.WriterLimits
 	MaximumBatches     int
+	RecentBatches      int
 	MinimumStartLedger uint32
 	PriorityBatchID    string
 	PressureGuard      *PressureGuard
@@ -62,8 +63,8 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 	if config.WorkerCount < 1 || config.WorkerCount > 64 {
 		return summary, fmt.Errorf("worker count must be between 1 and 64")
 	}
-	if config.MaximumBatches < 0 {
-		return summary, fmt.Errorf("maximum batches cannot be negative")
+	if err := ValidateBatchScheduling(config.MaximumBatches, config.RecentBatches); err != nil {
+		return summary, err
 	}
 	if config.ReadinessGuard != nil {
 		if err := config.ReadinessGuard.Wait(ctx); err != nil {
@@ -79,12 +80,21 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		return summary, err
 	}
 	summary.CatalogBatches = len(batches)
-	completed, err := config.Client.CompletedBatches(ctx)
+	var completed, incomplete map[string]string
+	if config.RecentBatches > 0 {
+		// Frequent head refresh never blindly replays partial or failed writes.
+		state, stateErr := config.Client.BatchAdmissionState(ctx)
+		err = stateErr
+		completed = state.Completed
+		incomplete = state.Incomplete
+	} else {
+		completed, err = config.Client.CompletedBatches(ctx)
+	}
 	if err != nil {
 		return summary, fmt.Errorf("read warehouse completion state: %w", err)
 	}
 	pending, completedCount, err := selectPendingBatches(
-		batches, completed, config.PriorityBatchID, config.MaximumBatches, config.MinimumStartLedger,
+		batches, completed, config.PriorityBatchID, config.MaximumBatches, config.MinimumStartLedger, config.RecentBatches, incomplete,
 	)
 	if err != nil {
 		return summary, err

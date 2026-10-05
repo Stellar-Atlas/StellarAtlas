@@ -1,11 +1,22 @@
+const reviewedStellarFormats = [
+	{
+		stellarSdk: 'github.com/stellar/go-stellar-sdk@v0.6.0',
+		stellarXdrCommit: '68fa1ac55692f68ad2a2ca549d0a283273554439'
+	},
+	{
+		stellarSdk: 'github.com/stellar/go-stellar-sdk@v0.7.3',
+		stellarXdrCommit: '9c9c145953e80990d6ff1ae3a6a973a0ce6d0694'
+	}
+] as const;
+
 export interface GoFullHistoryLedgerCloseMetaFormat {
 	readonly canonicalLedgerCloseMetaEncoding: 'xdr+zstd';
 	readonly name: 'stellar-atlas-full-history-shard';
 	readonly parquetCompression: 'zstd';
 	readonly parquetWriter: 'github.com/xitongsys/parquet-go@v1.6.2';
 	readonly partitionColumns: readonly ['ledger_sequence'];
-	readonly stellarSdk: 'github.com/stellar/go-stellar-sdk@v0.6.0';
-	readonly stellarXdrCommit: '68fa1ac55692f68ad2a2ca549d0a283273554439';
+	readonly stellarSdk: (typeof reviewedStellarFormats)[number]['stellarSdk'];
+	readonly stellarXdrCommit: (typeof reviewedStellarFormats)[number]['stellarXdrCommit'];
 }
 
 export interface GoFullHistoryLedgerCloseMetaLimits {
@@ -71,6 +82,16 @@ export function parseManifestFormat(
 	value: unknown
 ): GoFullHistoryLedgerCloseMetaFormat {
 	const row = exactObjectValue(value, 'format', formatKeys);
+	const stellarFormat = reviewedStellarFormats.find(
+		(format) =>
+			format.stellarSdk === row.stellarSdk &&
+			format.stellarXdrCommit === row.stellarXdrCommit
+	);
+	if (stellarFormat === undefined) {
+		throw new TypeError(
+			'format stellarSdk/stellarXdrCommit pair is not compatible with this service'
+		);
+	}
 	return Object.freeze({
 		canonicalLedgerCloseMetaEncoding: exactString(
 			row.canonicalLedgerCloseMetaEncoding,
@@ -97,16 +118,7 @@ export function parseManifestFormat(
 			'format.partitionColumns',
 			['ledger_sequence'] as const
 		),
-		stellarSdk: exactString(
-			row.stellarSdk,
-			'format.stellarSdk',
-			'github.com/stellar/go-stellar-sdk@v0.6.0'
-		),
-		stellarXdrCommit: exactString(
-			row.stellarXdrCommit,
-			'format.stellarXdrCommit',
-			'68fa1ac55692f68ad2a2ca549d0a283273554439'
-		)
+		...stellarFormat
 	});
 }
 

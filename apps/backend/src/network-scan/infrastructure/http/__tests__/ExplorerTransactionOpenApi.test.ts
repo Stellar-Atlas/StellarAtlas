@@ -35,6 +35,7 @@ describe('Explorer transaction OpenAPI contract', () => {
 		]);
 		expect(schema?.properties?.selectionReason?.enum).toEqual([
 			'local_history_current',
+			'local_history_newer',
 			'local_history_empty',
 			'local_history_behind',
 			'live_network_unavailable'

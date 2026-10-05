@@ -15,6 +15,8 @@ import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-
 import { GetExplorerLocalTransactions } from '@network-scan/use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 import { GetExplorerRecentTransactions } from '@network-scan/use-cases/get-explorer-recent-transactions/GetExplorerRecentTransactions.js';
 import { fetchRecentTransactions } from '@network-scan/infrastructure/http/HorizonLedgerClient.js';
+import { hubbleWarehouseFromEnvironment } from '../../../status/infrastructure/http/HubbleWarehouseClient.js';
+import { fetchParsedRecentTransactions } from '@network-scan/use-cases/get-explorer-recent-transactions/ParsedRecentTransactions.js';
 
 export function mountExplorerRoutes(
 	api: express.Express,
@@ -24,7 +26,12 @@ export function mountExplorerRoutes(
 	const getExplorerLocalTransactions = kernel.container.get(
 		GetExplorerLocalTransactions
 	);
+	const warehouse = hubbleWarehouseFromEnvironment();
 	const getExplorerRecentTransactions = new GetExplorerRecentTransactions({
+		fetchParsedTransactions:
+			process.env.EXPLORER_PARSED_HISTORY_FEED_ENABLED === 'true'
+				? (limit) => fetchParsedRecentTransactions(warehouse, limit)
+				: undefined,
 		fetchLiveTransactions: (limit) =>
 			fetchRecentTransactions(config.horizonUrl.value, limit),
 		freshnessWindowMs: config.explorerTransactionFreshnessWindowMs,

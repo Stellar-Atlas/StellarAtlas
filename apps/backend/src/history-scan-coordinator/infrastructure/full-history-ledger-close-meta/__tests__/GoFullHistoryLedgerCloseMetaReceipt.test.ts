@@ -5,6 +5,44 @@ import {
 } from '../GoFullHistoryLedgerCloseMetaReceipt.js';
 
 describe('GoFullHistoryLedgerCloseMetaReceipt', () => {
+	it('accepts the deployed SDK/XDR pair and preserves historical producer receipts', () => {
+		const historical = manifestFixture();
+		expect(
+			parseGoFullHistoryLedgerCloseMetaManifest(historical).format
+		).toEqual(historical.format);
+		const current = manifestFixture();
+		current.format.stellarSdk = 'github.com/stellar/go-stellar-sdk@v0.7.3';
+		current.format.stellarXdrCommit =
+			'9c9c145953e80990d6ff1ae3a6a973a0ce6d0694';
+		expect(parseGoFullHistoryLedgerCloseMetaManifest(current).format).toEqual(
+			current.format
+		);
+	});
+	it.each([
+		[
+			'github.com/stellar/go-stellar-sdk@v0.6.0',
+			'9c9c145953e80990d6ff1ae3a6a973a0ce6d0694'
+		],
+		[
+			'github.com/stellar/go-stellar-sdk@v0.7.3',
+			'68fa1ac55692f68ad2a2ca549d0a283273554439'
+		],
+		[
+			'github.com/stellar/go-stellar-sdk@v0.8.0',
+			'9c9c145953e80990d6ff1ae3a6a973a0ce6d0694'
+		],
+		['github.com/stellar/go-stellar-sdk@v0.7.3', 'f'.repeat(40)]
+	])(
+		'rejects unreviewed or cross-paired producer metadata %s/%s',
+		(stellarSdk, stellarXdrCommit) => {
+			const value = manifestFixture();
+			value.format.stellarSdk = stellarSdk;
+			value.format.stellarXdrCommit = stellarXdrCommit;
+			expect(() => parseGoFullHistoryLedgerCloseMetaManifest(value)).toThrow(
+				/pair is not compatible/
+			);
+		}
+	);
 	it('parses aggregate typed output and ordered per-object evidence', () => {
 		const receipt = parseGoFullHistoryLedgerCloseMetaReceipt(receiptFixture());
 		const manifest =

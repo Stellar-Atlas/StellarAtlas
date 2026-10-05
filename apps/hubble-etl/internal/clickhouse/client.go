@@ -257,8 +257,7 @@ func (c *Client) CompletedBatches(ctx context.Context) (map[string]string, error
 		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
 			return nil, fmt.Errorf("decode completed batch: %w", err)
 		}
-		if !uuidPattern.MatchString(row.BatchID) ||
-			!digestPattern.MatchString(row.SourceSHA256) {
+		if !uuidPattern.MatchString(row.BatchID) || !digestPattern.MatchString(row.SourceSHA256) {
 			return nil, fmt.Errorf("ClickHouse returned an invalid completed batch")
 		}
 		completed[row.BatchID] = row.SourceSHA256
@@ -267,4 +266,47 @@ func (c *Client) CompletedBatches(ctx context.Context) (map[string]string, error
 		return nil, err
 	}
 	return completed, nil
+}
+
+type BatchAdmissionSnapshot struct {
+	Completed  map[string]string
+	Incomplete map[string]string
+}
+
+func (c *Client) BatchAdmissionState(ctx context.Context) (BatchAdmissionSnapshot, error) {
+	state := BatchAdmissionSnapshot{Completed: make(map[string]string), Incomplete: make(map[string]string)}
+	query := "SELECT batch_id, source_sha256, status FROM " + quoted(c.database) +
+		"._ingestion_batches FINAL FORMAT JSONEachRow"
+	body, err := c.execute(ctx, query, nil, nil)
+	if err != nil {
+		return state, err
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner.Buffer(make([]byte, 64*1024), 1<<20)
+	for scanner.Scan() {
+		var row struct {
+			BatchID      string `json:"batch_id"`
+			SourceSHA256 string `json:"source_sha256"`
+			Status       string `json:"status"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
+			return state, fmt.Errorf("decode batch admission manifest: %w", err)
+		}
+		if !uuidPattern.MatchString(row.BatchID) ||
+			!digestPattern.MatchString(row.SourceSHA256) {
+			return state, fmt.Errorf("ClickHouse returned an invalid batch admission manifest")
+		}
+		switch row.Status {
+		case "complete":
+			state.Completed[row.BatchID] = row.SourceSHA256
+		case "started", "failed":
+			state.Incomplete[row.BatchID] = row.SourceSHA256
+		default:
+			return state, fmt.Errorf("ClickHouse returned an invalid batch status")
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return state, err
+	}
+	return state, nil
 }

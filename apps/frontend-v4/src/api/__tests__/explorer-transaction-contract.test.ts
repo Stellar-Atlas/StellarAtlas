@@ -1,6 +1,12 @@
 import { parseExplorerRecentTransactions } from '../explorer-transaction-contract';
 
 describe('explorer recent transaction contract', () => {
+	it('accepts newer parsed history without claiming it is current', () => {
+		const value = feed({ freshness: 'stale', selectionReason: 'local_history_newer' });
+		expect(parseExplorerRecentTransactions(value)).toEqual(value);
+		expect(parseExplorerRecentTransactions({ ...value, freshness: 'fresh' })).toBeNull();
+		expect(parseExplorerRecentTransactions({ ...value, source: 'live_network' })).toBeNull();
+	});
 	it('parses a current local-history feed', () => {
 		expect(parseExplorerRecentTransactions(feed())).toEqual(feed());
 	});

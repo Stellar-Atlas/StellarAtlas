@@ -35,6 +35,7 @@ const validateRecentTransactions = matches({
 	records: arrayOf(validateRecentTransaction, maximumRecentTransactionRecords),
 	selectionReason: oneOf(
 		'local_history_current',
+		'local_history_newer',
 		'local_history_empty',
 		'local_history_behind',
 		'live_network_unavailable'
@@ -82,6 +83,9 @@ function hasCoherentSelection(
 	if (value.freshness !== 'unknown' && value.dataThrough === null) return false;
 	if (value.selectionReason === 'local_history_current') {
 		return value.source === 'local_history' && value.freshness === 'fresh';
+	}
+	if (value.selectionReason === 'local_history_newer') {
+		return value.source === 'local_history' && value.freshness === 'stale';
 	}
 	if (value.selectionReason === 'live_network_unavailable') {
 		return value.source === 'local_history' && value.freshness === 'stale';
