@@ -1,8 +1,9 @@
 [Unit]
 Description=StellarAtlas Hubble warehouse ETL
 After=clickhouse-server.service network-online.target stellaratlas-postgresql.service
-Requires=clickhouse-server.service
-Wants=network-online.target
+# A failed ClickHouse boot job must not strand ETL after the warehouse recovers.
+# ETL stays alive behind bounded warehouse-readiness and I/O-admission probes.
+Wants=clickhouse-server.service network-online.target
 RequiresMountsFor=/mnt/bulk /mnt/fast
 
 [Service]
