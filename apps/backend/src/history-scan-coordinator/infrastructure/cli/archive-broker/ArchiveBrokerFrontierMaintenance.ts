@@ -5,7 +5,7 @@ import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js
 /** Optional frontier work uses the existing pool and statement bounds. Periodic
  * callers do not wait; an empty ready queue joins the same sequence. */
 export class ArchiveBrokerFrontierMaintenance {
-	private pending: Promise<void> | null = null;
+	private pending: Promise<number> | null = null;
 	private stopping = false;
 	constructor(
 		private readonly repository: Pick<
@@ -19,17 +19,21 @@ export class ArchiveBrokerFrontierMaintenance {
 		private readonly logger: Pick<Logger, 'error'>,
 		private readonly onComplete: () => void
 	) {}
-	run(): Promise<void> {
-		if (this.stopping) return Promise.resolve();
+	run(): Promise<number> {
+		if (this.stopping) return Promise.resolve(0);
 		if (this.pending !== null) return this.pending;
+		let changedReadyWork = 0;
 		this.pending = Promise.resolve()
 			.then(async () => {
-				if (this.stopping) return;
-				await this.repository.ensurePrefetch(this.config.canonicalFirstRoot);
+				if (this.stopping) return 0;
+				changedReadyWork += await this.repository.ensurePrefetch(
+					this.config.canonicalFirstRoot
+				);
 				if (!this.stopping)
-					await this.repository.recoverMissingFrontierReady(
+					changedReadyWork += await this.repository.recoverMissingFrontierReady(
 						this.config.batchSize
 					);
+				return changedReadyWork;
 			})
 			.catch((error: unknown) => {
 				this.logger.error(
@@ -38,10 +42,12 @@ export class ArchiveBrokerFrontierMaintenance {
 						errorMessage: error instanceof Error ? error.message : String(error)
 					}
 				);
+				// The first transaction may already have committed useful work.
+				return changedReadyWork;
 			})
 			.finally(() => {
 				this.pending = null;
-				if (!this.stopping) this.onComplete();
+				if (!this.stopping && changedReadyWork > 0) this.onComplete();
 			});
 		return this.pending;
 	}

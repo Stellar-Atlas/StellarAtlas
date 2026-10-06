@@ -299,14 +299,13 @@ export class HistoryArchiveBrokerFrontierRepository {
 			this.dataSource,
 			async (manager) => {
 				if (!(await this.tryTakeExecutionReconciliationLock(manager)))
-					return false;
-				await this.materializeFrontier(manager, archiveUrlIdentity);
-				return true;
+					return null;
+				return await this.materializeFrontier(manager, archiveUrlIdentity);
 			},
-			false,
+			null,
 			this.onMaintenanceDeferred
 		);
-		if (!materialized) return 0;
+		if (materialized === null) return 0;
 		const readyObjects = await withBoundedArchiveBrokerMaintenance(
 			this.dataSource,
 			async (manager) => {
@@ -314,12 +313,12 @@ export class HistoryArchiveBrokerFrontierRepository {
 					manager,
 					maximumArchiveSourceFrontierRows
 				);
-				return result.readyObjects;
+				return result.scheduledObjects;
 			},
 			0,
 			this.onMaintenanceDeferred
 		);
-		return readyObjects;
+		return materialized + readyObjects;
 	}
 	async reserveJobs(
 		limit: number,
@@ -476,7 +475,9 @@ export class HistoryArchiveBrokerFrontierRepository {
 			archiveUrlIdentity
 		);
 		if (activation.ready > 0) await notifyHistoryArchiveReadyWork(manager);
-		return compactPlan.planned + activation.activated;
+		// Planned includes existing pending UPSERTs; only new ready rows and
+		// actual deferred-to-executable transitions justify another reservation.
+		return compactPlan.ready + activation.activated;
 	}
 
 	private async tryTakeExecutionReconciliationLock(

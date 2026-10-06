@@ -58,7 +58,8 @@ describe('single-flight optional archive frontier maintenance', () => {
 		gate.resolve();
 		await first;
 		expect(repository.recoverMissingFrontierReady).toHaveBeenCalledTimes(1);
-		expect(wake).toHaveBeenCalledTimes(1);
+		expect(wake).not.toHaveBeenCalled();
+		expect(await first).toBe(0);
 		await maintenance.run();
 		expect(repository.ensurePrefetch).toHaveBeenCalledTimes(2);
 	});
@@ -83,7 +84,7 @@ describe('single-flight optional archive frontier maintenance', () => {
 				() => undefined
 			);
 			const pending = maintenance.run();
-			await expect(pending).resolves.toBeUndefined();
+			await expect(pending).resolves.toBe(0);
 			expect(log.error).toHaveBeenCalledTimes(1);
 			await maintenance.close();
 		}
@@ -154,7 +155,7 @@ describe('dispatcher refill while optional maintenance is slow', () => {
 				await gate.promise;
 				return 0;
 			}),
-			recoverMissingFrontierReady: jest.fn(async () => 0),
+			recoverMissingFrontierReady: jest.fn(async () => (emptyFirst ? 1 : 0)),
 			requeueOrphanedPublishedJobs: jest.fn(async () => {
 				events.push('empty-stream-cleanup');
 				return 0;

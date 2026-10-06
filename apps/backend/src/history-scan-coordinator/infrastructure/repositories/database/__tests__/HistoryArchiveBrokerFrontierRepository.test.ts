@@ -283,4 +283,75 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		]);
 		expect(planned).toBe(6);
 	});
+
+	it('does not report existing planned objects as newly available work', async () => {
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([{ locked: true }])
+			.mockResolvedValueOnce([{ advanced: 0, planned: 9, ready: 0 }])
+			.mockResolvedValueOnce([{ activated: 0, ready: 0 }]);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest.fn(
+			async (work: (manager: EntityManager) => Promise<unknown>) =>
+				work(manager)
+		);
+		const repository = new HistoryArchiveBrokerFrontierRepository({
+			transaction
+		} as unknown as DataSource);
+		await expect(repository.ensurePrefetch()).resolves.toBe(0);
+	});
+
+	it('returns changed ready work, not the existing ready census', async () => {
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([{ locked: true }])
+			.mockResolvedValueOnce([{ advanced: 0, planned: 9, ready: 0 }])
+			.mockResolvedValueOnce([{ activated: 0, ready: 0 }])
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([{ locked: true }])
+			.mockResolvedValueOnce([{ count: 0 }])
+			.mockResolvedValueOnce([{ count: 0 }])
+			.mockResolvedValueOnce([{ count: 353000 }]);
+		const manager = {
+			query,
+			queryRunner: { isTransactionActive: true }
+		} as unknown as EntityManager;
+		const transaction = jest.fn(
+			async (work: (manager: EntityManager) => Promise<unknown>) =>
+				work(manager)
+		);
+		const repository = new HistoryArchiveBrokerFrontierRepository({
+			transaction
+		} as unknown as DataSource);
+		await expect(repository.ensureFrontier()).resolves.toBe(0);
+		expect(transaction).toHaveBeenCalledTimes(2);
+		expect(query).toHaveBeenCalledTimes(9);
+	});
+
+	it('retains committed ready admissions when later synchronization times out', async () => {
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([{ locked: true }])
+			.mockResolvedValueOnce([{ advanced: 0, planned: 1, ready: 1 }])
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([{ activated: 0, ready: 0 }]);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest
+			.fn()
+			.mockImplementationOnce(
+				async (work: (manager: EntityManager) => Promise<unknown>) =>
+					work(manager)
+			)
+			.mockRejectedValueOnce({ code: '57014' });
+		const report = jest.fn();
+		const repository = new HistoryArchiveBrokerFrontierRepository(
+			{ transaction } as unknown as DataSource,
+			report
+		);
+		await expect(repository.ensureFrontier()).resolves.toBe(1);
+		expect(report).toHaveBeenCalledWith('57014');
+	});
 });

@@ -190,7 +190,7 @@ export class HistoryArchiveBrokerDispatcher {
 		await this.initialize();
 		await this.initializeReadyListener();
 		while (!this.stopping) {
-			const observedWakeVersion = this.wakeVersion;
+			let observedWakeVersion = this.wakeVersion;
 			try {
 				const capacity = await this.getAvailableCapacity();
 				if (capacity < 1) {
@@ -199,47 +199,38 @@ export class HistoryArchiveBrokerDispatcher {
 				}
 				if (await this.replayOrphanedPublishedJobs(capacity)) continue;
 				const limit = Math.min(capacity, this.config.batchSize);
-				await this.repository.admitDailyTransientSourceRetries(limit);
-				let jobs = await this.repository.reserveJobs(
-					limit,
-					this.config.maximumPerHost,
-					this.config.maximumPriority,
-					this.config.canonicalFirstRoot
-				);
-				if (jobs.length === 0) {
-					await this.frontierMaintenance.run();
-					jobs = await this.repository.reserveJobs(
+				const reserve = async (root = this.config.canonicalFirstRoot) => {
+					// Consume only wakes preceding this SELECT; later events must survive.
+					observedWakeVersion = this.wakeVersion;
+					return this.repository.reserveJobs(
 						limit,
 						this.config.maximumPerHost,
 						this.config.maximumPriority,
-						this.config.canonicalFirstRoot
+						root
 					);
+				};
+				await this.repository.admitDailyTransientSourceRetries(limit);
+				let jobs = await reserve();
+				if (jobs.length === 0) {
+					const changed = await this.frontierMaintenance.run();
+					if (changed > 0 || this.wakeVersion !== observedWakeVersion)
+						jobs = await reserve();
 				}
 				if (jobs.length === 0) {
-					await this.repository.ensureFrontier(this.config.canonicalFirstRoot);
-					jobs = await this.repository.reserveJobs(
-						limit,
-						this.config.maximumPerHost,
-						this.config.maximumPriority,
+					const changed = await this.repository.ensureFrontier(
 						this.config.canonicalFirstRoot
 					);
+					if (changed > 0 || this.wakeVersion !== observedWakeVersion)
+						jobs = await reserve();
 				}
 				if (jobs.length === 0 && this.config.canonicalFirstRoot !== null) {
 					await this.repository.ensurePrefetch(null);
-					jobs = await this.repository.reserveJobs(
-						limit,
-						this.config.maximumPerHost,
-						this.config.maximumPriority,
-						null
-					);
+					// A broader root scope also requires a SELECT even without new work.
+					jobs = await reserve(null);
 					if (jobs.length === 0) {
-						await this.repository.ensureFrontier(null);
-						jobs = await this.repository.reserveJobs(
-							limit,
-							this.config.maximumPerHost,
-							this.config.maximumPriority,
-							null
-						);
+						const changed = await this.repository.ensureFrontier(null);
+						if (changed > 0 || this.wakeVersion !== observedWakeVersion)
+							jobs = await reserve(null);
 					}
 				}
 				if (jobs.length === 0) {
