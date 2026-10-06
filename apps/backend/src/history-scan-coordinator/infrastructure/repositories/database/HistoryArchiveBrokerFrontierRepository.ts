@@ -1,3 +1,16 @@
+import type { ArchiveBrokerRamSelected } from '../../cli/archive-broker/ArchiveBrokerRamTypes.js';
+import { HistoryArchiveRamCandidateFeed } from './HistoryArchiveRamCandidateFeed.js';
+import { buildReserveBrokerCandidateIdsSql } from './HistoryArchiveBrokerCandidateIdsSql.js';
+import {
+	mapAndOrderBrokerJobs,
+	requirePriority,
+	type BrokerJobRow,
+	type HistoryArchiveBrokerJob
+} from './HistoryArchiveBrokerJobMapper.js';
+export {
+	compareHistoryArchiveBrokerJobs,
+	type HistoryArchiveBrokerJob
+} from './HistoryArchiveBrokerJobMapper.js';
 import type { DataSource, EntityManager } from 'typeorm';
 import type { ArchiveBrokerExecutionSnapshot } from '../../cli/archive-broker/ArchiveBrokerExecutionSnapshot.js';
 import { reconcileHistoryArchivePhaseSuppressedReservations } from './HistoryArchivePhaseSuppressedReservation.js';
@@ -18,7 +31,6 @@ import {
 	defaultHistoryArchiveBrokerMaximumPriority,
 	type HistoryArchiveBrokerPriority
 } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
-import type { HistoryArchiveObjectType } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import {
 	notifyHistoryArchiveReadyWork,
 	synchronizeHistoryArchiveReadyQueue
@@ -34,36 +46,6 @@ import { prefetchAdjacentCheckpointStates } from './HistoryArchiveAdjacentCheckp
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 const maximumArchiveSourceFrontierRows = 4_096;
 export type { HistoryArchiveBrokerPriority } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
-export interface HistoryArchiveBrokerJob {
-	readonly executionId: string;
-	readonly job: {
-		readonly archiveUrl: string;
-		readonly bucketHash: string | null;
-		readonly checkpointLedger: number | null;
-		readonly claimAttempt: number;
-		readonly objectKey: string;
-		readonly objectType: HistoryArchiveObjectType;
-		readonly objectUrl: string;
-		readonly remoteId: string;
-		readonly allowListingDiscovery?: boolean;
-	};
-	readonly priority: HistoryArchiveBrokerPriority;
-	readonly selectedOrdinal: number;
-}
-interface BrokerJobRow {
-	readonly allowListingDiscovery?: boolean;
-	readonly archiveUrl: string;
-	readonly bucketHash: string | null;
-	readonly checkpointLedger: number | string | null;
-	readonly claimAttempt: number | string;
-	readonly dispatchToken: string;
-	readonly objectKey: string;
-	readonly objectType: HistoryArchiveObjectType;
-	readonly objectUrl: string;
-	readonly priority: number | string;
-	readonly remoteId: string;
-	readonly selectedOrdinal: number | string;
-}
 function buildFindPublishedBrokerJobsSql(
 	phase: HistoryArchiveRetryPhase
 ): string {
@@ -135,73 +117,6 @@ const requeueOrphanedPublishedBrokerJobsSql = `
 	select count(*)::integer as count
 	from requeued
 `;
-function requirePositiveInteger(value: number | string, field: string): number {
-	const parsed = typeof value === 'number' ? value : Number(value);
-	if (!Number.isSafeInteger(parsed) || parsed < 1)
-		throw new Error(`Invalid archive broker ${field}`);
-	return parsed;
-}
-function nullableInteger(
-	value: number | string | null,
-	field: string
-): number | null {
-	if (value === null) return null;
-	const parsed = typeof value === 'number' ? value : Number(value);
-	if (!Number.isSafeInteger(parsed) || parsed < 0)
-		throw new Error(`Invalid archive broker ${field}`);
-	return parsed;
-}
-function requirePriority(value: number | string): HistoryArchiveBrokerPriority {
-	const parsed = typeof value === 'number' ? value : Number(value);
-	if (parsed !== 0 && parsed !== 1 && parsed !== 2)
-		throw new Error('Invalid archive broker priority');
-	return parsed;
-}
-function mapBrokerJob(row: BrokerJobRow): HistoryArchiveBrokerJob {
-	return {
-		executionId: row.dispatchToken,
-		job: {
-			archiveUrl: row.archiveUrl,
-			bucketHash: row.bucketHash,
-			checkpointLedger: nullableInteger(
-				row.checkpointLedger,
-				'checkpointLedger'
-			),
-			claimAttempt: requirePositiveInteger(row.claimAttempt, 'claimAttempt'),
-			objectKey: row.objectKey,
-			objectType: row.objectType,
-			objectUrl: row.objectUrl,
-			remoteId: row.remoteId,
-			allowListingDiscovery: row.allowListingDiscovery === true
-		},
-		priority: requirePriority(row.priority),
-		selectedOrdinal: requirePositiveInteger(
-			row.selectedOrdinal,
-			'selectedOrdinal'
-		)
-	};
-}
-
-export function compareHistoryArchiveBrokerJobs(
-	left: HistoryArchiveBrokerJob,
-	right: HistoryArchiveBrokerJob
-): number {
-	// The database ordinal includes first-pass precedence as well as priority.
-	// Re-sorting by numeric priority would move allowed recoveries ahead of fresh work.
-	if (left.selectedOrdinal !== right.selectedOrdinal)
-		return left.selectedOrdinal - right.selectedOrdinal;
-	if (left.priority !== right.priority) return left.priority - right.priority;
-	return left.executionId < right.executionId
-		? -1
-		: left.executionId > right.executionId
-			? 1
-			: 0;
-}
-function mapAndOrderBrokerJobs(
-	rows: readonly BrokerJobRow[]
-): readonly HistoryArchiveBrokerJob[] {
-	return rows.map(mapBrokerJob).sort(compareHistoryArchiveBrokerJobs);
-}
 export class HistoryArchiveBrokerFrontierRepository {
 	private readonly candidateProjection =
 		new HistoryArchiveBrokerCandidateProjection();
@@ -211,6 +126,30 @@ export class HistoryArchiveBrokerFrontierRepository {
 		private readonly dataSource: DataSource,
 		private readonly onMaintenanceDeferred?: (code: string) => void
 	) {}
+	createRamCandidateFeed(): HistoryArchiveRamCandidateFeed {
+		return new HistoryArchiveRamCandidateFeed(this.dataSource);
+	}
+	async reserveCandidateIds(
+		selected: readonly ArchiveBrokerRamSelected[],
+		maximumPerHost: number,
+		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority,
+		canonicalFirstRoot: string | null = null
+	): Promise<readonly HistoryArchiveBrokerJob[]> {
+		if (selected.length === 0 || getHistoryArchiveRetryPhase() !== 'first-pass')
+			return [];
+		return this.dataSource.transaction(async (manager) => {
+			await this.takeDispatcherLock(manager);
+			await manager.query("set local work_mem = '32MB'");
+			const rows = (await manager.query(buildReserveBrokerCandidateIdsSql(), [
+				selected.length,
+				Math.max(1, Math.floor(maximumPerHost)),
+				requirePriority(maximumPriority),
+				canonicalFirstRoot,
+				JSON.stringify(selected)
+			])) as readonly BrokerJobRow[];
+			return mapAndOrderBrokerJobs(rows);
+		});
+	}
 	async recoverMissingFrontierReady(limit: number): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {
 			await manager.query(

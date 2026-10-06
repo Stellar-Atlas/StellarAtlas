@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import {
 	AckPolicy,
 	connect,
@@ -26,7 +25,9 @@ import {
 	HistoryArchiveBrokerFrontierRepository,
 	type HistoryArchiveBrokerJob
 } from '../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
-import { historyArchiveReadyNotificationChannel } from '../../repositories/database/HistoryArchiveObjectReadyQueue.js';
+import { ArchiveBrokerReadyListener } from './ArchiveBrokerReadyListener.js';
+import { ArchiveBrokerRamDispatch } from './ArchiveBrokerRamDispatch.js';
+import { getHistoryArchiveRetryPhase } from '../../repositories/database/HistoryArchiveFirstPassPolicy.js';
 import {
 	createArchiveBrokerConsumerStateReporter,
 	readArchiveBrokerOccupancy
@@ -41,24 +42,6 @@ export {
 	calculateHistoryArchiveBrokerStreamMessageLimit
 } from './ArchiveBrokerBuffer.js';
 
-interface PostgresNotification {
-	readonly channel: string;
-}
-interface PostgresNotificationClient {
-	connect(): Promise<void>;
-	end(): Promise<void>;
-	on(
-		event: 'notification',
-		listener: (notification: PostgresNotification) => void
-	): this;
-	on(event: 'error', listener: (error: Error) => void): this;
-	query(sql: string): Promise<unknown>;
-}
-const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
-	Client: new (config: {
-		readonly connectionString: string;
-	}) => PostgresNotificationClient;
-};
 const orphanedPublishedReplayAgeMs = 30_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -154,7 +137,8 @@ export class HistoryArchiveBrokerDispatcher {
 	private capacitySubscription: Subscription | null = null;
 	private jetStream: JetStreamClient | null = null;
 	private manager: JetStreamManager | null = null;
-	private readyListener: PostgresNotificationClient | null = null;
+	private readyListener: ArchiveBrokerReadyListener | null = null;
+	private readonly ram: ArchiveBrokerRamDispatch | null;
 	private nextOrphanedPublishedReplayAt = 0;
 	private wakeVersion = 0;
 	private readonly wakeWaiters = new Set<() => void>();
@@ -168,6 +152,22 @@ export class HistoryArchiveBrokerDispatcher {
 		private readonly config: HistoryArchiveBrokerConfig,
 		private readonly logger: Logger
 	) {
+		this.ram =
+			config.ramQueueEnabled === true
+				? new ArchiveBrokerRamDispatch(
+						repository.createRamCandidateFeed(),
+						(ids, root) =>
+							repository.reserveCandidateIds(
+								ids,
+								config.maximumPerHost,
+								config.maximumPriority,
+								root
+							),
+						config,
+						logger,
+						() => this.signalWork()
+					)
+				: null;
 		this.reportConsumerState = createArchiveBrokerConsumerStateReporter(logger);
 		this.frontierMaintenance = new ArchiveBrokerFrontierMaintenance(
 			repository,
@@ -198,6 +198,11 @@ export class HistoryArchiveBrokerDispatcher {
 				const reserve = async (root = this.config.canonicalFirstRoot) => {
 					// Consume only wakes preceding this SELECT; later events must survive.
 					observedWakeVersion = this.wakeVersion;
+					const ramJobs =
+						getHistoryArchiveRetryPhase() === 'first-pass'
+							? await this.ram?.reserve(limit, root)
+							: null;
+					if (ramJobs !== undefined && ramJobs !== null) return ramJobs;
 					return this.repository.reserveJobs(
 						limit,
 						this.config.maximumPerHost,
@@ -300,8 +305,8 @@ export class HistoryArchiveBrokerDispatcher {
 		]);
 		const readyListener = this.readyListener;
 		this.readyListener = null;
-		if (readyListener !== null)
-			await readyListener.end().catch(() => undefined);
+		if (readyListener !== null) await readyListener.close();
+		await this.ram?.close();
 		this.capacitySubscription?.unsubscribe();
 		this.capacitySubscription = null;
 		const connection = this.connection;
@@ -314,25 +319,14 @@ export class HistoryArchiveBrokerDispatcher {
 		const connectionString = process.env.ACTIVE_DATABASE_URL;
 		if (!connectionString)
 			throw new Error('ACTIVE_DATABASE_URL is required for broker wake events');
-		const listener = new PostgresClient({ connectionString });
-		listener.on('notification', (notification: PostgresNotification) => {
-			if (notification.channel === historyArchiveReadyNotificationChannel)
-				this.signalWork();
-		});
-		listener.on('error', (error: Error) => {
-			this.logger.error('Archive broker ready listener failed', {
-				errorMessage: error.message
-			});
-			this.signalWork();
-		});
-		try {
-			await listener.connect();
-			await listener.query('listen ' + historyArchiveReadyNotificationChannel);
-			this.readyListener = listener;
-		} catch (error) {
-			await listener.end().catch(() => undefined);
-			throw error;
-		}
+		this.readyListener = new ArchiveBrokerReadyListener(
+			connectionString,
+			() => this.signalWork(),
+			(payload) => this.ram?.notify(payload),
+			(connected) => this.ram?.setConnected(connected),
+			this.logger
+		);
+		await this.readyListener.start();
 	}
 	private signalWork(): void {
 		this.wakeVersion++;

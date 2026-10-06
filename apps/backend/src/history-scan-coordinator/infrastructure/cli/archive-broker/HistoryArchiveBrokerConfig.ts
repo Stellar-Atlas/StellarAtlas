@@ -16,6 +16,9 @@ export interface HistoryArchiveBrokerConfig {
 	readonly maximumPerHost: number;
 	readonly maximumPriority: HistoryArchiveBrokerPriority;
 	readonly pollIntervalMs: number;
+	/** Rollout switch; all memory is a rebuildable scheduling read model. */
+	readonly ramQueueEnabled?: boolean;
+	readonly ramMaximumRows?: number;
 	readonly servers: readonly string[];
 	readonly stream: string;
 	readonly subject: string;
@@ -71,6 +74,11 @@ export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
 		pollIntervalMs: readPositiveInteger(
 			'HISTORY_ARCHIVE_BROKER_POLL_INTERVAL_MS',
 			2_000
+		),
+		ramQueueEnabled: process.env.HISTORY_ARCHIVE_BROKER_RAM_QUEUE === 'true',
+		ramMaximumRows: readPositiveInteger(
+			'HISTORY_ARCHIVE_BROKER_RAM_MAXIMUM_ROWS',
+			1_000_000
 		),
 		servers,
 		stream:

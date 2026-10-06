@@ -7,7 +7,24 @@ import { historyArchiveCanonicalFirstAdmissionSql } from './HistoryArchiveCanoni
  * never-attempted objects cannot be retries: retained evidence is irrelevant to
  * their priority/flags, and the first-pass policy is already satisfied. Mutable
  * admission, source controls, and execution-token semantics remain unchanged. */
-export function historyArchiveBrokerFreshEligibilitySql(): string {
+export interface BrokerFreshEligibilityRelations {
+	readonly ready?: 'history_archive_object_ready' | 'ram_ready';
+	readonly object?: 'history_archive_broker_candidate' | 'ram_objects';
+	readonly control?:
+		'history_archive_root_failure_control' | 'ram_root_controls';
+}
+
+export function historyArchiveBrokerFreshEligibilitySql(
+	relations: BrokerFreshEligibilityRelations = {}
+): string {
+	const controlRelation =
+		relations.control ?? 'history_archive_root_failure_control';
+	// Reuse the complete authoritative policy against locked control versions;
+	// this is a relation substitution only, not a second policy implementation.
+	const rootAllowed = historyArchiveRootControlAllowedSql('object').replaceAll(
+		'history_archive_root_failure_control',
+		controlRelation
+	);
 	return `
 		select ready."objectRemoteId", ready."archiveUrlIdentity",
 			ready.priority as stored_priority, ready.priority as priority,
@@ -16,12 +33,12 @@ export function historyArchiveBrokerFreshEligibilitySql(): string {
 			object."objectType", control.scope as control_scope,
 			false as is_transient_source_retry, false as is_retry,
 			coalesce(active.active_count, 0) as active_count
-		from history_archive_object_ready ready
-		join history_archive_broker_candidate object
+		from ${relations.ready ?? 'history_archive_object_ready'} ready
+		join ${relations.object ?? 'history_archive_broker_candidate'} object
 			on object."remoteId"=ready."objectRemoteId"
 		left join active_hosts active on active."hostIdentity"=object."hostIdentity"
 		left join lateral (
-			select scope from history_archive_root_failure_control control
+			select scope from ${controlRelation} control
 			where control."archiveUrlIdentity"=object."archiveUrlIdentity"
 				and control.scope in ('*',object."objectType")
 				and (control."blockedUntil" is not null
@@ -30,7 +47,7 @@ export function historyArchiveBrokerFreshEligibilitySql(): string {
 		) control on true
 		where object.status='pending' and object.attempts=0
 			and ready."publishedAt" is null
-			and ${historyArchiveRootControlAllowedSql('object')}
+			and ${rootAllowed}
 			and ${historyArchiveHostScanAllowedSql('object')}
 			and ready."availableAt"<=now()
 			and (ready."dispatchToken" is not null or (
