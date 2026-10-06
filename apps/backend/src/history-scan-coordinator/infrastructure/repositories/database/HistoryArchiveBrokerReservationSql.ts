@@ -1,5 +1,6 @@
 import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObjectReadyQueue.js';
 import { historyArchiveBrokerFirstPassAdmissionSql } from './HistoryArchiveBrokerFirstPassAdmissionSql.js';
+import { historyArchiveBrokerFreshEligibilitySql } from './HistoryArchiveBrokerFreshEligibilitySql.js';
 import {
 	getHistoryArchiveRetryPhase,
 	type HistoryArchiveRetryPhase,
@@ -120,7 +121,10 @@ export function buildReserveBrokerJobsSql(
 	`;
 	const admission =
 		firstPass && candidateRelation === 'history_archive_broker_candidate'
-			? historyArchiveBrokerFirstPassAdmissionSql(eligibleSql)
+			? historyArchiveBrokerFirstPassAdmissionSql(
+					eligibleSql,
+					historyArchiveBrokerFreshEligibilitySql()
+				)
 			: `eligible as materialized (select source.*,null::timestamptz as first_pass_root_ready_at from (${eligibleSql}) source)`;
 	return `
 	with ${historyArchiveCanonicalFirstScopeCteSql('$4::text')}, active_hosts as materialized (

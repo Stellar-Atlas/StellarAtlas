@@ -1,4 +1,5 @@
 import { historyArchiveBrokerRecoveryAdmissionSql } from './HistoryArchiveBrokerRecoveryAdmissionSql.js';
+import { historyArchiveBrokerControlAdmissionSql } from './HistoryArchiveBrokerControlAdmissionSql.js';
 
 /** Bound global ranking without dropping a sparse root behind another root's
  * backlog. Each root/priority/category contributes at most twice the host/batch
@@ -6,13 +7,14 @@ import { historyArchiveBrokerRecoveryAdmissionSql } from './HistoryArchiveBroker
  * The lane's oldest eligible ready timestamp is found independently, so an old
  * timestamp outside the checkpoint prefix still controls round-robin fairness. */
 export function historyArchiveBrokerFirstPassAdmissionSql(
-	eligibleSql: string
+	eligibleSql: string,
+	freshEligibleSql: string = eligibleSql
 ): string {
 	const fresh = `object.status='pending' and object.attempts=0`;
 	const scope = `object."archiveUrlIdentity"=scope."archiveUrlIdentity"
 		and ready.priority=scope.priority and ${fresh}`;
 	const freshCategory = (checkpoint: string): string => `(
-		${eligibleSql} and ${scope} and object."objectType"=scope."objectType"
+		${freshEligibleSql} and ${scope} and object."objectType"=scope."objectType"
 			and ${checkpoint}
 		order by object."checkpointLedger" asc nulls first,object."objectOrder",
 			ready."updatedAt",ready."objectRemoteId"
@@ -46,7 +48,7 @@ export function historyArchiveBrokerFirstPassAdmissionSql(
 		left join lateral (
 			select lane."updatedAt" from history_archive_object_ready lane
 			cross join lateral (
-				${eligibleSql} and ${scope} and control.scope is null
+				${freshEligibleSql} and ${scope} and control.scope is null
 					and ready."objectRemoteId"=lane."objectRemoteId" limit 1
 			) eligible_oldest
 			-- Controlled admissions never consume this age. Avoid walking their
@@ -56,10 +58,10 @@ export function historyArchiveBrokerFirstPassAdmissionSql(
 				and lane.priority=scope.priority and lane."publishedAt" is null
 			order by lane."updatedAt",lane."objectRemoteId" limit 1
 		) oldest on true
-	), fresh_admission as materialized (
+	), ${historyArchiveBrokerControlAdmissionSql}, fresh_admission as materialized (
 		select admitted.*,case when admitted.control_scope is null
 			then oldest.first_pass_root_ready_at else null::timestamptz end as first_pass_root_ready_at
-		from ready_scopes scope
+		from fresh_admissible_scopes scope
 		join fresh_root_minimum oldest using ("archiveUrlIdentity",priority)
 		cross join lateral (
 			${freshCategory('object."checkpointLedger" between scope.first_checkpoint and scope.last_checkpoint')}
