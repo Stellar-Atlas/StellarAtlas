@@ -174,14 +174,20 @@ describe('dispatcher refill while optional maintenance is slow', () => {
 		const runtime = dispatcher as unknown as {
 			initialize(): Promise<void>;
 			initializeReadyListener(): Promise<void>;
-			getAvailableCapacity(): Promise<number>;
+			getBrokerCapacity(): Promise<{
+				availableCapacity: number;
+				empty: boolean;
+			}>;
 			publish(jobs: readonly HistoryArchiveBrokerJob[]): Promise<void>;
 			stopping: boolean;
 			connection: { drain(): Promise<void> } | null;
 		};
 		runtime.initialize = async () => undefined;
 		runtime.initializeReadyListener = async () => undefined;
-		runtime.getAvailableCapacity = async () => 120;
+		runtime.getBrokerCapacity = async () => ({
+			availableCapacity: 120,
+			empty: true
+		});
 		const drain = jest.fn(async () => {
 			events.push('nats-drain');
 		});

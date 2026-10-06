@@ -27,6 +27,15 @@ import {
 	createArchiveBrokerConsumerStateReporter,
 	readArchiveBrokerOccupancy
 } from './ArchiveBrokerConsumerHealth.js';
+import {
+	calculateHistoryArchiveBrokerStreamMessageLimit,
+	getArchiveBrokerCapacity,
+	type ArchiveBrokerCapacity
+} from './ArchiveBrokerBuffer.js';
+export {
+	calculateHistoryArchiveBrokerAvailableCapacity,
+	calculateHistoryArchiveBrokerStreamMessageLimit
+} from './ArchiveBrokerBuffer.js';
 
 interface PostgresNotification {
 	readonly channel: string;
@@ -48,7 +57,6 @@ const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
 };
 const orphanedPublishedReplayAgeMs = 30_000;
 const orphanedPublishedReplayIntervalMs = 15_000;
-const brokerStreamRetentionHeadroomFactor = 2;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
@@ -62,28 +70,6 @@ function assertPublishableBrokerJob(job: HistoryArchiveBrokerJob): void {
 		throw new Error('Invalid archive broker publish priority');
 	if (!Number.isSafeInteger(job.selectedOrdinal) || job.selectedOrdinal < 1)
 		throw new Error('Invalid archive broker selected ordinal');
-}
-
-export function calculateHistoryArchiveBrokerAvailableCapacity(
-	highWatermark: number,
-	numAckPending: number,
-	numPending: number,
-	numStreamMessages: number
-): number {
-	const consumerOccupied = Math.max(0, numAckPending) + Math.max(0, numPending);
-	const consumerCapacity = Math.max(0, highWatermark - consumerOccupied);
-	const streamCapacity = Math.max(
-		0,
-		calculateHistoryArchiveBrokerStreamMessageLimit(highWatermark) -
-			Math.max(0, numStreamMessages)
-	);
-	return Math.min(consumerCapacity, streamCapacity);
-}
-
-export function calculateHistoryArchiveBrokerStreamMessageLimit(
-	highWatermark: number
-): number {
-	return highWatermark * brokerStreamRetentionHeadroomFactor;
 }
 
 export function shouldReplayOrphanedPublishedJobs(
@@ -192,12 +178,13 @@ export class HistoryArchiveBrokerDispatcher {
 		while (!this.stopping) {
 			let observedWakeVersion = this.wakeVersion;
 			try {
-				const capacity = await this.getAvailableCapacity();
+				const broker = await this.getBrokerCapacity();
+				const capacity = broker.availableCapacity;
 				if (capacity < 1) {
 					await this.waitForWork(observedWakeVersion);
 					continue;
 				}
-				if (await this.replayOrphanedPublishedJobs(capacity)) continue;
+				if (await this.replayOrphanedPublishedJobs(broker)) continue;
 				const limit = Math.min(capacity, this.config.batchSize);
 				const reserve = async (root = this.config.canonicalFirstRoot) => {
 					// Consume only wakes preceding this SELECT; later events must survive.
@@ -247,12 +234,12 @@ export class HistoryArchiveBrokerDispatcher {
 		}
 	}
 	private async replayOrphanedPublishedJobs(
-		availableCapacity: number
+		broker: ArchiveBrokerCapacity
 	): Promise<boolean> {
 		const now = Date.now();
 		if (
 			!shouldReplayOrphanedPublishedJobs(
-				availableCapacity,
+				broker.availableCapacity,
 				now,
 				this.nextOrphanedPublishedReplayAt
 			)
@@ -263,7 +250,7 @@ export class HistoryArchiveBrokerDispatcher {
 			now + orphanedPublishedReplayIntervalMs;
 		// Only an empty broker permits invalidating unconsumed published tokens.
 		// Run that cleanup before optional frontier maintenance can time out.
-		if (availableCapacity === this.config.highWatermark) {
+		if (broker.empty) {
 			const requeued = await this.repository.requeueOrphanedPublishedJobs(
 				new Date(now - orphanedPublishedReplayAgeMs),
 				this.config.highWatermark
@@ -367,7 +354,10 @@ export class HistoryArchiveBrokerDispatcher {
 				jetStream,
 				this.repository,
 				this.config.subject,
-				await this.getAvailableCapacity(),
+				Math.min(
+					this.config.highWatermark,
+					(await this.getBrokerCapacity()).availableCapacity
+				),
 				this.config.maximumPriority,
 				this.config.canonicalFirstRoot
 			);
@@ -449,20 +439,14 @@ export class HistoryArchiveBrokerDispatcher {
 		}
 	}
 
-	private async getAvailableCapacity(): Promise<number> {
+	private async getBrokerCapacity(): Promise<ArchiveBrokerCapacity> {
 		const manager = this.requireManager();
 		const occupancy = await readArchiveBrokerOccupancy(
 			() => manager.consumers.info(this.config.stream, this.config.consumer),
 			() => manager.streams.info(this.config.stream)
 		);
 		this.reportConsumerState(occupancy);
-		if (occupancy.inconsistent) return 0;
-		return calculateHistoryArchiveBrokerAvailableCapacity(
-			this.config.highWatermark,
-			occupancy.consumer.num_ack_pending,
-			occupancy.consumer.num_pending,
-			occupancy.stream.state.messages
-		);
+		return getArchiveBrokerCapacity(this.config.highWatermark, occupancy);
 	}
 
 	private async publish(

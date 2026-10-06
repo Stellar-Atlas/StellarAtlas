@@ -27,20 +27,20 @@ function createJob(executionId: string): HistoryArchiveBrokerJob {
 describe('calculateHistoryArchiveBrokerAvailableCapacity', () => {
 	it('uses consumer occupancy when it is the larger constraint', () => {
 		expect(calculateHistoryArchiveBrokerAvailableCapacity(240, 76, 0, 40)).toBe(
-			164
+			404
 		);
 	});
 
 	it('allows acknowledged stream-retention headroom without starving consumers', () => {
 		expect(
 			calculateHistoryArchiveBrokerAvailableCapacity(240, 112, 0, 189)
-		).toBe(128);
+		).toBe(291);
 	});
 
 	it('preserves backpressure when stream-retention headroom is exhausted', () => {
 		expect(
 			calculateHistoryArchiveBrokerAvailableCapacity(240, 112, 0, 470)
-		).toBe(10);
+		).toBe(0);
 	});
 
 	it('derives stream-retention headroom from the worker high watermark', () => {

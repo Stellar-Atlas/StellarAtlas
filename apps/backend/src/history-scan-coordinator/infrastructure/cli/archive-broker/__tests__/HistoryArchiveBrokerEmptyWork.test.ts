@@ -45,14 +45,17 @@ function fixture(canonicalFirstRoot: string | null = null) {
 	const runtime = dispatcher as unknown as {
 		initialize(): Promise<void>;
 		initializeReadyListener(): Promise<void>;
-		getAvailableCapacity(): Promise<number>;
+		getBrokerCapacity(): Promise<{ availableCapacity: number; empty: boolean }>;
 		signalWork(): void;
 		publish(jobs: readonly HistoryArchiveBrokerJob[]): Promise<void>;
 		stopping: boolean;
 	};
 	runtime.initialize = async () => undefined;
 	runtime.initializeReadyListener = async () => undefined;
-	runtime.getAvailableCapacity = async () => 120;
+	runtime.getBrokerCapacity = async () => ({
+		availableCapacity: 120,
+		empty: true
+	});
 	const publish = jest.fn(async () => {
 		runtime.stopping = true;
 	});
