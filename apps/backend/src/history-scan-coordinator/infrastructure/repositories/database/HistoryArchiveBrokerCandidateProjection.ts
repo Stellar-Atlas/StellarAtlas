@@ -112,8 +112,10 @@ where candidate."remoteId"=locked."remoteId"
 
 export class HistoryArchiveBrokerCandidateProjection {
 	private cursor: string | null = null;
-	async maintain(manager: EntityManager, limit: number): Promise<void> {
+	async cleanup(manager: EntityManager): Promise<void> {
 		await manager.query(cleanupHistoryArchiveBrokerCandidatesSql);
+	}
+	async hydrate(manager: EntityManager, limit: number): Promise<void> {
 		const [result] = (await manager.query(
 			hydrateHistoryArchiveBrokerCandidatesSql,
 			[this.cursor, Math.min(Math.max(1, Math.floor(limit)), 128)]

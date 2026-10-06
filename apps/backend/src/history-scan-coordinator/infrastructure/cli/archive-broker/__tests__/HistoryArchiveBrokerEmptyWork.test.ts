@@ -25,6 +25,7 @@ const logger = {
 const fresh = [{ executionId: 'fresh' }] as HistoryArchiveBrokerJob[];
 function fixture(canonicalFirstRoot: string | null = null) {
 	const repository = {
+		cleanupOrphanedCandidates: jest.fn(async () => undefined),
 		ensurePrefetch: jest.fn(async () => 0),
 		recoverMissingFrontierReady: jest.fn(async () => 0),
 		requeueOrphanedPublishedJobs: jest.fn(async () => 0),
@@ -153,6 +154,7 @@ describe('maintenance work notifications', () => {
 		const wake = jest.fn();
 		const maintenance = new ArchiveBrokerFrontierMaintenance(
 			{
+				cleanupOrphanedCandidates: jest.fn(async () => undefined),
 				ensurePrefetch: async () => 3,
 				recoverMissingFrontierReady: async () => {
 					throw new Error('recovery timeout');
@@ -172,6 +174,7 @@ describe('maintenance work notifications', () => {
 		const wake = jest.fn();
 		const maintenance = new ArchiveBrokerFrontierMaintenance(
 			{
+				cleanupOrphanedCandidates: jest.fn(async () => undefined),
 				ensurePrefetch: async () => 2,
 				recoverMissingFrontierReady: async () => 4
 			},
@@ -185,6 +188,7 @@ describe('maintenance work notifications', () => {
 		const failureWake = jest.fn();
 		const failed = new ArchiveBrokerFrontierMaintenance(
 			{
+				cleanupOrphanedCandidates: jest.fn(async () => undefined),
 				ensurePrefetch: async () => {
 					throw new Error('no commit');
 				},

@@ -5,6 +5,7 @@ import {
 } from '@test-support/DisposablePostgres.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import {
+	HistoryArchiveBrokerCandidateProjection,
 	historyArchiveBrokerCandidateProjectionSchemaSql,
 	hydrateHistoryArchiveBrokerCandidatesSql,
 	cleanupHistoryArchiveBrokerCandidatesSql
@@ -232,7 +233,10 @@ describe('broker candidate projection lock ordering', () => {
 			expect(
 				await db.query(buildReserveBrokerJobsSql(false), [1, 8, 2, null])
 			).toHaveLength(0);
-			await db.query(hydrateHistoryArchiveBrokerCandidatesSql, [null, 1]);
+			await new HistoryArchiveBrokerCandidateProjection().hydrate(
+				db.manager,
+				1
+			);
 			expect(
 				await db.query(buildReserveBrokerJobsSql(false), [1, 8, 2, null])
 			).toHaveLength(1);

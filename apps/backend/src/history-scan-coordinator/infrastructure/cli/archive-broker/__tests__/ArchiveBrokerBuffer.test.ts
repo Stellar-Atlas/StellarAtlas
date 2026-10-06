@@ -42,6 +42,7 @@ function occupancy(
 function fixture(initial: ArchiveBrokerOccupancy, batchSize = 120) {
 	let snapshot = initial;
 	const repository = {
+		cleanupOrphanedCandidates: jest.fn(async () => undefined),
 		ensurePrefetch: jest.fn(async () => 0),
 		recoverMissingFrontierReady: jest.fn(async () => 0),
 		requeueOrphanedPublishedJobs: jest.fn(async () => 0),

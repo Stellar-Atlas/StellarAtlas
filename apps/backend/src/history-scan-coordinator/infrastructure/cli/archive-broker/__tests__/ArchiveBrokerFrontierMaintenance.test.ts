@@ -2,6 +2,7 @@ import { setImmediate } from 'node:timers/promises';
 import type { Logger } from 'logger';
 import {
 	ArchiveBrokerFrontierMaintenance,
+	archiveBrokerFrontierMaintenanceIntervalMs,
 	shareArchiveBrokerClose
 } from '../ArchiveBrokerFrontierMaintenance.js';
 import { HistoryArchiveBrokerDispatcher } from '../HistoryArchiveBrokerDispatcher.js';
@@ -34,9 +35,102 @@ const logger = () =>
 	}) as unknown as Logger;
 
 describe('single-flight optional archive frontier maintenance', () => {
+	it('cleans only on the existing cadence and never wakes for deleted orphan metadata', async () => {
+		const clock = jest.spyOn(Date, 'now').mockReturnValue(100_000);
+		let deleted = 0;
+		const repository = {
+			cleanupOrphanedCandidates: jest.fn(async () => {
+				deleted += 512;
+			}),
+			ensurePrefetch: jest.fn(async () => 0),
+			recoverMissingFrontierReady: jest.fn(async () => 0)
+		};
+		const wake = jest.fn();
+		const maintenance = new ArchiveBrokerFrontierMaintenance(
+			repository,
+			config,
+			logger(),
+			wake
+		);
+		try {
+			await expect(maintenance.run()).resolves.toBe(0);
+			await maintenance.run();
+			clock.mockReturnValue(
+				100_000 + archiveBrokerFrontierMaintenanceIntervalMs - 1
+			);
+			await maintenance.run();
+			expect(repository.cleanupOrphanedCandidates).toHaveBeenCalledTimes(1);
+			clock.mockReturnValue(
+				100_000 + archiveBrokerFrontierMaintenanceIntervalMs
+			);
+			await expect(maintenance.run()).resolves.toBe(0);
+			expect(deleted).toBe(1024);
+			expect(wake).not.toHaveBeenCalled();
+		} finally {
+			await maintenance.close();
+			clock.mockRestore();
+		}
+	});
+	it('backs off failed cleanup while still doing prefetch and recovery', async () => {
+		const clock = jest.spyOn(Date, 'now').mockReturnValue(100_000);
+		const repository = {
+			cleanupOrphanedCandidates: jest.fn(async () => {
+				throw new Error('cleanup timeout');
+			}),
+			ensurePrefetch: jest.fn(async () => 0),
+			recoverMissingFrontierReady: jest.fn(async () => 0)
+		};
+		const wake = jest.fn();
+		const maintenance = new ArchiveBrokerFrontierMaintenance(
+			repository,
+			config,
+			logger(),
+			wake
+		);
+		try {
+			await expect(maintenance.run()).resolves.toBe(0);
+			await expect(maintenance.run()).resolves.toBe(0);
+			expect(repository.cleanupOrphanedCandidates).toHaveBeenCalledTimes(1);
+			expect(repository.ensurePrefetch).toHaveBeenCalledTimes(2);
+			expect(repository.recoverMissingFrontierReady).toHaveBeenCalledTimes(2);
+			expect(wake).not.toHaveBeenCalled();
+		} finally {
+			await maintenance.close();
+			clock.mockRestore();
+		}
+	});
+	it('shares in-flight cleanup and drains it before closing without new frontier work', async () => {
+		const gate = deferred();
+		const repository = {
+			cleanupOrphanedCandidates: jest.fn(async () => {
+				await gate.promise;
+			}),
+			ensurePrefetch: jest.fn(async () => 0),
+			recoverMissingFrontierReady: jest.fn(async () => 0)
+		};
+		const wake = jest.fn();
+		const maintenance = new ArchiveBrokerFrontierMaintenance(
+			repository,
+			config,
+			logger(),
+			wake
+		);
+		const pending = maintenance.run();
+		expect(maintenance.run()).toBe(pending);
+		await setImmediate();
+		const closing = maintenance.close();
+		gate.resolve();
+		await closing;
+		expect(await pending).toBe(0);
+		expect(repository.cleanupOrphanedCandidates).toHaveBeenCalledTimes(1);
+		expect(repository.ensurePrefetch).not.toHaveBeenCalled();
+		expect(repository.recoverMissingFrontierReady).not.toHaveBeenCalled();
+		expect(wake).not.toHaveBeenCalled();
+	});
 	it('shares one sequence, handles completion and can run again on a later cadence', async () => {
 		const gate = deferred();
 		const repository = {
+			cleanupOrphanedCandidates: jest.fn(async () => undefined),
 			ensurePrefetch: jest.fn(async () => {
 				await gate.promise;
 				return 0;
@@ -68,6 +162,7 @@ describe('single-flight optional archive frontier maintenance', () => {
 		async (step) => {
 			const log = logger();
 			const repository = {
+				cleanupOrphanedCandidates: jest.fn(async () => undefined),
 				ensurePrefetch: jest.fn(async () => {
 					if (step === 'prefetch') throw new Error('prefetch unavailable');
 					return 0;
@@ -92,6 +187,7 @@ describe('single-flight optional archive frontier maintenance', () => {
 	it('closes by joining the active query and starts no recovery or wake after stopping', async () => {
 		const gate = deferred();
 		const repository = {
+			cleanupOrphanedCandidates: jest.fn(async () => undefined),
 			ensurePrefetch: jest.fn(async () => {
 				await gate.promise;
 				return 0;
@@ -150,6 +246,7 @@ describe('dispatcher refill while optional maintenance is slow', () => {
 		});
 		if (emptyFirst) reserveJobs.mockResolvedValueOnce([]);
 		const repository = {
+			cleanupOrphanedCandidates: jest.fn(async () => undefined),
 			ensurePrefetch: jest.fn(async () => {
 				events.push('maintenance');
 				await gate.promise;
@@ -229,5 +326,19 @@ describe('dispatcher refill while optional maintenance is slow', () => {
 		expect(test.repository.recoverMissingFrontierReady).toHaveBeenCalledTimes(
 			1
 		);
+	});
+	it('publishes fresh work while periodic orphan cleanup is still running', async () => {
+		const test = fixture(false);
+		test.repository.cleanupOrphanedCandidates.mockImplementation(async () => {
+			await test.gate.promise;
+		});
+		await test.dispatcher.run();
+		expect(test.events).toContain('publish');
+		expect(test.repository.cleanupOrphanedCandidates).toHaveBeenCalledTimes(1);
+		expect(test.repository.ensurePrefetch).not.toHaveBeenCalled();
+		const closing = test.dispatcher.close();
+		test.gate.resolve();
+		await closing;
+		expect(test.drain).toHaveBeenCalledTimes(1);
 	});
 });

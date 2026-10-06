@@ -32,10 +32,8 @@ import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpoin
 import { materializeCompactCheckpointPlanResult } from './HistoryArchiveCompactPlanning.js';
 import { prefetchAdjacentCheckpointStates } from './HistoryArchiveAdjacentCheckpointPrefetch.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
-
 const maximumArchiveSourceFrontierRows = 4_096;
 export type { HistoryArchiveBrokerPriority } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
-
 export interface HistoryArchiveBrokerJob {
 	readonly executionId: string;
 	readonly job: {
@@ -52,7 +50,6 @@ export interface HistoryArchiveBrokerJob {
 	readonly priority: HistoryArchiveBrokerPriority;
 	readonly selectedOrdinal: number;
 }
-
 interface BrokerJobRow {
 	readonly allowListingDiscovery?: boolean;
 	readonly archiveUrl: string;
@@ -67,7 +64,6 @@ interface BrokerJobRow {
 	readonly remoteId: string;
 	readonly selectedOrdinal: number | string;
 }
-
 function buildFindPublishedBrokerJobsSql(
 	phase: HistoryArchiveRetryPhase
 ): string {
@@ -111,7 +107,6 @@ function buildFindPublishedBrokerJobsSql(
 	limit $1::integer
 `;
 }
-
 const requeueOrphanedPublishedBrokerJobsSql = `
 	with orphaned as materialized (
 		select ready."objectRemoteId"
@@ -140,14 +135,12 @@ const requeueOrphanedPublishedBrokerJobsSql = `
 	select count(*)::integer as count
 	from requeued
 `;
-
 function requirePositiveInteger(value: number | string, field: string): number {
 	const parsed = typeof value === 'number' ? value : Number(value);
 	if (!Number.isSafeInteger(parsed) || parsed < 1)
 		throw new Error(`Invalid archive broker ${field}`);
 	return parsed;
 }
-
 function nullableInteger(
 	value: number | string | null,
 	field: string
@@ -158,14 +151,12 @@ function nullableInteger(
 		throw new Error(`Invalid archive broker ${field}`);
 	return parsed;
 }
-
 function requirePriority(value: number | string): HistoryArchiveBrokerPriority {
 	const parsed = typeof value === 'number' ? value : Number(value);
 	if (parsed !== 0 && parsed !== 1 && parsed !== 2)
 		throw new Error('Invalid archive broker priority');
 	return parsed;
 }
-
 function mapBrokerJob(row: BrokerJobRow): HistoryArchiveBrokerJob {
 	return {
 		executionId: row.dispatchToken,
@@ -206,13 +197,11 @@ export function compareHistoryArchiveBrokerJobs(
 			? 1
 			: 0;
 }
-
 function mapAndOrderBrokerJobs(
 	rows: readonly BrokerJobRow[]
 ): readonly HistoryArchiveBrokerJob[] {
 	return rows.map(mapBrokerJob).sort(compareHistoryArchiveBrokerJobs);
 }
-
 export class HistoryArchiveBrokerFrontierRepository {
 	private readonly candidateProjection =
 		new HistoryArchiveBrokerCandidateProjection();
@@ -222,7 +211,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 		private readonly dataSource: DataSource,
 		private readonly onMaintenanceDeferred?: (code: string) => void
 	) {}
-
 	async recoverMissingFrontierReady(limit: number): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {
 			await manager.query(
@@ -231,7 +219,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 			return await recoverMissingFrontierReady(manager, limit);
 		});
 	}
-
 	private nextTransientSourceSweepAt = 0;
 	async admitDailyTransientSourceRetries(limit: number): Promise<number> {
 		if (limit < 1 || Date.now() < this.nextTransientSourceSweepAt) return 0;
@@ -269,7 +256,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 		);
 		return result.admitted;
 	}
-
 	async ensurePrefetch(
 		archiveUrlIdentity: string | null = null
 	): Promise<number> {
@@ -320,6 +306,15 @@ export class HistoryArchiveBrokerFrontierRepository {
 		);
 		return materialized + readyObjects;
 	}
+	async cleanupOrphanedCandidates(): Promise<void> {
+		if (!historyArchiveBrokerCandidateProjectionEnabled) return;
+		await withBoundedArchiveBrokerMaintenance(
+			this.dataSource,
+			(manager) => this.candidateProjection.cleanup(manager),
+			undefined,
+			this.onMaintenanceDeferred
+		);
+	}
 	async reserveJobs(
 		limit: number,
 		maximumPerHost: number,
@@ -331,7 +326,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 			await withBoundedArchiveBrokerMaintenance(
 				this.dataSource,
 				async (manager) => {
-					await this.candidateProjection.maintain(manager, limit);
+					await this.candidateProjection.hydrate(manager, limit);
 					return true;
 				},
 				false,
@@ -421,7 +416,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 			return count;
 		});
 	}
-
 	async reconcilePhaseSuppressedPublishedJobs(
 		publishedBefore: Date,
 		limit: number,
@@ -461,7 +455,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 			);
 		});
 	}
-
 	private async materializeFrontier(
 		manager: EntityManager,
 		archiveUrlIdentity: string | null
@@ -479,7 +472,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 		// actual deferred-to-executable transitions justify another reservation.
 		return compactPlan.ready + activation.activated;
 	}
-
 	private async tryTakeExecutionReconciliationLock(
 		manager: EntityManager
 	): Promise<boolean> {
@@ -489,7 +481,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 		)) as readonly { readonly locked?: boolean }[];
 		return lock?.locked === true;
 	}
-
 	private async takeDispatcherLock(manager: EntityManager): Promise<void> {
 		await manager.query(
 			`select pg_advisory_xact_lock(hashtextextended($1::text, 8191))`,

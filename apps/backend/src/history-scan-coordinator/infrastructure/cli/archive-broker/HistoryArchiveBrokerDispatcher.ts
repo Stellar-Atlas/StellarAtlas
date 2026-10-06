@@ -15,7 +15,10 @@ import {
 } from 'nats';
 import type { Logger } from 'logger';
 import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
-import { ArchiveBrokerFrontierMaintenance } from './ArchiveBrokerFrontierMaintenance.js';
+import {
+	ArchiveBrokerFrontierMaintenance,
+	archiveBrokerFrontierMaintenanceIntervalMs as orphanedPublishedReplayIntervalMs
+} from './ArchiveBrokerFrontierMaintenance.js';
 import { reconcileSuppressedPublications } from './ArchiveBrokerExecutionSnapshot.js';
 import {
 	compareHistoryArchiveBrokerJobs,
@@ -56,7 +59,6 @@ const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
 	}) => PostgresNotificationClient;
 };
 const orphanedPublishedReplayAgeMs = 30_000;
-const orphanedPublishedReplayIntervalMs = 15_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;

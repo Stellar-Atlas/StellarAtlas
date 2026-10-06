@@ -2,15 +2,20 @@ import type { Logger } from 'logger';
 import type { HistoryArchiveBrokerFrontierRepository } from '../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
 import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
 
+export const archiveBrokerFrontierMaintenanceIntervalMs = 15_000;
+
 /** Optional frontier work uses the existing pool and statement bounds. Periodic
  * callers do not wait; an empty ready queue joins the same sequence. */
 export class ArchiveBrokerFrontierMaintenance {
 	private pending: Promise<number> | null = null;
 	private stopping = false;
+	private nextCandidateCleanupAt = 0;
 	constructor(
 		private readonly repository: Pick<
 			HistoryArchiveBrokerFrontierRepository,
-			'ensurePrefetch' | 'recoverMissingFrontierReady'
+			| 'ensurePrefetch'
+			| 'recoverMissingFrontierReady'
+			| 'cleanupOrphanedCandidates'
 		>,
 		private readonly config: Pick<
 			HistoryArchiveBrokerConfig,
@@ -25,6 +30,22 @@ export class ArchiveBrokerFrontierMaintenance {
 		let changedReadyWork = 0;
 		this.pending = Promise.resolve()
 			.then(async () => {
+				if (this.stopping) return 0;
+				if (Date.now() >= this.nextCandidateCleanupAt) {
+					this.nextCandidateCleanupAt =
+						Date.now() + archiveBrokerFrontierMaintenanceIntervalMs;
+					try {
+						await this.repository.cleanupOrphanedCandidates();
+					} catch (error) {
+						this.logger.error(
+							'Archive broker optional candidate cleanup failed',
+							{
+								errorMessage:
+									error instanceof Error ? error.message : String(error)
+							}
+						);
+					}
+				}
 				if (this.stopping) return 0;
 				changedReadyWork += await this.repository.ensurePrefetch(
 					this.config.canonicalFirstRoot
