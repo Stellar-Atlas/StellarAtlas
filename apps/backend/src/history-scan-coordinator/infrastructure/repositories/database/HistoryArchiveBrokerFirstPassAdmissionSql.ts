@@ -31,31 +31,42 @@ export function historyArchiveBrokerFirstPassAdmissionSql(
 			and ready.priority<=$3::smallint
 			and fresh.status='pending' and fresh.attempts=0
 		group by ready."archiveUrlIdentity",ready.priority,fresh."objectType"
-	), fresh_age_scopes as materialized (
-		select scope."archiveUrlIdentity",scope.priority,
-			bool_or(not exists (
+	), fresh_age_categories as materialized (
+		select scope.*,not exists (
 				select 1 from history_archive_root_failure_control control
 				where control."archiveUrlIdentity"=scope."archiveUrlIdentity"
 					and control.scope in ('*',scope."objectType")
 					and (control."blockedUntil" is not null
 						or coalesce(jsonb_array_length(control."adaptiveProbeState"->'unknown'),0)>0)
-			)) as has_uncontrolled_scope
+			) as uncontrolled
 		from ready_scopes scope
-		group by scope."archiveUrlIdentity",scope.priority
+	), fresh_age_scopes as materialized (
+		select "archiveUrlIdentity",priority,bool_or(uncontrolled) as has_uncontrolled_scope,
+			array_agg("objectType") filter (where uncontrolled) as uncontrolled_types
+		from fresh_age_categories group by "archiveUrlIdentity",priority
 	), fresh_root_minimum as materialized (
 		select scope.*,oldest."updatedAt" as first_pass_root_ready_at
 		from fresh_age_scopes scope
 		left join lateral (
 			select lane."updatedAt" from history_archive_object_ready lane
 			cross join lateral (
+				select fresh."remoteId" from history_archive_broker_candidate fresh
+				where fresh."remoteId"=lane."objectRemoteId"
+					and fresh."archiveUrlIdentity"=scope."archiveUrlIdentity"
+					and fresh.status='pending' and fresh.attempts=0
+					and fresh."objectType"=any(scope.uncontrolled_types)
+				limit 1
+			) fresh_oldest
+			cross join lateral (
 				${freshEligibleSql} and ${scope} and control.scope is null
-					and ready."objectRemoteId"=lane."objectRemoteId" limit 1
+					and ready."objectRemoteId"=fresh_oldest."remoteId" limit 1
 			) eligible_oldest
 			-- Controlled admissions never consume this age. Avoid walking their
 			-- entire ready prefix looking for a categorically impossible NULL control.
 			where scope.has_uncontrolled_scope
 				and lane."archiveUrlIdentity"=scope."archiveUrlIdentity"
 				and lane.priority=scope.priority and lane."publishedAt" is null
+				and lane."availableAt"<=now()
 			order by lane."updatedAt",lane."objectRemoteId" limit 1
 		) oldest on true
 	), ${historyArchiveBrokerControlAdmissionSql}, fresh_admission as materialized (

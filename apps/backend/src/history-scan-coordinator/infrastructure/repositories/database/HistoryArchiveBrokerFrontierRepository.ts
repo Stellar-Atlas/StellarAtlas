@@ -334,6 +334,9 @@ export class HistoryArchiveBrokerFrontierRepository {
 			);
 		return await this.dataSource.transaction(async (manager) => {
 			await this.takeDispatcherLock(manager);
+			// The mutex admits only one reservation; local memory avoids the measured
+			// serial ready-hash spill and resets on commit/rollback, not other work.
+			await manager.query("set local work_mem = '32MB'");
 			// Ephemeral fairness only: no sequence/table write per dispatch. The
 			// existing dispatcher mutex serializes reservations in this process.
 			const singleSlot = Math.floor(limit) === 1;
