@@ -44,8 +44,8 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(report).toHaveBeenCalledWith('42P01');
 		expect(await repository.reserveJobs(1, 8)).toEqual([]);
 		expect(await repository.admitDailyTransientSourceRetries(10)).toBe(0);
-		// Retry maintenance, independent adaptive maintenance, then reservation.
-		expect(transaction).toHaveBeenCalledTimes(3);
+		// Retry maintenance then reservation; adaptive work has a separate owner.
+		expect(transaction).toHaveBeenCalledTimes(2);
 	});
 	it('admits independent ready objects without deleting a competing priority lane', () => {
 		expect(reserveBrokerJobsSql).toContain('from root_probe_ranked candidate');

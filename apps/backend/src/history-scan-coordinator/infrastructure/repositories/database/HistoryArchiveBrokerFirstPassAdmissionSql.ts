@@ -1,4 +1,4 @@
-import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveBrokerRecoveryAdmissionSql } from './HistoryArchiveBrokerRecoveryAdmissionSql.js';
 
 /** Bound global ranking without dropping a sparse root behind another root's
  * backlog. Each root/priority/category contributes at most twice the host/batch
@@ -66,35 +66,7 @@ export function historyArchiveBrokerFirstPassAdmissionSql(
 			union all
 			${freshCategory('scope.has_null_checkpoint and object."checkpointLedger" is null')}
 		) admitted
-	), recovery_identities as materialized (
-		select ready."objectRemoteId" as "remoteId"
-		from history_archive_object_ready ready
-		where ready."recheckRequestedAt" is not null and ready."publishedAt" is null
-		union
-		select object."remoteId" from history_archive_broker_candidate object
-		where object.status in ('pending','failed')
-			and object."objectType"='history-archive-state'
-		union
-		select object."remoteId" from history_archive_checkpoint_scan_cursor cursor
-		cross join lateral (
-			${historyArchiveCheckpointBucketDependenciesSql('cursor."archiveUrlIdentity"', 'cursor."nextHistoricalCheckpointLedger"-64')}
-		) dependency
-		join history_archive_object_queue bucket
-			on bucket."archiveUrlIdentity"=cursor."archiveUrlIdentity"
-			and bucket."objectType"='bucket' and bucket."objectKey"='bucket:'||dependency."bucketHash"
-		join history_archive_broker_candidate object on object."remoteId"=bucket."remoteId"
-		where cursor."nextHistoricalCheckpointLedger">=127
-			and object.attempts>0 and object.status in ('pending','failed')
-		union
-		select object."remoteId" from history_archive_checkpoint_scan_cursor cursor
-		cross join (values ('checkpoint-state'),('ledger'),('transactions'),('results'),('scp')) category("objectType")
-		join history_archive_broker_candidate object
-			on object."archiveUrlIdentity"=cursor."archiveUrlIdentity"
-			and object."objectType"=category."objectType"
-			and object."checkpointLedger"=cursor."nextHistoricalCheckpointLedger"-64
-		where cursor."nextHistoricalCheckpointLedger">=127
-			and object.attempts>0 and object.status in ('pending','failed')
-	), eligible as materialized (
+	), ${historyArchiveBrokerRecoveryAdmissionSql}, eligible as materialized (
 		select * from fresh_admission
 		union all
 		select admitted.*,null::timestamptz as first_pass_root_ready_at

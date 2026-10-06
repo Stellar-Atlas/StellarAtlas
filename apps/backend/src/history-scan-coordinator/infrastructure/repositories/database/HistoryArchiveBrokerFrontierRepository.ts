@@ -332,7 +332,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 				false,
 				this.onMaintenanceDeferred
 			);
-		await this.maintainAdaptiveProbes(limit);
 		return await this.dataSource.transaction(async (manager) => {
 			await this.takeDispatcherLock(manager);
 			// Ephemeral fairness only: no sequence/table write per dispatch. The
@@ -364,17 +363,16 @@ export class HistoryArchiveBrokerFrontierRepository {
 		});
 	}
 	private nextAdaptiveMaintenanceAt = 0;
-	private async maintainAdaptiveProbes(limit: number): Promise<void> {
-		if (Date.now() < this.nextAdaptiveMaintenanceAt) return;
+	async maintainAdaptiveProbes(limit: number): Promise<number> {
+		if (limit < 1 || Date.now() < this.nextAdaptiveMaintenanceAt) return 0;
 		this.nextAdaptiveMaintenanceAt = Date.now() + 1_000;
-		const result = await withBoundedArchiveBrokerMaintenance(
+		const result = await maintainHistoryArchiveAdaptiveProbes(
 			this.dataSource,
-			(manager) =>
-				maintainHistoryArchiveAdaptiveProbes(manager, Math.min(limit, 16)),
-			-1,
+			Math.min(limit, 16),
 			this.onMaintenanceDeferred
-		).catch(() => -1);
-		if (result < 0) this.nextAdaptiveMaintenanceAt = Date.now() + 60_000;
+		);
+		if (result.deferred) this.nextAdaptiveMaintenanceAt = Date.now() + 60_000;
+		return result.admitted;
 	}
 	async findPublishedJobs(
 		limit: number,

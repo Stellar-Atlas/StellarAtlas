@@ -1,4 +1,5 @@
-import type { EntityManager } from 'typeorm';
+import type { DataSource, EntityManager } from 'typeorm';
+import { withBoundedArchiveBrokerMaintenance } from './BoundedArchiveBrokerMaintenance.js';
 import {
 	completeAdaptiveProbe,
 	createAdaptiveProbeState,
@@ -57,94 +58,123 @@ where control.scope=any($2::text[]) and root.status='verified' and state.status=
   or pending.status='verified' or (pending.status='failed' and pending."httpStatus" in (404,410)))
 order by control."updatedAt",control."archiveUrlIdentity",control.scope limit $1::integer`;
 
-/** Called inside bounded dispatcher maintenance's transaction. Queue/ready work
- * precedes the optimistic root CAS, matching completion's ready→object→root order. */
-export async function maintainHistoryArchiveAdaptiveProbes(
+export async function loadHistoryArchiveAdaptiveProbeControls(
 	manager: EntityManager,
 	limit: number
-): Promise<number> {
-	if (!Number.isFinite(limit) || limit < 1) return 0;
-	const rows = (await manager.query(adaptiveProbeControlCandidatesSql, [
+): Promise<readonly ControlRow[]> {
+	if (!Number.isFinite(limit) || limit < 1) return [];
+	return manager.query(adaptiveProbeControlCandidatesSql, [
 		Math.min(16, Math.floor(limit)),
 		numberedScopes
-	])) as readonly ControlRow[];
+	]) as Promise<readonly ControlRow[]>;
+}
+
+/** Release a control's ready/object/root locks before touching the next control.
+ * A later rollback never erases earlier committed admission or its wake signal. */
+export async function maintainHistoryArchiveAdaptiveProbes(
+	dataSource: DataSource,
+	limit: number,
+	reportDeferred?: (code: string) => void
+): Promise<{ admitted: number; deferred: boolean }> {
+	const rows = await withBoundedArchiveBrokerMaintenance(
+		dataSource,
+		(manager) => loadHistoryArchiveAdaptiveProbeControls(manager, limit),
+		null,
+		reportDeferred
+	).catch(() => null);
+	if (rows === null) return { admitted: 0, deferred: true };
 	let admitted = 0;
 	for (const row of rows) {
-		let state =
-			row.adaptiveProbeState === null
-				? createAdaptiveProbeState(
-						row.missingCheckpoints.map(Number),
-						Number(row.latest)
-					)
-				: parseAdaptiveProbeState(row.adaptiveProbeState);
-		if (state === null) continue; // Fail closed on corrupt/unknown state versions.
-		await manager.query('savepoint adaptive_probe_root');
-		if (state.pending !== null) {
-			if (row.pendingStatus === 'verified') {
-				if (row.scope === 'checkpoint-state') {
-					const activation = await activateAdaptiveProbeCheckpointDependencies(
-						manager,
-						row.archiveUrlIdentity,
-						state.pending.checkpoint
-					);
-					if (!activation.materialized) {
-						await manager.query('release savepoint adaptive_probe_root');
-						continue;
-					}
+		const result = await withBoundedArchiveBrokerMaintenance(
+			dataSource,
+			(manager) => maintainHistoryArchiveAdaptiveProbeControl(manager, row),
+			-1,
+			reportDeferred
+		).catch(() => -1);
+		if (result < 0) return { admitted, deferred: true };
+		admitted += result;
+	}
+	return { admitted, deferred: false };
+}
+
+/** One control only; optimistic version CAS fences the earlier candidate snapshot. */
+export async function maintainHistoryArchiveAdaptiveProbeControl(
+	manager: EntityManager,
+	row: ControlRow
+): Promise<number> {
+	let state =
+		row.adaptiveProbeState === null
+			? createAdaptiveProbeState(
+					row.missingCheckpoints.map(Number),
+					Number(row.latest)
+				)
+			: parseAdaptiveProbeState(row.adaptiveProbeState);
+	if (state === null) return 0; // Fail closed on corrupt/unknown state versions.
+	await manager.query('savepoint adaptive_probe_root');
+	if (state.pending !== null) {
+		if (row.pendingStatus === 'verified') {
+			if (row.scope === 'checkpoint-state') {
+				const activation = await activateAdaptiveProbeCheckpointDependencies(
+					manager,
+					row.archiveUrlIdentity,
+					state.pending.checkpoint
+				);
+				if (!activation.materialized) {
+					await manager.query('release savepoint adaptive_probe_root');
+					return 0;
 				}
-			} else if (
-				row.pendingStatus !== 'failed' ||
-				(row.pendingHttpStatus !== 404 && row.pendingHttpStatus !== 410)
-			) {
-				await manager.query('release savepoint adaptive_probe_root');
-				continue;
 			}
-			state = completeAdaptiveProbe(state);
-		}
-		state = extendAdaptiveProbeState(state, Number(row.latest));
-		const checkpoint = nextAdaptiveProbeCheckpoint(state);
-		if (
-			checkpoint === null &&
-			JSON.stringify(state) === JSON.stringify(row.adaptiveProbeState)
+		} else if (
+			row.pendingStatus !== 'failed' ||
+			(row.pendingHttpStatus !== 404 && row.pendingHttpStatus !== 410)
 		) {
 			await manager.query('release savepoint adaptive_probe_root');
-			continue;
+			return 0;
 		}
-		let nextState: AdaptiveProbeState = state;
-		let queued = false;
-		if (checkpoint !== null) {
-			const object = await ensureProbeObject(manager, row, checkpoint);
-			if (!object) {
-				await manager.query('rollback to savepoint adaptive_probe_root');
-				await manager.query('release savepoint adaptive_probe_root');
-				continue;
-			}
-			nextState = {
-				...state,
-				pending: { checkpoint, remoteId: object.remoteId }
-			};
-			queued = object.status === 'pending';
+		state = completeAdaptiveProbe(state);
+	}
+	state = extendAdaptiveProbeState(state, Number(row.latest));
+	const checkpoint = nextAdaptiveProbeCheckpoint(state);
+	if (
+		checkpoint === null &&
+		JSON.stringify(state) === JSON.stringify(row.adaptiveProbeState)
+	) {
+		await manager.query('release savepoint adaptive_probe_root');
+		return 0;
+	}
+	let nextState: AdaptiveProbeState = state;
+	let queued = false;
+	if (checkpoint !== null) {
+		const object = await ensureProbeObject(manager, row, checkpoint);
+		if (!object) {
+			await manager.query('rollback to savepoint adaptive_probe_root');
+			await manager.query('release savepoint adaptive_probe_root');
+			return 0;
 		}
-		const updated = (await manager.query(
-			`update history_archive_root_failure_control
+		nextState = {
+			...state,
+			pending: { checkpoint, remoteId: object.remoteId }
+		};
+		queued = object.status === 'pending';
+	}
+	const updated = (await manager.query(
+		`update history_archive_root_failure_control
  set "adaptiveProbeState"=$4::jsonb,"nextProbeCheckpoint"=$5::bigint,
  version=version+1,"updatedAt"=now()
  where "archiveUrlIdentity"=$1 and scope=$2 and version=$3::bigint
  returning version`,
-			[
-				row.archiveUrlIdentity,
-				row.scope,
-				row.version,
-				JSON.stringify(nextState),
-				checkpoint
-			]
-		)) as readonly unknown[];
-		if (updated.length === 0)
-			await manager.query('rollback to savepoint adaptive_probe_root');
-		else if (queued) admitted++;
-		await manager.query('release savepoint adaptive_probe_root');
-	}
-	return admitted;
+		[
+			row.archiveUrlIdentity,
+			row.scope,
+			row.version,
+			JSON.stringify(nextState),
+			checkpoint
+		]
+	)) as readonly unknown[];
+	if (updated.length === 0)
+		await manager.query('rollback to savepoint adaptive_probe_root');
+	await manager.query('release savepoint adaptive_probe_root');
+	return updated.length > 0 && queued ? 1 : 0;
 }
 
 async function ensureProbeObject(

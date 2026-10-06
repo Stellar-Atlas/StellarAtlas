@@ -260,6 +260,7 @@ describe('dispatcher refill while optional maintenance is slow', () => {
 			findPublishedJobs: jest.fn(async () => []),
 			reconcilePhaseSuppressedPublishedJobs: jest.fn(async () => 0),
 			admitDailyTransientSourceRetries: jest.fn(async () => 0),
+			maintainAdaptiveProbes: jest.fn(async () => 0),
 			reserveJobs,
 			ensureFrontier: jest.fn(async () => 0)
 		};

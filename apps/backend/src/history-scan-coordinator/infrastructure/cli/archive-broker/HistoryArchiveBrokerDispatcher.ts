@@ -20,6 +20,7 @@ import {
 	archiveBrokerFrontierMaintenanceIntervalMs as orphanedPublishedReplayIntervalMs
 } from './ArchiveBrokerFrontierMaintenance.js';
 import { reconcileSuppressedPublications } from './ArchiveBrokerExecutionSnapshot.js';
+import { ArchiveBrokerAdaptiveMaintenance } from './ArchiveBrokerAdaptiveMaintenance.js';
 import {
 	compareHistoryArchiveBrokerJobs,
 	HistoryArchiveBrokerFrontierRepository,
@@ -160,6 +161,7 @@ export class HistoryArchiveBrokerDispatcher {
 	private stopping = false;
 	private readonly reportConsumerState;
 	private readonly frontierMaintenance: ArchiveBrokerFrontierMaintenance;
+	private readonly adaptiveMaintenance: ArchiveBrokerAdaptiveMaintenance;
 
 	constructor(
 		private readonly repository: HistoryArchiveBrokerFrontierRepository,
@@ -170,6 +172,11 @@ export class HistoryArchiveBrokerDispatcher {
 		this.frontierMaintenance = new ArchiveBrokerFrontierMaintenance(
 			repository,
 			config,
+			logger,
+			() => this.signalWork()
+		);
+		this.adaptiveMaintenance = new ArchiveBrokerAdaptiveMaintenance(
+			repository,
 			logger,
 			() => this.signalWork()
 		);
@@ -199,7 +206,13 @@ export class HistoryArchiveBrokerDispatcher {
 					);
 				};
 				await this.repository.admitDailyTransientSourceRetries(limit);
+				const adaptive = this.adaptiveMaintenance.run(limit);
 				let jobs = await reserve();
+				if (jobs.length === 0) {
+					const changed = await adaptive;
+					if (changed > 0 || this.wakeVersion !== observedWakeVersion)
+						jobs = await reserve();
+				}
 				if (jobs.length === 0) {
 					const changed = await this.frontierMaintenance.run();
 					if (changed > 0 || this.wakeVersion !== observedWakeVersion)
@@ -281,7 +294,10 @@ export class HistoryArchiveBrokerDispatcher {
 	async close(): Promise<void> {
 		this.stopping = true;
 		this.signalWork();
-		await this.frontierMaintenance.close();
+		await Promise.all([
+			this.frontierMaintenance.close(),
+			this.adaptiveMaintenance.close()
+		]);
 		const readyListener = this.readyListener;
 		this.readyListener = null;
 		if (readyListener !== null)

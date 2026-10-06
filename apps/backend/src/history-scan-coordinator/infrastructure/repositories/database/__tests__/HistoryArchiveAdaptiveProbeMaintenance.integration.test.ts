@@ -1,10 +1,15 @@
-import type { DataSource } from 'typeorm';
+import type { DataSource, EntityManager } from 'typeorm';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
-import { maintainHistoryArchiveAdaptiveProbes } from '../HistoryArchiveAdaptiveProbeMaintenance.js';
+import {
+	loadHistoryArchiveAdaptiveProbeControls,
+	maintainHistoryArchiveAdaptiveProbeControl,
+	maintainHistoryArchiveAdaptiveProbes
+} from '../HistoryArchiveAdaptiveProbeMaintenance.js';
+import { HistoryArchiveBrokerFrontierRepository } from '../HistoryArchiveBrokerFrontierRepository.js';
 import {
 	createEvidenceObject,
 	createKnownEvidenceDataSource,
@@ -66,9 +71,7 @@ describe('durable adaptive probe maintenance', () => {
 		);
 	}
 	async function run(limit = 16) {
-		return db.transaction((manager) =>
-			maintainHistoryArchiveAdaptiveProbes(manager, limit)
-		);
+		return (await maintainHistoryArchiveAdaptiveProbes(db, limit)).admitted;
 	}
 	async function control(archive = root) {
 		const [row] = await db.query(
@@ -218,7 +221,8 @@ describe('durable adaptive probe maintenance', () => {
 		await seed();
 		await expect(
 			db.transaction(async (manager) => {
-				await maintainHistoryArchiveAdaptiveProbes(manager, 16);
+				const [row] = await loadHistoryArchiveAdaptiveProbeControls(manager, 1);
+				await maintainHistoryArchiveAdaptiveProbeControl(manager, row);
 				throw new Error('crash');
 			})
 		).rejects.toThrow('crash');
@@ -232,4 +236,117 @@ describe('durable adaptive probe maintenance', () => {
 			await db.query('select * from history_archive_object_ready')
 		).toHaveLength(1);
 	});
+	it.each([false, true])(
+		'releases control A before waiting on ready B, preserving A on timeout (same root=%s)',
+		async (sameRoot) => {
+			await seed();
+			const rootB = sameRoot ? root : 'https://other.example/history';
+			if (sameRoot) {
+				await db.query(
+					`insert into history_archive_root_failure_control
+ ("archiveUrlIdentity",scope,"failureKind","consecutiveFailures","missingCheckpoints","lastFailureAt")
+ values($1,'ledger','missing',3,array[63,127,191],now())`,
+					[rootB]
+				);
+			} else await seed(rootB, 'ledger');
+			await db.query(`update history_archive_root_failure_control set "updatedAt"=
+ now()-case when scope='checkpoint-state' then interval '2 minutes' else interval '1 minute' end`);
+			const objectB = createEvidenceObject(
+				rootB,
+				'ledger:0000027f',
+				'ledger',
+				'pending'
+			);
+			objectB.checkpointLedger = 639;
+			await db.getRepository(HistoryArchiveObject).save(objectB);
+			await db.query(
+				`insert into history_archive_object_ready
+ ("objectRemoteId","archiveUrlIdentity",priority,"availableAt","updatedAt")
+ values($1,$2,2,now(),now())`,
+				[objectB.remoteId, rootB]
+			);
+			const broker = db.createQueryRunner();
+			await broker.connect();
+			await broker.startTransaction();
+			let enterB!: () => void;
+			const enteredB = new Promise<void>((resolve) => {
+				enterB = resolve;
+			});
+			let transactionCount = 0;
+			const transaction = async <T>(
+				work: (manager: EntityManager) => Promise<T>
+			) => {
+				transactionCount++;
+				if (transactionCount === 3) enterB();
+				return db.transaction(work);
+			};
+			const deferred = jest.fn();
+			const repository = new HistoryArchiveBrokerFrontierRepository(
+				{ transaction } as unknown as DataSource,
+				deferred
+			);
+			let maintenance: Promise<number> | undefined;
+			try {
+				// Reservation's relevant real lock sequence: ready B, then control A.
+				await broker.query(
+					"set local lock_timeout='100ms'; set local statement_timeout='2s'"
+				);
+				await broker.query(
+					'select * from history_archive_object_ready where "objectRemoteId"=$1 for update',
+					[objectB.remoteId]
+				);
+				maintenance = repository.maintainAdaptiveProbes(16);
+				await Promise.race([
+					enteredB,
+					new Promise((_, reject) =>
+						setTimeout(
+							() => reject(new Error('No per-control transaction boundary')),
+							2_000
+						)
+					)
+				]);
+				const [controlA] = await broker.query(
+					`select "nextProbeCheckpoint" from
+ history_archive_root_failure_control where "archiveUrlIdentity"=$1 and scope='checkpoint-state' for update`,
+					[root]
+				);
+				expect(Number(controlA.nextProbeCheckpoint)).toBe(639);
+				// B rolls back on its ready lock; committed A is still a positive result.
+				await expect(maintenance).resolves.toBe(1);
+				expect(deferred).toHaveBeenCalledWith('55P03');
+				expect(transactionCount).toBe(3);
+				await expect(repository.maintainAdaptiveProbes(16)).resolves.toBe(0);
+				expect(transactionCount).toBe(3); // 60s failure backoff, no immediate retry.
+				await broker.rollbackTransaction();
+				const [controlB] = await db.query(
+					`select "adaptiveProbeState" from
+ history_archive_root_failure_control where "archiveUrlIdentity"=$1 and scope='ledger'`,
+					[rootB]
+				);
+				expect(controlB.adaptiveProbeState).toBeNull();
+				const clock = jest
+					.spyOn(Date, 'now')
+					.mockReturnValue(Date.now() + 60_001);
+				try {
+					await expect(repository.maintainAdaptiveProbes(16)).resolves.toBe(1);
+				} finally {
+					clock.mockRestore();
+				}
+				expect(
+					await db.query('select * from history_archive_object_ready')
+				).toHaveLength(2);
+				for (const cursor of await db.query(
+					'select "nextHistoricalCheckpointLedger" as next from history_archive_checkpoint_scan_cursor'
+				))
+					expect(cursor.next).toBe(255);
+				expect(
+					await db.query('select * from history_archive_checkpoint_proof')
+				).toEqual([]);
+			} finally {
+				if (broker.isTransactionActive) await broker.rollbackTransaction();
+				await broker.release();
+				await maintenance;
+			}
+		}
+	);
 });

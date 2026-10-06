@@ -49,6 +49,7 @@ function fixture(initial: ArchiveBrokerOccupancy, batchSize = 120) {
 		findPublishedJobs: jest.fn(async () => []),
 		reconcilePhaseSuppressedPublishedJobs: jest.fn(async () => 0),
 		admitDailyTransientSourceRetries: jest.fn(async () => 0),
+		maintainAdaptiveProbes: jest.fn(async () => 0),
 		reserveJobs: jest.fn<
 			Promise<readonly HistoryArchiveBrokerJob[]>,
 			[number, number, number, string | null]
