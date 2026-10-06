@@ -63,6 +63,7 @@ export class ArchiveObjectWorkerTelemetry {
 	private readonly outcomes = new Map<number, WorkerOutcomeState>();
 	private readonly reportSequences = new Map<number, number>();
 	private readonly stoppingObjects = new Set<string>();
+	private readonly slotOwners = new Map<number, string>();
 
 	constructor(
 		private readonly statusReporter: HistoryArchiveWorkerReportSink,
@@ -107,6 +108,7 @@ export class ArchiveObjectWorkerTelemetry {
 		this.stoppingObjects.delete(job.remoteId);
 		this.activeObjects.set(job.remoteId, progress);
 		this.activeLeases.set(job.remoteId, lease);
+		this.slotOwners.set(slot, job.remoteId);
 		this.statusReporter.enqueue(this.createReport(slot, progress));
 		this.scheduleHeartbeat(
 			job.remoteId,
@@ -125,7 +127,21 @@ export class ArchiveObjectWorkerTelemetry {
 		progress.workerStage = workerStage;
 		progress.bytesDownloaded = bytesDownloaded;
 		progress.bytesTotal = bytesTotal;
-		this.statusReporter.enqueue(this.createReport(progress.slot, progress));
+		if (this.slotOwners.get(progress.slot) === remoteId) {
+			this.statusReporter.enqueue(this.createReport(progress.slot, progress));
+		}
+	}
+
+	/** Keep the delivery lease/heartbeat, but relinquish this reusable UI slot. */
+	detachSlot(remoteId: string): void {
+		const progress = this.activeObjects.get(remoteId);
+		if (
+			progress !== undefined &&
+			this.slotOwners.get(progress.slot) === remoteId
+		) {
+			this.slotOwners.delete(progress.slot);
+			this.reportIdle(progress.slot);
+		}
 	}
 
 	setStage(remoteId: string, workerStage: HistoryArchiveWorkerStageDTO): void {
@@ -164,7 +180,10 @@ export class ArchiveObjectWorkerTelemetry {
 			at: this.now().toISOString(),
 			outcome
 		});
-		this.reportIdle(progress.slot);
+		if (this.slotOwners.get(progress.slot) === remoteId) {
+			this.slotOwners.delete(progress.slot);
+			this.reportIdle(progress.slot);
+		}
 		this.stoppingObjects.delete(remoteId);
 	}
 
@@ -186,7 +205,9 @@ export class ArchiveObjectWorkerTelemetry {
 		progress: ActiveObjectProgress
 	): Promise<void> {
 		try {
-			this.statusReporter.enqueue(this.createReport(progress.slot, progress));
+			if (this.slotOwners.get(progress.slot) === remoteId) {
+				this.statusReporter.enqueue(this.createReport(progress.slot, progress));
+			}
 			await this.activeLeases.get(remoteId)?.heartbeat();
 		} catch (error) {
 			this.exceptionLogger.captureException(mapUnknownToError(error));
@@ -218,7 +239,11 @@ export class ArchiveObjectWorkerTelemetry {
 					outcome: 'worker_issue'
 				});
 				await this.heartbeatsInFlight.get(progress.remoteId);
-				this.statusReporter.enqueue(this.createReport(progress.slot, progress));
+				if (this.slotOwners.get(progress.slot) === progress.remoteId) {
+					this.statusReporter.enqueue(
+						this.createReport(progress.slot, progress)
+					);
+				}
 			})
 		);
 	}

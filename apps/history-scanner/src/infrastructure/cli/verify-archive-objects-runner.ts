@@ -20,12 +20,13 @@ export async function runVerifyArchiveObjects(
 ): Promise<void> {
 	const kernel = await Kernel.getInstance();
 	const verifyArchiveObjects = kernel.container.get(VerifyArchiveObjects);
-	let shuttingDown = false;
-	const shutdown = async (): Promise<void> => {
-		if (shuttingDown) return;
-		shuttingDown = true;
-		await verifyArchiveObjects.releaseActiveObjectJobs();
-		await kernel.shutdown();
+	let closing: Promise<void> | null = null;
+	const shutdown = (): Promise<void> => {
+		closing ??= (async () => {
+			await verifyArchiveObjects.releaseActiveObjectJobs();
+			await kernel.shutdown();
+		})();
+		return closing;
 	};
 
 	process

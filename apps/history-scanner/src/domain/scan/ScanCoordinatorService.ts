@@ -54,6 +54,11 @@ export interface HistoryArchiveObjectCompletionDTO extends HistoryArchiveObjectP
 	readonly archiveMetadata?: ArchiveMetadataDTO;
 }
 
+export interface HistoryArchiveObjectCompletionItem {
+	readonly remoteId: string;
+	readonly completion: HistoryArchiveObjectCompletionDTO;
+}
+
 export interface HistoryArchiveObjectFailureDTO {
 	readonly listingCapability?: HistoryArchiveListingCapabilityDTO;
 	readonly listingGap?: HistoryArchiveListingGapDTO;
@@ -99,6 +104,9 @@ export interface ScanCoordinatorService {
 		remoteId: string,
 		completion: HistoryArchiveObjectCompletionDTO
 	): Promise<Result<void, Error>>;
+	completeHistoryArchiveObjects(
+		items: readonly HistoryArchiveObjectCompletionItem[]
+	): Promise<Result<readonly Result<void, Error>[], Error>>;
 	failHistoryArchiveObject(
 		remoteId: string,
 		failure: HistoryArchiveObjectFailureDTO

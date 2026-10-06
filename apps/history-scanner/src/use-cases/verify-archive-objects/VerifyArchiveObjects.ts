@@ -5,10 +5,7 @@ import type { ExceptionLogger } from 'exception-logger';
 import type { JobMonitor } from 'job-monitor';
 import type { Logger } from 'logger';
 import { asyncSleep, mapUnknownToError } from 'shared';
-import type {
-	HistoryArchiveWorkerOutcomeDTO,
-	HistoryArchiveWorkerStageDTO
-} from 'history-scanner-dto';
+import type { HistoryArchiveWorkerStageDTO } from 'history-scanner-dto';
 import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { BucketCache } from '../../domain/scanner/BucketCache.js';
 import type {
@@ -22,10 +19,8 @@ import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { HistoryArchiveWorkerStatusReporter } from '../../domain/scan/HistoryArchiveWorkerStatusReporter.js';
 import { ArchiveObjectCategoryVerifier } from './ArchiveObjectCategoryVerifier.js';
 import { ArchiveObjectHistoryStateVerifier } from './ArchiveObjectHistoryStateVerifier.js';
-import {
-	ArchiveObjectWorkerTelemetry,
-	mapFailureToWorkerOutcome
-} from './ArchiveObjectWorkerTelemetry.js';
+import { ArchiveObjectWorkerTelemetry } from './ArchiveObjectWorkerTelemetry.js';
+import { ArchiveObjectTerminalQueue } from './ArchiveObjectTerminalQueue.js';
 import { CoalescingHistoryArchiveWorkerReporter } from './CoalescingHistoryArchiveWorkerReporter.js';
 import type { VerifyArchiveObjectsDTO } from './VerifyArchiveObjectsDTO.js';
 import type {
@@ -34,7 +29,6 @@ import type {
 } from './HistoryArchiveObjectJobDelivery.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
-import { retryArchiveObjectTerminalUpdate } from './ArchiveObjectTerminalUpdate.js';
 import {
 	isReadableArchiveObject,
 	mapArchiveObjectHttpError,
@@ -50,7 +44,6 @@ import {
 	archiveEvidenceFailure,
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
-import { logArchiveObjectFailure } from './ArchiveObjectFailureLogger.js';
 
 const maximumPendingWorkerReports = 24;
 const routineCheckInIntervalMs = 30_000;
@@ -61,6 +54,9 @@ export class VerifyArchiveObjects {
 	private readonly historyStateVerifier: ArchiveObjectHistoryStateVerifier;
 	private readonly downloadPermit: HistoryArchiveDownloadPermit;
 	private readonly workerTelemetry: ArchiveObjectWorkerTelemetry;
+	private readonly terminalQueue: ArchiveObjectTerminalQueue;
+	private stopping = false;
+	private sourceClosed = false;
 	private nextRoutineCheckInAt = 0;
 
 	constructor(
@@ -101,6 +97,14 @@ export class VerifyArchiveObjects {
 			coalescingStatusReporter,
 			this.exceptionLogger,
 			this.logger
+		);
+		this.terminalQueue = new ArchiveObjectTerminalQueue(
+			Math.max(Math.floor(this.workerCount), 1),
+			this.scanCoordinator,
+			this.workerTelemetry,
+			this.logger,
+			(error) => this.exceptionLogger.captureException(error),
+			(status) => this.checkIn(status)
 		);
 		this.historyStateVerifier = new ArchiveObjectHistoryStateVerifier(
 			this.httpService,
@@ -148,10 +152,14 @@ export class VerifyArchiveObjects {
 				this.runWorkerLoop(dto, slot)
 			)
 		);
+		await this.terminalQueue.drain();
 	}
 
 	async releaseActiveObjectJobs(): Promise<void> {
+		this.stopping = true;
+		await this.terminalQueue.close();
 		await this.workerTelemetry.releaseActiveObjectJobs();
+		this.sourceClosed = true;
 		await this.jobSource.close();
 		await this.categoryVerifier.close();
 	}
@@ -162,13 +170,14 @@ export class VerifyArchiveObjects {
 	): Promise<void> {
 		this.workerTelemetry.reportIdle(slot);
 		do {
+			if (this.stopping) return;
 			try {
 				await this.claimAndVerifyObject(slot);
 			} catch (error) {
 				this.exceptionLogger.captureException(mapUnknownToError(error));
 				await this.waitBeforeRetry();
 			}
-		} while (dto.loop);
+		} while (dto.loop && !this.stopping);
 	}
 
 	private async claimAndVerifyObject(slot: number): Promise<void> {
@@ -204,12 +213,22 @@ export class VerifyArchiveObjects {
 			}
 
 			const job = delivery.job;
+			if (this.stopping || !this.terminalQueue.claim(job.remoteId)) {
+				// A pull resolving after connection drain remains UNACKed for broker recovery.
+				if (!this.sourceClosed) await delivery.retry(30_000);
+				return;
+			}
 			this.workerTelemetry.startObject(slot, job, delivery);
-			await this.checkIn('in_progress');
 			try {
+				await this.checkIn('in_progress');
 				await this.verifyObject(job, releasePermit, delivery);
 			} catch (error) {
-				await delivery.retry(30_000);
+				try {
+					if (!this.sourceClosed) await delivery.retry(30_000);
+				} finally {
+					await this.workerTelemetry.finishObject(job.remoteId, 'worker_issue');
+					this.terminalQueue.releaseClaim(job.remoteId);
+				}
 				throw error;
 			}
 		} finally {
@@ -222,58 +241,16 @@ export class VerifyArchiveObjects {
 		releaseDownloadPermit: () => void,
 		delivery: HistoryArchiveObjectJobDelivery
 	): Promise<void> {
-		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
-		const schedulerFields =
-			delivery.source === 'broker'
-				? {
-						executionId: delivery.executionId,
-						scheduler: 'broker' as const
-					}
-				: { scheduler: 'legacy' as const };
-		try {
-			const result = await this.performObjectVerification(
-				job,
-				releaseDownloadPermit,
-				delivery
-			);
-			if (result.isErr()) {
-				outcome = mapFailureToWorkerOutcome(result.error);
-				this.workerTelemetry.setStage(
-					job.remoteId,
-					'recording_archive_evidence'
-				);
-				await retryArchiveObjectTerminalUpdate(
-					() =>
-						this.scanCoordinator.failHistoryArchiveObject(job.remoteId, {
-							...result.error,
-							claimAttempt: job.claimAttempt,
-							...schedulerFields
-						}),
-					(error) => this.exceptionLogger.captureException(error)
-				);
-				await delivery.acknowledge();
-				logArchiveObjectFailure(this.logger, job.remoteId, result.error);
-				await this.checkIn(
-					result.error.failureChannel === 'scanner_issue' ? 'error' : 'ok'
-				);
-				return;
-			}
-			this.workerTelemetry.setStage(job.remoteId, 'recording_archive_evidence');
-			await retryArchiveObjectTerminalUpdate(
-				() =>
-					this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
-						...result.value,
-						claimAttempt: job.claimAttempt,
-						...schedulerFields
-					}),
-				(error) => this.exceptionLogger.captureException(error)
-			);
-			await delivery.acknowledge();
-			outcome = 'verified';
-			await this.checkIn('ok');
-		} finally {
-			await this.workerTelemetry.finishObject(job.remoteId, outcome);
-		}
+		const result = await this.performObjectVerification(
+			job,
+			releaseDownloadPermit,
+			delivery
+		);
+		releaseDownloadPermit();
+		this.workerTelemetry.setStage(job.remoteId, 'recording_archive_evidence');
+		if (delivery.source === 'broker')
+			await this.terminalQueue.enqueue(delivery, result);
+		else await this.terminalQueue.persistInline(delivery, result);
 	}
 
 	private async performObjectVerification(
@@ -450,6 +427,10 @@ export class VerifyArchiveObjects {
 			const now = Date.now();
 			if (now < this.nextRoutineCheckInAt) return;
 			this.nextRoutineCheckInAt = now + routineCheckInIntervalMs;
+			this.logger.info(
+				'Archive terminal persistence queue',
+				this.terminalQueue.metrics
+			);
 		}
 
 		const result = await this.jobMonitor.checkIn({

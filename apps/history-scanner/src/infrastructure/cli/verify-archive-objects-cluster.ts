@@ -5,6 +5,7 @@ import {
 	HistoryArchiveObjectClusterSupervisor
 } from './HistoryArchiveObjectClusterSupervisor.js';
 import { HistoryArchiveDownloadPermitCoordinator } from '../services/HistoryArchiveDownloadPermit.js';
+import { archiveObjectShutdownTimeoutMs } from '../../use-cases/verify-archive-objects/ArchiveObjectShutdown.js';
 import {
 	isMainModule,
 	parseVerifyArchiveObjectsCliOptions,
@@ -12,7 +13,6 @@ import {
 } from './verify-archive-objects-runner.js';
 
 const startupJitterStepMs = 100;
-const shutdownTimeoutMs = 30_000;
 
 export {
 	createHistoryArchiveObjectClusterPlan,
@@ -61,7 +61,7 @@ export async function runHistoryArchiveObjectCluster(
 				worker?.kill();
 			}
 			process.exit(0);
-		}, shutdownTimeoutMs).unref();
+		}, archiveObjectShutdownTimeoutMs).unref();
 	};
 
 	process.on('SIGTERM', stop).on('SIGINT', stop);

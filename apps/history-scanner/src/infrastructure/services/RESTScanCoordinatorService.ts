@@ -18,6 +18,7 @@ import {
 import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
 import type {
 	HistoryArchiveObjectCompletionDTO,
+	HistoryArchiveObjectCompletionItem,
 	HistoryArchiveObjectFailureDTO,
 	HistoryArchiveObjectJobDTO,
 	HistoryArchiveObjectProgressDTO,
@@ -34,6 +35,10 @@ import { parseHistoryArchiveObjectJobDTO } from './HistoryArchiveObjectJobRespon
 import { mapParsedHistoryRegistrationResponse } from './ParsedHistoryRegistrationConflictError.js';
 import { requestReusableHistoryArchiveContent } from './HistoryArchiveContentReuseClient.js';
 import { mapScanToDTO } from './ScanDtoMapper.js';
+import {
+	isIdempotentMissingBrokerTerminalUpdate,
+	requestHistoryArchiveObjectCompletions
+} from './HistoryArchiveObjectCompletionBatchClient.js';
 
 const coordinatorReadOptions: HttpOptions = {
 	connectionTimeoutMs: 30_000,
@@ -43,26 +48,6 @@ const coordinatorWriteOptions: HttpOptions = {
 	connectionTimeoutMs: 30_000,
 	socketTimeoutMs: 30_000
 };
-
-function isIdempotentMissingBrokerTerminalUpdate(
-	action: 'heartbeat' | 'complete' | 'fail' | 'release',
-	data: Record<string, unknown>,
-	status: number | undefined,
-	responseData: unknown
-): boolean {
-	return (
-		(action === 'complete' || action === 'fail') &&
-		data.scheduler === 'broker' &&
-		typeof data.executionId === 'string' &&
-		data.executionId.length > 0 &&
-		typeof data.claimAttempt === 'number' &&
-		Number.isSafeInteger(data.claimAttempt) &&
-		data.claimAttempt > 0 &&
-		status === 404 &&
-		isObject(responseData) &&
-		responseData.error === 'Archive object job not found'
-	);
-}
 
 @injectable()
 export class RESTScanCoordinatorService implements ScanCoordinatorService {
@@ -280,6 +265,19 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			'complete',
 			{ ...completion },
 			'Failed to complete history archive object job'
+		);
+	}
+
+	async completeHistoryArchiveObjects(
+		items: readonly HistoryArchiveObjectCompletionItem[]
+	): Promise<Result<readonly Result<void, Error>[], Error>> {
+		return requestHistoryArchiveObjectCompletions(
+			this.httpService,
+			this.coordinatorAPIBaseUrl,
+			items,
+			this.getHttpOptions(coordinatorWriteOptions),
+			(item) =>
+				this.completeHistoryArchiveObject(item.remoteId, item.completion)
 		);
 	}
 
