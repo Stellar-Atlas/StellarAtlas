@@ -1,6 +1,7 @@
 import type { ArchiveBrokerRamSelected } from '../../cli/archive-broker/ArchiveBrokerRamTypes.js';
 import { HistoryArchiveRamCandidateFeed } from './HistoryArchiveRamCandidateFeed.js';
 import { buildReserveBrokerCandidateIdsSql } from './HistoryArchiveBrokerCandidateIdsSql.js';
+import { hasPostgresSqlState } from './PostgresError.js';
 import {
 	mapAndOrderBrokerJobs,
 	requirePriority,
@@ -137,18 +138,27 @@ export class HistoryArchiveBrokerFrontierRepository {
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (selected.length === 0 || getHistoryArchiveRetryPhase() !== 'first-pass')
 			return [];
-		return this.dataSource.transaction(async (manager) => {
-			await this.takeDispatcherLock(manager);
-			await manager.query("set local work_mem = '32MB'");
-			const rows = (await manager.query(buildReserveBrokerCandidateIdsSql(), [
-				selected.length,
-				Math.max(1, Math.floor(maximumPerHost)),
-				requirePriority(maximumPriority),
-				canonicalFirstRoot,
-				JSON.stringify(selected)
-			])) as readonly BrokerJobRow[];
-			return mapAndOrderBrokerJobs(rows);
-		});
+		try {
+			return await this.dataSource.transaction(async (manager) => {
+				await manager.query("set local lock_timeout = '250ms'");
+				await this.takeDispatcherLock(manager);
+				await manager.query("set local work_mem = '32MB'");
+				const rows = (await manager.query(buildReserveBrokerCandidateIdsSql(), [
+					selected.length,
+					Math.max(1, Math.floor(maximumPerHost)),
+					requirePriority(maximumPriority),
+					canonicalFirstRoot,
+					JSON.stringify(selected)
+				])) as readonly BrokerJobRow[];
+				return mapAndOrderBrokerJobs(rows);
+			});
+		} catch (error) {
+			if (!hasPostgresSqlState(error, '55P03')) throw error;
+			// transaction() has rolled back; keep the disposable RAM mirror and
+			// its dirty selected IDs, so contention retries do not rebuild it.
+			this.onMaintenanceDeferred?.('55P03');
+			return [];
+		}
 	}
 	async recoverMissingFrontierReady(limit: number): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DataSource, QueryRunner } from 'typeorm';
+import type { DataSource } from 'typeorm';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -376,42 +376,55 @@ describe('exact RAM candidate admission', () => {
 			await holder.release();
 		}
 	});
-	it('rechecks a root cooldown changed while waiting for its row lock', async () => {
-		const rows = await seed(rootA, 1);
-		await db.query(
-			`insert into history_archive_root_failure_control ("archiveUrlIdentity",scope,"failureKind") values ($1,'ledger','transient')`,
-			[rootA]
-		);
-		const holder = db.createQueryRunner();
-		const claimant = db.createQueryRunner();
-		await holder.connect();
-		await claimant.connect();
-		await holder.startTransaction();
-		await claimant.startTransaction();
-		try {
-			await holder.query(
-				`select 1 from history_archive_root_failure_control where "archiveUrlIdentity"=$1 for update`,
+	it.each(['ledger', '*'])(
+		'skips a held %s control without treating it as absent or blocking other roots',
+		async (scope) => {
+			const [ledger] = await seed(rootA, 1);
+			const [transactions] = await seed(rootA, 1, 'transactions');
+			const [healthy] = await seed(rootB, 1);
+			await db.query(
+				`insert into history_archive_root_failure_control ("archiveUrlIdentity",scope,"failureKind","blockedUntil") values ($1,'ledger','transient','2000-01-01Z'),($1,'*','transient','2000-01-01Z')`,
 				[rootA]
 			);
-			const [{ pid }] = (await claimant.query(
-				'select pg_backend_pid() pid'
-			)) as { pid: number }[];
-			const claiming = claimant.query(exact, argumentsFor(input(rows)));
-			await waitForLock(holder, pid!);
-			await holder.query(
-				`update history_archive_root_failure_control set "blockedUntil"=now()+interval '1 hour' where "archiveUrlIdentity"=$1`,
-				[rootA]
-			);
-			await holder.commitTransaction();
-			expect(await claiming).toEqual([]);
-			await claimant.rollbackTransaction();
-		} finally {
-			if (holder.isTransactionActive) await holder.rollbackTransaction();
-			if (claimant.isTransactionActive) await claimant.rollbackTransaction();
-			await holder.release();
-			await claimant.release();
+			const holder = db.createQueryRunner();
+			await holder.connect();
+			await holder.startTransaction();
+			try {
+				await holder.query(
+					`update history_archive_root_failure_control set "blockedUntil"=now()+interval '1 hour' where "archiveUrlIdentity"=$1 and scope=$2`,
+					[rootA, scope]
+				);
+				const claimed = (await db.transaction(async (manager) => {
+					await manager.query("set local statement_timeout='2s'");
+					return manager.query(
+						exact,
+						argumentsFor(input([ledger!, transactions!, healthy!]))
+					);
+				})) as Row[];
+				expect(claimed.map((row) => row.remoteId)).toEqual(
+					scope === '*'
+						? [healthy!.remoteId]
+						: [transactions!.remoteId, healthy!.remoteId]
+				);
+				const [skipped] = await db.query(
+					`select "dispatchToken","publishedAt","claimAttempt" from history_archive_object_ready where "objectRemoteId"=$1`,
+					[ledger!.remoteId]
+				);
+				expect(skipped).toEqual({
+					dispatchToken: null,
+					publishedAt: null,
+					claimAttempt: null
+				});
+				await holder.commitTransaction();
+				expect(await db.query(exact, argumentsFor(input([ledger!])))).toEqual(
+					[]
+				);
+			} finally {
+				if (holder.isTransactionActive) await holder.rollbackTransaction();
+				await holder.release();
+			}
 		}
-	});
+	);
 	it('contains no global scope or root-age walk and bounds the JSON identities', () => {
 		expect(exact).not.toContain('ready_scopes');
 		expect(exact).not.toContain('fresh_root_minimum');
@@ -423,15 +436,3 @@ describe('exact RAM candidate admission', () => {
 		expect(exact).toContain('and ready."publishedAt" is null');
 	});
 });
-
-async function waitForLock(runner: QueryRunner, pid: number): Promise<void> {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		const rows = await runner.query(
-			'select wait_event_type from pg_stat_activity where pid=$1',
-			[pid]
-		);
-		if (rows[0]?.wait_event_type === 'Lock') return;
-		await new Promise((resolve) => setTimeout(resolve, 10));
-	}
-	throw new Error('Claim did not reach controlled root-row barrier');
-}

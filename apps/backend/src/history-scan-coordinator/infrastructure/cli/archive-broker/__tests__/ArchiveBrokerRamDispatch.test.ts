@@ -312,6 +312,20 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		expect(test.claim).toHaveBeenCalledTimes(1);
 		await test.dispatch.close();
 	});
+	it('keeps the mirror and refreshes only selected IDs after a rolled-back empty claim', async () => {
+		const test = fixture();
+		await ready(test);
+		test.claim.mockResolvedValueOnce([]);
+		expect(await test.dispatch.reserve(1, null)).toEqual([]);
+		expect(
+			(await test.dispatch.reserve(1, null))?.map((job) => job.job.remoteId)
+		).toEqual([id(1)]);
+		expect(test.feed.snapshotPage).toHaveBeenCalledTimes(1);
+		expect(test.feed.refreshIds).toHaveBeenCalledWith([id(1)]);
+		expect(test.claim).toHaveBeenCalledTimes(2);
+		expect(test.logger.error).not.toHaveBeenCalled();
+		await test.dispatch.close();
+	});
 	it('leaves periodic residual capacity for recovery during sustained fresh trickle', async () => {
 		const test = fixture();
 		await ready(test);

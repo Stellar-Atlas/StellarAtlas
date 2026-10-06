@@ -21,7 +21,7 @@ describe('RAM candidate repository integration', () => {
 		if (before === undefined) delete process.env.HISTORY_ARCHIVE_RETRY_PHASE;
 		else process.env.HISTORY_ARCHIVE_RETRY_PHASE = before;
 	});
-	it('locks dispatcher then sets local memory and claims only supplied IDs without hydration', async () => {
+	it('bounds locks before dispatcher mutex then claims only supplied IDs without hydration', async () => {
 		const query = jest.fn().mockResolvedValue([]);
 		const transaction = jest.fn(
 			async (work: (manager: EntityManager) => Promise<unknown>) =>
@@ -39,12 +39,13 @@ describe('RAM candidate repository integration', () => {
 			)
 		).resolves.toEqual([]);
 		expect(transaction).toHaveBeenCalledTimes(1);
-		expect(query).toHaveBeenCalledTimes(3);
-		expect(query.mock.calls[0]?.[0]).toContain('pg_advisory_xact_lock');
-		expect(query.mock.calls[1]?.[0]).toBe("set local work_mem = '32MB'");
-		expect(query.mock.calls[2]?.[0]).toContain('ram_input as materialized');
-		expect(query.mock.calls[2]?.[0]).not.toContain('fresh_root_minimum');
-		expect(query.mock.calls[2]?.[1]).toEqual([
+		expect(query).toHaveBeenCalledTimes(4);
+		expect(query.mock.calls[0]?.[0]).toBe("set local lock_timeout = '250ms'");
+		expect(query.mock.calls[1]?.[0]).toContain('pg_advisory_xact_lock');
+		expect(query.mock.calls[2]?.[0]).toBe("set local work_mem = '32MB'");
+		expect(query.mock.calls[3]?.[0]).toContain('ram_input as materialized');
+		expect(query.mock.calls[3]?.[0]).not.toContain('fresh_root_minimum');
+		expect(query.mock.calls[3]?.[1]).toEqual([
 			1,
 			8,
 			2,
@@ -63,7 +64,10 @@ describe('RAM candidate repository integration', () => {
 		expect(transaction).not.toHaveBeenCalled();
 	});
 	it('does not claim or allocate memory when the dispatcher mutex fails', async () => {
-		const query = jest.fn().mockRejectedValue(new Error('mutex failed'));
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce([])
+			.mockRejectedValue(new Error('mutex failed'));
 		const transaction = async (
 			work: (manager: EntityManager) => Promise<unknown>
 		) => work({ query } as unknown as EntityManager);
@@ -73,8 +77,56 @@ describe('RAM candidate repository integration', () => {
 		await expect(repository.reserveCandidateIds(selected, 8)).rejects.toThrow(
 			'mutex failed'
 		);
-		expect(query).toHaveBeenCalledTimes(1);
+		expect(query).toHaveBeenCalledTimes(2);
 	});
+	it('returns no claims only after a lock-timeout transaction rolls back', async () => {
+		const events: string[] = [];
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockRejectedValue({ driverError: { code: '55P03' } });
+		const transaction = async (
+			work: (manager: EntityManager) => Promise<unknown>
+		) => {
+			try {
+				return await work({ query } as unknown as EntityManager);
+			} catch (error) {
+				events.push('rollback');
+				throw error;
+			}
+		};
+		const deferred = jest.fn((code: string) => {
+			events.push(code);
+		});
+		const repository = new HistoryArchiveBrokerFrontierRepository(
+			{ transaction } as unknown as DataSource,
+			deferred
+		);
+		await expect(repository.reserveCandidateIds(selected, 8)).resolves.toEqual(
+			[]
+		);
+		expect(events).toEqual(['rollback', '55P03']);
+		expect(deferred).toHaveBeenCalledTimes(1);
+	});
+	it.each(['57014', '40P01', 'XX000'])(
+		'propagates non-lock-timeout SQLSTATE %s',
+		async (code) => {
+			const error = { driverError: { code } };
+			const deferred = jest.fn();
+			const repository = new HistoryArchiveBrokerFrontierRepository(
+				{
+					transaction: jest.fn().mockRejectedValue(error)
+				} as unknown as DataSource,
+				deferred
+			);
+			await expect(repository.reserveCandidateIds(selected, 8)).rejects.toBe(
+				error
+			);
+			expect(deferred).not.toHaveBeenCalled();
+		}
+	);
 	it('uses the established validated mapper and preserves its public re-export', async () => {
 		const row = {
 			archiveUrl: 'https://a.example',
@@ -91,6 +143,7 @@ describe('RAM candidate repository integration', () => {
 		};
 		const query = jest
 			.fn()
+			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([row]);

@@ -71,13 +71,17 @@ export function buildReserveBrokerCandidateIdsSql(): string {
 		where object.status='pending' and object.attempts=0
 		order by object."archiveUrlIdentity",object."objectType",object."objectKey"
 		for no key update of object skip locked
-	), ram_root_controls as materialized (
-		select control.* from history_archive_root_failure_control control
+	), ram_expected_controls as materialized (
+		select control."archiveUrlIdentity",control.scope
+		from history_archive_root_failure_control control
 		cross join (select count(*) from ram_objects) ordered_objects
 		where exists (select 1 from ram_objects object
 			where object."archiveUrlIdentity"=control."archiveUrlIdentity"
 				and control.scope in ('*',object."objectType"))
-		order by control."archiveUrlIdentity",control.scope for update of control
+	), ram_root_controls as materialized (
+		select control.* from history_archive_root_failure_control control
+		join ram_expected_controls expected using ("archiveUrlIdentity",scope)
+		order by control."archiveUrlIdentity",control.scope for update of control skip locked
 	), active_hosts as materialized (
 		select object."hostIdentity",count(*)::integer as active_count
 		from history_archive_object_ready ready
@@ -90,6 +94,13 @@ export function buildReserveBrokerCandidateIdsSql(): string {
 			else null::timestamptz end as first_pass_root_ready_at
 		from (${historyArchiveBrokerFreshEligibilitySql({ ready: 'ram_ready', object: 'ram_objects', control: 'ram_root_controls' })}) source
 		join ram_input input on input."remoteId"=source."objectRemoteId"
+		-- A skipped control is unavailable authority, never an uncontrolled root.
+		where not exists (select 1 from ram_expected_controls expected
+			where expected."archiveUrlIdentity"=source."archiveUrlIdentity"
+				and expected.scope in ('*',source."objectType")
+				and not exists (select 1 from ram_root_controls locked
+					where locked."archiveUrlIdentity"=expected."archiveUrlIdentity"
+						and locked.scope=expected.scope))
 	), ${historyArchiveBrokerReservationTailSql(false, {
 		selectionSql: candidateSelection,
 		lockSql: candidateLocks,
