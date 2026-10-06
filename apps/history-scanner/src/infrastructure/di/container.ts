@@ -49,6 +49,9 @@ export function load(container: Container, config: Config) {
 		.bind<number>(TYPES.HasherWorkerCount)
 		.toConstantValue(config.historyHasherWorkers);
 	container
+		.bind<number>(TYPES.ObjectHasherWorkerCount)
+		.toConstantValue(config.historyObjectHasherWorkers);
+	container
 		.bind<boolean>(TYPES.HistoryArchiveContentReuseEnabled)
 		.toConstantValue(config.historyArchiveContentReuseEnabled);
 	container

@@ -30,6 +30,8 @@ export interface Config {
 	historySlowArchiveMaxLedgers: number;
 	historyScanWorkers: number;
 	historyHasherWorkers: number;
+	/** One shared object-verification pool per process, not per logical slot. */
+	historyObjectHasherWorkers: number;
 	historyMaxRequests: number;
 	historyScanRangeSize: number;
 	historyBucketCacheDir: string;
@@ -412,6 +414,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		historySlowArchiveMaxLedgers,
 		historyScanWorkers,
 		historyHasherWorkers,
+		historyObjectHasherWorkers: historyTotalHasherWorkers,
 		historyMaxRequests: historyPerScannerMaxRequests,
 		historyScanRangeSize:
 			historyScanRangeSizeResult.value ?? defaultConfig.historyScanRangeSize,

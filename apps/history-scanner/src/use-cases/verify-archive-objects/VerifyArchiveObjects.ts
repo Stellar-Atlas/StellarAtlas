@@ -80,7 +80,7 @@ export class VerifyArchiveObjects {
 		private readonly jobMonitor: JobMonitor,
 		@inject(TYPES.ScanWorkerCount)
 		private readonly workerCount: number,
-		@inject(TYPES.HasherWorkerCount)
+		@inject(TYPES.ObjectHasherWorkerCount)
 		private readonly hasherWorkerCount: number,
 		@inject('Logger')
 		private readonly logger: Logger,

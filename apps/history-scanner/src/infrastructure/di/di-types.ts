@@ -22,5 +22,6 @@ export const TYPES = {
 	HttpQueue: Symbol('HttpQueue'),
 	HttpService: Symbol('HttpService'),
 	ScanWorkerCount: Symbol('ScanWorkerCount'),
-	HasherWorkerCount: Symbol('HasherWorkerCount')
+	HasherWorkerCount: Symbol('HasherWorkerCount'),
+	ObjectHasherWorkerCount: Symbol('ObjectHasherWorkerCount')
 };
