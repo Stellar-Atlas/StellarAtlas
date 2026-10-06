@@ -3,6 +3,7 @@ import type { Logger } from 'logger';
 import type { ArchiveBrokerOccupancy } from '../ArchiveBrokerConsumerHealth.js';
 import {
 	calculateHistoryArchiveBrokerAvailableCapacity,
+	getHistoryArchiveBrokerWorkBudget,
 	getArchiveBrokerCapacity
 } from '../ArchiveBrokerBuffer.js';
 import { HistoryArchiveBrokerDispatcher } from '../HistoryArchiveBrokerDispatcher.js';
@@ -95,7 +96,22 @@ const jobs = (count: number) =>
 	})) as HistoryArchiveBrokerJob[];
 
 describe('derived broker prebuffer', () => {
+	it.each([1, 10, 120])(
+		'derives verification/terminal budgets from the single W=%i base',
+		(workers) => {
+			expect(getHistoryArchiveBrokerWorkBudget(workers)).toEqual({
+				activeVerifications: workers,
+				pendingTerminals: workers,
+				maximumUnacknowledged: workers * 2,
+				maximumMessages: workers * 2,
+				refillAt: workers + Math.floor(workers / 2)
+			});
+		}
+	);
 	it.each([
+		[240, 0, 240, 0],
+		[181, 0, 181, 0],
+		[180, 0, 180, 60],
 		[120, 120, 240, 0],
 		[119, 120, 239, 0],
 		[120, 61, 181, 0],
@@ -138,6 +154,7 @@ describe('derived broker prebuffer', () => {
 		}
 	);
 	it.each([
+		occupancy(240, 0),
 		occupancy(120, 0),
 		occupancy(0, 1),
 		occupancy(0, 0, 1),
@@ -157,7 +174,7 @@ describe('derived broker prebuffer', () => {
 				calculateHistoryArchiveBrokerAvailableCapacity(120, count, 0, 0)
 			).toBe(0);
 	});
-	it('keeps consumer execution concurrency W and stream retention 2W', async () => {
+	it('allows W verification plus W pending-terminal ACKs but keeps stream retention 2W', async () => {
 		const test = fixture(occupancy(0, 0));
 		const manager = {
 			consumers: { info: jest.fn(async () => ({})), update: jest.fn() },
@@ -168,7 +185,7 @@ describe('derived broker prebuffer', () => {
 		expect(manager.consumers.update).toHaveBeenCalledWith(
 			'jobs',
 			'workers',
-			expect.objectContaining({ max_ack_pending: 120 })
+			expect.objectContaining({ max_ack_pending: 240 })
 		);
 		expect(manager.streams.update).toHaveBeenCalledWith(
 			'jobs',
@@ -206,6 +223,27 @@ describe('buffered dispatcher refill and orphan fencing', () => {
 		const running = test.dispatcher.run();
 		await setImmediate();
 		expect(test.repository.reserveJobs).toHaveBeenCalledTimes(1);
+		expect(test.repository.requeueOrphanedPublishedJobs).not.toHaveBeenCalled();
+		await test.dispatcher.close();
+		await running;
+	});
+	it('does not reserve or reset tokens while 120 verifications and 120 terminal deliveries occupy the stream', async () => {
+		const test = fixture(occupancy(240, 0));
+		const running = test.dispatcher.run();
+		await setImmediate();
+		expect(test.repository.reserveJobs).not.toHaveBeenCalled();
+		expect(test.repository.requeueOrphanedPublishedJobs).not.toHaveBeenCalled();
+		expect(test.publish).not.toHaveBeenCalled();
+		await test.dispatcher.close();
+		await running;
+	});
+	it('refills only freed terminal capacity at the original low boundary', async () => {
+		const test = fixture(occupancy(180, 0));
+		test.repository.reserveJobs.mockResolvedValue(jobs(60));
+		const running = test.dispatcher.run();
+		await setImmediate();
+		expect(test.repository.reserveJobs).toHaveBeenCalledTimes(1);
+		expect(test.repository.reserveJobs).toHaveBeenCalledWith(60, 8, 2, null);
 		expect(test.repository.requeueOrphanedPublishedJobs).not.toHaveBeenCalled();
 		await test.dispatcher.close();
 		await running;

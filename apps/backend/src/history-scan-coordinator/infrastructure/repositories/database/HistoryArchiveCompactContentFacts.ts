@@ -25,6 +25,8 @@ export function contentFactsForStorage(
 	| HistoryArchiveCompactContentFacts
 	| null
 	| undefined {
+	// Only the claim-bound server preparation path can supply this template.
+	if (prepared.storageFacts !== undefined) return prepared.storageFacts;
 	const facts = prepared.progress.verificationFacts;
 	const reuse = prepared.reuse;
 	if (!enabled || reuse === null || facts?.content === undefined) return facts;

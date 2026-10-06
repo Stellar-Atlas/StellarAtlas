@@ -34,6 +34,7 @@ import {
 } from './ArchiveBrokerConsumerHealth.js';
 import {
 	calculateHistoryArchiveBrokerStreamMessageLimit,
+	getHistoryArchiveBrokerWorkBudget,
 	getArchiveBrokerCapacity,
 	type ArchiveBrokerCapacity
 } from './ArchiveBrokerBuffer.js';
@@ -433,7 +434,9 @@ export class HistoryArchiveBrokerDispatcher {
 			deliver_policy: DeliverPolicy.All,
 			durable_name: this.config.consumer,
 			filter_subject: this.config.subject,
-			max_ack_pending: this.config.highWatermark,
+			max_ack_pending: getHistoryArchiveBrokerWorkBudget(
+				this.config.highWatermark
+			).maximumUnacknowledged,
 			max_deliver: -1,
 			name: this.config.consumer,
 			replay_policy: ReplayPolicy.Instant

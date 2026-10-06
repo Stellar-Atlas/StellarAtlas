@@ -1,6 +1,7 @@
 import type { JetStreamManager } from 'nats';
 import type { HistoryArchiveBrokerFrontierRepository } from '../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
 import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
+import { calculateHistoryArchiveBrokerStreamMessageLimit } from './ArchiveBrokerBuffer.js';
 
 export async function reconcileSuppressedPublications(
 	repository: Pick<
@@ -23,7 +24,7 @@ export async function reconcileSuppressedPublications(
 					manager(),
 					config.stream,
 					config.subject,
-					config.highWatermark * 2
+					calculateHistoryArchiveBrokerStreamMessageLimit(config.highWatermark)
 				)
 		);
 	} catch {

@@ -63,7 +63,9 @@ export async function markHistoryArchiveObjectsVerified(
 					claimAttempt: progress.claimAttempt,
 					executionId: progress.executionId ?? null,
 					hasBytesDownloaded: progress.bytesDownloaded !== undefined,
-					hasVerificationFacts: progress.verificationFacts !== undefined,
+					hasVerificationFacts:
+						prepared.storageFacts !== undefined ||
+						progress.verificationFacts !== undefined,
 					remoteId,
 					scheduler: progress.scheduler ?? 'legacy',
 					verificationFacts: contentFactsForStorage(prepared) ?? null,

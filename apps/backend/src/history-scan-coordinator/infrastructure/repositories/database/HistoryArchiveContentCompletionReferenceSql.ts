@@ -13,13 +13,15 @@ export const resolveReusableCompletionsSql = `
                         "sourceObjectRemoteId" uuid,
                         "contentDigest" text,
                         "contentRepresentation" text,
-                        "derivationVersion" integer
+                        "derivationVersion" integer,
+                        "omitVerificationFacts" boolean
                 )
         )
         select input."remoteId",
                 ready."objectRemoteId" is not null as "activeClaim",
                 artifact.id as "artifactId",
-                artifact."verificationFacts",
+                case when input."omitVerificationFacts" is true then null
+                        else artifact."verificationFacts" end as "verificationFacts",
                 object."objectType",
                 object."objectUrl"
         from input

@@ -45,6 +45,7 @@ import {
 import { ReportHistoryArchiveWorkerStatus } from '../../use-cases/report-history-archive-worker-status/ReportHistoryArchiveWorkerStatus.js';
 import { parseHistoryArchiveWorkerStatusReport } from './HistoryArchiveWorkerStatusRequestParser.js';
 import { GetHistoryArchiveContentReuse } from '../../use-cases/get-history-archive-content-reuse/GetHistoryArchiveContentReuse.js';
+import { registerArchiveObjectCompletionBatchRoute } from './ArchiveObjectCompletionBatchRoute.js';
 
 export interface HistoryScanRouterConfig
 	extends FrontendRevalidationConfig, ParsedHistoryRegistrationRouteConfig {
@@ -68,6 +69,7 @@ export const HistoryScanRouterWrapper = (
 	config: HistoryScanRouterConfig
 ): Router => {
 	const historyScanRouter = express.Router();
+	registerArchiveObjectCompletionBatchRoute(historyScanRouter, config);
 
 	if (config.userName && config.password)
 		historyScanRouter.post(

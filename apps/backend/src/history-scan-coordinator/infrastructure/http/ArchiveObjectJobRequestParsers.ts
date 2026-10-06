@@ -51,7 +51,7 @@ function parseSchedulerFields(
 }
 
 export function parseArchiveObjectProgress(
-	req: express.Request,
+	req: Pick<express.Request, 'body'>,
 	res: express.Response
 ): HistoryArchiveObjectProgressUpdate | null {
 	const body = req.body;
@@ -124,7 +124,7 @@ export function parseArchiveObjectProgress(
 }
 
 export function parseArchiveObjectCompletion(
-	req: express.Request,
+	req: Pick<express.Request, 'body'>,
 	res: express.Response
 ): CompleteHistoryArchiveObjectRequest | null {
 	const progress = parseArchiveObjectProgress(req, res);

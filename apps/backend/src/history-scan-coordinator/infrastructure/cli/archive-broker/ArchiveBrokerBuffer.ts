@@ -5,10 +5,29 @@ export interface ArchiveBrokerCapacity {
 	readonly empty: boolean;
 }
 
+/** W remains verification concurrency. A completed delivery may retain its ACK
+ * while one bounded terminal queue (also W) persists evidence. Both share the
+ * existing 2W durable stream budget; this does not grant more download slots. */
+export function getHistoryArchiveBrokerWorkBudget(highWatermark: number): {
+	readonly activeVerifications: number;
+	readonly pendingTerminals: number;
+	readonly maximumUnacknowledged: number;
+	readonly maximumMessages: number;
+	readonly refillAt: number;
+} {
+	return {
+		activeVerifications: highWatermark,
+		pendingTerminals: highWatermark,
+		maximumUnacknowledged: highWatermark * 2,
+		maximumMessages: highWatermark * 2,
+		refillAt: highWatermark + Math.floor(highWatermark / 2)
+	};
+}
+
 export function calculateHistoryArchiveBrokerStreamMessageLimit(
 	highWatermark: number
 ): number {
-	return highWatermark * 2;
+	return getHistoryArchiveBrokerWorkBudget(highWatermark).maximumMessages;
 }
 
 export function calculateHistoryArchiveBrokerAvailableCapacity(
@@ -27,12 +46,9 @@ export function calculateHistoryArchiveBrokerAvailableCapacity(
 		return 0;
 	// Retained messages and consumer occupancy may differ; never ignore either.
 	const occupied = Math.max(numAckPending + numPending, numStreamMessages);
-	const refillAt = highWatermark + Math.floor(highWatermark / 2);
-	if (occupied > refillAt) return 0;
-	return Math.max(
-		0,
-		calculateHistoryArchiveBrokerStreamMessageLimit(highWatermark) - occupied
-	);
+	const budget = getHistoryArchiveBrokerWorkBudget(highWatermark);
+	if (occupied > budget.refillAt) return 0;
+	return Math.max(0, budget.maximumMessages - occupied);
 }
 
 export function getArchiveBrokerCapacity(

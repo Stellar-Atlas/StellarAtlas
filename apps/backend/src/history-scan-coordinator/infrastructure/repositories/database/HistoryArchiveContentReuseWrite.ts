@@ -1,6 +1,11 @@
 import type { EntityManager } from 'typeorm';
 import { resolveReusableCompletionsSql } from './HistoryArchiveContentCompletionReferenceSql.js';
 import {
+	bindCompactTemplate,
+	compactTemplateCache
+} from './HistoryArchiveCompactTemplateCache.js';
+import type { HistoryArchiveCompactContentFacts } from './HistoryArchiveCompactContentFacts.js';
+import {
 	historyArchiveContentDerivationVersionV1,
 	type HistoryArchiveContentReuseRequestV1,
 	type HistoryArchiveContentReuseV1,
@@ -32,6 +37,7 @@ interface CompletionObjectRow {
 export interface PreparedContentCompletion {
 	readonly progress: HistoryArchiveObjectProgressUpdate;
 	readonly reuse: HistoryArchiveContentReuseV1 | null;
+	readonly storageFacts?: HistoryArchiveCompactContentFacts;
 }
 
 export interface HistoryArchiveContentCompletionUpdate {
@@ -73,6 +79,21 @@ export async function findReusableHistoryArchiveContent(
 		row.verificationFacts,
 		row.objectUrl
 	);
+	if (process.env.HISTORY_ARCHIVE_COMPACT_CONTENT_FACTS_ENABLED === 'true') {
+		compactTemplateCache(manager).put({
+			progress: {
+				claimAttempt: request.claimAttempt,
+				verificationFacts: facts
+			},
+			reuse: {
+				artifactId: row.artifactId,
+				sourceObjectRemoteId: row.sourceObjectRemoteId,
+				contentDigest: request.contentDigest,
+				contentRepresentation: request.contentRepresentation,
+				derivationVersion: historyArchiveContentDerivationVersionV1
+			}
+		});
+	}
 	return {
 		artifactId: row.artifactId,
 		contentDigest: request.contentDigest,
@@ -140,6 +161,15 @@ export async function prepareHistoryArchiveContentCompletions(
 			throw new Error('Content reuse requires an exact broker claim');
 		}
 	}
+	const cache = compactTemplateCache(manager);
+	const templates = new Map(
+		reuseUpdates.map(({ progress, remoteId }) => [
+			remoteId,
+			process.env.HISTORY_ARCHIVE_COMPACT_CONTENT_FACTS_ENABLED === 'true'
+				? cache.get(progress.contentReuse!, progress.claimAttempt)
+				: undefined
+		])
+	);
 	const rows =
 		reuseUpdates.length === 0
 			? []
@@ -147,6 +177,7 @@ export async function prepareHistoryArchiveContentCompletions(
 					JSON.stringify(
 						reuseUpdates.map(({ progress, remoteId }) => ({
 							artifactId: progress.contentReuse!.artifactId,
+							omitVerificationFacts: templates.get(remoteId) !== undefined,
 							claimAttempt: progress.claimAttempt,
 							contentDigest: progress.contentReuse!.contentDigest,
 							contentRepresentation:
@@ -176,26 +207,47 @@ export async function prepareHistoryArchiveContentCompletions(
 			const row = rowsByRemoteId.get(remoteId);
 			if (row === undefined || !row.activeClaim) return [];
 			if (row.artifactId === null) {
+				cache.delete(reuse.artifactId);
 				throw new Error(
 					'Content reuse artifact does not match the active claim'
 				);
 			}
-			return [
-				{
-					prepared: {
-						progress: {
-							...progress,
-							verificationFacts: rehydrateSourceUrl(
-								row.objectType,
-								row.verificationFacts,
-								row.objectUrl
+			const template = templates.get(remoteId);
+			if (
+				template !== undefined &&
+				template.categoryKey !== `${row.objectType}Category`
+			) {
+				cache.delete(reuse.artifactId);
+				throw new Error(
+					'Content reuse template identity does not match its artifact'
+				);
+			}
+			const prepared: PreparedContentCompletion = {
+				progress: {
+					...progress,
+					verificationFacts:
+						template !== undefined
+							? undefined
+							: rehydrateSourceUrl(
+									row.objectType,
+									row.verificationFacts,
+									row.objectUrl
+								)
+				},
+				reuse,
+				...(template === undefined
+					? {}
+					: {
+							storageFacts: bindCompactTemplate(
+								template,
+								row.objectUrl,
+								progress.claimAttempt
 							)
-						},
-						reuse
-					},
-					remoteId
-				}
-			];
+						})
+			};
+			if (process.env.HISTORY_ARCHIVE_COMPACT_CONTENT_FACTS_ENABLED === 'true')
+				cache.put(prepared);
+			return [{ prepared, remoteId }];
 		}
 	);
 }
