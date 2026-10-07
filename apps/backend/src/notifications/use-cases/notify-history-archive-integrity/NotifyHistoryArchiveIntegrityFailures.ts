@@ -6,7 +6,10 @@ import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
-import { isArchiveObjectEvidence, isRepairableObjectFailure } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/HistoryArchiveRepairActionMapper.js';
+import {
+	isArchiveObjectEvidence,
+	isRepairableObjectFailure
+} from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/HistoryArchiveRepairActionMapper.js';
 import type { OwnedKnownArchiveRoot } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
 import { getOwnedKnownArchiveRoots } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/KnownArchiveRootOwnership.js';
 import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
@@ -72,19 +75,37 @@ export class NotifyHistoryArchiveIntegrityFailures {
 	private async executeLocked(
 		options: NotifyHistoryArchiveIntegrityFailuresOptions
 	): Promise<HistoryArchiveIntegrityNotificationRun> {
-		const roots = getOwnedKnownArchiveRoots(
-			(await this.nodeRepository.findAllKnown()).map((node) => ({
-				historyUrl: node.details?.historyUrl ?? null,
-				publicKey: node.publicKey.value
-			}))
-		);
+		const subscribers = await this.subscriberRepository.find();
+		// No notification can be delivered without a subscriber to an owning node.
+		// Select the audience before touching the archive evidence queue.
+		const roots =
+			subscribers.length === 0
+				? []
+				: getOwnedKnownArchiveRoots(
+						(await this.nodeRepository.findAllKnown()).map((node) => ({
+							historyUrl: node.details?.historyUrl ?? null,
+							publicKey: node.publicKey.value
+						}))
+					).filter((root) =>
+						root.nodePublicKeys.some((value) => {
+							const publicKey = PublicKey.create(value);
+							return (
+								publicKey.isOk() &&
+								subscribers.some((subscriber) =>
+									subscriber.isSubscribedTo(publicKey.value)
+								)
+							);
+						})
+					);
 		const candidates = await this.findCandidates(
 			roots,
 			normalizeObjectsPerArchiveRoot(options.objectsPerArchiveRoot)
 		);
-		const subscribers = await this.subscriberRepository.find();
 		const notifications = subscribers.flatMap((subscriber) => {
-			const notification = subscriber.publishNotificationAbout(candidates, new Date());
+			const notification = subscriber.publishNotificationAbout(
+				candidates,
+				new Date()
+			);
 			return notification === null ? [] : [notification];
 		});
 		if (notifications.length === 0) {
@@ -99,7 +120,9 @@ export class NotifyHistoryArchiveIntegrityFailures {
 
 		const delivery = await this.notifier.sendNotifications(notifications);
 		await this.subscriberRepository.save(
-			delivery.successfulNotifications.map((notification) => notification.subscriber)
+			delivery.successfulNotifications.map(
+				(notification) => notification.subscriber
+			)
 		);
 		delivery.failedNotifications.forEach((failure) =>
 			this.exceptionLogger.captureException(failure.cause)
@@ -135,15 +158,15 @@ export class NotifyHistoryArchiveIntegrityFailures {
 				return objects.flatMap((object) =>
 					isCurrentIntegrityFailure(object)
 						? root.nodePublicKeys.flatMap((publicKey) =>
-							toIntegrityEvent(object, publicKey)
-						)
+								toIntegrityEvent(object, publicKey)
+							)
 						: []
 				);
 			}
 		);
-		return candidateGroups.flat().toSorted((left, right) =>
-			left.time.getTime() - right.time.getTime()
-		);
+		return candidateGroups
+			.flat()
+			.toSorted((left, right) => left.time.getTime() - right.time.getTime());
 	}
 }
 
@@ -160,18 +183,22 @@ function toIntegrityEvent(
 	if (publicKey.isErr() || observedAt === undefined) return [];
 
 	return [
-		new HistoryArchiveIntegrityFailureDetectedEvent(observedAt, publicKey.value, {
-			actionId: `${repairActionKind(object)}:${object.remoteId}`,
-			archiveUrl: object.archiveUrl,
-			bucketHash: object.bucketHash,
-			checkpointLedger: object.checkpointLedger,
-			evidenceId: object.remoteId,
-			evidenceObservedAt: observedAt.toISOString(),
-			failureCode: object.errorType ?? 'integrity-mismatch',
-			objectKey: object.objectKey,
-			objectType: object.objectType,
-			repairPlanPath: `/v1/archive-scans/${encodeURIComponent(object.archiveUrl)}/repair-plan`
-		})
+		new HistoryArchiveIntegrityFailureDetectedEvent(
+			observedAt,
+			publicKey.value,
+			{
+				actionId: `${repairActionKind(object)}:${object.remoteId}`,
+				archiveUrl: object.archiveUrl,
+				bucketHash: object.bucketHash,
+				checkpointLedger: object.checkpointLedger,
+				evidenceId: object.remoteId,
+				evidenceObservedAt: observedAt.toISOString(),
+				failureCode: object.errorType ?? 'integrity-mismatch',
+				objectKey: object.objectKey,
+				objectType: object.objectType,
+				repairPlanPath: `/v1/archive-scans/${encodeURIComponent(object.archiveUrl)}/repair-plan`
+			}
+		)
 	];
 }
 
@@ -186,7 +213,8 @@ function repairActionKind(object: HistoryArchiveObject): string {
 
 function normalizeObjectsPerArchiveRoot(value: number | undefined): number {
 	if (value === undefined) return defaultObjectsPerArchiveRoot;
-	if (!Number.isSafeInteger(value) || value < 1) return defaultObjectsPerArchiveRoot;
+	if (!Number.isSafeInteger(value) || value < 1)
+		return defaultObjectsPerArchiveRoot;
 	return Math.min(value, maxObjectsPerArchiveRoot);
 }
 

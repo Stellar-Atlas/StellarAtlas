@@ -16,6 +16,98 @@ const archiveUrl = 'https://history.example.org';
 const publicKey = 'GCGB2S2KGYARPVIA37HYZXVRM2YZUEXA6S33ZU5BUDC6THSB62LZSTYH';
 
 describe('NotifyHistoryArchiveIntegrityFailures', () => {
+	it('does not read nodes or archive evidence when there are no subscribers', async () => {
+		const fixture = createFixture([failedObject('bucket_hash_mismatch')]);
+		fixture.subscriberRepository.find.mockResolvedValue([]);
+		const result = await fixture.useCase.execute();
+
+		expect(result.isOk()).toBe(true);
+		if (result.isOk())
+			expect(result.value).toMatchObject({
+				candidateEvents: 0,
+				inspectedArchiveRoots: 0,
+				sentNotifications: 0,
+				skippedDueToConcurrentRun: false
+			});
+		expect(fixture.nodeRepository.findAllKnown).not.toHaveBeenCalled();
+		expect(
+			fixture.objectRepository.findActionableByArchiveUrl
+		).not.toHaveBeenCalled();
+		expect(fixture.subscriberRepository.save).not.toHaveBeenCalled();
+	});
+
+	it('does not read archive evidence for an unsubscribed owning node', async () => {
+		const fixture = createFixture([failedObject('bucket_hash_mismatch')]);
+		fixture.subscriber.isSubscribedTo.mockReturnValue(false);
+		const result = await fixture.useCase.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(
+			fixture.objectRepository.findActionableByArchiveUrl
+		).not.toHaveBeenCalled();
+		expect(fixture.events).toEqual([]);
+		expect(fixture.subscriberRepository.save).not.toHaveBeenCalled();
+	});
+
+	it('checks only a root with a subscribed owner and retains its evidence limit', async () => {
+		const fixture = createFixture([failedObject('bucket_hash_mismatch')]);
+		const otherKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
+		fixture.nodeRepository.findAllKnown.mockResolvedValue([
+			{ details: { historyUrl: archiveUrl }, publicKey: { value: publicKey } },
+			{
+				details: { historyUrl: 'https://unsubscribed.example.org' },
+				publicKey: { value: otherKey }
+			}
+		] as unknown as Node[]);
+		fixture.subscriber.isSubscribedTo.mockImplementation(
+			(source) => source.value === publicKey
+		);
+		const result = await fixture.useCase.execute({ objectsPerArchiveRoot: 23 });
+
+		expect(result.isOk()).toBe(true);
+		expect(
+			fixture.objectRepository.findActionableByArchiveUrl
+		).toHaveBeenCalledTimes(1);
+		expect(
+			fixture.objectRepository.findActionableByArchiveUrl
+		).toHaveBeenCalledWith(archiveUrl, 23);
+		expect(fixture.events).toHaveLength(1);
+	});
+
+	it('preserves a shared root when any owner is subscribed', async () => {
+		const fixture = createFixture([failedObject('bucket_hash_mismatch')]);
+		const otherKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
+		fixture.nodeRepository.findAllKnown.mockResolvedValue([
+			{ details: { historyUrl: archiveUrl }, publicKey: { value: otherKey } },
+			{ details: { historyUrl: archiveUrl }, publicKey: { value: publicKey } }
+		] as unknown as Node[]);
+		fixture.subscriber.isSubscribedTo.mockImplementation(
+			(source) => source.value === publicKey
+		);
+		const result = await fixture.useCase.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(
+			fixture.objectRepository.findActionableByArchiveUrl
+		).toHaveBeenCalledTimes(1);
+		expect(
+			fixture.events.some((event) => event.sourceId.value === publicKey)
+		).toBe(true);
+	});
+
+	it('does not publish or acknowledge findings after a candidate read failure', async () => {
+		const fixture = createFixture([failedObject('bucket_hash_mismatch')]);
+		fixture.objectRepository.findActionableByArchiveUrl.mockRejectedValue(
+			new Error('read deferred')
+		);
+		const result = await fixture.useCase.execute();
+
+		expect(result.isErr()).toBe(true);
+		expect(fixture.subscriber.publishNotificationAbout).not.toHaveBeenCalled();
+		expect(fixture.subscriberRepository.save).not.toHaveBeenCalled();
+		expect(fixture.notifier.sendNotifications).not.toHaveBeenCalled();
+	});
+
 	it('maps a confirmed hash mismatch to the owning node without leaking error text', async () => {
 		const fixture = createFixture([failedObject('bucket_hash_mismatch')]);
 		const result = await fixture.useCase.execute();
@@ -41,14 +133,17 @@ describe('NotifyHistoryArchiveIntegrityFailures', () => {
 		['rate_limit', 429],
 		['timeout', null],
 		['worker_error', null]
-	])('does not generate an archive-corruption notification for %s', async (errorType, httpStatus) => {
-		const fixture = createFixture([failedObject(errorType, httpStatus)]);
-		const result = await fixture.useCase.execute();
+	])(
+		'does not generate an archive-corruption notification for %s',
+		async (errorType, httpStatus) => {
+			const fixture = createFixture([failedObject(errorType, httpStatus)]);
+			const result = await fixture.useCase.execute();
 
-		expect(result.isOk()).toBe(true);
-		expect(fixture.events).toEqual([]);
-		expect(fixture.notifier.sendNotifications).not.toHaveBeenCalled();
-	});
+			expect(result.isOk()).toBe(true);
+			expect(fixture.events).toEqual([]);
+			expect(fixture.notifier.sendNotifications).not.toHaveBeenCalled();
+		}
+	);
 });
 
 function createFixture(objects: readonly HistoryArchiveObject[]) {
@@ -63,6 +158,7 @@ function createFixture(objects: readonly HistoryArchiveObject[]) {
 	]);
 	const events: HistoryArchiveIntegrityFailureDetectedEvent[] = [];
 	const subscriber = mock<Subscriber>();
+	subscriber.isSubscribedTo.mockReturnValue(true);
 	subscriber.publishNotificationAbout.mockImplementation((candidateEvents) => {
 		events.push(
 			...candidateEvents.filter(
@@ -90,7 +186,15 @@ function createFixture(objects: readonly HistoryArchiveObject[]) {
 		mock<ExceptionLogger>()
 	);
 
-	return { events, notifier, useCase };
+	return {
+		events,
+		notifier,
+		useCase,
+		objectRepository,
+		nodeRepository,
+		subscriber,
+		subscriberRepository
+	};
 }
 
 function failedObject(
