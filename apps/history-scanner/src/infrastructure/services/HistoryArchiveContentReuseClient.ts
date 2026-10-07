@@ -1,9 +1,9 @@
 import { Url, type HttpOptions, type HttpService } from 'http-helper';
 import { err, ok, type Result } from 'neverthrow';
 import {
-	isHistoryArchiveReusableContentV1,
+	isHistoryArchiveReusableContentResponse,
 	type HistoryArchiveContentReuseRequestV1,
-	type HistoryArchiveReusableContentV1
+	type HistoryArchiveReusableContentResponse
 } from 'shared';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
 import { CoordinatorServiceError } from './CoordinatorServiceError.js';
@@ -19,7 +19,7 @@ export async function requestReusableHistoryArchiveContent(
 	coordinatorAPIBaseUrl: string,
 	coordinatorAuth: CoordinatorAuthConfig,
 	request: HistoryArchiveContentReuseRequestV1
-): Promise<Result<HistoryArchiveReusableContentV1 | null, Error>> {
+): Promise<Result<HistoryArchiveReusableContentResponse | null, Error>> {
 	if (coordinatorAuth.type === 'community') return ok(null);
 	const urlResult = Url.create(
 		`${coordinatorAPIBaseUrl}/v1/history-scan/archive-content/reuse`
@@ -49,7 +49,7 @@ export async function requestReusableHistoryArchiveContent(
 	if (response.value.status === 204) return ok(null);
 	if (
 		response.value.status !== 200 ||
-		!isHistoryArchiveReusableContentV1(response.value.data)
+		!isHistoryArchiveReusableContentResponse(response.value.data)
 	) {
 		return err(
 			new CoordinatorServiceError('Invalid reusable archive content response')

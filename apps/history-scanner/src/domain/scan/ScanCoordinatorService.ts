@@ -14,7 +14,7 @@ import type { HistoryArchiveListingCapabilityDTO } from 'history-scanner-dto';
 import type {
 	HistoryArchiveContentReuseRequestV1,
 	HistoryArchiveContentReuseV1,
-	HistoryArchiveReusableContentV1
+	HistoryArchiveReusableContentResponse
 } from 'shared';
 
 export interface ScanJobProgressDTO {
@@ -95,7 +95,7 @@ export interface ScanCoordinatorService {
 	>;
 	getHistoryArchiveContentReuse(
 		request: HistoryArchiveContentReuseRequestV1
-	): Promise<Result<HistoryArchiveReusableContentV1 | null, Error>>;
+	): Promise<Result<HistoryArchiveReusableContentResponse | null, Error>>;
 	touchHistoryArchiveObject(
 		remoteId: string,
 		progress?: HistoryArchiveObjectProgressDTO

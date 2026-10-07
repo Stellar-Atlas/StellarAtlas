@@ -27,7 +27,7 @@ import type {
 import {
 	isObject,
 	type HistoryArchiveContentReuseRequestV1,
-	type HistoryArchiveReusableContentV1
+	type HistoryArchiveReusableContentResponse
 } from 'shared';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
 import { CoordinatorServiceError } from './CoordinatorServiceError.js';
@@ -207,7 +207,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 	async getHistoryArchiveContentReuse(
 		request: HistoryArchiveContentReuseRequestV1
-	): Promise<Result<HistoryArchiveReusableContentV1 | null, Error>> {
+	): Promise<Result<HistoryArchiveReusableContentResponse | null, Error>> {
 		return requestReusableHistoryArchiveContent(
 			this.httpService,
 			this.coordinatorAPIBaseUrl,

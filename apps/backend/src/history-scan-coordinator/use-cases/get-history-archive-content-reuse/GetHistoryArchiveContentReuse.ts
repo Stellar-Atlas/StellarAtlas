@@ -4,10 +4,10 @@ import { DataSource } from 'typeorm';
 import { err, ok, type Result } from 'neverthrow';
 import type {
 	HistoryArchiveContentReuseRequestV1,
-	HistoryArchiveReusableContentV1
+	HistoryArchiveReusableContentResponse
 } from 'shared';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
-import { findReusableHistoryArchiveContent } from '../../infrastructure/repositories/database/HistoryArchiveContentReuseWrite.js';
+import { lookupReusableHistoryArchiveContent } from '../../infrastructure/repositories/database/HistoryArchiveContentReuseLookup.js';
 
 @injectable()
 export class GetHistoryArchiveContentReuse {
@@ -15,10 +15,10 @@ export class GetHistoryArchiveContentReuse {
 
 	async execute(
 		request: HistoryArchiveContentReuseRequestV1
-	): Promise<Result<HistoryArchiveReusableContentV1 | null, Error>> {
+	): Promise<Result<HistoryArchiveReusableContentResponse | null, Error>> {
 		try {
 			return ok(
-				await findReusableHistoryArchiveContent(
+				await lookupReusableHistoryArchiveContent(
 					this.dataSource.manager,
 					request
 				)

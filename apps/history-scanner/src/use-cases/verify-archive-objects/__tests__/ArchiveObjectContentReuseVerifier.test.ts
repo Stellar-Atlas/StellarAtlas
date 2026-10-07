@@ -53,7 +53,8 @@ describe('ArchiveObjectContentReuseVerifier', () => {
 			executionId,
 			objectKey: 'ledger:0000003f',
 			objectType: 'ledger',
-			remoteId: targetRemoteId
+			remoteId: targetRemoteId,
+			responseFormat: 'compact-v2'
 		});
 		expect(httpService.get).toHaveBeenCalledTimes(1);
 		expect(release).toHaveBeenCalled();

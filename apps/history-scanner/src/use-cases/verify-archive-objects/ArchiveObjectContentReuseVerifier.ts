@@ -6,7 +6,9 @@ import { Url, type HttpService } from 'http-helper';
 import { err, ok, type Result } from 'neverthrow';
 import {
 	historyArchiveContentDerivationVersionV1,
+	isHistoryArchiveReusableContentV2,
 	type HistoryArchiveObjectVerificationFactsV1,
+	type HistoryArchiveReusableContentResponse,
 	type HistoryArchiveReusableContentV1
 } from 'shared';
 import type { HistoryArchiveWorkerStageDTO } from 'history-scanner-dto';
@@ -163,7 +165,10 @@ export class ArchiveObjectContentReuseVerifier {
 			executionId,
 			objectKey: job.objectKey,
 			objectType: job.objectType,
-			remoteId: job.remoteId
+			remoteId: job.remoteId,
+			...(job.objectType === 'scp'
+				? {}
+				: { responseFormat: 'compact-v2' as const })
 		});
 		if (lookup.isErr()) {
 			this.exceptionLogger.captureException(lookup.error);
@@ -171,7 +176,9 @@ export class ArchiveObjectContentReuseVerifier {
 		}
 		if (lookup.value === null) return miss();
 		const reusable = lookup.value;
-		if (!isExactReusableContent(job, digestFact.digest, reusable)) {
+		if (
+			!isExactReusableResponse(job, executionId, digestFact.digest, reusable)
+		) {
 			this.exceptionLogger.captureException(
 				new Error('Coordinator returned mismatched reusable archive content')
 			);
@@ -193,10 +200,36 @@ export class ArchiveObjectContentReuseVerifier {
 				derivationVersion: reusable.derivationVersion,
 				sourceObjectRemoteId: reusable.sourceObjectRemoteId
 			},
-			verificationFacts: reusable.verificationFacts,
+			...('format' in reusable
+				? {}
+				: { verificationFacts: reusable.verificationFacts }),
 			workerStage: 'verified'
 		});
 	}
+}
+
+function isExactReusableResponse(
+	job: HistoryArchiveObjectJobDTO,
+	executionId: string,
+	digest: string,
+	reusable: HistoryArchiveReusableContentResponse
+): boolean {
+	if (!('format' in reusable))
+		return isExactReusableContent(job, digest, reusable);
+	if (!isHistoryArchiveReusableContentV2(reusable)) return false;
+	const binding = reusable.binding;
+	return (
+		reusable.contentDigest === digest &&
+		reusable.contentRepresentation === 'uncompressed-xdr' &&
+		reusable.derivationVersion === historyArchiveContentDerivationVersionV1 &&
+		binding.remoteId === job.remoteId &&
+		binding.executionId === executionId &&
+		binding.claimAttempt === job.claimAttempt &&
+		binding.objectType === job.objectType &&
+		binding.objectKey === job.objectKey &&
+		binding.checkpointLedger === job.checkpointLedger &&
+		binding.sourceUrl === job.objectUrl
+	);
 }
 
 function isExactReusableContent(

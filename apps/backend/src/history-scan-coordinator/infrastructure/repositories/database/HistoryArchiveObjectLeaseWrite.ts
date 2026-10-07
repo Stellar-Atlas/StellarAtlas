@@ -1,5 +1,6 @@
 import { resolveVerifiedRemoteFindingsSql } from './HistoryArchiveRetainedRemoteFindingSql.js';
 import { contentFactsForStorage } from './HistoryArchiveCompactContentFacts.js';
+import { seedHistoryArchiveDbCompactTemplates } from './HistoryArchiveDbCompactTemplateSeed.js';
 import { clearRootFailureOnVerifiedCteSql } from './HistoryArchiveRootFailureControl.js';
 import type { Repository } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
@@ -49,6 +50,7 @@ export async function markHistoryArchiveObjectsVerified(
 			update.progress.executionId !== undefined
 	);
 	if (unique.length === 0) return new Set();
+	await seedHistoryArchiveDbCompactTemplates(repository.manager, unique);
 
 	return await repository.manager.transaction(async (manager) => {
 		const preparedUpdates: readonly PreparedHistoryArchiveContentCompletion[] =

@@ -96,6 +96,12 @@ export {
 	type HistoryArchiveReusableContentV1
 } from './dto/history-archive-content-reuse-v1.js';
 export {
+	isHistoryArchiveReusableContentV2,
+	isHistoryArchiveReusableContentResponse,
+	type HistoryArchiveReusableContentV2,
+	type HistoryArchiveReusableContentResponse
+} from './dto/history-archive-content-reuse-v2.js';
+export {
 	type HistoryArchiveBucketCoverageV1,
 	type HistoryArchiveCheckpointCoverageV1,
 	HistoryArchiveCheckpointCoverageV1Schema,

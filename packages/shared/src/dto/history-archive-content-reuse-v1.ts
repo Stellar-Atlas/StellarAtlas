@@ -4,6 +4,7 @@ import type { HistoryArchiveObjectVerificationFactsV1 } from './history-archive-
 export const historyArchiveContentDerivationVersionV1 = 1 as const;
 
 export interface HistoryArchiveContentReuseRequestV1 {
+	readonly responseFormat?: 'compact-v2';
 	readonly claimAttempt: number;
 	readonly contentDigest: string;
 	readonly contentRepresentation: 'uncompressed-xdr';
@@ -81,7 +82,9 @@ export function isHistoryArchiveContentReuseRequestV1(
 		typeof value.contentDigest === 'string' &&
 		digestPattern.test(value.contentDigest) &&
 		value.contentRepresentation === 'uncompressed-xdr' &&
-		value.derivationVersion === historyArchiveContentDerivationVersionV1
+		value.derivationVersion === historyArchiveContentDerivationVersionV1 &&
+		(value.responseFormat === undefined ||
+			value.responseFormat === 'compact-v2')
 	);
 }
 
