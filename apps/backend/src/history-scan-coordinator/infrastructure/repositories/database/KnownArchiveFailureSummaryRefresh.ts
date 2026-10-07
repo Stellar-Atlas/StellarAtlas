@@ -93,10 +93,22 @@ export function startArchiveFailureSummaryRefreshLoop(
 		let delay = 30_000;
 		try {
 			const completed = await refresh();
-			infrastructureFailureDelay = 300_000;
-			if (completed !== null) {
-				delay = 1_000;
-				if (completed.errorCode !== null) report({ code: completed.errorCode });
+			if (
+				completed?.errorCode != null &&
+				isAggregateInfrastructureError(completed.errorCode)
+			) {
+				// A recorded timeout is still an infrastructure failure: rotating
+				// to another root after 1s would keep cold-table reads saturated.
+				report({ code: completed.errorCode });
+				delay = infrastructureFailureDelay;
+				infrastructureFailureDelay = Math.min(delay * 2, 900_000);
+			} else {
+				infrastructureFailureDelay = 300_000;
+				if (completed !== null) {
+					delay = 1_000;
+					if (completed.errorCode !== null)
+						report({ code: completed.errorCode });
+				}
 			}
 		} catch (error: unknown) {
 			report(error);
@@ -115,6 +127,14 @@ export function startArchiveFailureSummaryRefreshLoop(
 		stopped = true;
 		if (timer !== undefined) clearTimeout(timer);
 	};
+}
+
+function isAggregateInfrastructureError(code: string): boolean {
+	// PostgreSQL connection/resource/system errors, cancellation, lock contention,
+	// transaction retries and server shutdown. These are not archive HTTP statuses.
+	return /^(?:08[A-Z0-9]{3}|53[A-Z0-9]{3}|58[A-Z0-9]{3}|57014|55P03|40P01|40001|57P0[123])$/.test(
+		code
+	);
 }
 
 function safeErrorCode(error: unknown): string {
