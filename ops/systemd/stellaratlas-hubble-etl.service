@@ -17,6 +17,8 @@ Environment=FULL_HISTORY_DATA_ROOT=/mnt/bulk/stellarbeat-data/full-history/typed
 Environment=HUBBLE_ETL_MAX_BATCHES=0
 Environment=HUBBLE_ETL_ONCE=false
 Environment=HUBBLE_ETL_WORKERS=2
+Environment=CLICKHOUSE_HOLDER_INDEX_ENABLED=true
+Environment=CLICKHOUSE_HOLDER_INDEX_STORAGE_POLICY=stellar_read_models
 # Admit a new immutable batch only while the shared RAID is within these limits.
 # Missing local probes defer work; already admitted batches finish normally.
 Environment=HUBBLE_ETL_ADMISSION_ENABLED=true

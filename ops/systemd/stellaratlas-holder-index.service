@@ -1,0 +1,28 @@
+[Unit]
+Description=StellarAtlas compact asset holder index rebuild and recovery
+After=clickhouse-server.service stellaratlas-hubble-etl.service
+Wants=clickhouse-server.service
+RequiresMountsFor=/mnt/bulk /mnt/stellaratlas-archive-db /mnt/fast
+
+[Service]
+Type=simple
+User=admins
+Group=admins
+WorkingDirectory=/mnt/bulk/stellarbeat-data/Observer/apps/hubble-etl
+EnvironmentFile=/mnt/bulk/stellarbeat-data/Observer/apps/backend/.env
+EnvironmentFile=/etc/stellaratlas/hubble-etl.env
+ExecStart=/mnt/fast/stellaratlas/bin/stellaratlas-holder-index-current backfill
+Restart=on-failure
+RestartSec=120s
+TimeoutStopSec=20s
+Nice=15
+IOWeight=10
+CPUWeight=10
+MemoryMax=4294967296
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

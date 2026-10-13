@@ -17,19 +17,23 @@ import (
 )
 
 type Config struct {
-	Endpoint   string
-	User       string
-	Password   string
-	Database   string
-	HTTPClient *http.Client
+	Endpoint                 string
+	User                     string
+	Password                 string
+	Database                 string
+	HTTPClient               *http.Client
+	HolderIndexEnabled       bool
+	HolderIndexStoragePolicy string
 }
 
 type Client struct {
-	endpoint *url.URL
-	user     string
-	password string
-	database string
-	http     *http.Client
+	endpoint                 *url.URL
+	user                     string
+	password                 string
+	database                 string
+	http                     *http.Client
+	holderIndexEnabled       bool
+	holderIndexStoragePolicy string
 }
 
 type BatchStatus struct {
@@ -45,9 +49,10 @@ type BatchStatus struct {
 }
 
 var (
-	digestPattern = regexp.MustCompile("^[0-9a-f]{64}$")
-	tokenPattern  = regexp.MustCompile("^[A-Za-z0-9:_-]{1,240}$")
-	uuidPattern   = regexp.MustCompile("^[0-9a-fA-F-]{36}$")
+	digestPattern     = regexp.MustCompile("^[0-9a-f]{64}$")
+	identifierPattern = regexp.MustCompile("^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+	tokenPattern      = regexp.MustCompile("^[A-Za-z0-9:_-]{1,240}$")
+	uuidPattern       = regexp.MustCompile("^[0-9a-fA-F-]{36}$")
 )
 
 func New(config Config) (*Client, error) {
@@ -59,16 +64,25 @@ func New(config Config) (*Client, error) {
 	if _, err := schema.DatabaseSQL(config.Database); err != nil {
 		return nil, err
 	}
+	storagePolicy := config.HolderIndexStoragePolicy
+	if storagePolicy == "" {
+		storagePolicy = "stellar_read_models"
+	}
+	if !identifierPattern.MatchString(storagePolicy) {
+		return nil, fmt.Errorf("invalid holder-index storage policy")
+	}
 	httpClient := config.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 2 * time.Minute}
 	}
 	return &Client{
-		endpoint: endpoint,
-		user:     config.User,
-		password: config.Password,
-		database: config.Database,
-		http:     httpClient,
+		endpoint:                 endpoint,
+		user:                     config.User,
+		password:                 config.Password,
+		database:                 config.Database,
+		http:                     httpClient,
+		holderIndexEnabled:       config.HolderIndexEnabled,
+		holderIndexStoragePolicy: storagePolicy,
 	}, nil
 }
 
@@ -101,6 +115,11 @@ func (c *Client) Initialize(ctx context.Context) error {
 			if _, err := c.execute(ctx, statement, nil, nil); err != nil {
 				return fmt.Errorf("add %s query index: %w", dataset.Name, err)
 			}
+		}
+	}
+	if c.holderIndexEnabled {
+		if err := c.InitializeHolderIndex(ctx); err != nil {
+			return err
 		}
 	}
 	return nil

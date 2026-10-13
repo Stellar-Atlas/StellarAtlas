@@ -1,0 +1,15 @@
+<clickhouse>
+  <storage_configuration>
+    <disks>
+      <stellar_read_models_nvme>
+        <path>/mnt/stellaratlas-archive-db/clickhouse-read-models/</path>
+        <keep_free_space_bytes>137438953472</keep_free_space_bytes>
+      </stellar_read_models_nvme>
+    </disks>
+    <policies>
+      <stellar_read_models>
+        <volumes><main><disk>stellar_read_models_nvme</disk></main></volumes>
+      </stellar_read_models>
+    </policies>
+  </storage_configuration>
+</clickhouse>

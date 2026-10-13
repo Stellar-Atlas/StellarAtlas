@@ -86,12 +86,20 @@ func run() int {
 
 func loadConfig() (config, error) {
 	var result config
+	holderIndexEnabled, err := strconv.ParseBool(
+		env("CLICKHOUSE_HOLDER_INDEX_ENABLED", "false"),
+	)
+	if err != nil {
+		return result, fmt.Errorf("CLICKHOUSE_HOLDER_INDEX_ENABLED: %w", err)
+	}
 	client, err := clickhouse.New(clickhouse.Config{
-		Endpoint:   env("CLICKHOUSE_URL", "http://127.0.0.1:8123"),
-		User:       os.Getenv("CLICKHOUSE_USER"),
-		Password:   os.Getenv("CLICKHOUSE_PASSWORD"),
-		Database:   env("CLICKHOUSE_DATABASE", "stellar_hubble"),
-		HTTPClient: &http.Client{Timeout: 10 * time.Minute},
+		Endpoint:                 env("CLICKHOUSE_URL", "http://127.0.0.1:8123"),
+		User:                     os.Getenv("CLICKHOUSE_USER"),
+		Password:                 os.Getenv("CLICKHOUSE_PASSWORD"),
+		Database:                 env("CLICKHOUSE_DATABASE", "stellar_hubble"),
+		HTTPClient:               &http.Client{Timeout: 10 * time.Minute},
+		HolderIndexEnabled:       holderIndexEnabled,
+		HolderIndexStoragePolicy: env("CLICKHOUSE_HOLDER_INDEX_STORAGE_POLICY", "stellar_read_models"),
 	})
 	if err != nil {
 		return result, err

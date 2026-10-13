@@ -27,12 +27,17 @@ type WriterLimits struct {
 }
 
 type BatchWriter struct {
-	client     *Client
-	identity   BatchIdentity
-	limits     WriterLimits
-	ingestedAt time.Time
-	tables     map[string]*tableBuffer
-	totalRows  uint64
+	client                *Client
+	identity              BatchIdentity
+	limits                WriterLimits
+	ingestedAt            time.Time
+	tables                map[string]*tableBuffer
+	totalRows             uint64
+	holderIndexRows       map[string]holderIndexUpdate
+	holderIndexBytes      int
+	holderIndexStagedRows uint64
+	holderIndexDisabled   bool
+	holderIndexFailure    error
 }
 
 type tableBuffer struct {
@@ -65,13 +70,17 @@ func NewBatchWriter(
 	if limits.RecoveryNamespace != "" {
 		ingestedAt = limits.RecoveryIngestedAt.UTC()
 	}
-	return &BatchWriter{
+	writer := &BatchWriter{
 		client:     client,
 		identity:   identity,
 		limits:     limits,
 		ingestedAt: ingestedAt,
 		tables:     make(map[string]*tableBuffer, len(schema.Datasets())),
-	}, nil
+	}
+	if client.holderIndexEnabled {
+		writer.holderIndexRows = make(map[string]holderIndexUpdate)
+	}
+	return writer, nil
 }
 
 func (w *BatchWriter) Emit(
@@ -108,6 +117,18 @@ func (w *BatchWriter) Emit(
 	if err != nil {
 		return fmt.Errorf("encode %s row: %w", dataset, err)
 	}
+	if w.client.holderIndexEnabled {
+		if err := w.captureHolderIndexRow(
+			ctx,
+			dataset,
+			ledgerSequence,
+			table.nextRow,
+			encoded,
+		); err != nil {
+			w.holderIndexFailure = err
+			w.holderIndexDisabled = true
+		}
+	}
 	table.body.Write(encoded)
 	table.body.WriteByte('\n')
 	table.nextRow++
@@ -128,7 +149,40 @@ func (w *BatchWriter) Flush(ctx context.Context) error {
 			}
 		}
 	}
+	if w.client.holderIndexEnabled && w.holderIndexFailure == nil {
+		if err := w.flushHolderIndex(ctx); err != nil {
+			w.holderIndexFailure = err
+		}
+		if w.holderIndexFailure == nil {
+			if err := w.client.recordHolderIndexBatch(
+				ctx,
+				w.identity,
+				"staged",
+				w.holderIndexStagedRows,
+			); err != nil {
+				w.holderIndexFailure = err
+			}
+		}
+	}
 	return nil
+}
+
+func (w *BatchWriter) HolderIndexRows() uint64 {
+	return w.holderIndexStagedRows
+}
+
+func (w *BatchWriter) HolderIndexFailure() error {
+	return w.holderIndexFailure
+}
+
+func (w *BatchWriter) PromoteHolderIndex(ctx context.Context) error {
+	if !w.client.holderIndexEnabled {
+		return nil
+	}
+	if w.holderIndexFailure != nil {
+		return w.holderIndexFailure
+	}
+	return w.client.PromoteHolderIndex(ctx, w.identity, w.holderIndexStagedRows)
 }
 
 func (w *BatchWriter) TotalRows() uint64 {

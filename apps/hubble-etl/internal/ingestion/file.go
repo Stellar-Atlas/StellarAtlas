@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -24,14 +25,15 @@ type Request struct {
 }
 
 type Receipt struct {
-	BatchID      string            `json:"batchId"`
-	EndLedger    uint32            `json:"endLedger"`
-	LedgerCount  uint32            `json:"ledgerCount"`
-	RowCount     uint64            `json:"rowCount"`
-	Skipped      bool              `json:"skipped"`
-	SourceSHA256 string            `json:"sourceSha256"`
-	StartLedger  uint32            `json:"startLedger"`
-	DatasetRows  map[string]uint64 `json:"datasetRows,omitempty"`
+	BatchID          string            `json:"batchId"`
+	EndLedger        uint32            `json:"endLedger"`
+	LedgerCount      uint32            `json:"ledgerCount"`
+	RowCount         uint64            `json:"rowCount"`
+	Skipped          bool              `json:"skipped"`
+	SourceSHA256     string            `json:"sourceSha256"`
+	StartLedger      uint32            `json:"startLedger"`
+	DatasetRows      map[string]uint64 `json:"datasetRows,omitempty"`
+	HolderIndexError string            `json:"holderIndexError,omitempty"`
 }
 
 func File(
@@ -136,18 +138,24 @@ func File(
 	if err := client.RecordBatch(ctx, status); err != nil {
 		return receipt, err
 	}
+	holderIndexError := ""
+	if err := writer.PromoteHolderIndex(ctx); err != nil {
+		holderIndexError = truncate("holder index: "+err.Error(), 512)
+		log.Printf("holder index promotion failed batch=%s error=%q", request.BatchID, truncate(err.Error(), 512))
+	}
 	var datasetRows map[string]uint64
 	if request.WriterLimits.RecoveryNamespace != "" {
 		datasetRows = writer.ExpectedRows()
 	}
 	return Receipt{
-		BatchID:      request.BatchID,
-		SourceSHA256: request.SourceSHA256,
-		StartLedger:  batch.Start,
-		EndLedger:    batch.End,
-		LedgerCount:  uint32(batch.LedgerCount),
-		RowCount:     writer.TotalRows(),
-		DatasetRows:  datasetRows,
+		BatchID:          request.BatchID,
+		SourceSHA256:     request.SourceSHA256,
+		StartLedger:      batch.Start,
+		EndLedger:        batch.End,
+		LedgerCount:      uint32(batch.LedgerCount),
+		RowCount:         writer.TotalRows(),
+		DatasetRows:      datasetRows,
+		HolderIndexError: holderIndexError,
 	}, nil
 }
 
