@@ -41,6 +41,30 @@ const holder = {
 };
 
 describe('explorer observed balances and holders', () => {
+	it('uses the object route for holder ordering and historical cutoffs', () => {
+		const path = balanceObservationPath('holders', 'USD:GA', 'c.page', {
+			sort: 'balance',
+			order: 'desc',
+			asOfLedger: '1234'
+		});
+		expect(path).toBe(
+			'/v1/assets/USD%3AGA/holders?limit=25&after=c.page&sort=balance&order=desc&as_of_ledger=1234'
+		);
+	});
+	it('retains the selected ledger and does not invent complete coverage', () => {
+		const page = parseBalanceObservationPage('holders', 'USD:GA', {
+			...evidence,
+			asset: 'USD:GA',
+			holders: [holder],
+			watermark: {
+				...evidence.watermark,
+				selectedLedger: '1234',
+				coverageStatus: 'partial_or_unknown'
+			}
+		});
+		expect(page.selectedLedger).toBe('1234');
+		expect(page.coverageStatus).toBe('partial_or_unknown');
+	});
 	it('uses existing bounded cursor routes without unsupported date/as-of/window parameters', () => {
 		expect(balanceObservationPath('balances', 'GA', null)).toBe(
 			'/v1/analytics/accounts/GA/balances?limit=25'

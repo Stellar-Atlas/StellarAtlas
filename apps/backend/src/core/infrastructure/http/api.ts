@@ -2,12 +2,13 @@ import express from 'express';
 import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
 import { resolve } from 'node:path';
-import { Config, getConfigFromEnv } from '../../config/Config.js';
+import { assetResourceRouter } from '@status/infrastructure/http/asset-catalogue/AssetResourceRouter.js';
+import { type Config, getConfigFromEnv } from '../../config/Config.js';
 import type { ExceptionLogger } from 'exception-logger';
 import type { Logger } from 'logger';
 import { subscriptionRouter } from '@notifications/infrastructure/http/SubscriptionRouter.js';
 import bodyParser from 'body-parser';
-import { Server } from 'http';
+import type { Server } from 'http';
 import type { Socket } from 'net';
 import openApiDocument from '../../../../openapi.json' with { type: 'json' };
 import { ConfirmSubscription } from '@notifications/use-cases/confirm-subscription/ConfirmSubscription.js';
@@ -74,6 +75,7 @@ import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendSc
 import { startArchiveBackgroundTasks } from './ArchiveBackgroundTasks.js';
 import { statusRouter } from '@status/infrastructure/http/StatusRouter.js';
 import { attachStatusLiveWebSocket } from '@status/infrastructure/http/StatusLiveWebSocket.js';
+import { attachWarehouseLiveWebSocket } from '@status/infrastructure/http/WarehouseLiveWebSocket.js';
 import { fullHistoryRouter } from '@status/infrastructure/http/FullHistoryRouter.js';
 import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
@@ -114,6 +116,7 @@ import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter
 import { hubbleWarehouseRouter } from '@status/infrastructure/http/HubbleWarehouseRouter.js';
 import { hubbleWarehouseGraphqlHandler } from '@status/infrastructure/http/HubbleWarehouseGraphql.js';
 import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
+import { publicGoodsRouter } from '@status/infrastructure/http/PublicGoodsRouter.js';
 import { withHubbleTransactionLedgerHints } from '@status/infrastructure/http/HubbleTransactionLedgerHints.js';
 import { createPostgresHubbleTransactionLedgerLocator } from '@status/infrastructure/http/HubbleTransactionLedgerLocator.js';
 import { corsMiddleware } from './CorsMiddleware.js';
@@ -204,6 +207,22 @@ const listen = async () => {
 	api.use(
 		'/v1/analytics',
 		hubbleWarehouseRouter({ warehouse: hubbleWarehouse })
+	);
+	api.use(
+		'/v1',
+		assetResourceRouter({
+			warehouse: hubbleWarehouse,
+			networkPassphrase: config.networkConfig.networkPassphrase
+		})
+	);
+	api.use(
+		'/v1/public-goods',
+		publicGoodsRouter({
+			warehouse: hubbleWarehouse,
+			getArchiveStatusSummary: kernel.container.get(
+				GetHistoryArchiveObjectStatusSummary
+			)
+		})
 	);
 
 	api.all('/graphql', hubbleWarehouseGraphqlHandler(hubbleWarehouse));
@@ -425,6 +444,7 @@ const listen = async () => {
 		console.log('api listening on port: ' + config.apiPort);
 	});
 	trackServerSockets(server);
+	attachWarehouseLiveWebSocket(server);
 	attachNetworkLiveWebSocket(server, {
 		getLatestObservedLedger: kernel.container.get(GetLatestObservedLedger),
 		getNetwork: kernel.container.get(GetNetwork),

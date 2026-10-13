@@ -1,0 +1,326 @@
+.heading,
+.search,
+.assetName,
+.assetTitle,
+.address {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+.heading {
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+.heading h2,
+.heading p {
+	margin: 0;
+}
+.search input {
+	flex: 1;
+	min-width: 220px;
+	border: 1px solid var(--border);
+	border-radius: 0.35rem;
+	padding: 0.7rem;
+	background: var(--panel);
+	color: var(--ink);
+}
+.search button {
+	border: 1px solid var(--border);
+	border-radius: 0.35rem;
+	min-height: 38px;
+	padding: 0.45rem 0.8rem;
+	background: var(--button-secondary);
+	color: var(--ink);
+}
+.filters {
+	border: 1px solid var(--border);
+	border-radius: 0.4rem;
+	padding: 0.75rem;
+}
+.filters summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.filters summary span {
+	margin-left: 0.5rem;
+	color: var(--muted);
+	font-size: 0.8rem;
+	font-weight: 400;
+}
+.filters > div {
+	margin-top: 0.8rem;
+}
+.assetName > span:last-child {
+	display: grid;
+	gap: 0.2rem;
+}
+.assetName small,
+.table small {
+	display: block;
+	color: var(--muted);
+	font-size: 0.72rem;
+	margin-top: 0.2rem;
+}
+.logo,
+.logoFallback {
+	width: 2.2rem;
+	height: 2.2rem;
+	border-radius: 50%;
+	object-fit: cover;
+	flex: 0 0 auto;
+}
+.logo {
+	background: #f1f3f5;
+	object-fit: contain;
+}
+.logoFallback {
+	display: grid;
+	place-items: center;
+	background: var(--button-secondary);
+	color: var(--muted);
+}
+.assetTitle h3,
+.assetTitle p {
+	margin: 0;
+}
+.details {
+	display: grid;
+	gap: 1rem;
+}
+.address {
+	align-items: baseline;
+	min-width: 0;
+}
+.address a {
+	min-width: 0;
+}
+.address code {
+	border: 0;
+	background: none;
+	padding: 0;
+	border-radius: 0;
+	font-family: var(--font-mono);
+	overflow-wrap: anywhere;
+	word-break: break-all;
+	min-width: 0;
+}
+.assetTable code {
+	border: 0;
+	background: none;
+	padding: 0;
+	border-radius: 0;
+}
+.copyButton {
+	border: 0;
+	background: none;
+	color: var(--muted);
+	font-size: 0.75rem;
+	padding: 0.2rem;
+	flex: 0 0 auto;
+	cursor: pointer;
+}
+.copyButton:hover {
+	color: var(--ink);
+}
+.identityFields {
+	display: grid;
+	grid-template-columns: 150px minmax(0, 1fr);
+	gap: 0.8rem 1.5rem;
+	font-size: 0.9rem;
+	margin: 0;
+}
+.identityFields dt {
+	color: var(--muted);
+}
+.identityFields dd {
+	margin: 0;
+	min-width: 0;
+}
+.issuerMetadata {
+	border-top: 1px solid var(--border);
+	padding-top: 1rem;
+	font-size: 0.85rem;
+}
+.issuerMetadata h3 {
+	font-size: 1rem;
+	margin: 0;
+}
+.issuerMetadata h3 span {
+	color: var(--muted);
+	font-weight: 400;
+	margin-left: 0.4rem;
+	font-size: 0.8rem;
+}
+.metadataSource {
+	display: grid;
+	gap: 0.4rem;
+	margin: 1rem 0;
+	color: var(--muted);
+}
+.metadataSource p {
+	margin: 0;
+}
+.metadataSource a {
+	overflow-wrap: anywhere;
+}
+.metadataFields {
+	margin: 0;
+}
+.metadataFields > div {
+	display: grid;
+	grid-template-columns: 170px minmax(0, 1fr);
+	gap: 1rem;
+	padding: 0.6rem 0;
+	border-top: 1px solid var(--border);
+}
+.metadataFields dt {
+	color: var(--muted);
+	font-family: var(--font-mono);
+}
+.metadataFields dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+.holderSection {
+	display: grid;
+	gap: 0.85rem;
+	border-top: 1px solid var(--border);
+	padding-top: 1rem;
+}
+.sectionHeading {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 1rem;
+}
+.observationLabel,
+.holderSummary {
+	font-size: 0.78rem;
+	color: var(--muted);
+}
+.holderSummary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+.holderControls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 0.75rem;
+}
+.holderControls label {
+	display: grid;
+	gap: 0.35rem;
+	font-size: 0.78rem;
+	color: var(--muted);
+}
+.holderControls input,
+.holderControls select {
+	min-width: 150px;
+	background: var(--panel);
+	color: var(--ink);
+	border: 1px solid var(--border);
+	border-radius: 0.3rem;
+	padding: 0.45rem 0.6rem;
+}
+.holderControls button {
+	background: var(--button-secondary);
+	color: var(--ink);
+	border: 1px solid var(--border);
+	border-radius: 0.3rem;
+	padding: 0.45rem 0.7rem;
+}
+.holderTable td:first-child {
+	max-width: 420px;
+	min-width: 260px;
+}
+.numeric {
+	text-align: right;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.table td code {
+	overflow-wrap: anywhere;
+	word-break: break-all;
+}
+.pending {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	color: var(--muted);
+}
+.assetTabs {
+	display: grid;
+	gap: 1.25rem;
+	margin-top: 0.75rem;
+}
+.tabBar {
+	display: flex;
+	gap: 1.5rem;
+	overflow-x: auto;
+	border-bottom: 1px solid var(--border);
+}
+.tabBar button {
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	background: none;
+	color: var(--muted);
+	padding: 0.8rem 0;
+	white-space: nowrap;
+	cursor: pointer;
+	font-size: 0.9rem;
+}
+.tabBar button[aria-pressed='true'] {
+	color: var(--ink);
+	border-bottom-color: var(--blue);
+	font-weight: 600;
+}
+.quickLinks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.8rem 1.5rem;
+}
+.quickLinks button {
+	border: 0;
+	background: none;
+	color: var(--blue);
+	padding: 0;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+.plainHash {
+	display: block;
+	font-family: var(--font-mono);
+	font-size: 0.78rem;
+	background: none;
+	border: 0;
+	padding: 0;
+	min-width: 140px;
+	max-width: 340px;
+	overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+	.identityFields {
+		grid-template-columns: 1fr;
+		gap: 0.25rem;
+	}
+	.identityFields dd {
+		margin-bottom: 0.65rem;
+	}
+	.metadataFields > div {
+		grid-template-columns: 1fr;
+		gap: 0.25rem;
+	}
+	.search {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.filters summary span {
+		display: block;
+		margin: 0.25rem 0 0 1.2rem;
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/pkg/lcmbatch"
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/backfill"
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/clickhouse"
+	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/publication"
 )
 
 const publicNetworkPassphrase = "Public Global Stellar Network ; September 2015"
@@ -32,6 +33,7 @@ type config struct {
 	workers            int
 	pressureGuard      *backfill.PressureGuard
 	readinessGuard     *backfill.WarehouseReadinessGuard
+	publisher          *publication.WarehousePublisher
 }
 
 func main() {
@@ -54,6 +56,19 @@ func run() int {
 		syscall.SIGTERM,
 	)
 	defer cancel()
+	var publisher *publication.WarehousePublisher
+	if os.Args[1] == "run" {
+		servers := os.Getenv("WAREHOUSE_NATS_URL")
+		if servers == "" {
+			servers = os.Getenv("NATS_SERVERS")
+		}
+		if servers == "" {
+			servers = "nats://127.0.0.1:4222"
+		}
+		publisher = publication.NewWarehousePublisher(servers, os.Getenv("NATS_TOKEN"))
+		defer publisher.Close()
+		cfg.publisher = publisher
+	}
 	err = cfg.client.Initialize(ctx)
 	if err != nil && os.Args[1] == "run" && cfg.readinessGuard.Invalidate(err) {
 		if err := cfg.readinessGuard.Wait(ctx); err != nil {
@@ -175,6 +190,7 @@ func runBackfill(ctx context.Context, cfg config) error {
 			WorkerCount:        cfg.workers,
 			PressureGuard:      cfg.pressureGuard,
 			ReadinessGuard:     cfg.readinessGuard,
+			Publisher:          cfg.publisher,
 			OnProgress: func(summary backfill.Summary) {
 				_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
 					"event":           "batch-completed",

@@ -99,6 +99,23 @@ SETTINGS storage_policy = '%s'`, db, c.holderIndexStoragePolicy),
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY asset_key
 SETTINGS storage_policy = '%s'`, db, c.holderIndexStoragePolicy),
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s._asset_pool_current (
+	pool_id String,
+	state SimpleAggregateFunction(max, %s)
+) ENGINE = AggregatingMergeTree
+ORDER BY pool_id
+SETTINGS storage_policy = '%s'`, db, poolIndexStateType, c.holderIndexStoragePolicy),
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s._asset_pool_stage (
+	pool_id String,
+	state SimpleAggregateFunction(max, %s),
+	batch_id UUID,
+	source_sha256 FixedString(64),
+	created_at DateTime DEFAULT now()
+) ENGINE = AggregatingMergeTree
+PARTITION BY toDate(created_at)
+ORDER BY (batch_id, source_sha256, pool_id)
+TTL created_at + INTERVAL 2 DAY DELETE
+SETTINGS storage_policy = '%s'`, db, poolIndexStateType, c.holderIndexStoragePolicy),
 	}
 	for _, statement := range statements {
 		if _, err := c.execute(ctx, statement, nil, nil); err != nil {
@@ -157,6 +174,23 @@ func (c *Client) PromoteHolderIndex(
 			"._asset_holder_stage WHERE batch_id={batch:UUID} AND source_sha256={digest:String} GROUP BY asset_key, account_id"
 		if _, err := c.execute(ctx, query, params, nil); err != nil {
 			return fmt.Errorf("promote staged holder rows: %w", err)
+		}
+	}
+	poolStageCount, err := c.execute(ctx, "SELECT count() FROM "+base+
+		"._asset_pool_stage WHERE batch_id={batch:UUID} AND source_sha256={digest:String} FORMAT TabSeparated", params, nil)
+	if err != nil {
+		return fmt.Errorf("verify staged pool rows: %w", err)
+	}
+	poolCount, parseErr := strconv.ParseUint(strings.TrimSpace(string(poolStageCount)), 10, 64)
+	if parseErr != nil {
+		return fmt.Errorf("decode staged pool row count: %w", parseErr)
+	}
+	if poolCount > 0 {
+		query := "INSERT INTO " + base +
+			"._asset_pool_current (pool_id,state) SELECT pool_id,max(state) FROM " + base +
+			"._asset_pool_stage WHERE batch_id={batch:UUID} AND source_sha256={digest:String} GROUP BY pool_id"
+		if _, err := c.execute(ctx, query, params, nil); err != nil {
+			return fmt.Errorf("promote staged pool rows: %w", err)
 		}
 	}
 	if err := c.recordHolderIndexBatch(ctx, identity, "complete", rowCount); err != nil {

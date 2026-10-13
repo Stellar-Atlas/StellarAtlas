@@ -1,4 +1,5 @@
 import type { HubbleCatalog } from './HubbleWarehouseContracts.js';
+import { isHubbleLedgerWindowComplete } from './HubbleLedgerCoverage.js';
 import { StrKey } from '@stellar/stellar-sdk';
 import type {
 	HubbleAccountBalance,
@@ -75,7 +76,18 @@ export async function queryHubbleAccountBalances(
 			mode: 'latest-ingested-observations',
 			catalogGeneratedAt: catalog.generatedAt,
 			catalogMaximumLedger: catalog.coverage.maximumLedger,
-			snapshotPinned: false
+			snapshotPinned: false,
+			selectedLedger: catalog.coverage.maximumLedger,
+			coverageStatus:
+				catalog.coverage.maximumLedger !== null &&
+				isHubbleLedgerWindowComplete(
+					catalog.coverage,
+					2,
+					Number(catalog.coverage.maximumLedger)
+				)
+					? 'complete'
+					: 'partial_or_unknown',
+			balancePrecision: 'source-float64'
 		}
 	};
 }

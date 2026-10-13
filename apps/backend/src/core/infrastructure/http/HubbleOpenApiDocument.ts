@@ -22,6 +22,10 @@ import {
 	readOpenApiRecord,
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
+import {
+	hubbleAssetReportPaths,
+	hubbleAssetReportSchemas
+} from './HubbleAssetReportOpenApi.js';
 import { hubbleSemanticPaths } from './HubbleSemanticOpenApiPaths.js';
 import {
 	hubbleTransferPaths,
@@ -228,6 +232,7 @@ const ledgerCoverageSchema: OpenApiRecord = hubbleCoverageSchema;
 const hubblePaths: Readonly<Record<string, OpenApiRecord>> =
 	withHubbleExplorerPaths({
 		...withHubbleContractEventPath(hubbleSemanticPaths),
+		...hubbleAssetReportPaths,
 		...hubbleTransferPaths,
 		...hubbleAccountBalancePaths,
 		...hubbleGraphqlPaths,
@@ -420,6 +425,7 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 	const components = readOpenApiRecord(source.components) ?? {};
 	const existingSchemas = readOpenApiRecord(components.schemas) ?? {};
 	const schemas = {
+		...hubbleAssetReportSchemas,
 		...hubbleAccountBalanceSchemas,
 		...hubbleContractEventSchemas,
 		...hubbleSemanticSchemas,

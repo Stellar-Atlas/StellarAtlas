@@ -3,6 +3,18 @@ import type { OpenApiOperationContext } from './OpenApiDocumentProjection.js';
 // Reviewed consumer-facing contract. New operations require an explicit review here.
 // Bind identity to method/path so reusing an allowed name cannot publish a new route.
 const publicOperations = new Map<string, string>([
+	['listAssetResources', 'get /v1/assets'],
+	['listIssuerResources', 'get /v1/issuers'],
+	['getAssetResource', 'get /v1/assets/{asset}'],
+	['getAssetResourceMetadata', 'get /v1/assets/{asset}/metadata'],
+	['listAssetBalancesSnapshot', 'get /v1/assets/{asset}/balances'],
+	['listAssetTrustlinesSnapshot', 'get /v1/assets/{asset}/trustlines'],
+	['getIssuerResource', 'get /v1/issuers/{issuer}'],
+	['listAssetMetadataBatch', 'get /v1/asset-metadata'],
+	['listSimilarAssetResources', 'get /v1/assets/{asset}/similar'],
+	['listIssuerAssetResources', 'get /v1/issuers/{issuer}/assets'],
+	['getPublicGoodsHealth', 'get /v1/public-goods/health'],
+	['getPublicGoodsMetrics', 'get /v1/public-goods/metrics'],
 	['callStellarRpc', 'post /rpc'],
 	[
 		'confirmSubscription',
@@ -150,6 +162,19 @@ const publicOperations = new Map<string, string>([
 	],
 	['listAnalyticsAssetHolders', 'get /v1/analytics/assets/{asset}/holders'],
 	[
+		'listAnalyticsAssetBalancesSnapshot',
+		'get /v1/analytics/assets/{asset}/balances'
+	],
+	[
+		'listAnalyticsAssetTrustlinesSnapshot',
+		'get /v1/analytics/assets/{asset}/trustlines'
+	],
+	[
+		'listAnalyticsAssetBalanceHistory',
+		'get /v1/analytics/assets/{asset}/balance-history'
+	],
+	['listAnalyticsAssetRankings', 'get /v1/analytics/assets/{asset}/rankings'],
+	[
 		'listAnalyticsAssetTransferActivity',
 		'get /v1/analytics/assets/{asset}/activity/transfers'
 	],
@@ -202,6 +227,20 @@ export function isReviewedPublicOpenApiOperation({
 	operation,
 	path
 }: OpenApiOperationContext): boolean {
+	if (
+		typeof operation.operationId === 'string' &&
+		operation.operationId.endsWith('Resource') &&
+		/^\/v1\/(accounts|assets|contracts|transactions|operations|transfers|activity|trades|offers|ledgers|liquidity-pools)(\/|$)/.test(
+			path
+		)
+	) {
+		const original = operation.operationId.slice(0, -'Resource'.length);
+		if (
+			publicOperations.get(original) ===
+			`${method} ${path.replace('/v1/', '/v1/analytics/')}`
+		)
+			return true;
+	}
 	return (
 		typeof operation.operationId === 'string' &&
 		publicOperations.get(operation.operationId) === `${method} ${path}`

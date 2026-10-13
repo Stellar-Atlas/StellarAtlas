@@ -13,15 +13,21 @@ export const hubbleAssetHolderSchema = `
 	"""Parsed ETL number or numeric string, preserved as received. Float64 balances are observations, not reconstructed exact atomic units."""
 	scalar HubbleParsedNumber
 	extend type Query {
-		hubbleAssetHolders(asset: String!, input: HubbleAssetHolderInput): HubbleAssetHolderPage!
+			hubbleAssetHolders(asset: String!, input: HubbleAssetHolderInput): HubbleAssetHolderPage!
+			hubbleAssetBalances(asset: String!, input: HubbleAssetHolderInput): HubbleAssetHolderPage!
+			hubbleAssetTrustlines(asset: String!, input: HubbleAssetHolderInput): HubbleAssetHolderPage!
 		hubbleAssetHolder(asset: String!, account: String!): HubbleAssetHolderDetail!
 	}
-	input HubbleAssetHolderInput { after: String limit: Int }
+	input HubbleAssetHolderInput { after: String limit: Int sort: String order: String asOfLedger: Int includeZero: Boolean includeDeleted: Boolean }
 	type HubbleAssetHolderWatermark {
+		indexStatus: String
 		mode: String!
 		catalogGeneratedAt: String!
 		catalogMaximumLedger: String
 		snapshotPinned: Boolean!
+		selectedLedger: String
+		coverageStatus: String!
+		balancePrecision: String!
 	}
 	type HubbleAssetHolder {
 		accountId: String!
@@ -37,7 +43,11 @@ export const hubbleAssetHolderSchema = `
 		assetIssuer: String
 		assetType: String
 		flags: String
+		sponsor: String
+		sponsored: Boolean!
+		deleted: Boolean!
 	}
+	type HubbleAssetHolderSummary { holderCount: String! balanceTotal: HubbleParsedNumber! }
 	type HubbleAssetHolderPage {
 		asset: String!
 		holders: [HubbleAssetHolder!]!
@@ -46,6 +56,7 @@ export const hubbleAssetHolderSchema = `
 		elapsedMilliseconds: Float!
 		coverage: HubbleLedgerCoverage!
 		watermark: HubbleAssetHolderWatermark!
+		indexedSummary: HubbleAssetHolderSummary
 	}
 	type HubbleAssetHolderDetail {
 		asset: String!
@@ -98,7 +109,10 @@ function holder(row: Readonly<Record<string, unknown>>) {
 		assetCode: optionalText(row.asset_code),
 		assetIssuer: optionalText(row.asset_issuer),
 		assetType: optionalText(row.asset_type),
-		flags: optionalText(row.flags)
+		flags: optionalText(row.flags),
+		sponsor: optionalText(row.sponsor),
+		sponsored: row.sponsored === true,
+		deleted: row.deleted === true
 	};
 }
 interface ListArguments {
@@ -106,6 +120,11 @@ interface ListArguments {
 	readonly input?: {
 		readonly limit?: number | null;
 		readonly after?: string | null;
+		readonly sort?: string | null;
+		readonly order?: string | null;
+		readonly asOfLedger?: number | null;
+		readonly includeZero?: boolean | null;
+		readonly includeDeleted?: boolean | null;
 	} | null;
 }
 interface DetailArguments {
@@ -116,29 +135,63 @@ export function hubbleAssetHolderResolvers(
 	warehouse: HubbleWarehouse,
 	mapError: (error: unknown) => Error
 ) {
+	const list = async (
+		{ asset, input }: ListArguments,
+		forceAll: boolean,
+		requireIssued: boolean
+	) => {
+		try {
+			const limit = input?.limit ?? 100;
+			const after = input?.after ?? undefined;
+			const sort = input?.sort ?? 'account';
+			const order = input?.order ?? 'asc';
+			const asOfLedger = input?.asOfLedger ?? undefined;
+			const parsedAsset = parseAsset(asset);
+			if (requireIssued && parsedAsset.type === 'native')
+				throw new HubbleWarehouseInputError(
+					'Asset trustlines require an issued asset'
+				);
+			if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
+				throw new HubbleWarehouseInputError(
+					'limit must be an integer between 1 and 200'
+				);
+			if (after !== undefined && after === '')
+				throw new HubbleWarehouseInputError(
+					'after must be one non-empty value'
+				);
+			if (sort !== 'account' && sort !== 'balance')
+				throw new HubbleWarehouseInputError('sort must be account or balance');
+			if (order !== 'asc' && order !== 'desc')
+				throw new HubbleWarehouseInputError('order must be asc or desc');
+			if (
+				asOfLedger !== undefined &&
+				(!Number.isSafeInteger(asOfLedger) ||
+					asOfLedger < 1 ||
+					asOfLedger > 4294967295)
+			)
+				throw new HubbleWarehouseInputError(
+					'asOfLedger must be a valid ledger'
+				);
+			const page = await warehouse.assetHolders({
+				asset: parsedAsset,
+				limit,
+				after,
+				sort,
+				order,
+				asOfLedger,
+				balanceFilter:
+					forceAll || input?.includeZero === true ? 'all' : 'positive',
+				includeDeleted: input?.includeDeleted ?? false
+			});
+			return { ...page, holders: page.holders.map(holder) };
+		} catch (error) {
+			throw mapError(error);
+		}
+	};
 	return {
-		hubbleAssetHolders: async ({ asset, input }: ListArguments) => {
-			try {
-				const limit = input?.limit ?? 100,
-					after = input?.after ?? undefined;
-				if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
-					throw new HubbleWarehouseInputError(
-						'limit must be an integer between 1 and 200'
-					);
-				if (after !== undefined && after === '')
-					throw new HubbleWarehouseInputError(
-						'after must be one non-empty value'
-					);
-				const page = await warehouse.assetHolders({
-					asset: parseAsset(asset),
-					limit,
-					after
-				});
-				return { ...page, holders: page.holders.map(holder) };
-			} catch (error) {
-				throw mapError(error);
-			}
-		},
+		hubbleAssetHolders: (args: ListArguments) => list(args, false, false),
+		hubbleAssetBalances: (args: ListArguments) => list(args, true, false),
+		hubbleAssetTrustlines: (args: ListArguments) => list(args, true, true),
 		hubbleAssetHolder: async ({ asset, account }: DetailArguments) => {
 			try {
 				const page = await warehouse.assetHolders({

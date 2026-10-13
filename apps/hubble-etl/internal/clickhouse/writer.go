@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -38,6 +39,10 @@ type BatchWriter struct {
 	holderIndexStagedRows uint64
 	holderIndexDisabled   bool
 	holderIndexFailure    error
+	poolIndexRows         map[string]poolIndexUpdate
+	poolIndexBytes        int
+	poolIndexStagedRows   uint64
+	poolIndexDisabled     bool
 }
 
 type tableBuffer struct {
@@ -79,6 +84,7 @@ func NewBatchWriter(
 	}
 	if client.holderIndexEnabled {
 		writer.holderIndexRows = make(map[string]holderIndexUpdate)
+		writer.poolIndexRows = make(map[string]poolIndexUpdate)
 	}
 	return writer, nil
 }
@@ -127,6 +133,13 @@ func (w *BatchWriter) Emit(
 		); err != nil {
 			w.holderIndexFailure = err
 			w.holderIndexDisabled = true
+			w.poolIndexDisabled = true
+		}
+		if w.holderIndexFailure == nil {
+			if err := w.capturePoolIndexRow(ctx, dataset, ledgerSequence, table.nextRow, w.ingestedAt, w.identity, encoded); err != nil {
+				w.holderIndexFailure = err
+				w.poolIndexDisabled = true
+			}
 		}
 	}
 	table.body.Write(encoded)
@@ -152,6 +165,11 @@ func (w *BatchWriter) Flush(ctx context.Context) error {
 	if w.client.holderIndexEnabled && w.holderIndexFailure == nil {
 		if err := w.flushHolderIndex(ctx); err != nil {
 			w.holderIndexFailure = err
+		}
+		if w.holderIndexFailure == nil {
+			if err := w.flushPoolIndex(ctx); err != nil {
+				w.holderIndexFailure = err
+			}
 		}
 		if w.holderIndexFailure == nil {
 			if err := w.client.recordHolderIndexBatch(
@@ -198,6 +216,17 @@ func (w *BatchWriter) ExpectedRows() map[string]uint64 {
 			result[dataset.Name] = 0
 		}
 	}
+	return result
+}
+
+func (w *BatchWriter) PopulatedDatasets() []string {
+	result := make([]string, 0, len(w.tables))
+	for name, table := range w.tables {
+		if table.nextRow > 0 {
+			result = append(result, name)
+		}
+	}
+	sort.Strings(result)
 	return result
 }
 

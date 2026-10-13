@@ -22,13 +22,13 @@ const record = (value: unknown): value is Record<string, unknown> =>
 
 export function operationGroup(path: string, tag: string): string {
 	if (path === '/graphql') return 'GraphQL';
+	if (path.includes('/assets') || path.includes('/issuers')) return 'Assets';
 	if (!path.startsWith('/v1/analytics')) return tag || 'Other public endpoints';
 	if (path.includes('/contracts') || path.includes('/events'))
 		return 'Contracts & events';
 	if (path.includes('/trades') || path.includes('/offers'))
 		return 'Trades & offers';
 	if (path.includes('/liquidity-pools')) return 'Liquidity pools';
-	if (path.includes('/assets')) return 'Assets';
 	if (path.includes('/balances') || path.includes('/accounts'))
 		return 'Accounts & balances';
 	if (path.includes('/transfers')) return 'Transfers';

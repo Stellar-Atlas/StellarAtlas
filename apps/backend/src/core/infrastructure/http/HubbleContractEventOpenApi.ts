@@ -6,32 +6,55 @@ import {
 	ref,
 	text
 } from './HubbleOpenApiSchemas.js';
-import {
-	defaultTransferLedgerSpan,
-	maximumTransferLedgerSpan
-} from '../../../status/infrastructure/http/HubbleTransferValidation.js';
+import { maximumContractEventLedgerSpan } from '../../../status/infrastructure/http/HubbleContractEventValidation.js';
 const contractId = 'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA';
 const description =
-	'Set view=typed for parsed events with exact identifiers, retained XDR/decoded JSON, and explicit classification. This includes system, contract, and diagnostic events: execution evidence does not imply success, and a native fee is not Soroban execution evidence. Typed pages use a descending ledger/row/batch/digest cursor tied to all filters and a published watermark. The watermark is not a frozen snapshot: later backfill can add older events. Only completed ingestion batches are visible; coverage gaps are explicit. Omit view to retain the existing raw offset response.';
+	'Set view=typed for parsed events with exact identifiers, retained XDR/decoded JSON, and explicit classification. This includes system, contract, and diagnostic events: execution evidence does not imply success, and a native fee is not Soroban execution evidence. Typed pages support asc or desc ledger/row/batch/digest order (default desc), exact decoded topic-symbol filtering, and q search by exact G/C address, transaction hash, or ledger. The default typed window begins at ledger 2 and ends at the published maximum; explicit bounds and cursors pin the window. Typed pages use a cursor tied to selection filters and watermark. include_summary returns matched-selection total and up to 128 named topic counts independent of cursor/page; it is cached briefly and is not a frozen snapshot. Only completed ingestion batches are visible; coverage gaps are explicit. Omit view to retain the existing raw offset response.';
 export const hubbleContractEventSchemas: Record<string, OpenApiRecord> = {
-	HubbleTypedContractEventPage: object({
-		contractId: {
-			type: 'string',
-			pattern: '^C[A-Z2-7]{55}$',
-			example: contractId
-		},
-		items: { type: 'array', items: hubbleTypedEventSchema },
-		limit: { type: 'integer', minimum: 1, maximum: 200 },
-		nextCursor: { type: 'string', nullable: true },
-		watermark: object({
-			minimumLedger: { type: 'integer', minimum: 0 },
-			maximumLedger: { type: 'integer', minimum: 0 },
-			observedAt: { type: 'string', format: 'date-time' },
-			coverage: { type: 'string', enum: ['ingested-only'] }
+	HubbleTypedContractEventPage: {
+		...object({
+			contractId: {
+				type: 'string',
+				pattern: '^C[A-Z2-7]{55}$',
+				example: contractId
+			},
+			items: { type: 'array', items: hubbleTypedEventSchema },
+			summary: {
+				type: 'object',
+				required: ['total', 'topics'],
+				properties: {
+					total: { type: 'string', pattern: '^[0-9]+$' },
+					topics: {
+						type: 'array',
+						maxItems: 128,
+						items: object({
+							topic: text,
+							count: { type: 'string', pattern: '^[0-9]+$' }
+						})
+					}
+				}
+			},
+			limit: { type: 'integer', minimum: 1, maximum: 200 },
+			nextCursor: { type: 'string', nullable: true },
+			watermark: object({
+				minimumLedger: { type: 'integer', minimum: 0 },
+				maximumLedger: { type: 'integer', minimum: 0 },
+				observedAt: { type: 'string', format: 'date-time' },
+				coverage: { type: 'string', enum: ['ingested-only'] }
+			}),
+			coverage: hubbleCoverageSchema,
+			elapsedMilliseconds: { type: 'number', minimum: 0 }
 		}),
-		coverage: hubbleCoverageSchema,
-		elapsedMilliseconds: { type: 'number', minimum: 0 }
-	})
+		required: [
+			'contractId',
+			'items',
+			'limit',
+			'nextCursor',
+			'watermark',
+			'coverage',
+			'elapsedMilliseconds'
+		]
+	}
 };
 export function withHubbleContractEventPath(
 	paths: Record<string, OpenApiRecord>
@@ -67,11 +90,13 @@ export function withHubbleContractEventPath(
 					example: 63490364
 				},
 				description:
-					'Inclusive ledger bound. Typed view maximum span: ' +
-					maximumTransferLedgerSpan +
-					'; default window: ' +
-					defaultTransferLedgerSpan +
-					' ledgers ending at the published maximum. Date filters additionally constrain this window.'
+					parameter.name === 'min_ledger'
+						? 'Inclusive ledger lower bound. Typed view defaults to ledger 2; maximum span: ' +
+							maximumContractEventLedgerSpan +
+							' ledgers. Date filters additionally constrain this window.'
+						: 'Inclusive ledger upper bound. Typed view defaults to the published maximum; maximum span: ' +
+							maximumContractEventLedgerSpan +
+							' ledgers. Date filters additionally constrain this window.'
 			};
 		return parameter;
 	});
@@ -121,6 +146,26 @@ export function withHubbleContractEventPath(
 			'in_successful_contract_call',
 			{ type: 'boolean', example: false },
 			'Typed only. Stored event call-success flag.'
+		),
+		query(
+			'order',
+			{ type: 'string', enum: ['asc', 'desc'], default: 'desc' },
+			'Typed only; applies consistently to pages and cursor comparisons.'
+		),
+		query(
+			'topic',
+			{ type: 'string', minLength: 1, maxLength: 128 },
+			'Typed only; exact decoded topic symbol filter.'
+		),
+		query(
+			'q',
+			{ type: 'string', minLength: 1, maxLength: 128 },
+			'Typed only; exact G/C address, 64-hex transaction hash, or positive ledger sequence.'
+		),
+		query(
+			'include_summary',
+			{ type: 'boolean', default: false },
+			'Typed only; include matched-selection total and top 128 decoded named topic counts, independent of cursor/page. Cached up to five minutes.'
 		)
 	);
 	const responses = get.responses as OpenApiRecord;

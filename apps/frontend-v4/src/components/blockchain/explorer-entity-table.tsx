@@ -53,10 +53,12 @@ function Field({
 				id={text}
 				filters={filters}
 				label={
-					collection === 'assets'
-						? entityText(row, 'code') ||
-							(text === 'native' ? 'XLM' : shorten(text))
-						: undefined
+					collection === 'contracts'
+						? text
+						: collection === 'assets'
+							? entityText(row, 'code') ||
+								(text === 'native' ? 'XLM' : shorten(text))
+							: undefined
 				}
 			/>
 		);

@@ -15,7 +15,8 @@ export interface HubbleSemanticQueryExecutor {
 	readonly maximumRows: number;
 	execute<T>(
 		sql: string,
-		parameters: readonly HubblePreparedParameter[]
+		parameters: readonly HubblePreparedParameter[],
+		timeoutMs?: number
 	): Promise<HubblePreparedResponse<T>>;
 }
 
@@ -47,19 +48,32 @@ export interface HubbleAssetHolderQuery {
 	readonly account?: string;
 	readonly after?: string;
 	readonly asset: HubbleAssetReference | HubbleNativeAssetReference;
+	readonly asOfLedger?: number;
+	readonly balanceFilter?: 'positive' | 'all';
+	readonly includeDeleted?: boolean;
 	readonly limit?: number;
+	readonly order?: 'asc' | 'desc';
+	readonly sort?: 'account' | 'balance';
 }
 
 export interface HubbleAssetHolderEvidence {
 	readonly coverage: HubbleLedgerCoverage;
 	readonly watermark: {
+		readonly indexStatus?: 'ready' | 'building' | 'historical-query';
 		readonly mode: 'latest-ingested-observations';
 		readonly catalogGeneratedAt: string;
 		readonly catalogMaximumLedger: string | null;
 		readonly snapshotPinned: false;
+		readonly selectedLedger: string | null;
+		readonly coverageStatus: 'complete' | 'partial_or_unknown';
+		readonly balancePrecision: 'source-float64';
 	};
 }
 export interface HubbleAssetHolderPage extends HubbleAssetHolderEvidence {
+	readonly indexedSummary?: {
+		readonly holderCount: string;
+		readonly balanceTotal: number;
+	};
 	readonly asset: string;
 	readonly elapsedMilliseconds: number;
 	readonly holders: readonly Record<string, unknown>[];

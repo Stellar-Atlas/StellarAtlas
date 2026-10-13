@@ -1,6 +1,7 @@
 package clickhouse
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,21 +62,24 @@ func TestHolderIndexOptInSchemaAndBatchLatestDeletion(t *testing.T) {
 	if err := client.InitializeHolderIndex(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(statements) != 5 {
-		t.Fatalf("want four holder tables and an index marker, got %d statements", len(statements))
+	if len(statements) != 7 {
+		t.Fatalf("want holder and pool tables plus an index marker, got %d statements", len(statements))
 	}
-	for _, query := range statements[:4] {
+	for _, query := range statements[:6] {
 		if !strings.Contains(query, "storage_policy = 'stellar_read_models'") {
 			t.Fatalf("missing default storage policy: %s", query)
 		}
 	}
 	if !strings.Contains(statements[0], "SimpleAggregateFunction(max, Tuple(UInt32, UInt64") ||
 		!strings.Contains(statements[1], "TTL created_at + INTERVAL 2 DAY DELETE") ||
-		!strings.Contains(statements[3], "_asset_holder_index_assets") {
-		t.Fatal("holder index DDL missing aggregate tuple or stage TTL")
+		!strings.Contains(statements[3], "_asset_holder_index_assets") ||
+		!strings.Contains(statements[4], "_asset_pool_current") ||
+		!strings.Contains(statements[5], "_asset_pool_stage") ||
+		!strings.Contains(statements[5], "TTL created_at + INTERVAL 2 DAY DELETE") {
+		t.Fatal("holder/pool index DDL missing aggregate tuple or stage TTL")
 	}
-	if !strings.Contains(statements[4], "'__started__'") || !strings.Contains(statements[4], "minOrNull(updated_at)") || !strings.Contains(statements[4], "FINAL") {
-		t.Fatalf("holder index start marker does not preserve the existing epoch: %s", statements[4])
+	if !strings.Contains(statements[6], "'__started__'") || !strings.Contains(statements[6], "minOrNull(updated_at)") || !strings.Contains(statements[6], "FINAL") {
+		t.Fatalf("holder index start marker does not preserve the existing epoch: %s", statements[6])
 	}
 	writer, err := NewBatchWriter(client, BatchIdentity{
 		ID: holderTestBatch, SourceSHA256: holderTestDigest, StartLedger: 10, EndLedger: 12,
@@ -275,5 +279,59 @@ func TestHolderSourceDecodesOfficialTrustlineTransform(t *testing.T) {
 	}
 	if update.TrustlineLimit != transformed.TrustlineLimit || update.Balance != transformed.Balance || update.AssetKey != "USD:"+holderTestIssuer {
 		t.Fatalf("official transform output changed during holder decoding: %#v", update)
+	}
+}
+
+func TestPoolIndexCapturesLatestAlreadyEncodedPoolRow(t *testing.T) {
+	var poolStages [][]byte
+	client := holderTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Query().Get("query"), "._asset_pool_stage (") {
+			body, _ := io.ReadAll(r.Body)
+			poolStages = append(poolStages, body)
+		}
+		w.WriteHeader(http.StatusOK)
+	}, true)
+	writer, err := NewBatchWriter(client, BatchIdentity{ID: holderTestBatch, SourceSHA256: holderTestDigest, StartLedger: 10, EndLedger: 11}, WriterLimits{MaximumRows: 100, MaximumBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := func(reserve float64) json.RawMessage {
+		encoded, _ := json.Marshal(map[string]any{
+			"liquidity_pool_id": "pool-hex", "liquidity_pool_id_strkey": "LPOOL",
+			"type": "constant_product", "fee": 30, "trustline_count": 7,
+			"pool_share_count": 9.5, "asset_a_type": "native", "asset_a_amount": reserve,
+			"asset_b_type": "credit_alphanum4", "asset_b_code": "USD", "asset_b_issuer": holderTestIssuer,
+			"asset_b_amount": 20.25, "deleted": false, "closed_at": "2026-10-13T00:00:00Z", "last_modified_ledger": 9,
+		})
+		return encoded
+	}
+	if err := writer.Emit(context.Background(), "liquidity_pools", 10, row(10)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Emit(context.Background(), "liquidity_pools", 11, row(12)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(poolStages) != 1 {
+		t.Fatalf("expected one pool stage insert, got %d", len(poolStages))
+	}
+	var staged struct {
+		PoolID string            `json:"pool_id"`
+		State  []json.RawMessage `json:"state"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(poolStages[0]), &staged); err != nil {
+		t.Fatal(err)
+	}
+	if staged.PoolID != "pool-hex" || len(staged.State) != 21 {
+		t.Fatalf("unexpected pool stage row: %#v", staged)
+	}
+	var reserve float64
+	if err := json.Unmarshal(staged.State[13], &reserve); err != nil {
+		t.Fatal(err)
+	}
+	if reserve != 12 {
+		t.Fatalf("pool capture did not retain latest row: reserve=%v", reserve)
 	}
 }

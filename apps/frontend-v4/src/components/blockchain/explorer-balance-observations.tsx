@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { buildEntityHref } from '../../api/explorer-analytics';
 import {
@@ -19,9 +19,11 @@ interface LoadedPage {
 	readonly history: readonly (string | null)[];
 }
 export function ExplorerBalanceObservations({
+	autoLoad = false,
 	kind,
 	identifier
 }: {
+	readonly autoLoad?: boolean;
 	readonly kind: BalanceObservationKind;
 	readonly identifier: string;
 }): React.JSX.Element {
@@ -32,32 +34,35 @@ export function ExplorerBalanceObservations({
 	const controller = useRef<AbortController | null>(null);
 	useEffect(() => () => controller.current?.abort(), []);
 	const current = request.result;
-	const load = (
-		cursor: string | null,
-		history: readonly (string | null)[]
-	): void => {
-		void request.run(async () => {
-			controller.current?.abort();
-			const abort = new AbortController();
-			controller.current = abort;
-			const timeout = setTimeout(() => abort.abort(), 25000);
-			try {
-				return {
-					page: await fetchBalanceObservations(
-						kind,
-						identifier,
+	const load = useCallback(
+		(cursor: string | null, history: readonly (string | null)[]): void => {
+			void request.run(async () => {
+				controller.current?.abort();
+				const abort = new AbortController();
+				controller.current = abort;
+				const timeout = setTimeout(() => abort.abort(), 25000);
+				try {
+					return {
+						page: await fetchBalanceObservations(
+							kind,
+							identifier,
+							cursor,
+							abort.signal
+						),
 						cursor,
-						abort.signal
-					),
-					cursor,
-					history
-				};
-			} finally {
-				clearTimeout(timeout);
-				if (controller.current === abort) controller.current = null;
-			}
-		});
-	};
+						history
+					};
+				} finally {
+					clearTimeout(timeout);
+					if (controller.current === abort) controller.current = null;
+				}
+			});
+		},
+		[identifier, kind, request.run]
+	);
+	useEffect(() => {
+		if (autoLoad) load(null, []);
+	}, [autoLoad, load]);
 	return (
 		<section
 			className={styles.panel}
@@ -85,7 +90,7 @@ export function ExplorerBalanceObservations({
 					disabled={request.loading}
 					onClick={() => load(null, [])}
 				>
-					{current ? 'Refresh first page' : `Load ${kind}`}
+					{current || autoLoad ? 'Refresh first page' : `Load ${kind}`}
 				</button>
 			</div>
 			<ExplorerRequestNotice

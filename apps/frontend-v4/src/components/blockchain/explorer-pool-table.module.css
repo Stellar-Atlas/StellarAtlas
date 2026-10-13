@@ -1,0 +1,152 @@
+.scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+.table {
+	width: 100%;
+	min-width: 1390px;
+	border-collapse: collapse;
+	text-align: left;
+	font-size: 0.8rem;
+	line-height: 1.4;
+}
+.table th {
+	padding: 0.65rem 0.8rem;
+	background: var(--surface-hover);
+	white-space: nowrap;
+	font-size: 0.7rem;
+	color: var(--muted);
+}
+.table th button {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+.table th[aria-sort='ascending'],
+.table th[aria-sort='descending'] {
+	color: var(--blue);
+}
+.table td {
+	border-top: 1px solid var(--border);
+	padding: 0.7rem 0.8rem;
+	vertical-align: middle;
+}
+.table tr:hover {
+	background: color-mix(in srgb, var(--blue) 3%, transparent);
+}
+.number {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	white-space: nowrap;
+}
+.pair {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	white-space: nowrap;
+}
+.asset {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	text-decoration: none;
+}
+.asset img,
+.monogram {
+	width: 24px;
+	height: 24px;
+	flex: none;
+	border-radius: 50%;
+	object-fit: contain;
+	background: var(--bg);
+}
+.monogram {
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--border);
+	font-size: 0.65rem;
+	color: var(--muted);
+}
+.separator {
+	color: var(--muted);
+}
+.identifier {
+	display: block;
+	width: 34ch;
+	overflow-wrap: anywhere;
+	font-size: 0.72rem;
+}
+.identifier code {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: inherit;
+	font-size: inherit;
+}
+.time {
+	min-width: 13rem;
+	font-size: 0.72rem;
+	color: var(--muted);
+}
+.empty {
+	text-align: center;
+	color: var(--muted);
+}
+.controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 0.75rem;
+	margin: 1rem 0;
+}
+.controls label {
+	display: grid;
+	gap: 0.3rem;
+	font-size: 0.75rem;
+	color: var(--muted);
+}
+.controls input {
+	min-width: 17rem;
+}
+.controls input,
+.controls select,
+.controls button,
+.pagination button {
+	font: inherit;
+	color: var(--ink);
+	background: var(--button-secondary);
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	padding: 0.5rem 0.65rem;
+}
+.summary {
+	font-size: 0.75rem;
+	color: var(--muted);
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+}
+.pagination {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 1rem;
+	gap: 1rem;
+	font-size: 0.75rem;
+}
+.pagination > div {
+	display: flex;
+	gap: 0.5rem;
+}
+.controls button:focus-visible,
+.table button:focus-visible,
+.pagination button:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 3px;
+}

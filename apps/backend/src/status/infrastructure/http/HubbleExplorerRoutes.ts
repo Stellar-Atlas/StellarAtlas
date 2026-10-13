@@ -39,7 +39,8 @@ export function registerHubbleExplorerRoutes(
 							'limit',
 							'offset',
 							'start_time',
-							'end_time'
+							'end_time',
+							...(entity === 'liquidity-pools' ? ['order_by', 'order'] : [])
 						]);
 						for (const key of Object.keys(request.query))
 							if (!reserved.has(key)) filters[key] = text(request, key)!;
@@ -52,7 +53,15 @@ export function registerHubbleExplorerRoutes(
 							limit: number(request, 'limit'),
 							offset: number(request, 'offset'),
 							startTime: text(request, 'start_time'),
-							endTime: text(request, 'end_time')
+							endTime: text(request, 'end_time'),
+							orderBy:
+								entity === 'liquidity-pools'
+									? text(request, 'order_by')
+									: undefined,
+							order:
+								entity === 'liquidity-pools'
+									? text(request, 'order')
+									: undefined
 						});
 						response.setHeader('Cache-Control', 'no-store');
 						if (detail && result.record === null) {

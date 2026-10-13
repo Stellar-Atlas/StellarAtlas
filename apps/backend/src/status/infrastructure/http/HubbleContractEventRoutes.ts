@@ -2,6 +2,7 @@ import type { Request, Router } from 'express';
 import type { HubbleWarehouse } from './HubbleWarehouseContracts.js';
 import type { HubbleContractEventInput } from './HubbleContractEventContracts.js';
 import { normalizeHubbleContractEventInput } from './HubbleContractEventValidation.js';
+import { withHubbleRequestCancellation } from './HubbleRequestCancellation.js';
 import {
 	HubbleWarehouseInputError,
 	HubbleWarehouseUnavailableError
@@ -16,6 +17,10 @@ const names: Readonly<Record<string, keyof HubbleContractEventInput>> = {
 	type_code: 'typeCode',
 	successful: 'successful',
 	in_successful_contract_call: 'inSuccessfulContractCall',
+	order: 'order',
+	topic: 'topic',
+	q: 'search',
+	include_summary: 'includeSummary',
 	limit: 'limit',
 	after: 'after'
 };
@@ -32,10 +37,15 @@ export function registerHubbleContractEventRoutes(
 			}
 			response.setHeader('Cache-Control', 'no-store');
 			try {
-				response.json(
-					await warehouse.contractEvents(parseContractEventRequest(request))
+				const input = parseContractEventRequest(request);
+				const page = await withHubbleRequestCancellation(
+					request,
+					response,
+					() => warehouse.contractEvents(input)
 				);
+				if (!response.destroyed) response.json(page);
 			} catch (error) {
+				if (response.destroyed) return;
 				if (error instanceof HubbleWarehouseInputError) {
 					response
 						.status(400)
@@ -71,6 +81,10 @@ function parseContractEventRequest(request: Request): HubbleContractEventInput {
 				throw new HubbleWarehouseInputError(name + ' must be an integer');
 			input[field] = Number(value);
 		} else if (field === 'successful' || field === 'inSuccessfulContractCall') {
+			if (value !== 'true' && value !== 'false')
+				throw new HubbleWarehouseInputError(name + ' must be true or false');
+			input[field] = value === 'true';
+		} else if (field === 'includeSummary') {
 			if (value !== 'true' && value !== 'false')
 				throw new HubbleWarehouseInputError(name + ' must be true or false');
 			input[field] = value === 'true';

@@ -1,0 +1,22 @@
+[Unit]
+Description=StellarAtlas VM-only NATS TCP proxy
+After=network-online.target stellaratlas-nats.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=admins
+Group=admins
+ExecStart=/lib/systemd/systemd-socket-proxyd --connections-max=32 127.0.0.1:4222
+Restart=on-failure
+RestartSec=1s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=192.168.122.2/32 127.0.0.1/8
+MemoryMax=64M
+TasksMax=16
+LimitNOFILE=128

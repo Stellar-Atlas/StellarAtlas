@@ -18,6 +18,7 @@ export function formatDate(value: string): string {
 export function formatExplorerSource(source: string): string {
 	if (source === 'horizon') return 'Stellar public API';
 	if (source === 'postgres_canonical') return 'StellarAtlas canonical history';
+	if (source === 'analytics_warehouse') return 'StellarAtlas analytics warehouse';
 	if (source === 'postgres_proof_gated_lcm_account_changes')
 		return 'StellarAtlas proof-gated account observations';
 	if (source === 'local') return 'StellarAtlas local index';

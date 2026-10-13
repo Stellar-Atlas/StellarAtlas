@@ -1,10 +1,12 @@
+import { xdr } from '@stellar/stellar-sdk';
 import type { HubbleEventClassification } from './HubbleEventClassification.js';
 import type {
 	HubbleTransactionRecord,
 	HubbleTransactionOperation,
 	HubbleTransactionEffect,
 	HubbleTransactionEvent,
-	HubbleExactAmount
+	HubbleExactAmount,
+	HubbleJsonValue
 } from './HubbleTransactionContracts.js';
 import {
 	envelopeAmounts,
@@ -195,7 +197,62 @@ export function mapTransactionEvent(
 		inSuccessfulContractCall: boolean(row.in_successful_contract_call),
 		topicsJson: jsonText(row.topics_decoded),
 		dataJson: jsonText(row.data_decoded),
+		decodedBytes: decodedBytes(row.data_decoded),
 		eventXdr: transactionString(row.contract_event_xdr, 'event XDR'),
 		classification
 	};
+}
+function decodedBytes(value: unknown): HubbleJsonValue {
+	let decoded: unknown = value;
+	if (typeof decoded === 'string') {
+		try {
+			decoded = JSON.parse(decoded);
+		} catch {
+			return null;
+		}
+	}
+	if (
+		decoded === null ||
+		typeof decoded !== 'object' ||
+		Array.isArray(decoded) ||
+		Object.keys(decoded).length !== 1 ||
+		!('bytes' in decoded)
+	)
+		return null;
+	const bytes = (decoded as { bytes?: unknown }).bytes;
+	if (
+		typeof bytes !== 'string' ||
+		bytes.length === 0 ||
+		bytes.length > 128 * 1024 ||
+		bytes.length % 2 !== 0 ||
+		!/^[0-9a-f]+$/i.test(bytes)
+	)
+		return null;
+	try {
+		const scVal = xdr.ScVal.fromXDR(bytes, 'hex');
+		if (scVal.toXDR('hex') !== bytes.toLowerCase()) return null;
+		const toJSON = (scVal as unknown as { toJSON?: () => unknown }).toJSON;
+		if (typeof toJSON !== 'function') return null;
+		const native = toJSON.call(scVal);
+		let nodes = 0;
+		const bounded = (node: unknown, depth: number): boolean => {
+			if (++nodes > 4096 || depth > 16) return false;
+			if (node === null || typeof node !== 'object') return true;
+			return Object.values(node).every((child) => bounded(child, depth + 1));
+		};
+		if (!bounded(native, 0)) return null;
+		const json = JSON.parse(
+			JSON.stringify(native, (_key, item) => {
+				if (typeof item === 'bigint') return item.toString();
+				if (item instanceof Uint8Array)
+					return Array.from(item, (byte) =>
+						byte.toString(16).padStart(2, '0')
+					).join('');
+				return item;
+			})
+		);
+		return json as HubbleJsonValue;
+	} catch {
+		return null;
+	}
 }

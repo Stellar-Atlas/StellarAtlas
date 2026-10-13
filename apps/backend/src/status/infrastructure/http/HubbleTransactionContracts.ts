@@ -63,6 +63,14 @@ export interface HubbleTransactionEffect {
 	readonly amounts: readonly HubbleExactAmount[];
 	readonly detailsJson: string;
 }
+export type HubbleJsonValue =
+	| null
+	| boolean
+	| number
+	| string
+	| readonly HubbleJsonValue[]
+	| { readonly [key: string]: HubbleJsonValue };
+
 export interface HubbleTransactionEvent {
 	readonly id: string;
 	readonly transactionId: string;
@@ -77,6 +85,7 @@ export interface HubbleTransactionEvent {
 	readonly inSuccessfulContractCall: boolean;
 	readonly topicsJson: string;
 	readonly dataJson: string;
+	readonly decodedBytes: HubbleJsonValue;
 	readonly eventXdr: string;
 	readonly classification: HubbleEventClassification;
 }

@@ -1,13 +1,19 @@
 'use client';
 import Link from 'next/link';
-import { useCallback, useEffect } from 'react';
-import { searchExplorer } from '../../app/actions/network-data';
+import { useCallback, useEffect, useRef } from 'react';
 import { initialExplorerSearch } from './blockchain-explorer-state';
 import { SearchResultView } from './blockchain-explorer-results';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
-import { buildEntityHref } from '../../api/explorer-analytics';
+import {
+	buildEntityHref,
+	requestExplorerJson
+} from '../../api/explorer-analytics';
+import {
+	buildAnalyticsLedgerPath,
+	parseAnalyticsLedgerLookup
+} from '../../api/explorer-record-lookup';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import styles from './explorer-entity.module.css';
 
@@ -22,19 +28,30 @@ export function ExplorerRecordLookup({
 		initialExplorerSearch,
 		'The requested record could not be loaded.'
 	);
+	const ledgerController = useRef<AbortController | null>(null);
+	useEffect(() => () => ledgerController.current?.abort(), []);
 	const refresh = useCallback(
 		() =>
-			search.run(() =>
-				searchExplorer(
-					identifier,
-					collection === 'accounts' ? 'account' : 'ledger'
-				)
-			),
-		[search.run, identifier, collection]
+			search.run(async () => {
+				ledgerController.current?.abort();
+				const controller = new AbortController();
+				ledgerController.current = controller;
+				try {
+					const response = await requestExplorerJson(
+						buildAnalyticsLedgerPath(identifier),
+						controller.signal
+					);
+					return parseAnalyticsLedgerLookup(identifier, response);
+				} finally {
+					if (ledgerController.current === controller)
+						ledgerController.current = null;
+				}
+			}),
+		[search.run, identifier]
 	);
 	useEffect(() => {
-		void refresh();
-	}, [refresh]);
+		if (collection === 'ledgers') void refresh();
+	}, [collection, refresh]);
 	const filter: Readonly<Record<string, string>> =
 		collection === 'accounts'
 			? { source_account: identifier }
@@ -46,12 +63,16 @@ export function ExplorerRecordLookup({
 				<h2>
 					{collection === 'accounts' ? 'Account' : 'Ledger'} {identifier}
 				</h2>
-				<ExplorerRequestNotice
-					error={search.error}
-					loading={search.loading}
-					onRetry={() => void refresh()}
-				/>
-				<SearchResultView result={search.result} />
+				{collection === 'ledgers' ? (
+					<>
+						<ExplorerRequestNotice
+							error={search.error}
+							loading={search.loading}
+							onRetry={() => void refresh()}
+						/>
+						<SearchResultView result={search.result} />
+					</>
+				) : null}
 				<div className={styles.actions}>
 					<Link href={buildEntityHref('operations', undefined, filter)}>
 						Operations
@@ -93,6 +114,7 @@ export function ExplorerRecordLookup({
 			{collection === 'accounts' && (
 				<ExplorerBalanceObservations
 					key={identifier}
+					autoLoad
 					kind="balances"
 					identifier={identifier}
 				/>

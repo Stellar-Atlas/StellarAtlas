@@ -10,6 +10,10 @@ describe('public OpenAPI document', () => {
 
 	it('keeps public data routes and removes operator or cross-check routes', () => {
 		expect(paths['/v1/explorer/operations']).toBeDefined();
+		expect(paths['/v1/asset-metadata']?.get).toBeDefined();
+		expect(paths['/v1/assets/{asset}/similar']?.get).toBeDefined();
+		expect(paths['/v1/assets/{asset}/rankings']?.get).toBeDefined();
+		expect(paths['/v1/assets/{asset}/balance-history']?.get).toBeDefined();
 		expect(paths['/horizon/']).toBeDefined();
 		expect(paths['/galexie/.config.json']).toBeDefined();
 		expect(paths['/v1/history-data/catalog']).toBeDefined();
@@ -60,6 +64,65 @@ describe('public OpenAPI document', () => {
 			expect(operationIds.has(operation.operationId as string)).toBe(false);
 			operationIds.add(operation.operationId as string);
 		}
+	});
+
+	it('keeps templated root resource aliases unique and preserves typed transaction lookup', () => {
+		const rootObjectPaths = Object.keys(paths).filter((path) =>
+			/^\/v1\/(accounts|assets|contracts|transactions|operations|transfers|activity|trades|offers|ledgers|liquidity-pools|issuers)(\/|$)/.test(
+				path
+			)
+		);
+		const normalizedPaths = rootObjectPaths.map((path) =>
+			path.replace(/\{[^/{}]+\}/g, '{}')
+		);
+		expect(new Set(normalizedPaths).size).toBe(normalizedPaths.length);
+
+		const transactionLookup = paths['/v1/transactions/{hash}'].get as {
+			operationId: string;
+			parameters: Array<{
+				name: string;
+				in: string;
+				 schema: Record<string, unknown>;
+			}>;
+		};
+		expect(transactionLookup.operationId).toBe('getTransactionByHash');
+		expect(transactionLookup.parameters).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					name: 'hash',
+					in: 'path',
+					schema: expect.objectContaining({ pattern: '^[0-9a-fA-F]{64}$' })
+				})
+			])
+		);
+		expect(paths['/v1/analytics/transactions/{transactionHash}']).toBeDefined();
+	});
+
+	it('inherits holder selection and evidence schema on the root asset route', () => {
+		const operation = paths['/v1/assets/{asset}/holders']!.get as Record<
+			string,
+			unknown
+		>;
+		const parameters = operation.parameters as Array<Record<string, unknown>>;
+		expect(parameters.map((parameter) => parameter.name)).toEqual(
+			expect.arrayContaining(['sort', 'order', 'as_of_ledger', 'after'])
+		);
+		const schemas = components.schemas ?? {};
+		const holderPage = schemas.HubbleHolderPage as {
+			properties: Record<string, unknown>;
+		};
+		const watermark = holderPage.properties.watermark as {
+			properties: Record<string, unknown>;
+		};
+		expect(watermark.properties).toMatchObject({
+			selectedLedger: expect.objectContaining({ nullable: true }),
+			coverageStatus: expect.objectContaining({
+				enum: ['complete', 'partial_or_unknown']
+			}),
+			balancePrecision: expect.objectContaining({
+				enum: ['source-float64']
+			})
+		});
 	});
 
 	it('advertises only the deployed public API server', () => {

@@ -20,7 +20,11 @@ export function resolveHubbleActivityWindow(
 	input: HubbleTransferInput,
 	maximumPublishedLedger: number,
 	maximumRows: number,
-	fingerprint: string
+	fingerprint: string,
+	policy: {
+		readonly defaultMinimumLedger?: number;
+		readonly maximumLedgerSpan?: number;
+	} = {}
 ): {
 	limit: number;
 	minimumLedger: number;
@@ -37,7 +41,11 @@ export function resolveHubbleActivityWindow(
 	const cursor =
 		input.after === undefined
 			? undefined
-			: decodeTransferCursor(input.after, fingerprint);
+			: decodeTransferCursor(
+					input.after,
+					fingerprint,
+					policy.maximumLedgerSpan
+				);
 	if (
 		!Number.isSafeInteger(maximumPublishedLedger) ||
 		maximumPublishedLedger < 0 ||
@@ -49,21 +57,28 @@ export function resolveHubbleActivityWindow(
 	const maximumLedger =
 		cursor?.watermark.maximumLedger ??
 		Math.min(input.maxLedger ?? maximumPublishedLedger, maximumPublishedLedger);
-	const minimumLedger =
-		cursor?.watermark.minimumLedger ??
-		input.minLedger ??
+	const defaultMinimumLedger =
+		policy.defaultMinimumLedger ??
 		Math.max(1, maximumLedger - defaultTransferLedgerSpan + 1);
+	const minimumLedger =
+		cursor?.watermark.minimumLedger ?? input.minLedger ?? defaultMinimumLedger;
 	if (input.minLedger !== undefined && input.maxLedger !== undefined)
-		validateTransferLedgerRange(input.minLedger, input.maxLedger);
+		validateTransferLedgerRange(
+			input.minLedger,
+			input.maxLedger,
+			policy.maximumLedgerSpan
+		);
 	if (maximumLedger > 0 && minimumLedger <= maximumLedger)
-		validateTransferLedgerRange(minimumLedger, maximumLedger);
+		validateTransferLedgerRange(
+			minimumLedger,
+			maximumLedger,
+			policy.maximumLedgerSpan
+		);
 	if (
 		cursor !== undefined &&
 		(maximumLedger > maximumPublishedLedger ||
 			maximumLedger > (input.maxLedger ?? maximumPublishedLedger) ||
-			minimumLedger !==
-				(input.minLedger ??
-					Math.max(1, maximumLedger - defaultTransferLedgerSpan + 1)))
+			minimumLedger !== (input.minLedger ?? defaultMinimumLedger))
 	)
 		throw new HubbleWarehouseInputError(
 			'Transfer cursor ledger window no longer matches the filters or published watermark'

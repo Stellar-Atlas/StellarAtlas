@@ -6,6 +6,7 @@ import {
 
 describe('ClickHouseHubbleWarehouse', () => {
 	it('validates fields and emits one parameterized ClickHouse query', async () => {
+		const timeout = jest.spyOn(AbortSignal, 'timeout');
 		const requests: URL[] = [];
 		const warehouse = new ClickHouseHubbleWarehouse({
 			database: 'stellar_hubble',
@@ -27,6 +28,8 @@ describe('ClickHouseHubbleWarehouse', () => {
 		});
 
 		expect(result.rows).toEqual([{ id: '123', ledger_sequence: 3 }]);
+		expect(timeout).toHaveBeenCalledWith(100_000);
+		timeout.mockRestore();
 		const queryRequest = requests.find((request) =>
 			request.searchParams
 				.get('query')

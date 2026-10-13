@@ -15,7 +15,7 @@ import {
 import { LocalDateTime } from '../local-date-time';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { EntityLink } from './explorer-entity-table';
-import { ExplorerEventProvenance } from './explorer-event-provenance';
+import { ExplorerContractEventTable } from './explorer-contract-event-table';
 import Link from 'next/link';
 import styles from './explorer-entity.module.css';
 
@@ -104,15 +104,6 @@ function RelationRecord({
 					</>
 				)}
 			</dl>
-			{relation === 'events' ? (
-				<>
-					<ExplorerEventProvenance row={row} />
-					<h5>Topics</h5>
-					<JsonValue value={row.topicsJson} />
-					<h5>Payload</h5>
-					<JsonValue value={row.dataJson} />
-				</>
-			) : null}
 			<details>
 				<summary>
 					{relation === 'operations'
@@ -286,7 +277,9 @@ export function ExplorerTransactionDetail({
 									<h3>
 										{relation.charAt(0).toUpperCase() + relation.slice(1)}
 									</h3>
-									{items.length ? (
+									{items.length && relation === 'events' ? (
+										<ExplorerContractEventTable rows={items} />
+									) : items.length ? (
 										items.map((row, index) => (
 											<RelationRecord
 												key={entityText(row, 'id') + ':' + index}

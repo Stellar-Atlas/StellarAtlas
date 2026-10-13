@@ -21,7 +21,10 @@ import {
 	contractIdParameter,
 	assetParameter
 } from './HubbleSemanticOpenApiParameters.js';
-import { semanticResponse, holderNotFoundResponse } from './HubbleSemanticOpenApiSchemas.js';
+import {
+	semanticResponse,
+	holderNotFoundResponse
+} from './HubbleSemanticOpenApiSchemas.js';
 
 export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/ledgers/{sequence}': {
@@ -388,7 +391,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 	'/v1/analytics/assets/{asset}/holders': {
 		get: {
 			description:
-				'Returns positive balances from each account’s latest observed completed-batch change. This is not a complete current-chain holder set when history has gaps. Use native or URL-encoded CODE:ISSUER. Response coverage comes from the shared cached catalog and is not an atomic balance snapshot; no historical as-of parameter is supported.',
+				'Returns positive balances from each account’s latest published observation, optionally at or before as_of_ledger. Complete coverage requires continuous published history from the ledger-2 baseline through the selected ledger; otherwise results are partial or unknown. This is not a pinned current-chain snapshot. Balances retain source Float64 precision.',
 			operationId: 'listAnalyticsAssetHolders',
 			parameters: [
 				{
@@ -399,11 +402,39 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 					schema: { example: 'native', type: 'string' }
 				},
 				{
-					description: 'Account cursor returned as nextCursor.',
+					description:
+						'Cursor returned as nextCursor. Reuse with unchanged asset, sort, order and as_of_ledger.',
 					in: 'query',
 					name: 'after',
 					required: false,
 					schema: { type: 'string' }
+				},
+				{
+					description: 'Sort by account ID or balance.',
+					in: 'query',
+					name: 'sort',
+					required: false,
+					schema: {
+						type: 'string',
+						enum: ['account', 'balance'],
+						default: 'account'
+					}
+				},
+				{
+					description:
+						'Sort direction; balance ties always use account ID ascending.',
+					in: 'query',
+					name: 'order',
+					required: false,
+					schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' }
+				},
+				{
+					description:
+						'Optional positive ledger upper bound. State is reconstructed only from published observations at or before this ledger; coverageStatus reports whether history is continuous from the baseline.',
+					in: 'query',
+					name: 'as_of_ledger',
+					required: false,
+					schema: { type: 'integer', minimum: 1, maximum: 4294967295 }
 				},
 				limitParameter
 			],
@@ -413,7 +444,7 @@ export const hubbleSemanticPaths: Readonly<Record<string, OpenApiRecord>> = {
 				'503': errorResponse('The analytics warehouse is unavailable.')
 			},
 			security: publicAccess,
-			summary: 'List latest-ingested asset holders',
+			summary: 'List asset holders',
 			tags: analyticsTag
 		}
 	},

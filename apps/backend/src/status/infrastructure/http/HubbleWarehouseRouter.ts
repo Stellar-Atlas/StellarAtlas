@@ -13,6 +13,9 @@ import {
 import { registerHubbleExplorerRoutes } from './HubbleExplorerRoutes.js';
 import { registerHubbleSemanticRoutes } from './HubbleSemanticRoutes.js';
 import { registerHubbleTransferRoutes } from './HubbleTransferRoutes.js';
+import { registerHubbleAssetReportRoutes } from './HubbleAssetReportRoutes.js';
+import { registerHubbleAssetSnapshotRoutes } from './HubbleAssetSnapshotRoutes.js';
+import { registerHubblePoolSnapshotRoutes } from './HubblePoolSnapshotRoutes.js';
 
 export interface HubbleWarehouseRouterConfig {
 	readonly warehouse: HubbleWarehouse;
@@ -89,6 +92,14 @@ export function hubbleWarehouseRouter(
 	});
 
 	registerHubbleTransferRoutes(router, config.warehouse);
+	const executor = () => {
+		if (!config.warehouse.readModelExecutor)
+			throw new HubbleWarehouseUnavailableError('Read models unavailable');
+		return config.warehouse.readModelExecutor();
+	};
+	registerHubbleAssetReportRoutes(router, config.warehouse, executor);
+	registerHubbleAssetSnapshotRoutes(router, config.warehouse);
+	registerHubblePoolSnapshotRoutes(router, config.warehouse, executor);
 	registerHubbleExplorerRoutes(router, config.warehouse);
 	registerHubbleContractEventRoutes(router, config.warehouse);
 	registerHubbleSemanticRoutes(router, config.warehouse);

@@ -5,6 +5,7 @@ import type {
 	HubbleFilter,
 	HubbleWarehouse
 } from './HubbleWarehouseContracts.js';
+import { HubbleWarehouseInputError } from './HubbleWarehouseErrors.js';
 import {
 	HubbleSemanticNotFoundError,
 	requireSupportedHolderQuery,
@@ -430,11 +431,28 @@ export function registerHubbleSemanticRoutes(
 
 	router.get('/assets/:asset/holders', async (request, response) => {
 		await semanticSend(response, async () => {
-			requireSupportedHolderQuery(request, ['after', 'limit']);
+			requireSupportedHolderQuery(request, [
+				'after',
+				'limit',
+				'sort',
+				'order',
+				'as_of_ledger'
+			]);
+			const sort = optionalQueryString(request, 'sort') ?? 'account';
+			const order = optionalQueryString(request, 'order') ?? 'asc';
+			if (sort !== 'account' && sort !== 'balance')
+				throw new HubbleWarehouseInputError('sort must be account or balance');
+			if (order !== 'asc' && order !== 'desc')
+				throw new HubbleWarehouseInputError('order must be asc or desc');
 			return warehouse.assetHolders({
 				after: optionalQueryString(request, 'after'),
 				asset: parseAsset(request.params.asset),
-				limit: parseQueryInteger(request, 'limit', 100, 1, 200)
+				asOfLedger: optionalQueryString(request, 'as_of_ledger')
+					? parseQueryInteger(request, 'as_of_ledger', 1, 1, 4294967295)
+					: undefined,
+				limit: parseQueryInteger(request, 'limit', 100, 1, 200),
+				order,
+				sort
 			});
 		});
 	});

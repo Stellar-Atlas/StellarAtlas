@@ -1,7 +1,9 @@
+import { xdr } from '@stellar/stellar-sdk';
 import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { queryHubbleContractEvents } from '../HubbleContractEventQuery.js';
+import { mapTransactionEvent } from '../HubbleTransactionMapper.js';
 import { normalizeHubbleContractEventInput } from '../HubbleContractEventValidation.js';
 import { summarizeHubbleLedgerCoverage } from '../HubbleLedgerCoverage.js';
 import { hubbleWarehouseRouter } from '../HubbleWarehouseRouter.js';
@@ -61,6 +63,42 @@ export function fixture() {
 	return { executor, calls };
 }
 describe('bounded typed contract history', () => {
+	it('decodes only bounded, round-trippable embedded ScVal bytes', () => {
+		const bytes = xdr.ScVal.scvMap([
+			new xdr.ScMapEntry({
+				key: xdr.ScVal.scvSymbol('updated_feeds'),
+				val: xdr.ScVal.scvVoid()
+			})
+		]).toXDR('hex');
+		const base = eventFixtures[0]!;
+		const mapped = mapTransactionEvent({
+			...base,
+			data_decoded: JSON.stringify({ bytes }),
+			cursor_row: base._row_number,
+			cursor_batch: base._batch_id,
+			cursor_digest: base._source_sha256,
+			classification: { eventKind: 'contract' }
+		});
+		expect(mapped.dataJson).toBe(JSON.stringify({ bytes }));
+		const parsedScVal = xdr.ScVal.fromXDR(bytes, 'hex');
+		const toJSON = (parsedScVal as unknown as { toJSON?: () => unknown })
+			.toJSON;
+		expect(mapped.decodedBytes).toEqual(
+			typeof toJSON === 'function'
+				? { map: [{ key: { symbol: 'updated_feeds' }, val: 'void' }] }
+				: null
+		);
+		expect(
+			mapTransactionEvent({
+				...base,
+				data_decoded: JSON.stringify({ bytes: '00' }),
+				cursor_row: base._row_number,
+				cursor_batch: base._batch_id,
+				cursor_digest: base._source_sha256,
+				classification: { eventKind: 'contract' }
+			}).decodedBytes
+		).toBeNull();
+	});
 	it('pages descending exact identities with filter-bound watermark and published predicates', async () => {
 		const { executor, calls } = fixture();
 		const input = {

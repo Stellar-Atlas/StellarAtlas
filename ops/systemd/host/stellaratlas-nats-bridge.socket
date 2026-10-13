@@ -1,0 +1,18 @@
+[Unit]
+Description=StellarAtlas VM-only NATS bridge listener
+# The virtual bridge is created by libvirt, after the early sockets target.
+DefaultDependencies=no
+Requires=libvirtd.service
+After=sysinit.target libvirtd.service
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Socket]
+ListenStream=192.168.122.1:4222
+BindToDevice=virbr0
+Accept=no
+MaxConnections=32
+Service=stellaratlas-nats-bridge.service
+
+[Install]
+WantedBy=multi-user.target

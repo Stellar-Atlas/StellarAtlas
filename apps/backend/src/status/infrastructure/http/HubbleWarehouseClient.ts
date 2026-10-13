@@ -7,6 +7,7 @@ import type {
 } from './HubbleAccountBalanceContracts.js';
 import { queryHubbleContractEvents } from './HubbleContractEventQuery.js';
 import { normalizeHubbleContractEventInput } from './HubbleContractEventValidation.js';
+import { currentHubbleRequestSignal } from './HubbleRequestCancellation.js';
 import type {
 	HubbleContractEventInput,
 	HubbleContractEventPage
@@ -54,7 +55,7 @@ import type {
 	HubbleTransferPage
 } from './HubbleTransferContracts.js';
 import { queryHubbleAccountTransactions } from './HubbleAccountTransactionQuery.js';
-import { queryHubbleAssetHolders } from './HubbleAssetHolderQuery.js';
+import { HubbleWarehouseCache } from './HubbleWarehouseCache.js';
 import type {
 	HubbleAccountTransactionQuery,
 	HubbleAssetHolderPage,
@@ -82,6 +83,7 @@ interface ClickHousePartRow {
 interface ClickHouseIngestionRow {
 	readonly completed_batches: string;
 	readonly failed_batches: string;
+	readonly latest_completed_at: string | null;
 	readonly maximum_ledger: number | string | null;
 	readonly minimum_ledger: number | string | null;
 	readonly started_batches: string;
@@ -97,11 +99,6 @@ interface HubbleWarehouseClientConfig {
 	readonly user?: string;
 }
 
-interface CatalogCache {
-	readonly expiresAt: number;
-	readonly value: HubbleCatalog;
-}
-
 interface QueryParameter {
 	readonly name: string;
 	readonly type: string;
@@ -112,18 +109,28 @@ const identifierPattern = /^[a-z][a-z0-9_]*$/;
 const columnIdentifierPattern = /^[a-z_][a-z0-9_]*$/;
 const officialSchemaSource =
 	'github.com/stellar/stellar-etl/v2/internal/transform@v2.8.23';
-const catalogCacheMilliseconds = 15_000;
 const defaultMaximumRows = 1_000;
 const absoluteMaximumRows = 10_000;
 
 export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
+	async probe(): Promise<void> {
+		const result = await this.execute<{ ready: string | number }>(
+			'SELECT 1 AS ready FORMAT JSON',
+			[],
+			5_000
+		);
+		if (String(result.data?.[0]?.ready ?? '') !== '1') {
+			throw new HubbleWarehouseUnavailableError(
+				'ClickHouse readiness query returned no ready result'
+			);
+		}
+	}
 	private readonly authorization: string | undefined;
 	private readonly database: string;
 	private readonly endpoint: URL;
 	private readonly fetchImplementation: typeof fetch;
 	private readonly maximumRows: number;
-	private cache: CatalogCache | undefined;
-	private catalogRequest: Promise<HubbleCatalog> | undefined;
+	private readonly cache = new HubbleWarehouseCache();
 
 	constructor(config: HubbleWarehouseClientConfig) {
 		const endpoint = new URL(config.endpoint);
@@ -163,31 +170,14 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 					);
 	}
 	async catalog(force = false): Promise<HubbleCatalog> {
-		const now = Date.now();
-		if (!force && this.cache !== undefined && this.cache.expiresAt > now) {
-			return this.cache.value;
-		}
-		if (!force && this.catalogRequest !== undefined) {
-			return this.catalogRequest;
-		}
-		const request = this.readCatalog();
-		this.catalogRequest = request;
-		try {
-			const value = await request;
-			this.cache = {
-				expiresAt: Date.now() + catalogCacheMilliseconds,
-				value
-			};
-			return value;
-		} finally {
-			if (this.catalogRequest === request) this.catalogRequest = undefined;
-		}
+		return this.cache.catalog(force, () => this.readCatalog());
 	}
 
-	private semanticExecutor(): HubbleSemanticQueryExecutor {
+	readModelExecutor(): HubbleSemanticQueryExecutor {
 		return {
 			database: this.database,
-			execute: (sql, parameters) => this.execute(sql, parameters),
+			execute: (sql, parameters, timeoutMs) =>
+				this.execute(sql, parameters, timeoutMs),
 			maximumRows: this.maximumRows
 		};
 	}
@@ -196,7 +186,7 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 	): Promise<HubbleContractEventPage> {
 		const input = normalizeHubbleContractEventInput(request);
 		return queryHubbleContractEvents(
-			this.semanticExecutor(),
+			this.readModelExecutor(),
 			input,
 			(await this.catalog()).coverage
 		);
@@ -204,12 +194,12 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 	async transactionDetail(
 		input: HubbleTransactionInput
 	): Promise<HubbleTransactionDetail | null> {
-		return queryHubbleTransactionDetail(this.semanticExecutor(), input);
+		return queryHubbleTransactionDetail(this.readModelExecutor(), input);
 	}
 	async classifyEventRows(
 		rows: readonly Record<string, unknown>[]
 	): Promise<readonly Record<string, unknown>[]> {
-		return classifyHubbleEventRows(this.semanticExecutor(), rows);
+		return classifyHubbleEventRows(this.readModelExecutor(), rows);
 	}
 	async transferActivity(
 		request: HubbleTransferInput
@@ -217,7 +207,7 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 		const input = normalizeHubbleTransferInput(request);
 		const catalog = await this.catalog();
 		return queryHubbleTransferActivity(
-			this.semanticExecutor(),
+			this.readModelExecutor(),
 			input,
 			Number(catalog.ingestion.maximumLedger ?? 0)
 		);
@@ -225,22 +215,24 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 	async accountTransactions(
 		input: HubbleAccountTransactionQuery
 	): Promise<HubbleSemanticPage> {
-		return queryHubbleAccountTransactions(this.semanticExecutor(), input);
+		return queryHubbleAccountTransactions(this.readModelExecutor(), input);
 	}
 	async assetHolders(
 		input: HubbleAssetHolderQuery
 	): Promise<HubbleAssetHolderPage> {
-		return queryHubbleAssetHolders(
-			this.semanticExecutor(),
+		const catalog = await this.catalog();
+		return this.cache.getAssetHolders(
+			this.database,
 			input,
-			await this.catalog()
+			catalog,
+			this.readModelExecutor()
 		);
 	}
 	async accountBalances(
 		input: HubbleAccountBalanceInput
 	): Promise<HubbleAccountBalancePage> {
 		return queryHubbleAccountBalances(
-			this.semanticExecutor(),
+			this.readModelExecutor(),
 			input,
 			await this.catalog()
 		);
@@ -262,7 +254,7 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 			input.maxLedger !== undefined
 		) {
 			return queryHubbleAggregate(
-				this.semanticExecutor(),
+				this.readModelExecutor(),
 				catalog,
 				dataset,
 				input
@@ -372,6 +364,7 @@ FORMAT JSON`,
 	toString(countIf(status='failed')) AS failed_batches,
 	toString(countIf(status='started')) AS started_batches,
 	toString(sumIf(row_count, status='complete')) AS total_rows,
+	if(countIf(status='complete')=0, NULL, formatDateTime(maxIf(updated_at, status='complete'), '%Y-%m-%dT%H:%i:%S.%fZ')) AS latest_completed_at,
 	nullIf(toString(minIf(start_ledger, status='complete')), '0') AS minimum_ledger,
 	nullIf(toString(maxIf(end_ledger, status='complete')), '0') AS maximum_ledger
 FROM ${quote(this.database)}._ingestion_batches FINAL
@@ -380,7 +373,7 @@ FORMAT JSON`,
 				)
 			]
 		);
-		const coverage = await queryHubbleLedgerCoverage(this.semanticExecutor());
+		const coverage = await queryHubbleLedgerCoverage(this.readModelExecutor());
 		const rowsByTable = new Map(
 			(partResponse.data ?? []).map((row) => [row.table, row.rows])
 		);
@@ -416,6 +409,7 @@ FORMAT JSON`,
 			generatedAt: new Date().toISOString(),
 			ingestion: {
 				completedBatches: ingestion?.completed_batches ?? '0',
+				latestCompletedAt: ingestion?.latest_completed_at ?? null,
 				failedBatches: ingestion?.failed_batches ?? '0',
 				maximumLedger: optionalIntegerString(ingestion?.maximum_ledger),
 				minimumLedger: optionalIntegerString(ingestion?.minimum_ledger),
@@ -428,7 +422,8 @@ FORMAT JSON`,
 
 	private async execute<T>(
 		sql: string,
-		parameters: readonly QueryParameter[]
+		parameters: readonly QueryParameter[],
+		timeoutMs = 100_000
 	): Promise<ClickHouseResponse<T>> {
 		const url = new URL(this.endpoint);
 		url.searchParams.set('query', sql);
@@ -445,7 +440,13 @@ FORMAT JSON`,
 			const response = await this.fetchImplementation(url, {
 				headers,
 				method: 'POST',
-				signal: AbortSignal.timeout(30_000)
+				signal:
+					currentHubbleRequestSignal() === undefined
+						? AbortSignal.timeout(timeoutMs)
+						: AbortSignal.any([
+								AbortSignal.timeout(timeoutMs),
+								currentHubbleRequestSignal()!
+							])
 			});
 			const body = await response.text();
 			if (!response.ok) {

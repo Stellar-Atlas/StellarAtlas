@@ -9,8 +9,13 @@ export interface BalanceObservationRow {
 	readonly observedLedger: number;
 	readonly lastModifiedLedger: number;
 	readonly trustLineLimit: string | null;
+	readonly sponsor?: string | null;
+	readonly deleted?: boolean;
 }
 export interface BalanceObservationPage {
+	readonly indexedHolderCount?: string;
+	readonly indexedBalanceTotal?: number;
+	readonly indexStatus?: string;
 	readonly rows: readonly BalanceObservationRow[];
 	readonly nextCursor: string | null;
 	readonly catalogGeneratedAt: string;
@@ -18,16 +23,31 @@ export interface BalanceObservationPage {
 	readonly totalLedgerCount: string;
 	readonly contiguousLastLedger: string | null;
 	readonly gapCount: number;
+	readonly selectedLedger?: string | null;
+	readonly coverageStatus?: 'complete' | 'partial_or_unknown';
+}
+export interface BalanceObservationOptions {
+	readonly sort?: 'account' | 'balance';
+	readonly order?: 'asc' | 'desc';
+	readonly asOfLedger?: string;
+	readonly includeZero?: boolean;
 }
 
 export function balanceObservationPath(
 	kind: BalanceObservationKind,
 	identifier: string,
-	after: string | null
+	after: string | null,
+	options?: BalanceObservationOptions
 ): string {
 	const query = new URLSearchParams({ limit: '25' });
 	if (after !== null) query.set('after', after);
-	return `/v1/analytics/${kind === 'balances' ? 'accounts' : 'assets'}/${encodeURIComponent(identifier)}/${kind}?${query}`;
+	if (kind === 'holders' && options) {
+		if (options.sort) query.set('sort', options.sort);
+		if (options.order) query.set('order', options.order);
+		if (options.asOfLedger) query.set('as_of_ledger', options.asOfLedger);
+	}
+	const base = kind === 'holders' && options ? '/v1' : '/v1/analytics';
+	return `${base}/${kind === 'balances' ? 'accounts' : 'assets'}/${encodeURIComponent(identifier)}/${kind === 'holders' && options?.includeZero ? 'balances' : kind}?${query}`;
 }
 
 function invalid(): never {
@@ -70,6 +90,8 @@ function parseRow(
 	const limit = balances ? row.trustLineLimitRaw : row.trust_line_limit;
 	return {
 		id,
+		sponsor: typeof row.sponsor === 'string' ? row.sponsor : null,
+		deleted: row.deleted === true,
 		balance: finiteNumber(row.balance),
 		buyingLiabilities: finiteNumber(
 			balances ? row.buyingLiabilities : row.buying_liabilities
@@ -99,6 +121,7 @@ export function parseBalanceObservationPage(
 		watermark = recordValue(data.watermark),
 		coverage = recordValue(data.coverage);
 	const rows = data[kind];
+	const indexedSummary = recordValue(data.indexedSummary);
 	if (
 		data[kind === 'balances' ? 'account' : 'asset'] !== identifier ||
 		!Array.isArray(rows) ||
@@ -116,13 +139,31 @@ export function parseBalanceObservationPage(
 	if (!Number.isSafeInteger(coverage.gapCount) || Number(coverage.gapCount) < 0)
 		invalid();
 	return {
+		indexedHolderCount:
+			typeof indexedSummary.holderCount === 'string'
+				? indexedSummary.holderCount
+				: undefined,
+		indexedBalanceTotal:
+			typeof indexedSummary.balanceTotal === 'number' &&
+			Number.isFinite(indexedSummary.balanceTotal)
+				? indexedSummary.balanceTotal
+				: undefined,
+		indexStatus:
+			typeof watermark.indexStatus === 'string'
+				? watermark.indexStatus
+				: undefined,
 		rows: rows.map((row) => parseRow(kind, row)),
 		nextCursor: data.nextCursor,
 		catalogGeneratedAt: watermark.catalogGeneratedAt,
 		maximumLedger: decimalString(watermark.catalogMaximumLedger, true),
 		totalLedgerCount: decimalString(coverage.totalLedgerCount)!,
 		contiguousLastLedger: decimalString(coverage.contiguousLastLedger, true),
-		gapCount: Number(coverage.gapCount)
+		gapCount: Number(coverage.gapCount),
+		selectedLedger: decimalString(watermark.selectedLedger ?? null, true),
+		coverageStatus:
+			watermark.coverageStatus === 'complete'
+				? 'complete'
+				: 'partial_or_unknown'
 	};
 }
 
@@ -130,13 +171,14 @@ export async function fetchBalanceObservations(
 	kind: BalanceObservationKind,
 	identifier: string,
 	after: string | null,
-	signal: AbortSignal
+	signal: AbortSignal,
+	options?: BalanceObservationOptions
 ): Promise<BalanceObservationPage> {
 	const page = parseBalanceObservationPage(
 		kind,
 		identifier,
 		await requestExplorerJson(
-			balanceObservationPath(kind, identifier, after),
+			balanceObservationPath(kind, identifier, after, options),
 			signal
 		)
 	);

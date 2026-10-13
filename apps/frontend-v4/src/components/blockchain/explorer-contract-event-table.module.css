@@ -1,0 +1,221 @@
+.workspace {
+	min-width: 0;
+	display: grid;
+	gap: 0.7rem;
+}
+.scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+}
+.table {
+	width: 100%;
+	min-width: 1060px;
+	table-layout: fixed;
+	border-collapse: collapse;
+	text-align: left;
+	font-size: 0.8rem;
+	line-height: 1.35;
+}
+.ledgerColumn {
+	width: 15%;
+}
+.eventColumn {
+	width: 16%;
+}
+.dataColumn {
+	width: 35%;
+}
+.txColumn {
+	width: 27%;
+}
+.detailsColumn {
+	width: 7%;
+}
+.table th {
+	padding: 0.65rem 0.85rem;
+	background: var(--surface-hover);
+	color: var(--muted);
+	font-size: 0.68rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.table td {
+	height: 3rem;
+	padding: 0.65rem 0.85rem;
+	border-top: 1px solid var(--border);
+	vertical-align: middle;
+}
+.table tr:hover {
+	background: color-mix(in srgb, var(--blue) 3%, transparent);
+}
+.table code,
+.raw code {
+	background: none;
+	border: 0;
+	padding: 0;
+	box-shadow: none;
+	font-family: var(--font-mono);
+	font-size: 0.75rem;
+}
+.ledgerCell > a {
+	font-weight: 600;
+}
+.ledgerCell time {
+	display: block;
+	color: var(--muted);
+	font-size: 0.7rem;
+	margin-top: 0.15rem;
+	white-space: nowrap;
+}
+.reference,
+.transaction {
+	color: var(--blue);
+	text-decoration: none;
+}
+.reference:hover,
+.transaction:hover {
+	text-decoration: underline;
+}
+.eventName {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+.eventName strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.eventName span {
+	color: var(--blue);
+}
+.muted {
+	color: var(--muted);
+	font-size: 0.72rem;
+}
+.preview {
+	display: grid;
+	max-height: 2.7em;
+	overflow: hidden;
+	gap: 0.1rem;
+}
+.previewLine {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.preview strong {
+	font-variant-numeric: tabular-nums;
+}
+.transaction code {
+	display: block;
+	overflow-wrap: anywhere;
+	line-height: 1.35;
+	max-height: 2.7em;
+	overflow: hidden;
+}
+.workspace button,
+.raw button {
+	font: inherit;
+	font-size: 0.73rem;
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	padding: 0.35rem 0.55rem;
+	background: var(--button-secondary);
+	color: var(--ink);
+	cursor: pointer;
+}
+.workspace button:hover,
+.raw button:hover {
+	border-color: var(--blue);
+}
+.workspace button:focus-visible,
+.raw button:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+.empty {
+	color: var(--muted);
+	text-align: center;
+}
+.raw {
+	width: min(900px, calc(100vw - 2rem));
+	max-height: 85dvh;
+	box-sizing: border-box;
+	padding: 1.2rem;
+	background: var(--panel);
+	color: var(--ink);
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	box-shadow: 0 18px 80px #0008;
+}
+.raw::backdrop {
+	background: #0009;
+}
+.rawHeading {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+}
+.rawHeading h3 {
+	margin: 0;
+	font-size: 1rem;
+}
+.raw h4 {
+	font-size: 0.8rem;
+	margin: 1.2rem 0 0.5rem;
+}
+.fields {
+	margin: 0;
+}
+.field {
+	display: grid;
+	grid-template-columns: minmax(100px, 25%) minmax(0, 1fr);
+	gap: 1rem;
+	border-bottom: 1px solid var(--border);
+	padding: 0.55rem 0;
+}
+.field dt {
+	color: var(--muted);
+	font-size: 0.75rem;
+	overflow-wrap: anywhere;
+}
+.field dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+.raw details {
+	margin-top: 1.2rem;
+}
+.raw pre {
+	padding: 1rem;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	max-height: 45dvh;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 0.72rem;
+}
+.srOnly {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
+.previewAddress {
+	overflow-wrap: anywhere;
+	font-size: 0.75rem;
+	line-height: 1.35;
+	max-width: 100%;
+}
+.previewAddress code {
+	white-space: normal;
+}

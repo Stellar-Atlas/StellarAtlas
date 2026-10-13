@@ -46,7 +46,6 @@ export class ExplorerEntityRequest {
 		const abort = new AbortController();
 		this.active = abort;
 		this.attempt = { ...request, filters: { ...request.filters } };
-		const timeout = setTimeout(() => abort.abort(), 25000);
 		try {
 			const filters = normalizeExplorerTimes(this.attempt.filters);
 			const page = parseEntityPage(
@@ -67,13 +66,12 @@ export class ExplorerEntityRequest {
 			return {
 				ok: false,
 				message: abort.signal.aborted
-					? 'The query timed out. Narrow the ledger range and try again.'
+					? 'The query was cancelled. Retry or narrow the ledger range.'
 					: failure instanceof Error
 						? failure.message
 						: 'The data service could not complete this query.'
 			};
 		} finally {
-			clearTimeout(timeout);
 			if (generation === this.generation) this.active = null;
 		}
 	}

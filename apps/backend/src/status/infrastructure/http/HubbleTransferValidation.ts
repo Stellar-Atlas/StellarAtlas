@@ -117,12 +117,15 @@ export function normalizeRawAmount(value: string, name: string): string {
 
 export function validateTransferLedgerRange(
 	minimum: number,
-	maximum: number
+	maximum: number,
+	maximumSpan = maximumTransferLedgerSpan
 ): void {
 	if (minimum > maximum) fail('minLedger cannot exceed maxLedger');
-	if (maximum - minimum + 1 > maximumTransferLedgerSpan)
+	if (maximum - minimum + 1 > maximumSpan)
 		fail(
-			'Transfer queries may span at most 1000000 ledgers; split the requested range'
+			maximumSpan === maximumTransferLedgerSpan
+				? 'Transfer queries may span at most 1000000 ledgers; split the requested range'
+				: 'Ledger query range exceeds the configured maximum span'
 		);
 }
 

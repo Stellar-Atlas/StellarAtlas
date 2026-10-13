@@ -12,8 +12,15 @@ export interface ContractActivityPage {
 	readonly nextPosition: string | null;
 	readonly coverage: EntityRecord;
 	readonly watermark: EntityRecord;
+	readonly summary?: {
+		readonly total: string;
+		readonly topics: readonly {
+			readonly topic: string;
+			readonly count: string;
+		}[];
+	};
 }
-const pageSize = 10;
+const pageSize = 25;
 
 export function contractActivityPath(
 	contractId: string,
@@ -21,7 +28,9 @@ export function contractActivityPath(
 	filters: ExplorerFilters,
 	position = ''
 ): string {
-	const query = new URLSearchParams({ limit: String(pageSize) });
+	const query = new URLSearchParams({
+		limit: filters.limit || String(pageSize)
+	});
 	const names = [
 		'min_ledger',
 		'max_ledger',
@@ -32,7 +41,10 @@ export function contractActivityPath(
 					'end_time',
 					'type_code',
 					'successful',
-					'in_successful_contract_call'
+					'in_successful_contract_call',
+					'order',
+					'topic',
+					'q'
 				]
 			: ['ledger_key_hash', 'durability', 'deleted'])
 	];
@@ -42,6 +54,7 @@ export function contractActivityPath(
 	}
 	if (tab === 'events') {
 		query.set('view', 'typed');
+		query.set('include_summary', 'true');
 		if (position) query.set('after', position);
 	} else {
 		if (
@@ -86,7 +99,7 @@ export function parseContractActivityPage(
 	const items: unknown = tab === 'events' ? data.items : data.rows;
 	if (
 		!Array.isArray(items) ||
-		items.length > pageSize ||
+		items.length > 200 ||
 		items.some((row) => Object.keys(recordValue(row)).length === 0)
 	)
 		throw new Error(
@@ -163,6 +176,25 @@ export function parseContractActivityPage(
 		rows,
 		nextPosition,
 		coverage: recordValue(data.coverage),
-		watermark: recordValue(data.watermark)
+		watermark: recordValue(data.watermark),
+		...(typeof recordValue(data.summary).total === 'string' &&
+		Array.isArray(recordValue(data.summary).topics)
+			? {
+					summary: {
+						total: String(recordValue(data.summary).total),
+						topics: (recordValue(data.summary).topics as unknown[])
+							.map(recordValue)
+							.filter(
+								(item) =>
+									typeof item.topic === 'string' &&
+									typeof item.count === 'string'
+							)
+							.map((item) => ({
+								topic: String(item.topic),
+								count: String(item.count)
+							}))
+					}
+				}
+			: {})
 	};
 }

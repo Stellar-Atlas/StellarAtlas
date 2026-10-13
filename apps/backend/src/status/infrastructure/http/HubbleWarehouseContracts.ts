@@ -70,6 +70,7 @@ export interface HubbleDataset {
 export interface HubbleIngestionCoverage {
 	readonly completedBatches: string;
 	readonly failedBatches: string;
+	readonly latestCompletedAt?: string | null;
 	readonly maximumLedger: string | null;
 	readonly minimumLedger: string | null;
 	readonly startedBatches: string;
@@ -105,8 +106,10 @@ import type {
 	HubbleTransferPage
 } from './HubbleTransferContracts.js';
 import type { HubbleLedgerCoverage } from './HubbleLedgerCoverage.js';
+import type { HubbleSemanticQueryExecutor } from './HubbleSemanticWarehouse.js';
 
 export interface HubbleWarehouse {
+	readModelExecutor?(): HubbleSemanticQueryExecutor;
 	accountBalances(
 		input: HubbleAccountBalanceInput
 	): Promise<HubbleAccountBalancePage>;
@@ -125,5 +128,6 @@ export interface HubbleWarehouse {
 	): Promise<HubbleSemanticPage>;
 	assetHolders(query: HubbleAssetHolderQuery): Promise<HubbleAssetHolderPage>;
 	catalog(force?: boolean): Promise<HubbleCatalog>;
+	probe?(): Promise<void>;
 	query(query: HubbleQuery): Promise<HubbleQueryResult>;
 }

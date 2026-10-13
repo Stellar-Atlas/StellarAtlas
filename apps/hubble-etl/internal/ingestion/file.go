@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/clickhouse"
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/projector"
+	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/publication"
 )
 
 type Request struct {
@@ -22,6 +23,7 @@ type Request struct {
 	NetworkPassphrase string
 	DecodeLimits      lcmbatch.Limits
 	WriterLimits      clickhouse.WriterLimits
+	Publisher         *publication.WarehousePublisher
 }
 
 type Receipt struct {
@@ -142,6 +144,13 @@ func File(
 	if err := writer.PromoteHolderIndex(ctx); err != nil {
 		holderIndexError = truncate("holder index: "+err.Error(), 512)
 		log.Printf("holder index promotion failed batch=%s error=%q", request.BatchID, truncate(err.Error(), 512))
+	}
+	if request.Publisher != nil {
+		request.Publisher.PublishBatch(publication.Event{
+			BatchID: request.BatchID, MinLedger: batch.Start, MaxLedger: batch.End,
+			PublishedAt: time.Now().UTC().Format(time.RFC3339Nano),
+			Datasets:    writer.PopulatedDatasets(),
+		})
 	}
 	var datasetRows map[string]uint64
 	if request.WriterLimits.RecoveryNamespace != "" {

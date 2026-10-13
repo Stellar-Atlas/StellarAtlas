@@ -12,8 +12,19 @@ export interface HubbleContractEventInput {
 	readonly typeCode?: number;
 	readonly successful?: boolean;
 	readonly inSuccessfulContractCall?: boolean;
+	readonly order?: 'asc' | 'desc';
+	readonly topic?: string;
+	readonly search?: string;
+	readonly includeSummary?: boolean;
 	readonly limit?: number;
 	readonly after?: string;
+}
+export interface HubbleContractEventSummary {
+	readonly total: string;
+	readonly topics: readonly {
+		readonly topic: string;
+		readonly count: string;
+	}[];
 }
 export interface HubbleContractEventPage {
 	readonly contractId: string;
@@ -23,4 +34,5 @@ export interface HubbleContractEventPage {
 	readonly watermark: HubbleTransferWatermark;
 	readonly coverage: HubbleLedgerCoverage;
 	readonly elapsedMilliseconds: number;
+	readonly summary?: HubbleContractEventSummary;
 }

@@ -18,6 +18,10 @@ export const hubbleContractEventSchema = `
 		typeCode: Int
 		successful: Boolean
 		inSuccessfulContractCall: Boolean
+		order: String
+		topic: String
+		search: String
+		includeSummary: Boolean
 		limit: Int
 		after: String
 	}
@@ -29,7 +33,13 @@ export const hubbleContractEventSchema = `
 		watermark: HubbleTransferWatermark!
 		coverage: HubbleLedgerCoverage!
 		elapsedMilliseconds: Float!
+		summary: HubbleContractEventSummary
 	}
+	type HubbleContractEventSummary {
+		total: String!
+		topics: [HubbleContractEventTopicCount!]!
+	}
+	type HubbleContractEventTopicCount { topic: String!, count: String! }
 `;
 type Arguments = {
 	contractId: string;

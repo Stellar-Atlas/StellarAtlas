@@ -145,6 +145,35 @@ export function withHubbleExplorerPaths(
 						: parameter
 				),
 				...(!detail ? pageParameters : []),
+				...(entity === 'liquidity-pools'
+					? [
+							queryParameter(
+								'order_by',
+								'Sort key for latest pool snapshots when no historical window is supplied; in historical mode sorts observations in the selected window.',
+								{
+									type: 'string',
+									enum: [
+										'pool',
+										'asset_a',
+										'asset_b',
+										'reserve_a',
+										'reserve_b',
+										'shares',
+										'trustlines',
+										'fee',
+										'ledger',
+										'time'
+									],
+									default: 'trustlines'
+								}
+							),
+							queryParameter(
+								'order',
+								'Sort direction for latest snapshots or historical observations.',
+								{ type: 'string', enum: ['asc', 'desc'], default: 'desc' }
+							)
+						]
+					: []),
 				...filterNames[entity].map((filter) =>
 					queryParameter(
 						filter,

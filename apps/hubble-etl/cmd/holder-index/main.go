@@ -25,7 +25,7 @@ func main() {
 
 func run(ctx context.Context) error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: holder-index seed ASSET | backfill | promote")
+		return fmt.Errorf("usage: holder-index seed ASSET | seed-pools | backfill | promote")
 	}
 	db := os.Getenv("CLICKHOUSE_DATABASE")
 	if db == "" {
@@ -56,6 +56,8 @@ func run(ctx context.Context) error {
 			return fmt.Errorf("seed requires one exact asset")
 		}
 		return index.seed(ctx, os.Args[2])
+	case "seed-pools":
+		return index.seedPools(ctx)
 	case "backfill":
 		if err = index.backfill(ctx); err != nil {
 			return err

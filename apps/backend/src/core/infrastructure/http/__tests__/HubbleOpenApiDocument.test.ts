@@ -1,4 +1,5 @@
 import { withHubbleOpenApiPaths } from '../HubbleOpenApiDocument.js';
+import { createPublicOpenApiDocument } from '../PublicOpenApiDocument.js';
 import { hubbleCoverageSchema } from '../HubbleOpenApiSchemas.js';
 import express from 'express';
 import request from 'supertest';
@@ -150,5 +151,43 @@ describe('Hubble OpenAPI paths', () => {
 				expect(operation.security).toEqual([]);
 			}
 		}
+	});
+	it('publishes the implemented balance and trustline snapshot shapes in the public document', () => {
+		const publicDocument = createPublicOpenApiDocument({
+			info: { title: 'test', version: '1' },
+			openapi: '3.0.3',
+			paths: {}
+		});
+		const publicPaths = readOpenApiRecord(publicDocument.paths)!;
+		const expected = {
+			'/v1/assets/{asset}/balances': 'listAssetBalancesSnapshot',
+			'/v1/assets/{asset}/trustlines': 'listAssetTrustlinesSnapshot',
+			'/v1/analytics/assets/{asset}/balances': 'listAnalyticsAssetBalancesSnapshot',
+			'/v1/analytics/assets/{asset}/trustlines': 'listAnalyticsAssetTrustlinesSnapshot'
+		};
+		for (const [path, operationId] of Object.entries(expected)) {
+			const pathItem = readOpenApiRecord(publicPaths[path])!;
+			const operation = readOpenApiRecord(pathItem.get)!;
+			expect(operation.operationId).toBe(operationId);
+		}
+		const balances = readOpenApiRecord(readOpenApiRecord(publicPaths['/v1/assets/{asset}/balances'])!.get)!;
+		const parameters = balances.parameters as Array<Record<string, unknown>>;
+		expect(parameters.map((parameter) => parameter.name)).toEqual(
+			expect.arrayContaining(['account', 'after', 'limit', 'sort', 'order', 'as_of_ledger', 'include_deleted'])
+		);
+		const responses = readOpenApiRecord(balances.responses)!;
+		const success = readOpenApiRecord(responses['200'])!;
+		const content = readOpenApiRecord(success.content)!;
+		const json = readOpenApiRecord(content['application/json'])!;
+		const schema = readOpenApiRecord(json.schema)!;
+		const properties = readOpenApiRecord(schema.properties)!;
+		expect(properties).toHaveProperty('holders');
+		expect(properties).toHaveProperty('coverage');
+		expect(properties).toHaveProperty('watermark');
+		expect(properties).toHaveProperty('indexedSummary');
+		expect(properties).toHaveProperty('dataset');
+		const trustlines = readOpenApiRecord(readOpenApiRecord(publicPaths['/v1/assets/{asset}/trustlines'])!.get)!;
+		const trustlineResponses = readOpenApiRecord(trustlines.responses)!;
+		expect(readOpenApiRecord(trustlineResponses['400'])!.description).toContain('native');
 	});
 });

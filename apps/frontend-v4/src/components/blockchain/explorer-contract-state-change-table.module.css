@@ -1,0 +1,196 @@
+.scroll {
+	max-width: 100%;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: 0.45rem;
+}
+.table {
+	width: 100%;
+	min-width: 1020px;
+	table-layout: fixed;
+	border-collapse: collapse;
+	text-align: left;
+	font-size: 0.85rem;
+}
+.table th {
+	position: sticky;
+	top: 0;
+	background: var(--panel);
+	color: var(--muted);
+	font-size: 0.72rem;
+	letter-spacing: 0.035em;
+	text-transform: uppercase;
+}
+.table th,
+.table td {
+	padding: 0.75rem;
+	border-bottom: 1px solid var(--border);
+	vertical-align: top;
+}
+.table td {
+	max-width: 440px;
+	min-width: 140px;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+.table td:first-child {
+	min-width: 150px;
+}
+.table td:first-child time {
+	display: block;
+	margin-top: 0.25rem;
+	color: var(--muted);
+	font-size: 0.75rem;
+}
+.keyParts {
+	font-size: 0.9rem;
+	font-weight: 600;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.fields {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.25rem;
+	margin: 0;
+}
+.field {
+	display: grid;
+	grid-template-columns: minmax(110px, 38%) minmax(0, 1fr);
+	gap: 0.5rem;
+	align-items: start;
+	padding: 0.2rem 0;
+}
+.field dt {
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+.field dd {
+	min-width: 0;
+	margin: 0;
+}
+.number,
+.text,
+.reference code {
+	font-family: var(--font-mono);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+.number {
+	color: var(--ink);
+	white-space: nowrap;
+	display: block;
+	overflow-x: auto;
+	word-break: normal;
+	overflow-wrap: normal;
+}
+.text {
+	color: var(--ink);
+}
+.reference {
+	color: var(--blue);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+.reference:hover {
+	color: var(--ink);
+}
+.muted,
+.warning {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+.warning {
+	color: var(--yellow);
+}
+.raw {
+	margin-top: 0.55rem;
+	font-size: 0.76rem;
+}
+.raw summary {
+	color: var(--blue);
+	cursor: pointer;
+}
+.raw pre {
+	max-height: 260px;
+	overflow: auto;
+	padding: 0.65rem;
+	border: 1px solid var(--border);
+	border-radius: 0.35rem;
+	background: var(--panel);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.table th:first-child,
+.table td:first-child {
+	width: 14%;
+}
+.table th:nth-child(2),
+.table td:nth-child(2) {
+	width: 20%;
+}
+.table th:nth-child(3),
+.table td:nth-child(3) {
+	width: 44%;
+}
+.table th:nth-child(4),
+.table td:nth-child(4) {
+	width: 22%;
+}
+.scroll .table code {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	border-radius: 0;
+	padding: 0;
+	font-size: inherit;
+	line-height: inherit;
+	color: inherit;
+}
+.table[data-transactions='false'] > thead > tr > th:nth-child(3) {
+	width: 58%;
+}
+.table[data-transactions='false'] > thead > tr > th:nth-child(4) {
+	width: 8%;
+}
+.valueGroup {
+	margin-bottom: 0.6rem;
+}
+.valueGroup > strong {
+	display: block;
+	margin-bottom: 0.4rem;
+	font-size: 0.8rem;
+}
+.valueScroll {
+	max-width: 100%;
+	overflow-x: auto;
+}
+.table .valueTable {
+	width: 100%;
+	table-layout: auto;
+	border-collapse: collapse;
+}
+.table .valueTable th,
+.table .valueTable td {
+	width: auto;
+	min-width: 0;
+	max-width: none;
+	padding: 0.3rem 0.5rem;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	position: static;
+	background: transparent;
+	text-transform: none;
+	letter-spacing: normal;
+	font-size: 0.78rem;
+	white-space: nowrap;
+}
+.table .valueTable th {
+	font-weight: 500;
+}
+.table .valueTable tbody tr:last-child td {
+	border-bottom: 0;
+}

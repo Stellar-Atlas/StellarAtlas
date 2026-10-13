@@ -13,6 +13,10 @@ import {
 	hubbleContractEventResolvers
 } from './HubbleContractEventGraphql.js';
 import {
+	hubbleAssetReportSchema,
+	hubbleAssetReportResolvers
+} from './HubbleAssetReportGraphql.js';
+import {
 	hubbleExplorerSchema,
 	hubbleExplorerResolvers
 } from './HubbleExplorerGraphql.js';
@@ -163,6 +167,7 @@ const schema = buildSchema(
 		hubbleTransferSchema +
 		hubbleTransactionSchema +
 		hubbleContractEventSchema +
+		hubbleAssetReportSchema +
 		hubbleExplorerSchema +
 		hubbleAssetHolderSchema +
 		hubbleAccountBalanceSchema
@@ -221,6 +226,7 @@ export function hubbleWarehouseGraphqlHandler(
 			...hubbleTransactionResolvers(warehouse, mapGraphqlError),
 			...hubbleContractEventResolvers(warehouse, mapGraphqlError),
 			...hubbleExplorerResolvers(warehouse, mapGraphqlError),
+			...hubbleAssetReportResolvers(warehouse, mapGraphqlError),
 			...hubbleAssetHolderResolvers(warehouse, mapGraphqlError),
 			...hubbleAccountBalanceResolvers(warehouse, mapGraphqlError),
 			hubbleDatasets: async () => (await warehouse.catalog()).datasets,

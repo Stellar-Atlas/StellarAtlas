@@ -24,6 +24,9 @@ export class UnavailableHubbleWarehouse implements HubbleWarehouse {
 	async assetHolders(): Promise<never> {
 		throw this.error();
 	}
+	async probe(): Promise<never> {
+		throw this.error();
+	}
 	async catalog(): Promise<never> {
 		throw this.error();
 	}

@@ -5,6 +5,7 @@ import type {
 } from './HubbleTransferContracts.js';
 import { HubbleWarehouseInputError } from './HubbleWarehouseErrors.js';
 import { validateTransferLedgerRange } from './HubbleTransferValidation.js';
+import { maximumTransferLedgerSpan } from './HubbleTransferValidation.js';
 
 export interface HubbleTransferPosition {
 	readonly ledger: number;
@@ -37,7 +38,8 @@ export function encodeTransferCursor(cursor: HubbleTransferCursor): string {
 
 export function decodeTransferCursor(
 	value: string,
-	fingerprint: string
+	fingerprint: string,
+	maximumLedgerSpan = maximumTransferLedgerSpan
 ): HubbleTransferCursor {
 	try {
 		if (value.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(value))
@@ -76,7 +78,8 @@ export function decodeTransferCursor(
 			throw new Error();
 		validateTransferLedgerRange(
 			watermark.minimumLedger,
-			watermark.maximumLedger
+			watermark.maximumLedger,
+			maximumLedgerSpan
 		);
 		return parsed as unknown as HubbleTransferCursor;
 	} catch {

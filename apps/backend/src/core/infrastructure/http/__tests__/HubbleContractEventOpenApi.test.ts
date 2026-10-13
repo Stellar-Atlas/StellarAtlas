@@ -70,7 +70,7 @@ describe('typed contract-event OpenAPI', () => {
 				'type_code',
 				'successful',
 				'in_successful_contract_call',
-				'limit',
+				'order', 'topic', 'q', 'include_summary', 'limit',
 				'after',
 				'offset'
 			])
@@ -84,6 +84,10 @@ describe('typed contract-event OpenAPI', () => {
 		expect(record(parameter('in_successful_contract_call').schema).type).toBe(
 			'boolean'
 		);
+		expect(record(parameter('order').schema).enum).toEqual(['asc', 'desc']);
+		expect(parameter('topic').description).toContain('exact decoded topic');
+		expect(parameter('q').description).toContain('exact G/C address');
+		expect(record(parameter('include_summary').schema).type).toBe('boolean');
 		expect(parameter('start_time').description).toContain('Inclusive UTC');
 		expect(parameter('end_time').description).toContain('Exclusive UTC');
 		expect(record(parameter('after').schema)).toMatchObject({
@@ -101,8 +105,8 @@ describe('typed contract-event OpenAPI', () => {
 			maximum: 200,
 			default: defaults.limit
 		});
-		expect(parameter('min_ledger').description).toContain('1000000');
-		expect(parameter('min_ledger').description).toContain('100000');
+		expect(parameter('min_ledger').description).toContain('2147483647');
+		expect(parameter('max_ledger').description).toContain('published maximum');
 	});
 
 	it('publishes exact event fields and required coverage without claiming a frozen snapshot', () => {
@@ -174,6 +178,11 @@ describe('typed contract-event OpenAPI', () => {
 			}).toEqual({ example: name, errors: [] });
 		}
 		expect(schema.getMutationType()).toBeNull();
+		const queryFields = schema.getQueryType()!.getFields();
+		expect(queryFields).toHaveProperty('hubbleAssetRankings');
+		expect(queryFields).toHaveProperty('hubbleAssetBalanceHistory');
+		expect(queryFields).toHaveProperty('hubbleAssetBalances');
+		expect(queryFields).toHaveProperty('hubbleAssetTrustlines');
 		expect(warehouse.contractEvents).not.toHaveBeenCalled();
 		expect(warehouse.catalog).not.toHaveBeenCalled();
 	});

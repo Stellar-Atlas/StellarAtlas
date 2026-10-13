@@ -94,6 +94,10 @@ ORDER BY updated_at,batch_id LIMIT 100 FORMAT JSON`
 				return err
 			}
 		}
+		poolPredicate := " AND intDiv(_ledger_sequence,1048576)={part:UInt32} AND _batch_id IN {batches:Array(UUID)}"
+		if _, err = i.execute(ctx, i.snapshotPoolSQL(poolPredicate), params); err != nil {
+			return err
+		}
 		logEvent("holder-recovery-partition", partition)
 	}
 

@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/catalog"
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/clickhouse"
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/ingestion"
+	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/publication"
 )
 
 type Config struct {
@@ -27,6 +28,7 @@ type Config struct {
 	PriorityBatchID    string
 	PressureGuard      *PressureGuard
 	ReadinessGuard     *WarehouseReadinessGuard
+	Publisher          *publication.WarehousePublisher
 	OnProgress         func(Summary)
 }
 
@@ -127,6 +129,7 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 						NetworkPassphrase: config.NetworkPassphrase,
 						DecodeLimits:      config.DecodeLimits,
 						WriterLimits:      config.WriterLimits,
+						Publisher:         config.Publisher,
 					})
 				}
 				if config.ReadinessGuard != nil {

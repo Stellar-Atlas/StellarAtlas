@@ -68,9 +68,14 @@ describe('typed GraphQL asset holders', () => {
 			.send({ query: listQuery, variables: { asset, input: { limit: 1 } } })
 			.expect(200);
 		expect(first.body.errors).toBeUndefined();
-		expect(f.warehouse.assetHolders.mock.calls[1]).toEqual(
-			f.warehouse.assetHolders.mock.calls[0]
-		);
+		expect(f.warehouse.assetHolders.mock.calls[1]?.[0]).toMatchObject({
+			asset: { type: 'issued', code: 'USD', issuer: nextAccount },
+			limit: 1,
+			sort: 'account',
+			order: 'asc',
+			balanceFilter: 'positive',
+			includeDeleted: false
+		});
 		const page = first.body.data.hubbleAssetHolders;
 		expect(page).toMatchObject({
 			asset,
@@ -114,7 +119,12 @@ describe('typed GraphQL asset holders', () => {
 		expect(f.warehouse.assetHolders).toHaveBeenLastCalledWith({
 			asset: { type: 'issued', code: 'USD', issuer: nextAccount },
 			limit: 1,
-			after: account
+			after: account,
+			sort: 'account',
+			order: 'asc',
+			asOfLedger: undefined,
+			balanceFilter: 'positive',
+			includeDeleted: false
 		});
 		expect(f.warehouse.query).not.toHaveBeenCalled();
 		expect(f.warehouse.catalog).not.toHaveBeenCalled();
@@ -171,7 +181,7 @@ describe('typed GraphQL asset holders', () => {
 		}
 	);
 
-	it('rejects invalid accounts and unsupported as-of fields instead of silently returning latest state', async () => {
+	it('rejects invalid accounts and accepts supported as-of fields', async () => {
 		const f = fixture();
 		const invalid = await request(f.app)
 			.post('/graphql')
@@ -181,17 +191,17 @@ describe('typed GraphQL asset holders', () => {
 			})
 			.expect(200);
 		expect(invalid.body.errors[0].extensions.code).toBe('BAD_USER_INPUT');
-		const unsupported = await request(f.app)
+		const asOf = await request(f.app)
 			.post('/graphql')
 			.send({
 				query:
 					'{ hubbleAssetHolders(asset:"native",input:{asOfLedger:65}) { limit } }'
 			})
 			.expect(200);
-		expect(unsupported.body.errors[0].message).toContain('asOfLedger');
-		expect(unsupported.body.errors[0].message).toContain('not defined');
-		expect(unsupported.body.data).toBeUndefined();
-		expect(f.warehouse.assetHolders).not.toHaveBeenCalled();
+		expect(asOf.body.errors).toBeUndefined();
+		expect(f.warehouse.assetHolders).toHaveBeenCalledWith(
+			expect.objectContaining({ asOfLedger: 65 })
+		);
 	});
 
 	it('rejects malformed source amounts rather than manufacturing zero or exact precision', async () => {

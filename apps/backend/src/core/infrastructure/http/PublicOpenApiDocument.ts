@@ -9,6 +9,8 @@ import { withDataAccessOpenApiPaths } from './DataAccessOpenApiDocument.js';
 import { withHubbleOpenApiPaths } from './HubbleOpenApiDocument.js';
 import { isPublicOpenApiOperation } from './OpenApiOperationClassification.js';
 import { withLocalPublicOpenApiSchemas } from './LocalPublicOpenApiSchemas.js';
+import { withPublicGoodsOpenApiPaths } from './PublicGoodsOpenApiDocument.js';
+import { withAssetResourceOpenApiPaths } from './AssetResourceOpenApi.js';
 
 const publicServer = {
 	description: 'API for the Stellar public network',
@@ -16,6 +18,16 @@ const publicServer = {
 };
 
 const publicTagDefinitions = [
+	{
+		name: 'Assets',
+		description:
+			'Asset discovery, identifiers, issuer metadata and cached logos.'
+	},
+	{
+		name: 'Public goods',
+		description:
+			'Live readiness and measured publication and archive-check metrics.'
+	},
 	{
 		description:
 			'Parsed historical activity and entity lookup.\n\n**Start here:** transaction detail (`view=typed`), transfer activity, then operations, assets, contracts, offers and trades below. Entity examples use explicit single-ledger windows.\n\n**Pagination:** follow nextOffset with unchanged filters; typed transfer and transaction relationships use their own cursors.\n\n**Coverage and precision:** check returned window and coverage. Observed assets/contracts and historical offers are not complete current-chain inventories. Exact identifiers stay strings; trade/offer amounts marked source_float64 retain source rounding.',
@@ -89,7 +101,11 @@ export function createPublicOpenApiDocument(document: unknown): OpenApiRecord {
 	};
 	// Excluded operator/legacy routes must not introduce schema dependencies.
 	const publicDocument = projectOpenApiDocument(
-		withHubbleOpenApiPaths(withDataAccessOpenApiPaths(document)),
+		withAssetResourceOpenApiPaths(
+			withPublicGoodsOpenApiPaths(
+				withHubbleOpenApiPaths(withDataAccessOpenApiPaths(document))
+			)
+		),
 		options
 	);
 	return projectOpenApiDocument(
@@ -109,6 +125,15 @@ function canonicalizePublicOperation(
 
 function canonicalPublicTag(path: string, value: unknown): string {
 	const sourceTags = readOpenApiStringArray(value);
+	if (path.startsWith('/v1/public-goods/')) return 'Public goods';
+	if (path.startsWith('/v1/assets') || path.startsWith('/v1/issuers'))
+		return 'Assets';
+	if (
+		/^\/v1\/(accounts|contracts|transactions|operations|transfers|activity|trades|offers|ledgers|liquidity-pools)(\/|$)/.test(
+			path
+		)
+	)
+		return 'Explorer';
 	if (path.startsWith('/v1/search')) return 'Search';
 	if (path.includes('/archive-evidence')) return 'Archive verification';
 	if (

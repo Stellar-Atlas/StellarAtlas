@@ -9,6 +9,9 @@ export function withHubbleTransactionLedgerHints(
 	locateLedger: HubbleTransactionLedgerLocator
 ): HubbleWarehouse {
 	return {
+		...(warehouse.readModelExecutor
+			? { readModelExecutor: () => warehouse.readModelExecutor!() }
+			: {}),
 		catalog: (force) => warehouse.catalog(force),
 		query: (input) => warehouse.query(input),
 		contractEvents: (input) => warehouse.contractEvents(input),
@@ -17,6 +20,14 @@ export function withHubbleTransactionLedgerHints(
 		accountTransactions: (input) => warehouse.accountTransactions(input),
 		assetHolders: (input) => warehouse.assetHolders(input),
 		accountBalances: (input) => warehouse.accountBalances(input),
+		probe: () =>
+			warehouse.probe === undefined
+				? Promise.reject(
+						new HubbleWarehouseUnavailableError(
+							'ClickHouse probe is unavailable'
+						)
+					)
+				: warehouse.probe(),
 		async transactionDetail(request) {
 			const input = normalizeTransactionInput(request);
 			if (input.ledgerSequence === undefined) {

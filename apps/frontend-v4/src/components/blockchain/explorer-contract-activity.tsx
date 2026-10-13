@@ -1,28 +1,64 @@
 'use client';
-import { useEffect, useReducer, useState } from 'react';
-import { entityText, type ExplorerFilters } from '../../api/explorer-analytics';
+
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import type { ExplorerFilters } from '../../api/explorer-analytics';
 import {
 	contractActivityPath,
 	requestContractActivity,
-	type ContractActivityTab
+	type ContractActivityTab,
+	type ContractActivityPage
 } from '../../api/explorer-contract-activity';
-import { LocalDateTime } from '../local-date-time';
-import { ExplorerContractRecord } from './explorer-contract-record';
+import {
+	ExplorerContractEventTable,
+	type EventTokenContext
+} from './explorer-contract-event-table';
+import { ExplorerContractStateChangeTable } from './explorer-contract-state-change-table';
 import {
 	contractActivityReducer,
 	initialContractActivityState,
 	type ContractActivityState
 } from './explorer-contract-activity-model';
 import styles from './explorer-entity.module.css';
+import ui from './explorer-contract-controls.module.css';
 
+type Controls = {
+	type: string;
+	order: 'asc' | 'desc';
+	limit: string;
+	topic: string;
+	q: string;
+};
 export function ExplorerContractActivity({
 	contractId,
-	filters
+	filters,
+	token
 }: {
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
+	readonly token?: EventTokenContext;
 }): React.JSX.Element {
 	const [tab, setTab] = useState<ContractActivityTab>('events');
+	const [controls, setControls] = useState<Controls>({
+		type: 'all',
+		order: 'desc',
+		limit: '25',
+		topic: '',
+		q: ''
+	});
+	const [search, setSearch] = useState('');
+	const [summary, setSummary] = useState<ContractActivityPage['summary']>();
+	const onSummary = useCallback(
+		(value: ContractActivityPage['summary']) => setSummary(value),
+		[]
+	);
+	const applied = {
+		...filters,
+		limit: controls.limit,
+		order: controls.order,
+		...(controls.type === 'all' ? {} : { type_code: controls.type }),
+		...(controls.topic ? { topic: controls.topic } : {}),
+		...(controls.q ? { q: controls.q } : {})
+	};
 	return (
 		<section className={styles.panel} aria-label="Contract activity">
 			<div className={styles.actions}>
@@ -36,16 +72,124 @@ export function ExplorerContractActivity({
 					State changes
 				</button>
 			</div>
-			<p className={styles.muted}>
-				{tab === 'events'
-					? 'Typed decoded event topics and payloads, with recorded provenance and transaction links.'
-					: 'Recorded key/value changes. This is historical evidence, not a complete current-state snapshot.'}
-			</p>
+			{tab === 'events' && (
+				<div className={ui.controls}>
+					<div className={ui.topRow}>
+						<div className={ui.types} aria-label="Event type">
+							{[
+								['all', 'All events'],
+								['1', 'Contract events'],
+								['2', 'Diagnostics']
+							].map(([value, label]) => (
+								<button
+									key={value}
+									aria-pressed={controls.type === value}
+									onClick={() =>
+										setControls((current) => ({ ...current, type: value! }))
+									}
+								>
+									{label}
+								</button>
+							))}
+						</div>
+						<label>
+							Order
+							<select
+								value={controls.order}
+								onChange={(event) =>
+									setControls((current) => ({
+										...current,
+										order: event.target.value as 'asc' | 'desc'
+									}))
+								}
+							>
+								<option value="desc">Newest first</option>
+								<option value="asc">Oldest first</option>
+							</select>
+						</label>
+						<label>
+							Rows
+							<select
+								value={controls.limit}
+								onChange={(event) =>
+									setControls((current) => ({
+										...current,
+										limit: event.target.value
+									}))
+								}
+							>
+								{['10', '25', '50', '100'].map((value) => (
+									<option key={value} value={value}>
+										{value}
+									</option>
+								))}
+							</select>
+						</label>
+					</div>
+					<div className={ui.topics} aria-label="Named event topics">
+						<button
+							aria-pressed={!controls.topic}
+							onClick={() =>
+								setControls((current) => ({ ...current, topic: '' }))
+							}
+						>
+							All topics
+						</button>
+						{summary?.topics.map((topic) => (
+							<button
+								key={topic.topic}
+								title={`${Number(topic.count).toLocaleString()} indexed events`}
+								aria-pressed={controls.topic === topic.topic}
+								onClick={() =>
+									setControls((current) => ({ ...current, topic: topic.topic }))
+								}
+							>
+								{topic.topic}
+							</button>
+						))}
+					</div>
+					<form
+						className={ui.search}
+						onSubmit={(event) => {
+							event.preventDefault();
+							setControls((current) => ({ ...current, q: search.trim() }));
+						}}
+					>
+						<input
+							aria-label="Search contract events"
+							placeholder="Address, transaction hash or ledger"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+						/>
+						<button>Search</button>
+						{controls.q && (
+							<button
+								type="button"
+								onClick={() => {
+									setSearch('');
+									setControls((current) => ({ ...current, q: '' }));
+								}}
+							>
+								Clear
+							</button>
+						)}
+						<span className={ui.count}>
+							{summary
+								? `${Number(summary.total).toLocaleString()} indexed events`
+								: ''}
+						</span>
+					</form>
+				</div>
+			)}
 			<ContractActivityResults
-				key={contractActivityPath(contractId, tab, filters)}
+				key={contractId + ':' + tab + ':' + JSON.stringify(applied)}
 				contractId={contractId}
-				filters={filters}
+				filters={
+					tab === 'events' ? applied : { ...filters, limit: controls.limit }
+				}
 				tab={tab}
+				token={token}
+				onSummary={onSummary}
 			/>
 		</section>
 	);
@@ -54,17 +198,23 @@ export function ExplorerContractActivity({
 function ContractActivityResults({
 	contractId,
 	filters,
-	tab
+	tab,
+	token,
+	onSummary
 }: {
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
 	readonly tab: ContractActivityTab;
+	readonly token?: EventTokenContext;
+	readonly onSummary: (value: ContractActivityPage['summary']) => void;
 }): React.JSX.Element {
 	const [state, dispatch] = useReducer(
 		contractActivityReducer,
 		initialContractActivityState
 	);
 	const { requestId, requestedPosition } = state;
+	const [slow, setSlow] = useState(false);
+	const active = useRef<AbortController | null>(null);
 	const path = contractActivityPath(
 		contractId,
 		tab,
@@ -74,7 +224,9 @@ function ContractActivityResults({
 	useEffect(() => {
 		let disposed = false;
 		const abort = new AbortController();
-		const timeout = setTimeout(() => abort.abort(), 25000);
+		active.current = abort;
+		setSlow(false);
+		const timer = setTimeout(() => setSlow(true), 5000);
 		void requestContractActivity(
 			path,
 			contractId,
@@ -83,31 +235,37 @@ function ContractActivityResults({
 			abort.signal
 		)
 			.then((page) => {
-				if (!disposed) dispatch({ type: 'loaded', requestId, page });
+				if (!disposed) {
+					dispatch({ type: 'loaded', requestId, page });
+					onSummary(page.summary);
+				}
 			})
-			.catch((failure: unknown) => {
+			.catch((error: unknown) => {
 				if (!disposed)
 					dispatch({
 						type: 'failed',
 						requestId,
 						error: abort.signal.aborted
-							? 'Contract query timed out. Narrow the ledger range or retry.'
-							: failure instanceof Error
-								? failure.message
-								: 'Contract data unavailable.'
+							? 'Request cancelled.'
+							: error instanceof Error
+								? error.message
+								: 'Data unavailable.'
 					});
 			})
-			.finally(() => clearTimeout(timeout));
+			.finally(() => clearTimeout(timer));
 		return () => {
 			disposed = true;
-			clearTimeout(timeout);
+			clearTimeout(timer);
 			abort.abort();
 		};
-	}, [path, contractId, tab, requestedPosition, requestId]);
+	}, [path, contractId, tab, requestedPosition, requestId, onSummary]);
 	return (
 		<ContractActivityView
 			state={state}
 			tab={tab}
+			token={token}
+			slow={slow}
+			onCancel={() => active.current?.abort()}
 			onRetry={() => dispatch({ type: 'retry' })}
 			onPrevious={() => dispatch({ type: 'previous' })}
 			onNext={() => dispatch({ type: 'next' })}
@@ -119,6 +277,9 @@ function ContractActivityResults({
 export function ContractActivityView({
 	state,
 	tab,
+	token,
+	slow,
+	onCancel,
 	onRetry,
 	onPrevious,
 	onNext,
@@ -126,106 +287,63 @@ export function ContractActivityView({
 }: {
 	readonly state: ContractActivityState;
 	readonly tab: ContractActivityTab;
+	readonly token?: EventTokenContext;
+	readonly slow?: boolean;
+	readonly onCancel?: () => void;
 	readonly onRetry: () => void;
 	readonly onPrevious: () => void;
 	readonly onNext: () => void;
 	readonly onRefresh: () => void;
 }): React.JSX.Element {
 	const page = state.page;
-	const minimum = page ? entityText(page.watermark, 'minimumLedger') : '';
-	const maximum = page ? entityText(page.watermark, 'maximumLedger') : '';
-	const observedAt = page ? entityText(page.watermark, 'observedAt') : '';
 	return (
 		<div aria-busy={state.loading}>
 			{state.loading && (
-				<p role="status">
-					Loading contract {tab}…
-					{page ? ' Keeping the last successful page visible.' : ''}
+				<p role="status" className={ui.count}>
+					{slow ? 'Query is still running…' : 'Loading…'}
+					{page ? ' Previous page remains visible.' : ''}
 				</p>
+			)}
+			{state.loading && slow && onCancel && (
+				<button onClick={onCancel}>Cancel</button>
 			)}
 			{state.error && (
 				<div role="alert" className={styles.error}>
 					<p>{state.error}</p>
-					{page && (
-						<p>
-							Showing the last successful page; the failed request did not
-							replace these results.
-						</p>
-					)}
 					<button disabled={state.loading} onClick={onRetry}>
-						Retry contract {tab}
+						Retry
 					</button>
 				</div>
 			)}
-			{page && (
-				<p className={styles.muted}>
-					Page {state.pageIndex + 1} · {page.rows.length}{' '}
-					{tab === 'events' ? 'events' : 'state changes'} returned.
-					{minimum && maximum && (
-						<>
-							{' '}
-							Query ledgers {minimum}–{maximum}.
-						</>
-					)}{' '}
-					Imported records only; unavailable historical data is not evidence of
-					no activity.
-				</p>
-			)}
-			{page && observedAt && (
-				<p className={styles.muted}>
-					Query watermark recorded <LocalDateTime dateTime={observedAt} />.
-				</p>
-			)}
-			{page && Object.keys(page.coverage).length > 0 && (
-				<details>
-					<summary>Published dataset coverage</summary>
-					<p>
-						Contiguous imported ledgers:{' '}
-						{entityText(page.coverage, 'contiguousFirstLedger') ||
-							'not reported'}
-						–
-						{entityText(page.coverage, 'contiguousLastLedger') ||
-							'not reported'}
-						.
-					</p>
-					<p>
-						Coverage describes imported data, not complete network history or
-						current contract state.
-					</p>
-				</details>
-			)}
-			{!state.loading && !state.error && page?.rows.length === 0 && (
-				<p>
-					No contract {tab} were returned from imported records in this query
-					window.
-				</p>
-			)}
-			{page?.rows.map((row, index) => (
-				<ExplorerContractRecord
-					key={
-						entityText(row, 'id') ||
-						entityText(row, '_row_number') + ':' + index
-					}
-					row={row}
-					tab={tab}
-				/>
-			))}
-			<div className={styles.actions}>
-				<button
-					disabled={state.loading || state.pageIndex === 0}
-					onClick={onPrevious}
-				>
-					Previous {tab}
-				</button>
-				<button
-					disabled={state.loading || !page || page.nextPosition === null}
-					onClick={onNext}
-				>
-					Next {tab}
-				</button>
-				<button disabled={state.loading || !page} onClick={onRefresh}>
-					Refresh current page
-				</button>
+			{page &&
+				(tab === 'events' ? (
+					<ExplorerContractEventTable rows={page.rows} token={token} />
+				) : (
+					<ExplorerContractStateChangeTable rows={page.rows} />
+				))}
+			<div className={ui.pagination}>
+				<span>
+					{page
+						? `${page.rows.length} ${tab === 'events' ? 'events' : 'changes'} · Page ${state.pageIndex + 1}`
+						: ''}
+				</span>
+				<div>
+					<button
+						disabled={state.loading || state.pageIndex === 0}
+						onClick={onPrevious}
+					>
+						Previous
+					</button>
+					<button
+						disabled={state.loading || !page || page.nextPosition === null}
+						onClick={onNext}
+					>
+						Next
+					</button>
+					<button disabled={state.loading || !page} onClick={onRefresh}>
+						Refresh
+					</button>
+				</div>
 			</div>
 		</div>
 	);

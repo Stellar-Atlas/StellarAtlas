@@ -173,7 +173,7 @@ func (i indexer) promote(ctx context.Context) error {
 }
 
 func (i indexer) checkBudget(ctx context.Context) error {
-	body, err := i.execute(ctx, `SELECT toString(sum(bytes_on_disk)) AS bytes FROM system.parts WHERE active AND database={db:String} AND startsWith(table,'_asset_holder_') FORMAT JSON`, url.Values{"param_db": {i.database}})
+	body, err := i.execute(ctx, `SELECT toString(sum(bytes_on_disk)) AS bytes FROM system.parts WHERE active AND database={db:String} AND (startsWith(table,'_asset_holder_') OR startsWith(table,'_asset_pool_')) FORMAT JSON`, url.Values{"param_db": {i.database}})
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (i indexer) checkBudget(ctx context.Context) error {
 		return err
 	}
 	if size >= 32<<30 {
-		return fmt.Errorf("holder rebuild paused: 32 GiB read-model budget reached")
+		return fmt.Errorf("read-model rebuild paused: 32 GiB budget reached")
 	}
 	return nil
 }

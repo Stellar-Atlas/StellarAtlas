@@ -51,6 +51,9 @@ function fixture() {
 						total_rows: '128'
 					}
 				];
+			else if (sql.includes('._asset_holder_index_assets'))
+				data = [{ ready: 1 }];
+			else if (sql.includes('._asset_holder_current')) data = rows;
 			else if (sql.includes('.accounts') || sql.includes('.trustlines'))
 				data = rows;
 			else throw new Error('Unexpected query: ' + sql);
@@ -100,7 +103,11 @@ describe('latest-ingested holder REST coverage', () => {
 				mode: 'latest-ingested-observations',
 				catalogGeneratedAt: catalog.generatedAt,
 				catalogMaximumLedger: '193',
-				snapshotPinned: false
+				snapshotPinned: false,
+				selectedLedger: null,
+				coverageStatus: 'partial_or_unknown',
+				indexStatus: 'ready',
+				balancePrecision: 'source-float64'
 			}
 		};
 		f.setRows([balance, { ...balance, account_id: issuer }]);
@@ -126,8 +133,9 @@ describe('latest-ingested holder REST coverage', () => {
 			holder: balance
 		});
 		f.setRows([]);
+		const emptyAccount = 'G' + 'C'.repeat(55);
 		const empty = await request(f.app)
-			.get('/v1/analytics/assets/native/holders/' + account)
+			.get('/v1/analytics/assets/native/holders/' + emptyAccount)
 			.expect(404);
 		expect(empty.body).toMatchObject({
 			...expected,
@@ -141,11 +149,13 @@ describe('latest-ingested holder REST coverage', () => {
 			'does not establish absence on the current chain'
 		);
 		expect(empty.body).not.toHaveProperty('holder');
-		expect(f.requests).toHaveLength(7);
+		expect(f.requests).toHaveLength(10);
 		expect(
 			f.requests
 				.slice(4)
-				.every((url) => url.searchParams.get('query')?.includes('.accounts'))
+				.every((url) =>
+					url.searchParams.get('query')?.includes('_asset_holder')
+				)
 		).toBe(true);
 	});
 
@@ -158,7 +168,7 @@ describe('latest-ingested holder REST coverage', () => {
 				limit: 1
 			})
 		]);
-		expect(f.requests).toHaveLength(6);
+		expect(f.requests).toHaveLength(8);
 		expect(
 			f.requests.filter((url) =>
 				url.searchParams.get('query')?.includes('FROM system.columns')
@@ -190,10 +200,13 @@ describe('latest-ingested holder REST coverage', () => {
 		}
 	});
 
-	it('rejects unsupported historical filters before any warehouse access', async () => {
+	it('rejects unsupported or malformed holder filters before warehouse access', async () => {
 		const f = fixture();
 		await request(f.app)
-			.get('/v1/analytics/assets/native/holders?as_of_ledger=65')
+			.get('/v1/analytics/assets/native/holders?as_of_ledger=invalid')
+			.expect(400);
+		await request(f.app)
+			.get('/v1/analytics/assets/native/holders?sort=unsupported')
 			.expect(400);
 		await request(f.app)
 			.get(
@@ -201,6 +214,59 @@ describe('latest-ingested holder REST coverage', () => {
 			)
 			.expect(400);
 		expect(f.requests).toHaveLength(0);
+	});
+
+	it('validates holder sorting and passes the requested observation ledger to the warehouse', async () => {
+		const f = fixture();
+		const selected = await request(f.app)
+			.get(
+				'/v1/analytics/assets/native/holders?sort=balance&order=desc&as_of_ledger=65'
+			)
+			.expect(200);
+		expect(selected.body.watermark).toMatchObject({
+			selectedLedger: '65',
+			coverageStatus: 'complete',
+			balancePrecision: 'source-float64'
+		});
+		const holderQuery = f.requests.find((url) =>
+			url.searchParams.get('query')?.includes('.accounts')
+		);
+		expect(holderQuery?.searchParams.get('query')).toContain(
+			'ledger_sequence <= {as_of_ledger:UInt32}'
+		);
+		expect(holderQuery?.searchParams.get('query')).toContain(
+			'ORDER BY _latest_balance DESC, account_id ASC'
+		);
+		await request(f.app)
+			.get('/v1/analytics/assets/native/holders?sort=liquidity')
+			.expect(400);
+		await request(f.app)
+			.get('/v1/analytics/assets/native/holders?order=sideways')
+			.expect(400);
+	});
+
+	it('single-flights and briefly caches identical holder page selections', async () => {
+		const f = fixture();
+		const path = '/v1/analytics/assets/native/holders?sort=balance&order=desc';
+		const [first, concurrent] = await Promise.all([
+			request(f.app).get(path).expect(200),
+			request(f.app).get(path).expect(200)
+		]);
+		expect(first.body).toEqual(concurrent.body);
+		await request(f.app).get(path).expect(200);
+		expect(
+			f.requests.filter((url) =>
+				url.searchParams.get('query')?.includes('._asset_holder_current')
+			)
+		).toHaveLength(1);
+		await request(f.app)
+			.get('/v1/analytics/assets/native/holders?sort=balance&order=asc')
+			.expect(200);
+		expect(
+			f.requests.filter((url) =>
+				url.searchParams.get('query')?.includes('._asset_holder_current')
+			)
+		).toHaveLength(2);
 	});
 
 	it('documents the same evidence on success and not-found responses without a current-state promise', () => {

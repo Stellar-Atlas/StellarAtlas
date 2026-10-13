@@ -27,6 +27,8 @@ export interface ExplorerInput {
 	readonly filters: Readonly<Record<string, string>>;
 	readonly startTime?: string;
 	readonly endTime?: string;
+	readonly orderBy?: string;
+	readonly order?: string;
 }
 const datasets: Record<ExplorerEntity, string> = {
 	operations: 'history_operations',
@@ -106,13 +108,19 @@ export async function queryExplorer(
 			: input.entity === 'contracts'
 				? ['contract_id']
 				: undefined;
+	const poolOrder =
+		input.entity === 'liquidity-pools'
+			? liquidityPoolOrderBy(input.orderBy, input.order)
+			: undefined;
 	const orderBy: HubbleQuery['orderBy'] = distinct
 		? select!.map((field) => ({ field, direction: 'asc' }))
-		: [
-				{ field: '_ledger_sequence', direction: 'desc' },
-				{ field: '_row_number', direction: 'desc' },
-				{ field: '_batch_id', direction: 'asc' }
-			];
+		: input.entity === 'liquidity-pools' && input.id === undefined
+			? poolOrder!
+			: [
+					{ field: '_ledger_sequence', direction: 'desc' },
+					{ field: '_row_number', direction: 'desc' },
+					{ field: '_batch_id', direction: 'asc' }
+				];
 	let result = await warehouse.query({
 		dataset: datasets[input.entity],
 		distinct,
@@ -294,4 +302,50 @@ export function normalizeNativePoolId(value: string): string {
 	return fail(
 		'Pool id must be a 64-character hex hash or checksum-valid L-address'
 	);
+}
+
+const liquidityPoolOrderFields = new Set([
+	'pool',
+	'asset_a',
+	'asset_b',
+	'reserve_a',
+	'reserve_b',
+	'shares',
+	'trustlines',
+	'fee',
+	'ledger',
+	'time'
+]);
+
+export function liquidityPoolOrderBy(
+	orderBy = 'trustlines',
+	order = 'desc'
+): NonNullable<HubbleQuery['orderBy']> {
+	if (!liquidityPoolOrderFields.has(orderBy))
+		fail(
+			'order_by must be pool, asset_a, asset_b, reserve_a, reserve_b, shares, trustlines, fee, ledger, or time'
+		);
+	if (order !== 'asc' && order !== 'desc') fail('order must be asc or desc');
+	const fields: Record<string, readonly string[]> = {
+		pool: ['liquidity_pool_id'],
+		asset_a: ['asset_a_type', 'asset_a_code', 'asset_a_issuer'],
+		asset_b: ['asset_b_type', 'asset_b_code', 'asset_b_issuer'],
+		reserve_a: ['asset_a_amount'],
+		reserve_b: ['asset_b_amount'],
+		shares: ['pool_share_count'],
+		trustlines: ['trustline_count'],
+		fee: ['fee'],
+		ledger: ['_ledger_sequence'],
+		time: ['closed_at']
+	};
+	const uniqueFields = [
+		...new Set([
+			...fields[orderBy]!,
+			'liquidity_pool_id',
+			'_ledger_sequence',
+			'_row_number',
+			'_batch_id'
+		])
+	];
+	return uniqueFields.map((field) => ({ field, direction: order }));
 }
