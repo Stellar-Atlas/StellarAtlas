@@ -5,8 +5,7 @@
 
 ## About
 
-StellarAtlas is a monitoring and analytics platform for the Stellar network and
-its validators and organizations. It collects and visualizes network data with
+StellarAtlas is a Stellar network, monitoring, data validatation and observability platform. Providing monitoring and analytics as a service for the Stellar network and its validators and organizations. It collects and visualizes network data with
 the ability to time-travel, has simulation options, provides REST APIs for
 integration, implements email notifications, scans validator history archives
 for errors and provides educational tools to aid in understanding the Stellar
