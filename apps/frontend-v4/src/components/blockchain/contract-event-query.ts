@@ -41,6 +41,11 @@ export function contractEventQueryError(
 		return 'Choose newest or oldest events first.';
 	if (filters.limit && !['10', '25', '50', '100'].includes(filters.limit))
 		return 'Choose 10, 25, 50, or 100 events per page.';
+	if (
+		filters.after &&
+		(filters.after.length > 2048 || /[\u0000-\u001f\u007f]/.test(filters.after))
+	)
+		return 'The event cursor is invalid. Start again from the first page.';
 	return null;
 }
 

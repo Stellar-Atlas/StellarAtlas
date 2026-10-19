@@ -26,7 +26,7 @@ export function contractActivityPath(
 	contractId: string,
 	tab: ContractActivityTab,
 	filters: ExplorerFilters,
-	position = ''
+	position = tab === 'events' ? (filters.after ?? '') : ''
 ): string {
 	const query = new URLSearchParams({
 		limit: filters.limit || String(pageSize)

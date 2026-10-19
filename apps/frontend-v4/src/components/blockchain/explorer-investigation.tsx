@@ -22,6 +22,27 @@ export function useExplorerReturnTo(): string | null {
 	return useContext(InvestigationOrigin).returnTo;
 }
 
+/** A filtered result page can provide its own origin without another back bar. */
+export function ExplorerInvestigationScope({
+	origin,
+	children
+}: {
+	readonly origin: string;
+	readonly children: ReactNode;
+}): React.JSX.Element {
+	const inherited = useContext(InvestigationOrigin);
+	return (
+		<InvestigationOrigin.Provider
+			value={{
+				...inherited,
+				origin: sanitizeExplorerReturnTo(origin) ?? inherited.origin
+			}}
+		>
+			{children}
+		</InvestigationOrigin.Provider>
+	);
+}
+
 /** One URL context per explorer, shared by all linked record components. */
 export function ExplorerInvestigation({
 	children

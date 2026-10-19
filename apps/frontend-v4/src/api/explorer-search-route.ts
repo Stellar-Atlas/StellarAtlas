@@ -52,6 +52,7 @@ const filterNames = new Set([
 	'event_topic',
 	'transaction_hash',
 	'contract_id',
+	'after',
 	'topic',
 	'order',
 	'q',
@@ -67,7 +68,9 @@ export function explorerRouteFilters(
 	return Object.fromEntries(
 		Object.entries(query).filter(
 			([key, value]) =>
-				filterNames.has(key) && typeof value === 'string' && value.length <= 512
+				filterNames.has(key) &&
+				typeof value === 'string' &&
+				value.length <= (key === 'after' ? 2048 : 512)
 		)
 	) as ExplorerFilters;
 }

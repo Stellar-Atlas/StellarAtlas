@@ -30,10 +30,11 @@ describe('typed contract activity API contract', () => {
 			'/v1/analytics/contracts/' + contractId + '/events'
 		);
 		expect(Object.fromEntries(url.searchParams)).toEqual({
-			limit: '10',
+			limit: '25',
 			min_ledger: '63490364',
 			max_ledger: '63490365',
 			view: 'typed',
+			include_summary: 'true',
 			after: 'opaque+/='
 		});
 	});

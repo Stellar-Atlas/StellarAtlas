@@ -186,7 +186,12 @@ export const contractEventsGuide: DeveloperGuidePage = {
 						Copy <code>nextCursor</code> into <code>after</code> and preserve
 						the contract and all filters. Do not send <code>offset</code> with
 						the typed view. Stop when <code>nextCursor</code> is null. Changing
-						filters starts a new query without the old cursor.
+						filters starts a new query without the old cursor. Use{' '}
+						<strong>Link to this page</strong> to reopen the same event cursor.
+						Transaction and ledger links retain that event page as their return
+						destination. A reopened cursor does not contain earlier-page
+						history; use <strong>First page</strong>
+						to restart the result set.
 					</p>
 					<p>
 						Pages are ordered by descending ledger and stable source-row

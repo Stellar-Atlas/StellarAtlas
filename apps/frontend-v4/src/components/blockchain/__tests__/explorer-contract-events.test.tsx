@@ -8,6 +8,16 @@ jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 jest.unstable_mockModule('../explorer-contract-events.module.css', () => ({
 	default: {}
 }));
+jest.unstable_mockModule('../explorer-contract-controls.module.css', () => ({
+	default: {}
+}));
+jest.unstable_mockModule('../explorer-contract-event-table.module.css', () => ({
+	default: {}
+}));
+jest.unstable_mockModule(
+	'../explorer-contract-state-change-table.module.css',
+	() => ({ default: {} })
+);
 const { ExplorerContractEvents } = await import('../explorer-contract-events');
 
 describe('contract events workspace', () => {
@@ -19,13 +29,13 @@ describe('contract events workspace', () => {
 		expect(html).toContain('Try an imported example');
 		expect(html).toContain('method="get"');
 		expect(html).toContain('/docs/contract-events');
-		expect(html).not.toContain('Loading contract events');
+		expect(html).not.toContain('Loading…');
 	});
 	it('renders typed event results and public request links for a valid query', () => {
 		const html = renderToStaticMarkup(
 			createElement(ExplorerContractEvents, { filters: contractEventExample })
 		);
-		expect(html).toContain('Loading contract events');
+		expect(html).toContain('Loading…');
 		expect(html).toContain(
 			'https://api.stellaratlas.io/v1/analytics/contracts/'
 		);
@@ -40,7 +50,7 @@ describe('contract events workspace', () => {
 			})
 		);
 		expect(html).toContain('role="alert"');
-		expect(html).not.toContain('Loading contract events');
+		expect(html).not.toContain('Loading…');
 		expect(html).not.toContain('Open REST response');
 	});
 });

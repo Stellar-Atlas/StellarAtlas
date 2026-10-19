@@ -19,10 +19,28 @@ const invalidFilters: ExplorerFilters[] = [
 	{ limit: '10000' },
 	{ topic: 'x'.repeat(129) },
 	{ topic: 'line\nbreak' },
+	{ after: 'x'.repeat(2049) },
 	{ min_ledger: '1', max_ledger: '1000001' }
 ];
 
 describe('contract event workspace query', () => {
+	it('preserves a saved event cursor through the route and REST link', () => {
+		const filters = { ...contractEventExample, after: 'opaque'.repeat(120) };
+		const query = Object.fromEntries(
+			new URL('https://stellaratlas.io' + contractEventWorkspaceHref(filters))
+				.searchParams
+		);
+		expect(explorerRouteFilters(query)).toEqual(filters);
+		expect(contractEventQueryError(filters)).toBeNull();
+		const rest = new URL(
+			'https://api.stellaratlas.io' +
+				contractActivityPath(filters.contract_id!, 'events', filters)
+		);
+		expect(rest.searchParams.get('after')).toBe(filters.after);
+		expect(
+			contractActivityPath(filters.contract_id!, 'events', filters, '')
+		).not.toContain('after=');
+	});
 	it('validates the imported example and preserves explicit failed outcomes', () => {
 		const filters = {
 			...contractEventExample,

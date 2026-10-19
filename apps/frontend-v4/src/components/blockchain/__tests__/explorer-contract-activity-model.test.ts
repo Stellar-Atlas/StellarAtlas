@@ -1,6 +1,7 @@
 import { parseContractActivityPage } from '../../../api/explorer-contract-activity';
 import {
 	contractActivityReducer as reduce,
+	createContractActivityState,
 	initialContractActivityState,
 	formatContractJson
 } from '../explorer-contract-activity-model';
@@ -11,6 +12,30 @@ const first = parseContractActivityPage(
 	'events'
 );
 describe('contract activity cursor and failure state', () => {
+	it('uses an opaque saved cursor as the true previous-page origin', () => {
+		const savedPosition = 'opaque-saved-cursor';
+		const initial = createContractActivityState(savedPosition);
+		const loadedFirst = reduce(initial, {
+			type: 'loaded',
+			requestId: 0,
+			page: first
+		});
+		const next = reduce(loadedFirst, { type: 'next' });
+		const loadedNext = reduce(next, {
+			type: 'loaded',
+			requestId: next.requestId,
+			page: { ...first, nextPosition: null }
+		});
+		const previous = reduce(loadedNext, { type: 'previous' });
+
+		expect(initial.positions).toEqual([savedPosition]);
+		expect(loadedFirst.positions).toEqual([savedPosition]);
+		expect(previous).toMatchObject({
+			requestedPosition: savedPosition,
+			requestedIndex: 0
+		});
+	});
+
 	it('keeps the last loaded page on failed next-page requests and retries the exact cursor', () => {
 		const loaded = reduce(initialContractActivityState, {
 			type: 'loaded',

@@ -20,6 +20,17 @@ export const initialContractActivityState: ContractActivityState = {
 	loading: true,
 	error: null
 };
+
+export function createContractActivityState(
+	position: string = ''
+): ContractActivityState {
+	return {
+		...initialContractActivityState,
+		positions: [position],
+		requestedPosition: position
+	};
+}
+
 type ActivityAction =
 	| { readonly type: 'next' | 'previous' | 'retry' | 'refresh' }
 	| {

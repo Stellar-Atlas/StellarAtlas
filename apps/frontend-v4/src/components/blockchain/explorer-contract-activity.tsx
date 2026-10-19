@@ -15,7 +15,7 @@ import {
 import { ExplorerContractStateChangeTable } from './explorer-contract-state-change-table';
 import {
 	contractActivityReducer,
-	initialContractActivityState,
+	createContractActivityState,
 	type ContractActivityState
 } from './explorer-contract-activity-model';
 import styles from './explorer-entity.module.css';
@@ -25,6 +25,7 @@ import {
 	createEventControls
 } from './contract-event-controls';
 import { contractEventWorkspaceHref } from './contract-event-query';
+import { ExplorerInvestigationScope } from './explorer-investigation';
 export function ExplorerContractActivity({
 	contractId,
 	filters,
@@ -43,6 +44,11 @@ export function ExplorerContractActivity({
 		[]
 	);
 	const applied = applyEventControls(filters, controls);
+	if (
+		filters.after &&
+		JSON.stringify(controls) === JSON.stringify(createEventControls(filters))
+	)
+		applied.after = filters.after;
 	return (
 		<section className={styles.panel} aria-label="Contract activity">
 			<div className={styles.actions}>
@@ -202,7 +208,8 @@ function ContractActivityResults({
 }): React.JSX.Element {
 	const [state, dispatch] = useReducer(
 		contractActivityReducer,
-		initialContractActivityState
+		tab === 'events' ? (filters.after ?? '') : '',
+		createContractActivityState
 	);
 	const { requestId, requestedPosition } = state;
 	const [slow, setSlow] = useState(false);
@@ -251,7 +258,18 @@ function ContractActivityResults({
 			abort.abort();
 		};
 	}, [path, contractId, tab, requestedPosition, requestId, onSummary]);
-	return (
+	const displayedPosition = state.positions[state.pageIndex] ?? '';
+	const pageHref = contractEventWorkspaceHref({
+		...filters,
+		contract_id: contractId,
+		after: displayedPosition
+	});
+	const firstHref = contractEventWorkspaceHref({
+		...filters,
+		contract_id: contractId,
+		after: ''
+	});
+	const view = (
 		<ContractActivityView
 			state={state}
 			tab={tab}
@@ -263,6 +281,17 @@ function ContractActivityResults({
 			onNext={() => dispatch({ type: 'next' })}
 			onRefresh={() => dispatch({ type: 'refresh' })}
 		/>
+	);
+	return tab === 'events' ? (
+		<ExplorerInvestigationScope origin={pageHref}>
+			{view}
+			<div className={styles.actions}>
+				{state.page && <a href={pageHref}>Link to this page</a>}
+				{displayedPosition && <a href={firstHref}>First page</a>}
+			</div>
+		</ExplorerInvestigationScope>
+	) : (
+		view
 	);
 }
 
@@ -302,6 +331,7 @@ export function ContractActivityView({
 			{state.error && (
 				<div role="alert" className={styles.error}>
 					<p>{state.error}</p>
+					{page && <p>Showing previous results.</p>}
 					<button disabled={state.loading} onClick={onRetry}>
 						Retry
 					</button>
@@ -313,10 +343,15 @@ export function ContractActivityView({
 				) : (
 					<ExplorerContractStateChangeTable rows={page.rows} />
 				))}
+			{page && page.rows.length === 0 && (
+				<p className={ui.count}>
+					No {tab === 'events' ? 'events' : 'changes'} in this imported window.
+				</p>
+			)}
 			<div className={ui.pagination}>
 				<span>
 					{page
-						? `${page.rows.length} ${tab === 'events' ? 'events' : 'changes'} · Page ${state.pageIndex + 1}`
+						? `${page.rows.length} ${tab === 'events' ? 'events' : 'changes'}${state.positions[0] ? ' · Continued query' : ` · Page ${state.pageIndex + 1}`}`
 						: ''}
 				</span>
 				<div>
