@@ -5,15 +5,23 @@ import test from 'node:test';
 const backendRequire = createRequire(
 	new URL('../apps/backend/package.json', import.meta.url)
 );
+const frontendRequire = createRequire(
+	new URL('../apps/frontend-v4/package.json', import.meta.url)
+);
 const sharedRequire = createRequire(
 	new URL('../packages/shared/package.json', import.meta.url)
 );
+const rootRequire = createRequire(new URL('../package.json', import.meta.url));
 const schemaRequire = createRequire(
 	sharedRequire.resolve('typescript-json-schema')
 );
 const ajvRequire = createRequire(backendRequire.resolve('ajv'));
+const expressRequire = createRequire(backendRequire.resolve('express'));
+const tsJestRequire = createRequire(rootRequire.resolve('ts-jest'));
+const concurrentlyRequire = createRequire(rootRequire.resolve('concurrently'));
 const toml = backendRequire('toml');
 const { VM, NodeVM } = schemaRequire('vm2');
+const proxyAddr = expressRequire('proxy-addr');
 
 function assertVersionAtLeast(actual, minimum) {
 	const parts = actual.split('.').map(Number);
@@ -29,8 +37,22 @@ function assertVersionAtLeast(actual, minimum) {
 
 test('effective runtime and schema-tool versions contain the reviewed fixes', () => {
 	assertVersionAtLeast(backendRequire('toml/package.json').version, '4.2.0');
-	assertVersionAtLeast(schemaRequire('vm2/package.json').version, '3.11.6');
+	assertVersionAtLeast(schemaRequire('vm2/package.json').version, '3.12.2');
 	assertVersionAtLeast(ajvRequire('fast-uri/package.json').version, '3.1.6');
+	assertVersionAtLeast(frontendRequire('next/package.json').version, '16.4.2');
+	assertVersionAtLeast(expressRequire('proxy-addr/package.json').version, '2.0.8');
+	assertVersionAtLeast(tsJestRequire('handlebars/package.json').version, '4.7.10');
+	assertVersionAtLeast(concurrentlyRequire('shell-quote/package.json').version, '1.12.0');
+});
+
+test('proxy-addr normalizes IPv4-mapped IPv6 addresses for trusted ranges', () => {
+	const loopback = proxyAddr.compile('127.0.0.1/32');
+	assert.equal(loopback('::ffff:127.0.0.1'), true);
+	assert.equal(loopback('::ffff:127.0.0.2'), false);
+
+	const privateNetwork = proxyAddr.compile('10.0.0.0/8');
+	assert.equal(privateNetwork('::ffff:10.1.2.3'), true);
+	assert.equal(privateNetwork('::ffff:11.1.2.3'), false);
 });
 
 test('the schema sandbox remains usable without exposing dangerous host builtins', () => {
