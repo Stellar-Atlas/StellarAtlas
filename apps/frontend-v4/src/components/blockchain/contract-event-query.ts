@@ -1,9 +1,10 @@
 import type { ExplorerFilters } from '../../api/explorer-analytics';
 
 export const contractEventExample = {
-	contract_id: 'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA',
-	min_ledger: '63490364',
-	max_ledger: '63490364'
+	contract_id: 'CA526Y2NQWGWVVQ7RFFPGAZMU66PSYJ3UC2MTVAV4ZU7OM5BOPHDXUSG',
+	min_ledger: '64877635',
+	max_ledger: '64877698',
+	limit: '10'
 } satisfies ExplorerFilters;
 
 export function contractEventQueryError(
@@ -30,6 +31,16 @@ export function contractEventQueryError(
 	for (const name of ['successful', 'in_successful_contract_call'])
 		if (filters[name] && !['true', 'false'].includes(filters[name]))
 			return 'Choose all, successful, or failed outcomes.';
+	if (
+		filters.topic &&
+		(filters.topic.trim().length > 128 ||
+			/[\u0000-\u001f\u007f]/.test(filters.topic))
+	)
+		return 'Use a topic of at most 128 characters without control characters.';
+	if (filters.order && !['asc', 'desc'].includes(filters.order))
+		return 'Choose newest or oldest events first.';
+	if (filters.limit && !['10', '25', '50', '100'].includes(filters.limit))
+		return 'Choose 10, 25, 50, or 100 events per page.';
 	return null;
 }
 

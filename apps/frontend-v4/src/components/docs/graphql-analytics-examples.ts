@@ -11,14 +11,23 @@ export const graphqlAnalyticsExamples = {
 		query: `query ContractEvents($contractId: String!, $input: HubbleContractEventInput) {
   hubbleContractEvents(contractId: $contractId, input: $input) {
     contractId limit nextCursor
-    items { id contractId type successful topicsJson dataJson classification { transactionKind eventKind sorobanExecutionEvidence provenance } }
+    items { id contractId ledgerSequence transactionHash type typeCode successful topicsJson dataJson classification { transactionKind eventKind sorobanExecutionEvidence provenance } }
+    summary { total topics { topic count } }
     coverage { contiguousLastLedger maximumLedger gapCount }
     watermark { minimumLedger maximumLedger observedAt coverage }
   }
 }`,
 		variables: {
-			contractId: 'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA',
-			input: { minLedger: 63490364, maxLedger: 63490365, limit: 10 }
+			contractId: 'CA526Y2NQWGWVVQ7RFFPGAZMU66PSYJ3UC2MTVAV4ZU7OM5BOPHDXUSG',
+			input: {
+				minLedger: 64877635,
+				maxLedger: 64877698,
+				typeCode: 1,
+				topic: 'REDSTONE',
+				order: 'desc',
+				includeSummary: true,
+				limit: 2
+			}
 		}
 	},
 	balances: {

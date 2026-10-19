@@ -15,6 +15,10 @@ const invalidFilters: ExplorerFilters[] = [
 	{ transaction_hash: 'xyz' },
 	{ type_code: '3' },
 	{ successful: 'maybe' },
+	{ order: 'sideways' },
+	{ limit: '10000' },
+	{ topic: 'x'.repeat(129) },
+	{ topic: 'line\nbreak' },
 	{ min_ledger: '1', max_ledger: '1000001' }
 ];
 
@@ -24,7 +28,11 @@ describe('contract event workspace query', () => {
 			...contractEventExample,
 			successful: 'false',
 			in_successful_contract_call: 'false',
-			type_code: '0'
+			type_code: '0',
+			topic: 'transfer',
+			order: 'asc',
+			q: '64877639',
+			limit: '50'
 		};
 		expect(contractEventQueryError(filters)).toBeNull();
 		const query = Object.fromEntries(
@@ -35,6 +43,10 @@ describe('contract event workspace query', () => {
 		const path = contractActivityPath(filters.contract_id!, 'events', filters);
 		expect(path).toContain('successful=false');
 		expect(path).toContain('type_code=0');
+		expect(path).toContain('topic=transfer');
+		expect(path).toContain('order=asc');
+		expect(path).toContain('q=64877639');
+		expect(path).toContain('limit=50');
 		expect(path).toContain('view=typed');
 		expect(path).not.toContain('offset');
 	});

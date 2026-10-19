@@ -20,14 +20,11 @@ import {
 } from './explorer-contract-activity-model';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-contract-controls.module.css';
-
-type Controls = {
-	type: string;
-	order: 'asc' | 'desc';
-	limit: string;
-	topic: string;
-	q: string;
-};
+import {
+	applyEventControls,
+	createEventControls
+} from './contract-event-controls';
+import { contractEventWorkspaceHref } from './contract-event-query';
 export function ExplorerContractActivity({
 	contractId,
 	filters,
@@ -38,27 +35,14 @@ export function ExplorerContractActivity({
 	readonly token?: EventTokenContext;
 }): React.JSX.Element {
 	const [tab, setTab] = useState<ContractActivityTab>('events');
-	const [controls, setControls] = useState<Controls>({
-		type: 'all',
-		order: 'desc',
-		limit: '25',
-		topic: '',
-		q: ''
-	});
-	const [search, setSearch] = useState('');
+	const [controls, setControls] = useState(() => createEventControls(filters));
+	const [search, setSearch] = useState(controls.q);
 	const [summary, setSummary] = useState<ContractActivityPage['summary']>();
 	const onSummary = useCallback(
 		(value: ContractActivityPage['summary']) => setSummary(value),
 		[]
 	);
-	const applied = {
-		...filters,
-		limit: controls.limit,
-		order: controls.order,
-		...(controls.type === 'all' ? {} : { type_code: controls.type }),
-		...(controls.topic ? { topic: controls.topic } : {}),
-		...(controls.q ? { q: controls.q } : {})
-	};
+	const applied = applyEventControls(filters, controls);
 	return (
 		<section className={styles.panel} aria-label="Contract activity">
 			<div className={styles.actions}>
@@ -178,6 +162,14 @@ export function ExplorerContractActivity({
 								? `${Number(summary.total).toLocaleString()} indexed events`
 								: ''}
 						</span>
+						<a
+							href={contractEventWorkspaceHref({
+								...applied,
+								contract_id: contractId
+							})}
+						>
+							Link to this query
+						</a>
 					</form>
 				</div>
 			)}

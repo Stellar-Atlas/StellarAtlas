@@ -26,7 +26,9 @@ export const contractEventsGuide: DeveloperGuidePage = {
 						The <a href="/explorer/contract-events">contract-events explorer</a>{' '}
 						lets you enter a contract address, choose a ledger interval, and
 						filter by event type, transaction hash, transaction outcome, and
-						contract-call outcome.
+						contract-call outcome. Use <strong>Link to this query</strong> to
+						share the topic, search, order, page size, and selected window
+						together.
 					</p>
 					<p>
 						<a href={contractEventWorkspaceHref(contractEventExample)}>
@@ -88,6 +90,25 @@ export const contractEventsGuide: DeveloperGuidePage = {
 						<dd>
 							The recorded call-success flag. This is distinct from the
 							transaction outcome.
+						</dd>
+						<dt>
+							<code>topic / order / limit</code>
+						</dt>
+						<dd>
+							Filter by an exact named topic, such as <code>transfer</code>.
+							Choose <code>desc</code> (newest first, the default) or{' '}
+							<code>asc</code>. The explorer supports 10, 25, 50, or 100 rows
+							per page. Topic buttons and counts describe the selected imported
+							window, not all network history.
+						</dd>
+						<dt>
+							<code>q / include_summary</code>
+						</dt>
+						<dd>
+							Search for one exact G/C address, transaction hash, or ledger
+							number. Set <code>include_summary=true</code> for indexed event
+							and topic counts; the number of items in a page is not the total
+							count.
 						</dd>
 						<dt>
 							<code>min_ledger / max_ledger</code>

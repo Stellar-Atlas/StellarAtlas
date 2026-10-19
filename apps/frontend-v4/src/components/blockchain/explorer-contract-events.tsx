@@ -40,6 +40,16 @@ export function ExplorerContractEvents({
 					className={events.form}
 					key={JSON.stringify(filters)}
 				>
+					{['order', 'limit', 'q'].map((name) =>
+						filters[name] ? (
+							<input
+								key={name}
+								type="hidden"
+								name={name}
+								value={filters[name]}
+							/>
+						) : null
+					)}
 					<label className={events.wide}>
 						Contract address
 						<input
@@ -94,6 +104,16 @@ export function ExplorerContractEvents({
 							<option value="true">Successful</option>
 							<option value="false">Failed</option>
 						</select>
+					</label>
+					<label>
+						Topic <span className={styles.muted}>(optional)</span>
+						<input
+							name="topic"
+							defaultValue={filters.topic ?? ''}
+							maxLength={128}
+							placeholder="transfer, mint…"
+							spellCheck={false}
+						/>
 					</label>
 					<label className={events.hash}>
 						Transaction hash <span className={styles.muted}>(optional)</span>
