@@ -176,6 +176,8 @@
 .metadataFields dt {
 	color: var(--muted);
 	font-family: var(--font-mono);
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 .metadataFields dd {
 	margin: 0;

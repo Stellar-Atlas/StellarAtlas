@@ -1,6 +1,10 @@
 'use client';
 
 import { LocalDateTime } from '../local-date-time';
+import {
+	metadataFieldLabel,
+	safeMetadataUrl
+} from './explorer-metadata-fields';
 import type { Metadata } from './explorer-asset-types';
 import ui from './explorer-asset-workspace.module.css';
 
@@ -51,8 +55,20 @@ export function ParsedIssuerMetadata({
 				<dl className={ui.metadataFields}>
 					{entries.map(([key, value]) => (
 						<div key={key}>
-							<dt>{key}</dt>
-							<dd>{value}</dd>
+							<dt title={key}>{metadataFieldLabel(key)}</dt>
+							<dd>
+								{safeMetadataUrl(value) ? (
+									<a
+										href={safeMetadataUrl(value) ?? undefined}
+										target="_blank"
+										rel="noreferrer"
+									>
+										{value}
+									</a>
+								) : (
+									value
+								)}
+							</dd>
 						</div>
 					))}
 				</dl>

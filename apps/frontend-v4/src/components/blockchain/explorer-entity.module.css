@@ -28,6 +28,7 @@
 	padding: 1rem;
 	min-width: 0;
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 0.85rem;
 }
 .panel h2,
@@ -51,6 +52,57 @@
 	display: grid;
 	gap: 0.7rem;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.filterForm {
+	display: grid;
+	gap: 0.85rem;
+}
+.rangeFilters {
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+	padding: 0.7rem 0;
+}
+.rangeFilters summary {
+	cursor: pointer;
+	font-size: 0.82rem;
+	color: var(--muted);
+}
+.rangeFilters summary span {
+	margin-left: 0.6rem;
+	color: var(--blue);
+}
+.rangeFilters > div {
+	margin-top: 0.75rem;
+}
+.textAction {
+	border: 0;
+	background: none;
+	color: var(--blue);
+	font-size: 0.78rem;
+	margin-top: 0.6rem;
+	padding: 0;
+	cursor: pointer;
+}
+.filterToolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+.pageSize {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+.pageSize select {
+	border: 1px solid var(--border);
+	border-radius: 0.35rem;
+	background: var(--panel);
+	color: var(--ink);
+	padding: 0.4rem;
 }
 .form label {
 	display: grid;
@@ -128,6 +180,67 @@
 }
 .hash {
 	font-family: var(--font-mono);
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+.lookupForm label {
+	display: grid;
+	gap: 0.35rem;
+	min-width: 0;
+	flex: 1 1 160px;
+	max-width: 320px;
+	font-size: 0.82rem;
+}
+.lookupForm input {
+	width: 100%;
+	min-width: 0;
+	border: 1px solid var(--border);
+	border-radius: 0.35rem;
+	padding: 0.55rem;
+	background: var(--panel);
+	color: var(--ink);
+}
+.operationTable td:first-child,
+.operationTable td:nth-child(5) {
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+.invocation {
+	display: grid;
+	gap: 0.4rem;
+	margin-top: 0.4rem;
+	min-width: 210px;
+}
+.invocation strong code,
+.argumentFields code {
+	background: none;
+	border: 0;
+	padding: 0;
+	font-size: inherit;
+	overflow-wrap: anywhere;
+}
+.invocation > a {
+	font-size: 0.74rem;
+	overflow-wrap: anywhere;
+}
+.invocation summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 0.78rem;
+}
+.argumentFields {
+	display: grid;
+	gap: 0.6rem;
+	margin: 0.65rem 0 0;
+}
+.argumentFields dt {
+	font-size: 0.74rem;
+	color: var(--muted);
+	margin-bottom: 0.25rem;
+}
+.argumentFields dd {
+	margin: 0;
+	overflow-wrap: anywhere;
 }
 .details {
 	display: grid;
@@ -202,7 +315,7 @@
 		grid-template-columns: 1fr;
 	}
 	.details {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 0.2rem;
 	}
 	.details dd {

@@ -1,20 +1,16 @@
 'use client';
 import Link from 'next/link';
-import { localTimeInput } from '../../api/explorer-search-route';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+	buildEntityApiPath,
 	buildEntityHref,
 	type AnalyticsCollection,
 	type AnalyticsEntityPage,
 	type ExplorerFilters
 } from '../../api/explorer-analytics';
-import {
-	entityDescriptions,
-	entityFields,
-	titleCase,
-	windowFields
-} from './explorer-entity-config';
+import { entityDescriptions, titleCase } from './explorer-entity-config';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
+import { ExplorerEntityFilters } from './explorer-entity-filters';
 import {
 	ExplorerEntityDetails,
 	ExplorerEntityTable
@@ -41,7 +37,6 @@ export function ExplorerEntityBrowser({
 	initialOffset = 0
 }: Props): React.JSX.Element {
 	const [filters, setFilters] = useState<ExplorerFilters>(initialFilters);
-	const [mounted, setMounted] = useState(false);
 	const [page, setPage] = useState<AnalyticsEntityPage | null>(null);
 	const [submitted, setSubmitted] = useState<ExplorerFilters>(initialFilters);
 	const [busy, setBusy] = useState(false),
@@ -100,7 +95,6 @@ export function ExplorerEntityBrowser({
 		[collection, identifier, requests]
 	);
 	useEffect(() => {
-		setMounted(true);
 		void load(initialFilters, initialOffset);
 		return () => requests.cancel();
 	}, [load, initialFilters, initialOffset, requests]);
@@ -111,9 +105,6 @@ export function ExplorerEntityBrowser({
 			}
 		: {};
 	const row = page?.rows[0];
-	const fields = identifier
-		? windowFields
-		: [...entityFields[collection], ...windowFields];
 	return (
 		<div className={styles.workspace}>
 			<ExplorerEntityNavigation active={collection} />
@@ -129,56 +120,17 @@ export function ExplorerEntityBrowser({
 				{identifier && (
 					<Link href={buildEntityHref(collection)}>← Browse {collection}</Link>
 				)}
-				<form
-					onSubmit={(event) => {
-						event.preventDefault();
-						void load(filters);
-					}}
-				>
-					<div className={styles.form}>
-						{fields.map((field) => (
-							<label key={field.key}>
-								{field.label}
-								<input
-									type={field.type ?? 'text'}
-									placeholder={field.placeholder}
-									value={
-										field.type === 'datetime-local'
-											? mounted
-												? localTimeInput(filters[field.key] ?? '')
-												: ''
-											: (filters[field.key] ?? '')
-									}
-									onChange={(event) =>
-										setFilters((previous) => ({
-											...previous,
-											[field.key]: event.currentTarget.value
-										}))
-									}
-								/>
-							</label>
-						))}
-					</div>
-					<div className={styles.actions}>
-						<button type="submit" disabled={busy}>
-							{busy ? 'Loading…' : 'Apply filters'}
-						</button>
-						<button
-							type="button"
-							disabled={busy}
-							onClick={() => {
-								setFilters({});
-								void load({});
-							}}
-						>
-							Latest published
-						</button>
-					</div>
-				</form>
+				<ExplorerEntityFilters
+					collection={collection}
+					identifier={identifier}
+					filters={filters}
+					busy={busy}
+					onChange={setFilters}
+					onApply={(next) => void load(next)}
+				/>
 				<p className={styles.muted}>
-					Blank ledger bounds select the newest published window. An empty
-					result is not evidence that the item never existed; historical
-					ingestion is still in progress.
+					Latest published activity by default. Date and ledger filters are
+					optional.
 				</p>
 				{busy && <p role="status">Loading {collection}…</p>}
 				{error && (
@@ -215,6 +167,22 @@ export function ExplorerEntityBrowser({
 									: 'Selected window has incomplete or unknown coverage'}
 							</span>
 							<span>{elapsed} ms</span>
+							<a
+								href={
+									'https://api.stellaratlas.io' +
+									buildEntityApiPath(
+										collection,
+										identifier,
+										submitted,
+										page.offset
+									)
+								}
+								target="_blank"
+								rel="noreferrer"
+							>
+								View API response ↗
+							</a>
+							<Link href="/docs/rest">API guide</Link>
 						</div>
 						{identifier && row ? (
 							<ExplorerEntityDetails

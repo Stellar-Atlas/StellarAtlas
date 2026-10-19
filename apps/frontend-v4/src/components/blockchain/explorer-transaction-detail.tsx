@@ -16,6 +16,9 @@ import { LocalDateTime } from '../local-date-time';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { EntityLink } from './explorer-entity-table';
 import { ExplorerContractEventTable } from './explorer-contract-event-table';
+import { ExplorerOperationCall } from './explorer-operation-call';
+import { operationInvocation } from './explorer-operation-invocation';
+import { formatAtomic } from './explorer-format-values';
 import Link from 'next/link';
 import styles from './explorer-entity.module.css';
 
@@ -55,10 +58,13 @@ function RelationRecord({
 		? row.amounts.map(recordValue)
 		: [];
 	const details = recordValue(decoded(row.detailsJson));
+	const invocationRow = { ...row, details };
+	const hasInvocation =
+		relation === 'operations' && operationInvocation(invocationRow) !== null;
 	return (
 		<article className={styles.panel}>
 			<h4>
-				{type}
+				{type.replaceAll('_', ' ')}
 				{relation === 'operations' && id ? (
 					<>
 						{' '}
@@ -71,6 +77,12 @@ function RelationRecord({
 					</>
 				) : null}
 			</h4>
+			{hasInvocation && (
+				<ExplorerOperationCall
+					row={invocationRow}
+					filters={{ min_ledger: ledger, max_ledger: ledger }}
+				/>
+			)}
 			<dl className={styles.details}>
 				{amounts.flatMap((amount, index) => [
 					<dt key={'a' + index}>{entityText(amount, 'field')}</dt>,
@@ -81,10 +93,14 @@ function RelationRecord({
 				])}
 				{Object.entries(details)
 					.filter(
-						([, value]) =>
-							typeof value === 'string' ||
-							typeof value === 'number' ||
-							typeof value === 'boolean'
+						([key, value]) =>
+							!(
+								hasInvocation &&
+								['type', 'function', 'contract_id'].includes(key)
+							) &&
+							(typeof value === 'string' ||
+								typeof value === 'number' ||
+								typeof value === 'boolean')
 					)
 					.slice(0, 30)
 					.flatMap(([key, value]) => [
@@ -125,6 +141,7 @@ export function ExplorerTransactionDetail({
 	readonly ledgerSequence?: string;
 }): React.JSX.Element {
 	const [data, setData] = useState<EntityRecord | null>(null);
+	const activeRequest = useRef<AbortController | null>(null);
 	const resolvedLedger = useRef<{ hash: string; ledger: string } | null>(null);
 	const [busy, setBusy] = useState(false),
 		[error, setError] = useState<string | null>(null);
@@ -138,7 +155,7 @@ export function ExplorerTransactionDetail({
 	useEffect(() => {
 		let disposed = false;
 		const abort = new AbortController();
-		const timeout = setTimeout(() => abort.abort(), 25000);
+		activeRequest.current = abort;
 		setBusy(true);
 		setError(null);
 		void (async () => {
@@ -167,20 +184,19 @@ export function ExplorerTransactionDetail({
 				if (!disposed)
 					setError(
 						abort.signal.aborted
-							? 'Transaction lookup timed out. Enter its ledger number and try again.'
+							? 'Transaction request cancelled.'
 							: failure instanceof Error
 								? failure.message
 								: 'Transaction data could not be loaded.'
 					);
 			})
 			.finally(() => {
-				clearTimeout(timeout);
+				if (activeRequest.current === abort) activeRequest.current = null;
 				if (!disposed) setBusy(false);
 			});
 		return () => {
 			disposed = true;
 			abort.abort();
-			clearTimeout(timeout);
 		};
 	}, [hash, ledger, cursors, retry]);
 	const tx = data ? recordValue(data.transaction) : null;
@@ -194,7 +210,7 @@ export function ExplorerTransactionDetail({
 				<h2>Transaction</h2>
 				<p className={styles.hash}>{hash}</p>
 				<form
-					className={styles.actions}
+					className={`${styles.actions} ${styles.lookupForm}`}
 					onSubmit={(event) => {
 						event.preventDefault();
 						setLedger(input);
@@ -212,6 +228,14 @@ export function ExplorerTransactionDetail({
 						/>
 					</label>
 					<button disabled={busy}>Load transaction</button>
+					{busy && (
+						<button
+							type="button"
+							onClick={() => activeRequest.current?.abort()}
+						>
+							Cancel query
+						</button>
+					)}
 				</form>
 				{busy && <p role="status">Loading transaction and decoded activity…</p>}
 				{error && (
@@ -251,9 +275,20 @@ export function ExplorerTransactionDetail({
 						</dd>
 						<dt>Operations</dt>
 						<dd>{entityText(tx, 'operationCount')}</dd>
-						<dt>Fee (raw stroops)</dt>
+						<dt>Fee (XLM)</dt>
 						<dd>
-							{entityText(tx, 'feeChargedRaw') || entityText(tx, 'feeCharged')}
+							<span
+								title={
+									(entityText(tx, 'feeChargedRaw') ||
+										entityText(tx, 'feeCharged')) + ' stroops'
+								}
+							>
+								{formatAtomic(
+									entityText(tx, 'feeChargedRaw') ||
+										entityText(tx, 'feeCharged'),
+									7
+								)}
+							</span>
 						</dd>
 						<dt>Memo</dt>
 						<dd>{entityText(tx, 'memo') || 'None'}</dd>

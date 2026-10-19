@@ -246,7 +246,7 @@ function PayloadPreview({
 	);
 }
 
-function ScalarValue({
+export function ScalarValue({
 	value,
 	field = ''
 }: {

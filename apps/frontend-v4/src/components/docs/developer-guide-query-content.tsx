@@ -22,10 +22,17 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 							<code>startTime / endTime</code>.
 						</p>
 						<p>
-							Entity lists default to a small recent imported window. For
+							Activity lists default to a small recent imported window. For
 							repeatable analysis, supply your own bounds and retain the
 							returned window. Unsupported filters fail validation instead of
 							being interpreted as SQL.
+						</p>
+						<p>
+							In the explorer, use <strong>Date &amp; ledger range</strong> for
+							optional bounds. <strong>Latest published</strong> clears the
+							range but keeps account, asset and operation filters. Use{' '}
+							<strong>View API response</strong> to open the exact query behind
+							the displayed result, including its window and pagination.
 						</p>
 					</>
 				)
@@ -37,9 +44,15 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 					<>
 						<ul>
 							<li>
-								Operations, assets, contracts, trades and offers:{' '}
-								<code>limit</code> from 1–100, <code>offset</code> from
-								0–10,000, and a returned <code>nextOffset</code>.
+								Operations, contracts, trades and offers: <code>limit</code>{' '}
+								from 1–100, <code>offset</code> from 0–10,000, and a returned{' '}
+								<code>nextOffset</code>.
+							</li>
+							<li>
+								Asset catalogue (<code>/v1/assets</code>): opaque{' '}
+								<code>cursor</code>, returned <code>nextCursor</code>, and
+								<code>limit</code> from 1–100. Asset discovery does not require
+								a ledger window.
 							</li>
 							<li>
 								Transfer activity and typed contract events: opaque{' '}
@@ -57,6 +70,11 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 								<code>events_after</code>. Do not exchange these cursors.
 							</li>
 						</ul>
+						<p>
+							Explorer entity lists offer 10, 25, 50 or 100 rows per page. Apply
+							the selection to start at the first page; copied explorer URLs
+							preserve the page size, filters and returned ledger window.
+						</p>
 						<p>
 							Copy cursors unchanged and keep the original account, asset,
 							filters and window. They are continuation tokens, not reusable
@@ -128,9 +146,9 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 				content: (
 					<>
 						<p>
-							All paths below are relative to <code>{api}/v1/analytics</code>.
-							Add <code>view=typed</code> to transaction details, operation
-							details, trade lists and contract-event reads to select the typed
+							All paths below are relative to <code>{api}/v1</code>. Add{' '}
+							<code>view=typed</code> to transaction details, operation details,
+							trade lists and contract-event reads to select the typed
 							representation; the legacy responses remain available.
 						</p>
 						<table>
@@ -169,7 +187,8 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 										<code>/assets</code>, <code>/assets/{'{asset}'}</code>
 									</td>
 									<td>
-										<code>asset_code</code>, <code>asset_issuer</code>, window.
+										<code>q</code>, <code>symbol</code>, <code>issuer</code>,
+										optional observed ledger/time bounds; cursor pagination.
 									</td>
 								</tr>
 								<tr>
@@ -205,10 +224,35 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 							</tbody>
 						</table>
 						<p>
+							The asset catalogue returns <code>data</code> and a{' '}
+							<code>nextCursor</code>. Windowed entity lists return{' '}
+							<code>rows</code>, <code>window</code> and <code>nextOffset</code>
+							. Dataset-shaped compatibility routes remain available under{' '}
+							<code>/v1/analytics</code>.
+						</p>
+						<p>
 							Use <code>native</code> for XLM or <code>CODE:ISSUER</code> for an
 							issued asset. URL-encode path identifiers. Offer detail is the
 							latest observation inside the selected window, not the current
 							offer state.
+						</p>
+					</>
+				)
+			},
+			{
+				id: 'contract-invocations',
+				title: 'Find contract invocations',
+				content: (
+					<>
+						<Code>{`curl --fail-with-body '${api}/v1/operations?type=invoke_host_function&limit=10'`}</Code>
+						<p>
+							For contract calls, <code>details.contract_id</code> identifies
+							the contract. The first two entries in{' '}
+							<code>details.parameters_json_decoded</code> contain its address
+							and function symbol; remaining entries are typed arguments. The
+							explorer links these calls to contract details and the transaction
+							result. Other host-function operations may have different fields;
+							do not interpret an upload or deployment as a contract call.
 						</p>
 					</>
 				)

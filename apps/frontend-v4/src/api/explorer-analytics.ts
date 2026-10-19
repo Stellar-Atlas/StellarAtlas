@@ -46,12 +46,15 @@ export function buildEntityApiPath(
 	for (const [key, value] of Object.entries(filters)) {
 		if (value.trim()) query.set(key, value.trim());
 	}
-	query.set('limit', '25');
+	const limit = filters.limit?.trim() ?? '';
+	query.set('limit', /^(?:[1-9]|[1-9]\d|100)$/.test(limit) ? limit : '25');
 	query.set('offset', String(offset));
 	if (collection === 'trades' || (collection === 'operations' && identifier))
 		query.set('view', 'typed');
 	return (
-		'/v1/analytics/' +
+		(['operations', 'contracts', 'trades', 'offers'].includes(collection)
+			? '/v1/'
+			: '/v1/analytics/') +
 		collection +
 		(identifier ? '/' + encodeURIComponent(identifier) : '') +
 		'?' +

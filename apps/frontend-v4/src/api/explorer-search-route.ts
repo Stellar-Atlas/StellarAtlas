@@ -21,6 +21,7 @@ export function decodeExplorerIdentifier(value: string): string | null {
 }
 
 const filterNames = new Set([
+	'limit',
 	'min_ledger',
 	'max_ledger',
 	'start_time',

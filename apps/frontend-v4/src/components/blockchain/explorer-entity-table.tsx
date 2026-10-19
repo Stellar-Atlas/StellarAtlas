@@ -9,6 +9,7 @@ import {
 } from '../../api/explorer-analytics';
 import { LocalDateTime } from '../local-date-time';
 import { entityColumns } from './explorer-entity-config';
+import { ExplorerOperationCall } from './explorer-operation-call';
 import styles from './explorer-entity.module.css';
 
 const shorten = (value: string): string =>
@@ -30,7 +31,7 @@ export function EntityLink({
 			href={buildEntityHref(collection, id, filters)}
 			title={id}
 		>
-			{label ?? shorten(id)}
+			{label ?? id}
 		</Link>
 	);
 }
@@ -98,7 +99,10 @@ function Field({
 		field === 'issuer'
 	)
 		return text ? (
-			<EntityLink collection="accounts" id={text} />
+			<EntityLink
+				collection={text.startsWith('C') ? 'contracts' : 'accounts'}
+				id={text}
+			/>
 		) : (
 			<>
 				{field === 'issuer' && entityText(row, 'id') === 'native'
@@ -125,7 +129,20 @@ function Field({
 		);
 	}
 	if (field === 'ledgerSequence')
-		return <EntityLink collection="ledgers" id={text} />;
+		return (
+			<EntityLink
+				collection="ledgers"
+				id={text}
+				label={Number(text).toLocaleString('en-US')}
+			/>
+		);
+	if (field === 'type' && collection === 'operations')
+		return (
+			<>
+				<span>{text.replaceAll('_', ' ') || '—'}</span>
+				<ExplorerOperationCall row={row} filters={filters} />
+			</>
+		);
 	return <>{text || '—'}</>;
 }
 export function ExplorerEntityTable({
@@ -146,7 +163,13 @@ export function ExplorerEntityTable({
 		);
 	return (
 		<div className={styles.tableWrap}>
-			<table className={styles.table}>
+			<table
+				className={
+					collection === 'operations'
+						? `${styles.table} ${styles.operationTable}`
+						: styles.table
+				}
+			>
 				<thead>
 					<tr>
 						{entityColumns[collection].map(([key, label]) => (
@@ -196,10 +219,14 @@ export function ExplorerEntityDetails({
 	const details = recordValue(row.details);
 	const shownFields = Object.entries(details)
 		.filter(
-			([, value]) =>
-				typeof value === 'string' ||
-				typeof value === 'number' ||
-				typeof value === 'boolean'
+			([key, value]) =>
+				!(
+					entityText(row, 'type') === 'invoke_host_function' &&
+					['function', 'type', 'contract_id'].includes(key)
+				) &&
+				(typeof value === 'string' ||
+					typeof value === 'number' ||
+					typeof value === 'boolean')
 		)
 		.slice(0, 30);
 	return (
