@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ExplorerLink } from './explorer-investigation';
 import type { PublicRecentTransactions } from '@api/types';
 import { buildEntityHref } from '../../api/explorer-analytics';
 import {
@@ -76,7 +77,7 @@ export function ExplorerTransactionTable({
 						<tr key={tx.hash}>
 							<td data-label="Transaction">
 								<div className={styles.hash}>
-									<a
+									<ExplorerLink
 										className={styles.identifier}
 										title={tx.hash}
 										href={buildEntityHref('transactions', tx.hash, {
@@ -84,7 +85,7 @@ export function ExplorerTransactionTable({
 										})}
 									>
 										{formatTransactionHash(tx.hash)}
-									</a>
+									</ExplorerLink>
 									<div className={styles.actions}>
 										<button
 											type="button"
@@ -122,19 +123,21 @@ export function ExplorerTransactionTable({
 								</div>
 							</td>
 							<td data-label="Source account">
-								<a
+								<ExplorerLink
 									className={styles.identifier}
 									href={buildEntityHref('accounts', tx.sourceAccount)}
 									title={tx.sourceAccount}
 								>
 									{formatTransactionHash(tx.sourceAccount)}
-								</a>
+								</ExplorerLink>
 							</td>
 							<td data-label="Closed">
 								<time dateTime={tx.createdAt}>{formatDate(tx.createdAt)}</time>
 							</td>
 							<td data-label="Ledger">
-								<a href={buildEntityHref('ledgers', tx.ledger)}>{tx.ledger}</a>
+								<ExplorerLink href={buildEntityHref('ledgers', tx.ledger)}>
+									{tx.ledger}
+								</ExplorerLink>
 							</td>
 							<td data-label="Operations" className={styles.numeric}>
 								{tx.operationCount}

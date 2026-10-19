@@ -1,5 +1,7 @@
 'use client';
 import Link from 'next/link';
+import { useExplorerReturnTo } from './explorer-investigation';
+import { withExplorerReturnTo } from '../../api/explorer-return-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	buildEntityApiPath,
@@ -36,6 +38,7 @@ export function ExplorerEntityBrowser({
 	initialFilters,
 	initialOffset = 0
 }: Props): React.JSX.Element {
+	const returnTo = useExplorerReturnTo();
 	const [filters, setFilters] = useState<ExplorerFilters>(initialFilters);
 	const [page, setPage] = useState<AnalyticsEntityPage | null>(null);
 	const [submitted, setSubmitted] = useState<ExplorerFilters>(initialFilters);
@@ -89,10 +92,14 @@ export function ExplorerEntityBrowser({
 					pinnedFilters,
 					data.offset
 				);
-				window.history.replaceState(null, '', url);
+				window.history.replaceState(
+					null,
+					'',
+					withExplorerReturnTo(url, returnTo)
+				);
 			} else setError(outcome.message);
 		},
-		[collection, identifier, requests]
+		[collection, identifier, requests, returnTo]
 	);
 	useEffect(() => {
 		void load(initialFilters, initialOffset);

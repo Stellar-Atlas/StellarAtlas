@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { useEffect, useRef, useState } from 'react';
 import {
 	entityText,
@@ -208,6 +208,7 @@ export function ExplorerAssetMarkets({
 									<th>{result.view === 'trades' ? 'Operation' : 'Pool'}</th>
 									<th>Ledger</th>
 									<th>Time</th>
+									<th>Report</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -266,6 +267,31 @@ export function ExplorerAssetMarkets({
 											{typeof row.closedAt === 'string' && (
 												<LocalDateTime dateTime={row.closedAt} />
 											)}
+										</td>
+										<td>
+											<Link
+												href={
+													'/explorer/markets?' +
+													new URLSearchParams({
+														asset_a: entityText(
+															recordValue(row.sellingAsset),
+															'id'
+														),
+														asset_b: entityText(
+															recordValue(row.buyingAsset),
+															'id'
+														),
+														min_ledger: String(
+															result.pages[0]!.window.minLedger
+														),
+														max_ledger: String(
+															result.pages[0]!.window.maxLedger
+														)
+													})
+												}
+											>
+												Pair report
+											</Link>
 										</td>
 									</tr>
 								))}

@@ -21,6 +21,10 @@ export function decodeExplorerIdentifier(value: string): string | null {
 }
 
 const filterNames = new Set([
+	'a-to-b_offset',
+	'b-to-a_offset',
+	'pool-a-b_offset',
+	'pool-b-a_offset',
 	'limit',
 	'min_ledger',
 	'max_ledger',

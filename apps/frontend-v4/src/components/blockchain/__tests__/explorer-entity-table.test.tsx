@@ -4,6 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
 }));
+jest.unstable_mockModule('../explorer-contract-event-table.module.css', () => ({
+	default: {}
+}));
 const { ExplorerEntityNavigation } =
 	await import('../explorer-entity-navigation');
 const { ExplorerEntityTable, ExplorerEntityDetails } =
@@ -24,7 +27,7 @@ describe('parsed explorer presentation', () => {
 			})
 		);
 		expect(html).toContain('Reserve A');
-		expect(html).toContain('1635.3635675');
+		expect(html).toContain('1,635.3635675');
 		expect(html).toContain('selling_asset=native');
 		expect(html).toContain('buying_asset=native');
 		expect(html).toContain('(all venues)');

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { Fragment } from 'react';
 import {
 	buildEntityHref,

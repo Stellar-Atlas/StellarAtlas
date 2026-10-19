@@ -3,6 +3,14 @@
 	gap: 1rem;
 	min-width: 0;
 }
+.returnBar {
+	padding-top: 1rem;
+	font-size: 0.85rem;
+}
+.returnBar a {
+	color: var(--blue);
+	text-decoration: none;
+}
 .navigation {
 	display: flex;
 	flex-wrap: wrap;

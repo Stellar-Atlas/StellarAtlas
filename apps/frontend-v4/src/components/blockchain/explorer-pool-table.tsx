@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { entityText, type EntityRecord } from '../../api/explorer-analytics';
 import { LocalDateTime } from '../local-date-time';
 import { formatDecimal } from './explorer-format-values';

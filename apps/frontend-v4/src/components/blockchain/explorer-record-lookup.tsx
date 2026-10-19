@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { useCallback, useEffect, useRef } from 'react';
 import { initialExplorerSearch } from './blockchain-explorer-state';
 import { SearchResultView } from './blockchain-explorer-results';

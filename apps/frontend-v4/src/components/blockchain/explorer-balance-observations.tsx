@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { buildEntityHref } from '../../api/explorer-analytics';
 import {
 	fetchBalanceObservations,

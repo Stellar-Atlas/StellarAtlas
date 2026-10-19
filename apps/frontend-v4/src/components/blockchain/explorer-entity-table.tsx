@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import {
 	buildEntityHref,
 	entityText,
@@ -10,6 +10,7 @@ import {
 import { LocalDateTime } from '../local-date-time';
 import { entityColumns } from './explorer-entity-config';
 import { ExplorerOperationCall } from './explorer-operation-call';
+import { formatDecimal } from './explorer-format-values';
 import styles from './explorer-entity.module.css';
 
 const shorten = (value: string): string =>
@@ -65,6 +66,16 @@ function Field({
 		);
 	if (field === 'closedAt')
 		return text ? <LocalDateTime dateTime={text} /> : <>—</>;
+	if (
+		[
+			'sellingAmount',
+			'buyingAmount',
+			'amount',
+			'reserveA',
+			'reserveB'
+		].includes(field)
+	)
+		return <span title={text}>{text ? formatDecimal(text) : '—'}</span>;
 	if (field === 'deleted')
 		return <>{row.deleted === true ? 'Removed' : 'Open at observation'}</>;
 	if (['sellingAsset', 'buyingAsset', 'assetA', 'assetB'].includes(field)) {

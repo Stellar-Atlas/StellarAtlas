@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { LocalDateTime } from '../local-date-time';
 import {
 	buildEntityHref,

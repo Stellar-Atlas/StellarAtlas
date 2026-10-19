@@ -34,6 +34,12 @@ export function ExplorerEntityNavigation({
 				</Link>
 			))}
 			<Link
+				href="/explorer/markets"
+				aria-current={active === 'markets' ? 'page' : undefined}
+			>
+				Pair reports
+			</Link>
+			<Link
 				href="/explorer/issuers"
 				aria-current={active === 'issuers' ? 'page' : undefined}
 			>

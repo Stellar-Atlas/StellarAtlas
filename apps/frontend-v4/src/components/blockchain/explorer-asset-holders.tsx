@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
 	fetchBalanceObservations,

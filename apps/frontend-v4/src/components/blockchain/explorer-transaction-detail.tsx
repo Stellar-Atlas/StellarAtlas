@@ -19,7 +19,7 @@ import { ExplorerContractEventTable } from './explorer-contract-event-table';
 import { ExplorerOperationCall } from './explorer-operation-call';
 import { operationInvocation } from './explorer-operation-invocation';
 import { formatAtomic } from './explorer-format-values';
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import styles from './explorer-entity.module.css';
 
 function decoded(value: unknown): unknown {

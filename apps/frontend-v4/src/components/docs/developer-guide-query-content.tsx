@@ -240,6 +240,65 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 				)
 			},
 			{
+				id: 'historical-pair-report',
+				title: 'Investigate a historical asset pair',
+				content: (
+					<>
+						<p>
+							Open <a href="/explorer/markets">Pair reports</a>, choose two
+							classic assets, and optionally set a ledger interval of up to
+							2,048 ledgers. The report pins all four sections to the same
+							published window: trades in each direction and native pools in
+							either asset ordering. Each section has its own pagination and
+							JSON link. Pool observations are not separate pools, current
+							depth, or executable quotes.
+						</p>
+						<Code>{`curl --fail-with-body --get '${api}/v1/trades' \\
+  --data-urlencode 'view=typed' \\
+  --data-urlencode 'selling_asset=native' \\
+  --data-urlencode 'buying_asset=AQUA:GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA' \\
+  --data-urlencode 'min_ledger=64987203' \\
+  --data-urlencode 'max_ledger=64987266' \\
+  --data-urlencode 'limit=10'`}</Code>
+						<p>
+							Swap <code>selling_asset</code> and <code>buying_asset</code> for
+							the other trade direction. Historical pool observations use{' '}
+							<code>GET /v1/analytics/liquidity-pools</code> with{' '}
+							<code>asset_a</code>, <code>asset_b</code>, and the same window;
+							query both orderings. Follow each response’s own{' '}
+							<code>nextOffset</code> without changing its filters.
+						</p>
+						<Code>{`query HistoricalPair($a: String!, $b: String!, $min: Int!, $max: Int!) {
+  aToB: hubbleTrades(input: {sellingAsset: $a, buyingAsset: $b, minLedger: $min, maxLedger: $max, limit: 10}) {
+    window { minLedger maxLedger } coverageStatus nextOffset
+    rows { id operationId ledgerSequence sellingAmount buyingAmount amountPrecision }
+  }
+  bToA: hubbleTrades(input: {sellingAsset: $b, buyingAsset: $a, minLedger: $min, maxLedger: $max, limit: 10}) {
+    coverageStatus nextOffset
+    rows { id operationId ledgerSequence sellingAmount buyingAmount amountPrecision }
+  }
+  poolsAB: nativeLiquidityPools(input: {assetA: $a, assetB: $b, minLedger: $min, maxLedger: $max, limit: 10}) {
+    coverageStatus nextOffset
+    rows { id ledgerSequence reserveA reserveB amountPrecision }
+  }
+  poolsBA: nativeLiquidityPools(input: {assetA: $b, assetB: $a, minLedger: $min, maxLedger: $max, limit: 10}) {
+    coverageStatus nextOffset
+    rows { id ledgerSequence reserveA reserveB amountPrecision }
+  }
+}`}</Code>
+						<Code>{`{"a":"native","b":"AQUA:GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA","min":64987203,"max":64987266}`}</Code>
+						<p>
+							Run the query and variables in the{' '}
+							<a href="/docs/graphql">GraphQL workspace</a>. Amounts marked{' '}
+							<code>source_float64</code> retain source rounding; page sums are
+							not complete interval volume. In the explorer, linked records
+							retain the original investigation URL, including filters and page.
+							Use <strong>Back to results</strong> to return.
+						</p>
+					</>
+				)
+			},
+			{
 				id: 'contract-invocations',
 				title: 'Find contract invocations',
 				content: (

@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { ExplorerLink as Link } from './explorer-investigation';
 import { useEffect, useState } from 'react';
 import { requestExplorerJson } from '../../api/explorer-analytics';
 import {

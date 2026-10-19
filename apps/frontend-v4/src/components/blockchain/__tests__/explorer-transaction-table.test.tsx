@@ -5,6 +5,9 @@ import { jest } from '@jest/globals';
 jest.unstable_mockModule('../explorer-transaction-table.module.css', () => ({
 	default: {}
 }));
+jest.unstable_mockModule('../explorer-entity.module.css', () => ({
+	default: {}
+}));
 const { ExplorerTransactionTable } =
 	await import('../explorer-transaction-table');
 const transaction = {
