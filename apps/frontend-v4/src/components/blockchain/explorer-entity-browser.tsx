@@ -18,6 +18,7 @@ import {
 	ExplorerEntityTable
 } from './explorer-entity-table';
 import { ExplorerContractActivity } from './explorer-contract-activity';
+import { ExplorerContractProvenance } from './explorer-contract-provenance';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import {
 	ExplorerEntityRequest,
@@ -126,6 +127,12 @@ export function ExplorerEntityBrowser({
 				</div>
 				{identifier && (
 					<Link href={buildEntityHref(collection)}>← Browse {collection}</Link>
+				)}
+				{identifier && collection === 'contracts' && (
+					<ExplorerContractProvenance
+						key={identifier}
+						contractId={identifier}
+					/>
 				)}
 				<ExplorerEntityFilters
 					collection={collection}

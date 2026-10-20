@@ -18,6 +18,40 @@ export const contractEventsGuide: DeveloperGuidePage = {
 		'Query decoded events, inspect their transaction context, and paginate with REST or GraphQL.',
 	sections: [
 		{
+			id: 'build-provenance',
+			title: 'Contract source and build provenance',
+			content: (
+				<>
+					<p>
+						<code>GET /v1/contracts/{'{contractId}'}/provenance</code> reads the
+						deployed executable from our RPC. The response includes its observed
+						ledger, Wasm SHA-256, embedded source repository, and available
+						signed build record.
+					</p>
+					<p>
+						<code>build.status=verified</code> requires the artifact digest,
+						repository, source commit, GitHub workflow identity, certificate and
+						transparency evidence to match. <code>build.record</code> then links
+						to the exact source commit, workflow and build run. This is build
+						provenance, not a security audit or an independent reproducible
+						build.
+					</p>
+					<p>
+						Other statuses distinguish missing metadata, unpublished builds,
+						unsupported metadata, verification failures and unavailable
+						evidence. A missing contract at the reported ledger is not a claim
+						that it was never deployed. Contract upgrades can change the Wasm
+						hash.
+					</p>
+					<p>
+						<a href="/docs/api/getContractBuildProvenance">
+							Try the provenance endpoint
+						</a>
+					</p>
+				</>
+			)
+		},
+		{
 			id: 'try-events',
 			title: 'Explore an event before writing code',
 			content: (

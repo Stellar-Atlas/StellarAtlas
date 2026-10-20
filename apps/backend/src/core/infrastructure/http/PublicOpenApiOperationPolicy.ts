@@ -3,6 +3,7 @@ import type { OpenApiOperationContext } from './OpenApiDocumentProjection.js';
 // Reviewed consumer-facing contract. New operations require an explicit review here.
 // Bind identity to method/path so reusing an allowed name cannot publish a new route.
 const publicOperations = new Map<string, string>([
+	['getContractBuildProvenance', 'get /v1/contracts/{contractId}/provenance'],
 	['listParsedDatasets', 'get /v1/datasets'],
 	['getParsedDataset', 'get /v1/datasets/{dataset}'],
 	['getParsedDatasetSchema', 'get /v1/datasets/{dataset}/schema'],
