@@ -17,6 +17,13 @@ describe('GoFullHistoryLedgerCloseMetaReceipt', () => {
 		expect(parseGoFullHistoryLedgerCloseMetaManifest(current).format).toEqual(
 			current.format
 		);
+		const protocol30 = manifestFixture();
+		protocol30.format.stellarSdk = 'github.com/stellar/go-stellar-sdk@v0.8.0';
+		protocol30.format.stellarXdrCommit =
+			'4f524bbac80c781c06e4fb5fc93a2d0d331d6705';
+		expect(parseGoFullHistoryLedgerCloseMetaManifest(protocol30).format).toEqual(
+			protocol30.format
+		);
 	});
 	it.each([
 		[
@@ -30,6 +37,10 @@ describe('GoFullHistoryLedgerCloseMetaReceipt', () => {
 		[
 			'github.com/stellar/go-stellar-sdk@v0.8.0',
 			'9c9c145953e80990d6ff1ae3a6a973a0ce6d0694'
+		],
+		[
+			'github.com/stellar/go-stellar-sdk@v0.7.3',
+			'4f524bbac80c781c06e4fb5fc93a2d0d331d6705'
 		],
 		['github.com/stellar/go-stellar-sdk@v0.7.3', 'f'.repeat(40)]
 	])(

@@ -6,6 +6,10 @@ const reviewedStellarFormats = [
 	{
 		stellarSdk: 'github.com/stellar/go-stellar-sdk@v0.7.3',
 		stellarXdrCommit: '9c9c145953e80990d6ff1ae3a6a973a0ce6d0694'
+	},
+	{
+		stellarSdk: 'github.com/stellar/go-stellar-sdk@v0.8.0',
+		stellarXdrCommit: '4f524bbac80c781c06e4fb5fc93a2d0d331d6705'
 	}
 ] as const;
 
