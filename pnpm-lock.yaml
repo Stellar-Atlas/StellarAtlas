@@ -29,7 +29,7 @@ overrides:
   qs@<6.16.0: 6.16.0
   rollup@>=2 <3: 2.80.0
   rollup@>=4 <5: 4.59.0
-  markdown-it@<14.3.2: 14.3.2
+  markdown-it@<14.3.3: 14.3.3
   follow-redirects@<1.16.1: 1.16.1
   vite@>=6 <6.4.4: 6.4.4
   tmp@<0.2.7: 0.2.7
@@ -5866,8 +5866,8 @@ packages:
   makeerror@1.0.12:
     resolution: {integrity: sha512-JmqCvUhmt43madlpFzG4BQzG2Z3m6tvQDNKdClZnO3VbIudJYmxsT0FNJMeiB2+JTSlTQTSbU8QdesVmwJcmLg==}
 
-  markdown-it@14.3.2:
-    resolution: {integrity: sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==}
+  markdown-it@14.3.3:
+    resolution: {integrity: sha512-L//tDAkjTjJCU6pBUSBTgs3Kg4InVaZuUZog/b6V12UKhcDQ7S78877ibbCanRExwPuYP1CZD7Gd2dxSy1GXRg==}
     hasBin: true
 
   markdown-table@3.0.4:
@@ -8980,7 +8980,7 @@ snapshots:
       graphql: 16.11.0
       graphql-language-service: 5.7.0(graphql@16.11.0)
       jsonc-parser: 3.3.1
-      markdown-it: 14.3.2
+      markdown-it: 14.3.3
       monaco-editor: 0.52.2
       monaco-graphql: 1.9.0(graphql@16.11.0)(monaco-editor@0.52.2)(prettier@3.9.4)
       prettier: 3.9.4
@@ -13050,7 +13050,7 @@ snapshots:
     dependencies:
       tmpl: 1.0.5
 
-  markdown-it@14.3.2:
+  markdown-it@14.3.3:
     dependencies:
       argparse: 2.0.1
       entities: 4.5.0

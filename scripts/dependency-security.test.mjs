@@ -84,7 +84,7 @@ test('effective runtime and schema-tool versions contain the reviewed fixes', as
 	await assertInstalledPackageFloors('smol-toml', () => '1.9.0');
 	await assertInstalledPackageFloors('source-map-js', () => '1.2.2');
 	await assertInstalledPackageFloors('postcss-selector-parser', () => '7.1.6');
-	await assertInstalledPackageFloors('markdown-it', () => '14.3.2');
+	await assertInstalledPackageFloors('markdown-it', () => '14.3.3');
 	await assertInstalledPackageFloors('follow-redirects', () => '1.16.1');
 	await assertInstalledPackageFloors('vite', (version) =>
 		version.startsWith('6.') ? '6.4.4' : null
