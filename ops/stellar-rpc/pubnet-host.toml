@@ -1,9 +1,9 @@
 ADMIN_ENDPOINT = "127.0.0.1:8003"
 CAPTIVE_CORE_CONFIG_PATH = "/mnt/bulk/stellarbeat-data/stellar-rpc/pubnet/config/captive-core.cfg"
-CAPTIVE_CORE_STORAGE_PATH = "/mnt/bulk/stellarbeat-data/stellar-rpc/pubnet/captive-core"
+CAPTIVE_CORE_STORAGE_PATH = "/mnt/stellaratlas-archive-spool/stellar-rpc-captive-core"
 CHECKPOINT_FREQUENCY = 64
 DB_PATH = "/mnt/bulk/stellarbeat-data/stellar-rpc/pubnet/data/stellar-rpc.sqlite"
-ENDPOINT = "192.168.1.153:8002"
+ENDPOINT = "192.168.122.1:8002"
 HISTORY_ARCHIVE_URLS = [
   "https://history.stellar.org/prd/core-live/core_live_001/",
   "https://history.stellar.org/prd/core-live/core_live_002/",
@@ -21,5 +21,5 @@ PREFLIGHT_WORKER_QUEUE_SIZE = 24
 STELLAR_CAPTIVE_CORE_HTTP_PORT = 11636
 STELLAR_CAPTIVE_CORE_HTTP_QUERY_PORT = 11638
 STELLAR_CAPTIVE_CORE_HTTP_QUERY_THREAD_POOL_SIZE = 12
-STELLAR_CORE_BINARY_PATH = "/mnt/bulk/stellarbeat-data/stellar-core/bin/stellar-core"
+STELLAR_CORE_BINARY_PATH = "/mnt/bulk/stellarbeat-data/stellar-core/bin/stellar-core-main-overlay-20261020"
 STRICT = true
