@@ -3,7 +3,10 @@ import { createPublicOpenApiDocument } from '../PublicOpenApiDocument.js';
 import { hubbleCoverageSchema } from '../HubbleOpenApiSchemas.js';
 import express from 'express';
 import request from 'supertest';
-import { hubbleWarehouseRouter } from '../../../../status/infrastructure/http/HubbleWarehouseRouter.js';
+import {
+	hubbleWarehouseRouter,
+	registerHubbleDatasetRoutes
+} from '../../../../status/infrastructure/http/HubbleWarehouseRouter.js';
 import { summarizeHubbleLedgerCoverage } from '../../../../status/infrastructure/http/HubbleLedgerCoverage.js';
 import type {
 	HubbleCatalog,
@@ -21,7 +24,7 @@ describe('Hubble OpenAPI paths', () => {
 		string,
 		Record<string, Record<string, unknown>>
 	>;
-	it('matches the actual dataset-detail wrapper without promising an absent coverage field', async () => {
+	it('matches the dataset-detail and schema routes with catalog coverage', async () => {
 		const catalog: HubbleCatalog = {
 			database: 'stellar_hubble',
 			coverage: summarizeHubbleLedgerCoverage([
@@ -60,15 +63,35 @@ describe('Hubble OpenAPI paths', () => {
 			query: unused
 		};
 		const app = express();
+		const datasetRouter = express.Router();
+		registerHubbleDatasetRoutes(datasetRouter, warehouse);
+		app.use('/v1', datasetRouter);
 		app.use('/v1/analytics', hubbleWarehouseRouter({ warehouse }));
+		const datasets = await request(app).get('/v1/datasets').expect(200);
+		expect(datasets.body).toEqual(catalog);
+		const compatibilityDetail = await request(app)
+			.get('/v1/datasets/history_transactions')
+			.expect(200);
+		const schemaReply = await request(app)
+			.get('/v1/datasets/history_transactions/schema')
+			.expect(200);
+		expect(schemaReply.body).toEqual({
+			dataset: 'history_transactions',
+			columns: catalog.datasets[0].columns,
+			officialSchemaSource: catalog.officialSchemaSource
+		});
+		expect(schemaReply.headers['cache-control']).toBe('public, max-age=10');
+		await request(app).get('/v1/datasets/unknown/schema').expect(400);
 		const response = await request(app)
 			.get('/v1/analytics/datasets/history_transactions')
 			.expect(200);
+		expect(response.body).toEqual(compatibilityDetail.body);
 		expect(response.body).toEqual({
 			database: catalog.database,
 			dataset: catalog.datasets[0],
 			generatedAt: catalog.generatedAt,
 			ingestion: catalog.ingestion,
+			coverage: catalog.coverage,
 			officialSchemaSource: catalog.officialSchemaSource
 		});
 		const operation = paths['/v1/analytics/datasets/{dataset}']!.get!;
@@ -82,7 +105,7 @@ describe('Hubble OpenAPI paths', () => {
 		expect(schema.additionalProperties).toBe(false);
 		expect(schema.required).toEqual(Object.keys(response.body));
 		expect(Object.keys(properties)).toEqual(Object.keys(response.body));
-		expect(properties).not.toHaveProperty('coverage');
+		expect(properties.coverage).toBeDefined();
 		expect(properties.dataset).toMatchObject({
 			type: 'object',
 			required: ['columns', 'name', 'rowCount']

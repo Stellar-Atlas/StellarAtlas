@@ -9,6 +9,28 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 			'Keep queries bounded, preserve cursor scope, and aggregate without raw SQL.',
 		sections: [
 			{
+				id: 'discover-datasets',
+				title: 'Discover datasets and columns',
+				content: (
+					<>
+						<p>
+							Use <code>GET /v1/datasets</code> to find available tables. Each
+							dataset has a schema, completed ledger coverage and query routes.
+						</p>
+						<Code>{`curl --fail-with-body '${api}/v1/datasets/history_contract_events/schema'
+curl --fail-with-body '${api}/v1/datasets/history_contract_events/records?ledger_sequence=64877689&select=ledger_sequence,contract_id,transaction_hash&limit=2'`}</Code>
+						<p>
+							Column names and types come from the schema endpoint. Use{' '}
+							<code>select</code> to choose columns,{' '}
+							<code>order=-ledger_sequence</code> for descending order, and the
+							returned <code>nextOffset</code> for the next page. Keep filters
+							unchanged. Metadata uses the shared catalogue; record queries
+							remain bounded.
+						</p>
+					</>
+				)
+			},
+			{
 				id: 'bounded-windows',
 				title: 'Choose an explicit window',
 				content: (
@@ -103,10 +125,11 @@ export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
   --data '${JSON.stringify({ dataset: 'history_operations', minLedger: 63490360, maxLedger: 63490365, groupBy: ['type_string'], aggregations: [{ function: 'count', alias: 'records' }], orderBy: [{ field: 'records', direction: 'desc' }], limit: 10, offset: 0 })}'`}</Code>
 						<p>
 							The dataset-specific equivalent is{' '}
-							<code>POST /v1/analytics/datasets/{'{dataset}'}/query</code>.
-							Grouped queries return metric metadata alongside rows and
-							coverage. Use returned aliases in ordering; GraphQL uses uppercase
-							function enums such as <code>COUNT</code>.
+							<code>POST /v1/datasets/{'{dataset}'}/query</code>. Existing{' '}
+							<code>/v1/analytics</code> routes remain available. Grouped
+							queries return metric metadata alongside rows and coverage. Use
+							returned aliases in ordering; GraphQL uses uppercase function
+							enums such as <code>COUNT</code>.
 						</p>
 					</>
 				)

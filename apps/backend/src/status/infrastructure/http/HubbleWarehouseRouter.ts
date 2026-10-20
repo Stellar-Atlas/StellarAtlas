@@ -21,6 +21,82 @@ export interface HubbleWarehouseRouterConfig {
 	readonly warehouse: HubbleWarehouse;
 }
 
+export function registerHubbleDatasetRoutes(
+	router: Router,
+	warehouse: HubbleWarehouse
+): void {
+	router.get('/datasets', async (_request, response) => {
+		await send(response, async () => {
+			response.setHeader('Cache-Control', 'public, max-age=10');
+			return warehouse.catalog();
+		});
+	});
+
+	router.get('/datasets/:dataset', async (request, response) => {
+		await send(response, async () => {
+			const catalog = await warehouse.catalog();
+			const dataset = catalog.datasets.find(
+				(candidate) => candidate.name === request.params.dataset
+			);
+			if (dataset === undefined) {
+				throw new HubbleWarehouseInputError(
+					'Unknown Hubble dataset: ' + request.params.dataset
+				);
+			}
+			response.setHeader('Cache-Control', 'public, max-age=10');
+			return {
+				database: catalog.database,
+				dataset,
+				generatedAt: catalog.generatedAt,
+				ingestion: catalog.ingestion,
+				coverage: catalog.coverage,
+				officialSchemaSource: catalog.officialSchemaSource
+			};
+		});
+	});
+
+	router.get('/datasets/:dataset/schema', async (request, response) => {
+		await send(response, async () => {
+			const catalog = await warehouse.catalog();
+			const dataset = catalog.datasets.find(
+				(candidate) => candidate.name === request.params.dataset
+			);
+			if (dataset === undefined) {
+				throw new HubbleWarehouseInputError(
+					'Unknown Hubble dataset: ' + request.params.dataset
+				);
+			}
+			response.setHeader('Cache-Control', 'public, max-age=10');
+			return {
+				dataset: dataset.name,
+				columns: dataset.columns,
+				officialSchemaSource: catalog.officialSchemaSource
+			};
+		});
+	});
+
+	router.get('/datasets/:dataset/records', async (request, response) => {
+		await send(response, async () => {
+			response.setHeader('Cache-Control', 'no-store');
+			return warehouse.query(parseResourceQuery(request));
+		});
+	});
+
+	router.post('/datasets/:dataset/query', async (request, response) => {
+		await send(response, async () => {
+			const body = requireRecord(request.body, 'request body');
+			if (body.dataset !== undefined && body.dataset !== request.params.dataset)
+				throw new HubbleWarehouseInputError(
+					'Body dataset must match the route dataset'
+				);
+			response.setHeader('Cache-Control', 'no-store');
+			return warehouse.query(
+				parseBodyQuery({ ...body, dataset: request.params.dataset })
+			);
+		});
+	});
+}
+
 const operators = new Set<HubbleFilterOperator>([
 	'contains',
 	'eq',
@@ -40,49 +116,7 @@ export function hubbleWarehouseRouter(
 	config: HubbleWarehouseRouterConfig
 ): Router {
 	const router = express.Router();
-
-	router.get('/datasets', async (_request, response) => {
-		await send(response, async () => {
-			response.setHeader('Cache-Control', 'public, max-age=10');
-			return config.warehouse.catalog();
-		});
-	});
-
-	router.get('/datasets/:dataset', async (request, response) => {
-		await send(response, async () => {
-			const catalog = await config.warehouse.catalog();
-			const dataset = catalog.datasets.find(
-				(candidate) => candidate.name === request.params.dataset
-			);
-			if (dataset === undefined) {
-				throw new HubbleWarehouseInputError(
-					'Unknown Hubble dataset: ' + request.params.dataset
-				);
-			}
-			response.setHeader('Cache-Control', 'public, max-age=10');
-			return {
-				database: catalog.database,
-				dataset,
-				generatedAt: catalog.generatedAt,
-				ingestion: catalog.ingestion,
-				officialSchemaSource: catalog.officialSchemaSource
-			};
-		});
-	});
-
-	router.post('/datasets/:dataset/query', async (request, response) => {
-		await send(response, async () => {
-			const body = requireRecord(request.body, 'request body');
-			if (body.dataset !== undefined && body.dataset !== request.params.dataset)
-				throw new HubbleWarehouseInputError(
-					'Body dataset must match the route dataset'
-				);
-			response.setHeader('Cache-Control', 'no-store');
-			return config.warehouse.query(
-				parseBodyQuery({ ...body, dataset: request.params.dataset })
-			);
-		});
-	});
+	registerHubbleDatasetRoutes(router, config.warehouse);
 
 	router.post('/query', async (request, response) => {
 		await send(response, async () => {

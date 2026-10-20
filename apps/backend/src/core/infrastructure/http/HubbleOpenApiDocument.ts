@@ -43,6 +43,7 @@ import {
 	hubbleErrorSchema
 } from './HubbleOpenApiSchemas.js';
 import { hubbleTypedTransactionSchema } from './HubbleTransactionOpenApi.js';
+import { datasetResourceOpenApiPaths } from './HubbleDatasetResourceOpenApi.js';
 
 const analyticsTag = ['Analytics'];
 const publicAccess: readonly OpenApiRecord[] = [];
@@ -128,6 +129,7 @@ const datasetDetailSchema: OpenApiRecord = {
 			],
 			type: 'object'
 		},
+		coverage: hubbleCoverageSchema,
 		officialSchemaSource: { type: 'string' }
 	},
 	required: [
@@ -135,6 +137,7 @@ const datasetDetailSchema: OpenApiRecord = {
 		'dataset',
 		'generatedAt',
 		'ingestion',
+		'coverage',
 		'officialSchemaSource'
 	],
 	type: 'object'
@@ -292,7 +295,7 @@ const hubblePaths: Readonly<Record<string, OpenApiRecord>> =
 		'/v1/analytics/datasets/{dataset}': {
 			get: {
 				description:
-					'Returns the database name, one Hubble table schema, ingestion metadata, generation timestamp, and official schema source. Use the dataset catalog for ledger coverage.',
+					'Returns one parsed table schema, ingestion metadata, completed ledger coverage, generation timestamp, and official schema source.',
 				operationId: 'getHubbleDataset',
 				parameters: [datasetParameter],
 				responses: {
@@ -445,7 +448,8 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 		components: { ...components, schemas: { ...existingSchemas, ...schemas } },
 		paths: {
 			...paths,
-			...hubblePaths
+			...hubblePaths,
+			...datasetResourceOpenApiPaths(hubblePaths, columnSchema)
 		}
 	};
 }

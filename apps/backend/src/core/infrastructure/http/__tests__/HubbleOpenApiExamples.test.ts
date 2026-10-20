@@ -108,7 +108,7 @@ describe('deterministic representative Hubble OpenAPI examples', () => {
 		expect(readOpenApiRecord(catalog.properties)!.ingestion).toEqual(
 			readOpenApiRecord(detail.properties)!.ingestion
 		);
-		expect(readOpenApiRecord(detail.properties)).not.toHaveProperty('coverage');
+		expect(readOpenApiRecord(detail.properties)).toHaveProperty('coverage');
 	});
 	it('prepopulates a valid bounded one-ledger structured query instead of string placeholders', () => {
 		const paths = readOpenApiRecord(document.paths)!;

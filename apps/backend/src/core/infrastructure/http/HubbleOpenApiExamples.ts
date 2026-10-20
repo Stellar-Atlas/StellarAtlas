@@ -40,6 +40,7 @@ export const hubbleDatasetDetailExample = {
 	},
 	generatedAt: '2026-07-15T16:44:00.000Z',
 	ingestion: hubbleIngestionExample,
+	coverage: hubbleCoverageExample,
 	officialSchemaSource: 'stellar/stellar-etl'
 };
 export const hubbleCatalogExample = {

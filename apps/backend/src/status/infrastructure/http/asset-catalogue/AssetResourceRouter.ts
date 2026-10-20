@@ -16,6 +16,7 @@ import { registerHubblePoolSnapshotRoutes } from '../HubblePoolSnapshotRoutes.js
 import { registerHubbleAssetReportRoutes } from '../HubbleAssetReportRoutes.js';
 import { registerHubbleContractEventRoutes } from '../HubbleContractEventRoutes.js';
 import { HubbleWarehouseUnavailableError } from '../HubbleWarehouseErrors.js';
+import { registerHubbleDatasetRoutes } from '../HubbleWarehouseRouter.js';
 
 export interface AssetResourceConfig {
 	readonly networkPassphrase: string;
@@ -49,6 +50,7 @@ export function assetResourceRouter(config: AssetResourceConfig): Router {
 		});
 	const issuerDirectory = new IssuerDirectory(catalogue, metadata);
 	const router = express.Router();
+	registerHubbleDatasetRoutes(router, config.warehouse);
 	registerAssetRelatedRoutes(router, catalogue, (asset) =>
 		assetMetadata(asset, metadata)
 	);
