@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const backendRequire = createRequire(
 	new URL('../apps/backend/package.json', import.meta.url)
+);
+const usersRequire = createRequire(
+	new URL('../apps/users/package.json', import.meta.url)
+);
+const httpHelperRequire = createRequire(
+	new URL('../packages/http-helper/package.json', import.meta.url)
 );
 const frontendRequire = createRequire(
 	new URL('../apps/frontend-v4/package.json', import.meta.url)
@@ -22,6 +29,14 @@ const concurrentlyRequire = createRequire(rootRequire.resolve('concurrently'));
 const toml = backendRequire('toml');
 const { VM, NodeVM } = schemaRequire('vm2');
 const proxyAddr = expressRequire('proxy-addr');
+const lockfile = await readFile(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8');
+
+function assertDependencyVersionAtLeast(requireFrom, dependency, minimum) {
+	assertVersionAtLeast(
+		requireFrom(`${dependency}/package.json`).version,
+		minimum
+	);
+}
 
 function assertVersionAtLeast(actual, minimum) {
 	const parts = actual.split('.').map(Number);
@@ -35,14 +50,45 @@ function assertVersionAtLeast(actual, minimum) {
 	);
 }
 
-test('effective runtime and schema-tool versions contain the reviewed fixes', () => {
+async function assertInstalledPackageFloors(packageName, minimumForVersion) {
+	const escapedName = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const matches = [...lockfile.matchAll(new RegExp(`^  ${escapedName}@([0-9]+\\.[0-9]+\\.[0-9]+)(?:\\([^\\n:]*\\))?:`, 'gm'))];
+	assert.ok(matches.length > 0, `${packageName} must be present in the lockfile`);
+	for (const match of matches) {
+		const version = match[1].split('(')[0];
+		const minimum = minimumForVersion(version);
+		if (minimum) assertVersionAtLeast(version, minimum);
+	}
+}
+
+test('effective runtime and schema-tool versions contain the reviewed fixes', async () => {
 	assertVersionAtLeast(backendRequire('toml/package.json').version, '4.2.0');
 	assertVersionAtLeast(schemaRequire('vm2/package.json').version, '3.12.2');
-	assertVersionAtLeast(ajvRequire('fast-uri/package.json').version, '3.1.6');
+	assertVersionAtLeast(ajvRequire('fast-uri/package.json').version, '3.1.8');
 	assertVersionAtLeast(frontendRequire('next/package.json').version, '16.4.2');
 	assertVersionAtLeast(expressRequire('proxy-addr/package.json').version, '2.0.8');
 	assertVersionAtLeast(tsJestRequire('handlebars/package.json').version, '4.7.10');
 	assertVersionAtLeast(concurrentlyRequire('shell-quote/package.json').version, '1.12.0');
+	assertDependencyVersionAtLeast(backendRequire, 'axios', '1.20.0');
+	assertDependencyVersionAtLeast(usersRequire, 'axios', '1.20.0');
+	assertDependencyVersionAtLeast(httpHelperRequire, 'axios', '1.20.0');
+	assertDependencyVersionAtLeast(backendRequire, 'nodemailer', '10.0.9');
+	assertDependencyVersionAtLeast(backendRequire, 'moment', '2.31.0');
+	await assertInstalledPackageFloors('brace-expansion', (version) => {
+		const major = Number(version.split('.')[0]);
+		return major === 1 ? '1.1.21' : major === 2 ? '2.1.7' : major === 5 ? '5.0.12' : null;
+	});
+	await assertInstalledPackageFloors('js-yaml', (version) =>
+		version.startsWith('3.') ? '3.15.2' : null
+	);
+	await assertInstalledPackageFloors('smol-toml', () => '1.9.0');
+	await assertInstalledPackageFloors('source-map-js', () => '1.2.2');
+	await assertInstalledPackageFloors('postcss-selector-parser', () => '7.1.6');
+	await assertInstalledPackageFloors('markdown-it', () => '14.3.2');
+	await assertInstalledPackageFloors('follow-redirects', () => '1.16.1');
+	await assertInstalledPackageFloors('vite', (version) =>
+		version.startsWith('6.') ? '6.4.4' : null
+	);
 });
 
 test('proxy-addr normalizes IPv4-mapped IPv6 addresses for trusted ranges', () => {

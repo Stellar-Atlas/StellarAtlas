@@ -116,7 +116,7 @@ export function withPublicGoodsOpenApiPaths(document: unknown): OpenApiRecord {
 	return {
 		...source,
 		paths: {
-			...readOpenApiRecord(source.paths),
+			...readOpenApiRecord(source?.paths),
 			'/v1/public-goods/health': operation(
 				'getPublicGoodsHealth',
 				'Check public-goods readiness',
