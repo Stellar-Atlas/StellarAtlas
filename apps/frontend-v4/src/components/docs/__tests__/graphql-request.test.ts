@@ -134,9 +134,10 @@ describe('typed holder GraphQL pagination', () => {
 		expect(graphqlExamples.holders.query).toContain('hubbleAssetHolders');
 		expect(graphqlExamples.holders.query).toContain('amountPrecision');
 		expect(graphqlExamples.holders.query).toContain('snapshotPinned');
+		expect(graphqlExamples.holders.query).toContain('sponsor sponsored');
 		expect(graphqlExamples.holders.variables).toEqual({
-			asset: 'native',
-			input: { limit: 10 }
+			asset: 'KALE:GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE',
+			input: { limit: 10, sort: 'balance', order: 'desc' }
 		});
 	});
 });

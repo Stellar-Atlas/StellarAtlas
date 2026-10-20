@@ -1,6 +1,23 @@
 import { graphqlPageVariables } from '../graphql-request';
 
 describe('GraphiQL typed analytics page loading', () => {
+	it.each(['hubbleAssetHolders', 'hubbleAssetBalances', 'hubbleAssetTrustlines'])(
+		'continues %s without changing the asset, snapshot or sort',
+		(field) => {
+			const variables = {
+				asset: 'KALE:GISSUER',
+				input: { limit: 10, sort: 'balance', order: 'desc', asOfLedger: 64916610 }
+			};
+			expect(JSON.parse(graphqlPageVariables(
+				JSON.stringify(variables),
+				{ data: { [field]: { nextCursor: 'opaque-holder-page' } } },
+				1
+			)!)).toEqual({
+				...variables,
+				input: { ...variables.input, after: 'opaque-holder-page' }
+			});
+		}
+	);
 	it('carries account balance cursor without dropping the account', () => {
 		expect(
 			JSON.parse(

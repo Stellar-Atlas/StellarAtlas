@@ -40,16 +40,35 @@ function transactionExample(
 export const graphqlExamples = {
 	...graphqlAnalyticsExamples,
 	holders: {
-		label: 'Asset holders (latest-ingested Float64 observations)',
+		label: 'KALE holders by balance, with sponsorship',
 		query: `query Holders($asset: String!, $input: HubbleAssetHolderInput) {
   hubbleAssetHolders(asset: $asset, input: $input) {
     asset limit nextCursor
-    holders { accountId balance amountPrecision buyingLiabilities sellingLiabilities }
+    holders { accountId balance amountPrecision buyingLiabilities sellingLiabilities sponsor sponsored }
+    indexedSummary { holderCount balanceTotal }
     coverage { contiguousLastLedger maximumLedger gapCount }
-    watermark { mode catalogGeneratedAt catalogMaximumLedger snapshotPinned }
+    watermark { mode selectedLedger catalogGeneratedAt catalogMaximumLedger snapshotPinned coverageStatus balancePrecision }
   }
 }`,
-		variables: { asset: 'native', input: { limit: 10 } }
+		variables: {
+			asset: 'KALE:GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE',
+			input: { limit: 10, sort: 'balance', order: 'desc' }
+		}
+	},
+	trustlines: {
+		label: 'KALE trustlines, including zero balances and sponsorship',
+		query: `query Trustlines($asset: String!, $input: HubbleAssetHolderInput) {
+  hubbleAssetTrustlines(asset: $asset, input: $input) {
+    asset limit nextCursor
+    holders { accountId balance amountPrecision trustLineLimit flags sponsor sponsored lastModifiedLedger deleted }
+    coverage { contiguousLastLedger maximumLedger gapCount }
+    watermark { mode selectedLedger catalogGeneratedAt snapshotPinned coverageStatus balancePrecision }
+  }
+}`,
+		variables: {
+			asset: 'KALE:GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE',
+			input: { limit: 10, sort: 'account', order: 'asc' }
+		}
 	},
 	transaction: transactionExample(
 		'Transaction, operations, effects and contract events',
@@ -153,6 +172,8 @@ export function graphqlPageVariables(
 		data.hubbleAccountTransfers ??
 		data.hubbleAssetTransfers ??
 		data.hubbleAssetHolders ??
+		data.hubbleAssetBalances ??
+		data.hubbleAssetTrustlines ??
 		data.hubbleAccountBalances ??
 		data.hubbleContractEvents;
 	if (isRecord(typedPage)) {
