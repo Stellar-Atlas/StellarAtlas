@@ -14,6 +14,44 @@ export function datasetResourceOpenApiPaths(
 	): OpenApiRecord => {
 		const operation = readOpenApiRecord(paths[path]?.[method]);
 		if (!operation) throw new Error('Missing dataset API operation: ' + path);
+		if (operationId === 'queryParsedDatasetRecords') {
+			const responses = readOpenApiRecord(operation.responses) ?? {};
+			const success = readOpenApiRecord(responses['200']) ?? {};
+			const content = readOpenApiRecord(success.content) ?? {};
+			const json = readOpenApiRecord(content['application/json']) ?? {};
+			const schema = readOpenApiRecord(json.schema) ?? {};
+			return {
+				get: {
+					...operation,
+					operationId,
+					responses: {
+						...responses,
+						'200': {
+							...success,
+							content: {
+								...content,
+								'application/json': {
+									...json,
+									schema: {
+										...schema,
+										properties: {
+											...readOpenApiRecord(schema.properties),
+											nextOffset: {
+												type: 'integer',
+												minimum: 0,
+												nullable: true,
+												description:
+													'Possible next offset with unchanged filters; null when exhausted. A full final page may be followed by an empty page. No total-count query is performed.'
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			};
+		}
 		return { [method]: { ...operation, operationId } };
 	};
 	const detail = '/v1/analytics/datasets/{dataset}';

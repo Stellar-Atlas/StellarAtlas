@@ -27,6 +27,10 @@ curl --fail-with-body '${api}/v1/datasets/history_contract_events/records?ledger
 							unchanged. Metadata uses the shared catalogue; record queries
 							remain bounded.
 						</p>
+						<p>
+							A full final records page may be followed by one empty page; no
+							total-count scan is run.
+						</p>
 					</>
 				)
 			},

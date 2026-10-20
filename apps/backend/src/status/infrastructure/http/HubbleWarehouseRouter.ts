@@ -78,7 +78,16 @@ export function registerHubbleDatasetRoutes(
 	router.get('/datasets/:dataset/records', async (request, response) => {
 		await send(response, async () => {
 			response.setHeader('Cache-Control', 'no-store');
-			return warehouse.query(parseResourceQuery(request));
+			const page = await warehouse.query(parseResourceQuery(request));
+			return {
+				...page,
+				nextOffset:
+					page.nextOffset !== undefined
+						? page.nextOffset
+						: page.rows.length === page.limit
+							? page.offset + page.rows.length
+							: null
+			};
 		});
 	});
 

@@ -118,6 +118,31 @@ describe('Hubble OpenAPI paths', () => {
 		expect(success.description).toBe(
 			'Hubble dataset schema with warehouse and ingestion metadata.'
 		);
+		const query = jest.spyOn(warehouse, 'query');
+		query.mockResolvedValue({
+			columns: ['id'],
+			dataset: 'history_transactions',
+			elapsedMilliseconds: 1,
+			limit: 2,
+			offset: 0,
+			rows: [{ id: '1' }, { id: '2' }]
+		});
+		await request(app)
+			.get('/v1/datasets/history_transactions/records?limit=2')
+			.expect(200)
+			.expect(({ body }) => expect(body.nextOffset).toBe(2));
+		query.mockResolvedValue({
+			columns: ['id'],
+			dataset: 'history_transactions',
+			elapsedMilliseconds: 1,
+			limit: 2,
+			offset: 2,
+			rows: []
+		});
+		await request(app)
+			.get('/v1/datasets/history_transactions/records?limit=2&offset=2')
+			.expect(200)
+			.expect(({ body }) => expect(body.nextOffset).toBeNull());
 	});
 
 	it('documents optional merged completed intervals without changing legacy required fields', () => {
@@ -185,18 +210,30 @@ describe('Hubble OpenAPI paths', () => {
 		const expected = {
 			'/v1/assets/{asset}/balances': 'listAssetBalancesSnapshot',
 			'/v1/assets/{asset}/trustlines': 'listAssetTrustlinesSnapshot',
-			'/v1/analytics/assets/{asset}/balances': 'listAnalyticsAssetBalancesSnapshot',
-			'/v1/analytics/assets/{asset}/trustlines': 'listAnalyticsAssetTrustlinesSnapshot'
+			'/v1/analytics/assets/{asset}/balances':
+				'listAnalyticsAssetBalancesSnapshot',
+			'/v1/analytics/assets/{asset}/trustlines':
+				'listAnalyticsAssetTrustlinesSnapshot'
 		};
 		for (const [path, operationId] of Object.entries(expected)) {
 			const pathItem = readOpenApiRecord(publicPaths[path])!;
 			const operation = readOpenApiRecord(pathItem.get)!;
 			expect(operation.operationId).toBe(operationId);
 		}
-		const balances = readOpenApiRecord(readOpenApiRecord(publicPaths['/v1/assets/{asset}/balances'])!.get)!;
+		const balances = readOpenApiRecord(
+			readOpenApiRecord(publicPaths['/v1/assets/{asset}/balances'])!.get
+		)!;
 		const parameters = balances.parameters as Array<Record<string, unknown>>;
 		expect(parameters.map((parameter) => parameter.name)).toEqual(
-			expect.arrayContaining(['account', 'after', 'limit', 'sort', 'order', 'as_of_ledger', 'include_deleted'])
+			expect.arrayContaining([
+				'account',
+				'after',
+				'limit',
+				'sort',
+				'order',
+				'as_of_ledger',
+				'include_deleted'
+			])
 		);
 		const responses = readOpenApiRecord(balances.responses)!;
 		const success = readOpenApiRecord(responses['200'])!;
@@ -209,8 +246,12 @@ describe('Hubble OpenAPI paths', () => {
 		expect(properties).toHaveProperty('watermark');
 		expect(properties).toHaveProperty('indexedSummary');
 		expect(properties).toHaveProperty('dataset');
-		const trustlines = readOpenApiRecord(readOpenApiRecord(publicPaths['/v1/assets/{asset}/trustlines'])!.get)!;
+		const trustlines = readOpenApiRecord(
+			readOpenApiRecord(publicPaths['/v1/assets/{asset}/trustlines'])!.get
+		)!;
 		const trustlineResponses = readOpenApiRecord(trustlines.responses)!;
-		expect(readOpenApiRecord(trustlineResponses['400'])!.description).toContain('native');
+		expect(readOpenApiRecord(trustlineResponses['400'])!.description).toContain(
+			'native'
+		);
 	});
 });
