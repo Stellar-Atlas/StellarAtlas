@@ -1,0 +1,1445 @@
+{
+	"events": {
+		"hackmeridian-2026": {
+			"name": "HackMeridian 2026",
+			"network": "testnet",
+			"startsAt": "2026-10-25T09:00:00Z",
+			"endsAt": "2026-10-26T12:00:00Z",
+			"source": "https://hackproof-six.vercel.app/data/2026/"
+		}
+	},
+	"repositories": {
+		"0xdanomite/alloy-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": "first",
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"0xverahq/artifex-contracts": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"34m0r/payslip": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"abaresks24/confidential-rwa": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"acta-team/acta-gate-meridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"agamafinance/agama-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"agnesnaomiolim-cloud/stellar-forge": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"agrosmart-contracts/proof-of-trading": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"albycosmy99/lisbon-hackmeridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"aonishchenko/dealpassport": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"arkessiah/avocate-harvest-escrow": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"armsves/veilpay": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"arturete58-sys/402scope-trust": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"arturete58-sys/kyros2.0": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"arturshirokov/hackmeridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"atahanyild/koul": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"azrielthehellrazor/portus": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"beaguzman/pelamandarinas_project": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"belvast-innovation/breakwater": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"berryxmas/agent-pass": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"bilfrux/drainmywallet": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"bitfalt/scaffold-stellar-agentic": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"blnt-protocol/blnt-v3-migration": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"bran18/citypass": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"brozorec/stellar-confidential-token-demo": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"c-payments/batch-contract-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"cabscrypto/agentspacialeconomy": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"celadari/fathom-hack-meridian-2026": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"chaaiise/tsuna": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"cityofzion/hackmeridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"cryptovalencia/stellar2bitcoin": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"curtismoncoq/middlemate": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"dabuca/arqueo": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"ddortabencomo/yield-bearing-rental-deposit": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"defindex-io/hackathons-landing": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"deivitto/orloj-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"developerfred/nata-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"devfelipenunes/cmi-hackthon-meridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"devogazi/stellar-postage": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"devtobis/ballast": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"dgetsylver/turbolong": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"don-radman/merit": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"drank40/soroprove": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"eco-rv/astros": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"eduruizhipolito/kado-hackmeridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"elmersaid/xoracle": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"elszalencia/chateaux-meridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"emirykl/nema": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"emprendamosahora2030-sudo/greenledger": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"enzoblain/zkross": [
+			{
+				"event": "hackmeridian-2026",
+				"award": "runner-up",
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"eras256/nirium-watch": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"ethan-r13n/nest": [
+			{
+				"event": "hackmeridian-2026",
+				"award": "first",
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"fabian416/witness": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"fdddf/clippay": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"fizzl13/presign-guard": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"flowpay-bmoni/flowpay": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"forepay-stellar/forepay": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"forever8896/dvdnd": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"franciscogfsm/shake": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"fredericjasmin/cuotia": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"fthtrading/genesis402-stellar-facilitator": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"gastaan/stelleye": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"grmkris/hack-meridian-2026": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"hackatonwinnners/toolport": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "likely"
+			}
+		],
+		"hakeemullahjan/payraast": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"harsxul/nomad-vault": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"hassankorey/sorostream-app": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"helasnoussi/my-stellar-yield-vault": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"herbstephens/human-bond": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"hustle1hustle/bookerbob-hackmeridian-2026": [
+			{
+				"event": "hackmeridian-2026",
+				"award": "runner-up",
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"ihlasthetics/redevice": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"ilyes-ali-jeridi/qafila": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"inferara/stablecoin-close": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"infiniteezverse/nova": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"infoenzastore-cmd/enza": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"infoenzastore-cmd/enza3.mvmnt1": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"innokentyb/agent-payment-gate": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"innokeshka1/gamelock": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"isaac2399/secretspay-stellar-daap": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"joaointech/explorador-agent-loan-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"joinsendr/sendrpay": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"joshschcom/peridot-markets": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"jxsu404/stellar-quickpass": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"jzelada97/pledge": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"karagozemin/latch": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"karinapostemp/nomad-vault-vercel": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"karlostoteles/quits": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"karmainaria/sansara": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"kaycee276/rhitta": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"keylease-security/keylease-core": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"klorenn/loot": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"kotizi/kotizi-stellar-meridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"koul-me/koul": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"kovan-protocol/kovan": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"lagouze/keystone": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"lendara-org/lendara-shield": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"lmstewart88/chama": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"lothinnt/card-place-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"lucascariddi/passport-pay": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"manuuvllgs/lumensplit": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"marcocpp/peaje-zbe": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"michella-stack/stellar-split": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"mizukuhiiragi/starpocket": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"mohameddatax/hackmeridian-stellar-hackathon": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"mohamedkhellaf/hackmeridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"n1n4xyz/backstage": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"najathammouri-prog/airlock-guard-2": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"nearx-labs/nilo": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"neko-protocol/neko-tokenization-hackmeridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"nelsonalexis/unlocksharesxstellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"nema1502/tinkazo": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"nethermindeth/stellar-private-payments": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"nicolasguasca1/x402-stellar-ticket-gating": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"nicolecarolina/hackmeridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"nielslecodeur/lumaid": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"nina-osk/starlog": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"nnamdicyber/mallaka": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"nseguias/kintsu": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "likely"
+			}
+		],
+		"nunribhac/rwa-crowdfund-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"ogaziedaniel80-droid/marketpulse-oracle": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"oneid-ng/oneid": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"osdeniz/qrypton-vault": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"paolag93/plan4her-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"parricode/phonedo": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"pcmarts/x402git-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"pe4enable/stellar.chat": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"philiplewellen/cdp-clear": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"polailabs/polai-contracts": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"polailabs/polai-frontend": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"poolfi-ltd/poolfi-build-1": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"protocol-30/stellar-p30-check": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"pwsaragossy/hackmeridian-cos": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"pythagoras-x/gateflow": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"raglibol-re/ancora": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"rcusans-code/caravel": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"recentlyhatched/indexify-mvp": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"red-sentinel-ai/red-sentinal": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"rjk3d/fiavel_hack_lisbon": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"rockieraheem/devfest_harambeeone": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"rodrodros/stellar-rtgs": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"row-bear/sidekey": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"rushyard/monolith": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"seekdaseek/sounding": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"seidar-hq/seidar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"sendalabs/sendabussines": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "likely"
+			}
+		],
+		"seyfert-labs/seyf-p": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"shamba-records-limited/microvault": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"siwakadrianna-byte/ghost-proof": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "likely"
+			}
+		],
+		"skar8848/lotus-stellar": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"skopolabs/usagepay": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"slasettlehq/slasettle-vault": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"slimepay/stellar-anchor": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"sohamtech-uk/cherrypay-wallet": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"songu3020/keepalive": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"sorottl-network/sorottl-backend": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"sorottl-network/sorottl-sdk": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"sozu-capital/sozu-offline": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"stellar-scaffold/cli": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"stellaraid-network/sdk": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"strea-mora/streamora": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"swiftexwallet/swiftex_recovery_contracts": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"syncedtoblog/meritable": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"synt-tech/rebalancing_vault": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"team-hackmeridian-2026/hackmeridian2026": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"thaisfreis/pinakion": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"the-axmc/fermento": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"thisyearnofear/diversify": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"troqpay/private-yield": [
+			{
+				"event": "hackmeridian-2026",
+				"award": "runner-up",
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"untangledfinance/oz-policy-builder": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"up2itnow0822/agent-wallet-sdk": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"vicistar-star/holdfast": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		],
+		"vmichalik/stellar-p2p": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"w0lfyo/carimbo": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"websoroban/payloop": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "likely"
+			}
+		],
+		"wilivms/trust-meridian": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"wrever/bind": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"writzprotocol/writz": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": "scale",
+				"evidence": "verified"
+			}
+		],
+		"ygk94/4ward": [
+			{
+				"event": "hackmeridian-2026",
+				"award": "runner-up",
+				"track": "genesis",
+				"evidence": "verified"
+			}
+		],
+		"zelena-tech/harmony": [
+			{
+				"event": "hackmeridian-2026",
+				"award": null,
+				"track": null,
+				"evidence": "verified"
+			}
+		]
+	}
+}

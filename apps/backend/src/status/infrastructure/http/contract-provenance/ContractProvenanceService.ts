@@ -11,6 +11,10 @@ import {
 	verifyContractBuildAttestation,
 	type ContractBuildRecord
 } from './ContractBuildAttestation.js';
+import {
+	hackathonsOf,
+	type HackathonParticipation
+} from './HackathonParticipation.js';
 import { readContractCode, ContractRpcUnavailable } from './ContractRpcCode.js';
 import { readContractWasmMetadata } from './ContractWasmMetadata.js';
 
@@ -40,6 +44,7 @@ export interface ContractProvenance {
 		readonly status: BuildStatus;
 		readonly record: ContractBuildRecord | null;
 	};
+	readonly hackathons: readonly HackathonParticipation[];
 	readonly securityAudit: 'not_assessed';
 }
 
@@ -131,6 +136,7 @@ export class ContractProvenanceService {
 			wasmSha256: observation.wasmSha256,
 			metadata,
 			build,
+			hackathons: hackathonsOf(metadata.sourceRepository),
 			securityAudit: 'not_assessed'
 		};
 	}

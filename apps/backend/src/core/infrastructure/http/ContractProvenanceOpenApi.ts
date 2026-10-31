@@ -87,6 +87,7 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 			'wasmSha256',
 			'metadata',
 			'build',
+			'hackathons',
 			'securityAudit'
 		],
 		properties: {
@@ -114,6 +115,12 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 			},
 			metadata: { $ref: '#/components/schemas/ContractProvenanceMetadata' },
 			build: { $ref: '#/components/schemas/ContractProvenanceBuild' },
+			hackathons: {
+				type: 'array',
+				description:
+					'Hackathons the embedded source repository took part in. This describes the repository, so it is only as reliable as the repository named in the Wasm metadata, which the developer supplies unless the build is verified. Empty when there is no source repository or it took part in none.',
+				items: { $ref: '#/components/schemas/ContractProvenanceHackathon' }
+			},
 			securityAudit: {
 				type: 'string',
 				enum: ['not_assessed'],
@@ -167,6 +174,32 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 					runUrl: { type: 'string', format: 'uri', nullable: true },
 					attestationUrl: { type: 'string', format: 'uri' }
 				}
+			}
+		}
+	},
+	ContractProvenanceHackathon: {
+		type: 'object',
+		required: ['slug', 'name', 'network', 'award', 'track', 'evidence'],
+		properties: {
+			slug: { type: 'string' },
+			name: { type: 'string' },
+			network: {
+				type: 'string',
+				description:
+					'The Stellar network the hackathon ran on. This is not necessarily the network of the contract.'
+			},
+			award: { type: 'string', nullable: true, enum: ['first', 'runner-up'] },
+			track: {
+				type: 'string',
+				nullable: true,
+				enum: ['genesis', 'scale'],
+				description: 'Only set when the team states its track itself.'
+			},
+			evidence: {
+				type: 'string',
+				enum: ['verified', 'likely'],
+				description:
+					'verified: the repository references an on-chain account, contract or asset that was active during the event. likely: no on-chain proof.'
 			}
 		}
 	},

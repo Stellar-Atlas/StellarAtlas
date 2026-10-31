@@ -92,6 +92,7 @@ describe('contract provenance RPC path', () => {
 			observedLedger: 150,
 			wasmSha256: hash,
 			build: { status: 'metadata_missing', record: null },
+			hackathons: [],
 			securityAudit: 'not_assessed'
 		});
 		await request(app)
