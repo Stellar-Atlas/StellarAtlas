@@ -1,6 +1,8 @@
 import type { EntityRecord, ExplorerFilters } from '../../api/explorer-analytics';
 
 const keys = ['min_ledger', 'max_ledger', 'start_time', 'end_time', 'deleted'] as const;
+const windowLedger = (value: unknown): number => typeof value === 'number' ? value
+	: typeof value === 'string' && /^[1-9]\d{0,9}$/.test(value) ? Number(value) : NaN;
 
 export function poolContextQuery(context: ExplorerFilters): URLSearchParams {
 	return new URLSearchParams(keys.flatMap(key => {
@@ -18,7 +20,7 @@ export function poolContextFromRequest(path: string, window?: EntityRecord): Exp
 	const params = new URL(path, 'https://explorer.invalid').searchParams;
 	const context = Object.fromEntries(poolContextQuery(Object.fromEntries(params)));
 	if (!hasPoolHistory(context) && window) {
-		const min = Number(window.minLedger), max = Number(window.maxLedger);
+		const min = windowLedger(window.minLedger), max = windowLedger(window.maxLedger);
 		if ([min, max].every(value => Number.isSafeInteger(value) && value >= 1 && value <= 4294967295) && min <= max) {
 			context.min_ledger = String(min);
 			context.max_ledger = String(max);

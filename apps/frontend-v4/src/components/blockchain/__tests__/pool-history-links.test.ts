@@ -19,6 +19,7 @@ describe('pool historical links', () => {
 		expect(timed.min_ledger).toBeUndefined();
 		expect(poolContextFromRequest('?offset=50', { minLedger: 100, maxLedger: 163 })).toEqual({ min_ledger: '100', max_ledger: '163' });
 		expect(poolContextFromRequest('?offset=50', { minLedger: 'not-a-ledger', maxLedger: 163 })).toEqual({});
+		expect(poolContextFromRequest('?offset=50', { minLedger: true, maxLedger: 163 })).toEqual({});
 	});
 	it('keeps latest links current and does not classify deleted-only filtering as historical', () => {
 		expect(poolDetailHref('pool-id')).toBe('/explorer/liquidity-pools/pool-id');
