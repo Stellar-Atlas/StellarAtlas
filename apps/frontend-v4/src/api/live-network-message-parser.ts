@@ -1,6 +1,7 @@
 import type {
 	PublicLatestLedger,
 	PublicNetwork,
+	PublicScpGraphStatement,
 	PublicScpStatementCursor,
 	PublicScpStatementObservation,
 	PublicScpStatementReadMetadata
@@ -13,8 +14,10 @@ export type LiveNetworkMessage =
 			payload: { readonly observedAt: string };
 			type: 'heartbeat';
 	  }
+	| { payload: { readonly latestLedger: string; readonly name: string; readonly time: string }; type: 'summary' }
 	| { payload: PublicLatestLedger; type: 'latestLedger' }
 	| { payload: PublicNetwork; type: 'network' }
+	| (PublicScpStatementReadMetadata & { payload: PublicScpGraphStatement[]; type: 'scpGraph' })
 	| (PublicScpStatementReadMetadata & {
 			payload: PublicScpStatementObservation[];
 			type: 'scp';
@@ -25,6 +28,12 @@ export const parseLiveNetworkMessage = (
 	value: unknown
 ): LiveNetworkMessage | null => {
 	if (!isRecord(value)) return null;
+	if (value.type === 'summary' && isRecord(value.payload) &&
+		typeof value.payload.name === 'string' && isDateString(value.payload.time) &&
+		typeof value.payload.latestLedger === 'string') {
+		return { payload: { name: value.payload.name, time: value.payload.time, latestLedger: value.payload.latestLedger }, type: 'summary' };
+	}
+	if (value.type === 'scpGraph') return parseScpGraphMessage(value);
 	if (value.type === 'network' && isPublicNetwork(value.payload)) {
 		return { payload: value.payload, type: 'network' };
 	}
@@ -136,6 +145,53 @@ const parseScpMessage = (
 	return { ...metadata, payload, type: 'scp' };
 };
 
+const parseScpGraphMessage = (
+	value: Record<string, unknown>
+): LiveNetworkMessage | null => {
+	const metadata = parseScpMetadata(value);
+	if (metadata === null || !Array.isArray(value.payload)) return null;
+	const payload: PublicScpGraphStatement[] = [];
+	for (const entry of value.payload) {
+		const statement = parseScpGraphStatement(entry);
+		if (statement === null) return null;
+		payload.push(statement);
+	}
+	if (payload.length > 0 && (metadata.freshness === 'empty' || metadata.freshness === 'unavailable')) return null;
+	if (metadata.freshness === 'fresh' && (metadata.freshnessMs === null || metadata.observedAt === null)) return null;
+	if ((metadata.freshness === 'empty' || metadata.freshness === 'unavailable') && (metadata.freshnessMs !== null || metadata.observedAt !== null)) return null;
+	return { ...metadata, payload, type: 'scpGraph' };
+};
+
+const parseScpGraphStatement = (value: unknown): PublicScpGraphStatement | null => {
+	if (!isRecord(value) || !isStatementType(value.statementType) ||
+		typeof value.nodeId !== 'string' || !isDateString(value.observedAt) ||
+		typeof value.observedFromPeer !== 'string' || typeof value.quorumSetHash !== 'string' ||
+		typeof value.slotIndex !== 'string' || typeof value.statementHash !== 'string' ||
+		!Array.isArray(value.values)) return null;
+	const values: PublicScpGraphStatement['values'][number][] = [];
+	for (const entry of value.values) {
+		if (!isRecord(entry) || typeof entry.closeTime !== 'string' ||
+			typeof entry.txSetHash !== 'string' ||
+			(entry.upgradeCount !== undefined && !isNumber(entry.upgradeCount)) ||
+			(entry.value !== undefined && typeof entry.value !== 'string')) return null;
+		values.push({
+			closeTime: entry.closeTime,
+			txSetHash: entry.txSetHash,
+			...(entry.upgradeCount !== undefined ? { upgradeCount: entry.upgradeCount } : {}),
+			...(entry.value !== undefined ? { value: entry.value } : {})
+		});
+	}
+	return {
+		nodeId: value.nodeId,
+		observedAt: value.observedAt,
+		observedFromPeer: value.observedFromPeer,
+		quorumSetHash: value.quorumSetHash,
+		slotIndex: value.slotIndex,
+		statementHash: value.statementHash,
+		statementType: value.statementType,
+		values
+	};
+};
 const parseScpMetadata = (
 	value: Record<string, unknown>
 ): PublicScpStatementReadMetadata | null => {

@@ -8,6 +8,7 @@ import { developerGuideQueryPages } from './developer-guide-query-content';
 import { developerGuideReferencePages } from './developer-guide-reference-content';
 import { contractEventsGuide } from './developer-guide-contract-events';
 import { assetsAndIssuersGuide } from './developer-guide-assets-and-issuers';
+import { liveUpdatesGuide } from './developer-guide-live-updates';
 export type {
 	DeveloperGuidePage,
 	DeveloperGuideSection
@@ -235,6 +236,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 	...developerGuideQueryPages,
 	contractEventsGuide,
 	assetsAndIssuersGuide,
+	liveUpdatesGuide,
 	...developerGuideReferencePages
 ];
 

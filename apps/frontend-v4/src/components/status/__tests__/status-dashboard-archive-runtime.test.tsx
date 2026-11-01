@@ -101,7 +101,7 @@ describe('archive runtime presentation', () => {
 		).toContain('status-pill danger');
 	});
 
-	it('keeps compatibility-index failures visible alongside healthy workers', () => {
+	it('keeps archive runtime health visible without compatibility-index diagnostics', () => {
 		const props = statusProps();
 		const promotion = props.fullHistory.canonicalPromotion;
 		if (promotion === null) throw new Error('Expected promotion fixture');
@@ -114,14 +114,8 @@ describe('archive runtime presentation', () => {
 				}}
 			/>
 		);
-		const indexes = section(markup, 'Compatibility indexes');
-		expect(indexes).toContain('status-pill warning');
-		expect(indexes).toContain('Promotion failed');
-		expect(indexes).toContain('<details>');
-		expect(indexes).toContain('1 component needs attention');
-		expect(
-			markup.indexOf('aria-label="Archive verification runtime"')
-		).toBeLessThan(markup.indexOf('aria-label="Compatibility indexes"'));
+		expect(markup).not.toContain('Compatibility indexes');
+		expect(markup).not.toContain('Promotion failed');
 		expect(section(markup, 'Archive verification runtime')).toContain(
 			'status-pill good'
 		);

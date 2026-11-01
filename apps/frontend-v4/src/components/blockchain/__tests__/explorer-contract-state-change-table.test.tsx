@@ -62,6 +62,8 @@ describe('ExplorerContractStateChangeTable', () => {
 		expect(html).toContain('Timestamp');
 		expect(html).toContain('1791674220000');
 		expect(html).toContain('-170141183460469231731687303715884105727');
+		expect(html).toContain('>-170,141,183,460,469,231,731,687,303,715,884,105,727</code>');
+		expect(html).toContain('64,877,689</a>');
 		expect(html).toContain(`href="/explorer/accounts/${address}"`);
 		expect(html).toContain(`href="/explorer/ledgers/64877689"`);
 		expect(html).toContain(

@@ -55,12 +55,16 @@ export function ExplorerContractRecord({
 						<span>
 							{row.successful === true
 								? 'Transaction successful'
-								: 'Transaction failed'}
+								: row.successful === false
+									? 'Transaction failed'
+									: 'Transaction outcome unknown'}
 						</span>
 						<span>
 							{row.inSuccessfulContractCall === true
 								? 'In successful contract call'
-								: 'Not in a successful contract call'}
+								: row.inSuccessfulContractCall === false
+									? 'Not in a successful contract call'
+									: 'Contract-call outcome unknown'}
 						</span>
 					</>
 				)}

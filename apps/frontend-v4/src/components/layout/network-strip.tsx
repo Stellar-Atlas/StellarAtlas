@@ -1,23 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { PublicNetwork } from '../../api/types';
 import { publishLatestLedger } from '../../api/latest-ledger-events';
-import { subscribeToLiveNetworkStream } from '../../api/live-network-stream';
+import {
+	subscribeToLiveNetworkStream,
+	type LiveNetworkSubscriptionOptions
+} from '../../api/live-network-stream';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { LocalDateTime } from '../local-date-time';
 
+const networkStripSubscription: LiveNetworkSubscriptionOptions = {
+	channels: ['summary']
+};
+
 export function NetworkStrip(): React.JSX.Element {
-	const [network, setNetwork] = useState<PublicNetwork | null>(null);
-	const [liveLedger, setLiveLedger] = useState<string | null>(null);
+	const [networkName, setNetworkName] = useState<string | null>(null);
+	const [networkTime, setNetworkTime] = useState<string | null>(null);
 	const [latestLedger, setLatestLedger] = useState<string | null>(null);
 
 	useEffect(
 		() =>
 			subscribeToLiveNetworkStream((message) => {
-				if (message.type === 'network') {
-					setNetwork(message.payload);
+				if (message.type === 'summary') {
+					setNetworkName(message.payload.name);
+					setNetworkTime(message.payload.time);
 					publishLatestLedger(message.payload.latestLedger);
+					setLatestLedger((current) =>
+						getHighestLedgerSequence([
+							current,
+							message.payload.latestLedger
+						]) ?? current
+					);
 				}
 				if (message.type === 'latestLedger') {
 					publishLatestLedger(message.payload.sequence);
@@ -28,27 +41,11 @@ export function NetworkStrip(): React.JSX.Element {
 						);
 					});
 				}
-				if (message.type === 'scp') {
-					const highestLedger = getHighestLedgerSequence(
-						message.payload.map((statement) => statement.slotIndex)
-					);
-					if (!highestLedger) return;
-					publishLatestLedger(highestLedger);
-					setLiveLedger((current) => {
-						return (
-							getHighestLedgerSequence([current, highestLedger]) ?? current
-						);
-					});
-				}
-			}),
+			}, undefined, networkStripSubscription),
 		[]
 	);
 
-	const displayedLedger = getHighestLedgerSequence([
-		liveLedger,
-		latestLedger,
-		network?.latestLedger
-	]);
+	const displayedLedger = latestLedger;
 
 	return (
 		<div className="network-strip">
@@ -57,11 +54,11 @@ export function NetworkStrip(): React.JSX.Element {
 					<span>Modern update</span>
 					<a href="/legacy/">Legacy version</a>
 				</div>
-				<span>{network?.name ?? 'Public Stellar Network'}</span>
+				<span>{networkName ?? 'Public Stellar Network'}</span>
 				<span>Ledger {displayedLedger ?? 'syncing'}</span>
 				<strong>
 					Network snapshot:{' '}
-					{network ? <LocalDateTime dateTime={network.time} /> : 'Loading'}
+					{networkTime ? <LocalDateTime dateTime={networkTime} /> : 'Loading'}
 				</strong>
 			</div>
 		</div>

@@ -7,6 +7,13 @@ import type { PublicScpStatementCursor } from './types';
 
 export type { LiveNetworkMessage } from './live-network-message-parser';
 
+export type LiveNetworkChannel = 'summary' | 'network' | 'scp';
+export interface LiveNetworkSubscriptionOptions {
+	readonly channels: readonly LiveNetworkChannel[];
+	readonly scpMode?: 'graph';
+}
+type LiveSubscriptionProfile = LiveNetworkSubscriptionOptions;
+
 export type LiveNetworkStreamStatus =
 	'connecting' | 'idle' | 'open' | 'reconnecting' | 'stale';
 
@@ -29,11 +36,14 @@ export const liveNetworkReconnectMaxDelayMs = 15_000;
 const liveWebSocketPath = '/v1/live/ws';
 const listeners = new Set<LiveNetworkListener>();
 const stateListeners = new Set<LiveNetworkStateListener>();
+const subscriptionOptions = new Map<LiveNetworkListener, LiveNetworkSubscriptionOptions>();
 let reconnectAttempt = 0;
 let reconnectTimeout: number | null = null;
 let resumeCursor: PublicScpStatementCursor | null = null;
 let socket: WebSocket | null = null;
 let watchdogTimeout: number | null = null;
+let activeProfileKey = '';
+let visibilityListenerInstalled = false;
 let streamState: LiveNetworkStreamState = createIdleState();
 
 function createIdleState(): LiveNetworkStreamState {
@@ -55,8 +65,41 @@ const setStreamState = (update: Partial<LiveNetworkStreamState>): void => {
 };
 
 const notify = (message: LiveNetworkMessage): void => {
-	for (const listener of listeners) listener(message);
+	for (const listener of listeners) {
+		const options = subscriptionOptions.get(listener);
+		if (options === undefined || acceptsMessage(options, message)) listener(message);
+	}
 };
+const acceptsMessage = (options: LiveNetworkSubscriptionOptions, message: LiveNetworkMessage): boolean => {
+	if (message.type === 'heartbeat' || message.type === 'error') return true;
+	if (message.type === 'summary') return options.channels.includes('summary');
+	if (message.type === 'latestLedger') {
+		return options.channels.includes('network') || options.channels.includes('summary');
+	}
+	if (message.type === 'network') return options.channels.includes('network');
+	return options.channels.includes('scp');
+};
+
+const getSubscriptionProfile = (): LiveSubscriptionProfile => {
+	const channels = new Set<LiveNetworkChannel>();
+	let graphMode = false;
+	let fullScpRequired = false;
+	for (const options of subscriptionOptions.values()) {
+		for (const channel of options.channels) channels.add(channel);
+		if (options.scpMode === 'graph' && options.channels.includes('scp')) graphMode = true;
+		if (options.scpMode !== 'graph' && options.channels.includes('scp')) fullScpRequired = true;
+	}
+	return {
+		channels: (['summary', 'network', 'scp'] as const).filter((channel) => channels.has(channel)),
+		...(graphMode && !fullScpRequired ? { scpMode: 'graph' as const } : {})
+	};
+};
+
+const profileKey = (profile: LiveSubscriptionProfile): string =>
+	`${profile.channels.join(',')}|${profile.scpMode ?? ''}`;
+
+const visible = (): boolean =>
+	typeof document === 'undefined' || document.visibilityState !== 'hidden';
 
 const clearReconnectTimeout = (): void => {
 	if (reconnectTimeout === null) return;
@@ -99,7 +142,7 @@ const advanceResumeCursor = (
 const cursorFromMessage = (
 	message: LiveNetworkMessage
 ): PublicScpStatementCursor | null => {
-	if (message.type !== 'scp') return null;
+	if (message.type !== 'scp' && message.type !== 'scpGraph') return null;
 	let newest: PublicScpStatementCursor | null = null;
 	for (const statement of message.payload) {
 		const observedAtMs = Date.parse(statement.observedAt);
@@ -110,8 +153,10 @@ const cursorFromMessage = (
 	return newest;
 };
 
-const buildLiveNetworkUrl = (): string => {
+const buildLiveNetworkUrl = (profile: LiveSubscriptionProfile): string => {
 	const url = new URL(buildBrowserRealtimeUrl(liveWebSocketPath));
+	url.searchParams.set('channels', profile.channels.join(','));
+	if (profile.scpMode !== undefined) url.searchParams.set('scpMode', profile.scpMode);
 	if (resumeCursor !== null) {
 		url.searchParams.set(
 			'afterObservedAtMs',
@@ -123,7 +168,12 @@ const buildLiveNetworkUrl = (): string => {
 };
 
 const scheduleReconnect = (): void => {
-	if (listeners.size === 0 || reconnectTimeout !== null) return;
+	if (
+		listeners.size === 0 ||
+		!visible() ||
+		getSubscriptionProfile().channels.length === 0 ||
+		reconnectTimeout !== null
+	) return;
 	reconnectAttempt = Math.min(31, reconnectAttempt + 1);
 	setStreamState({ reconnectAttempt, status: 'reconnecting' });
 	reconnectTimeout = window.setTimeout(() => {
@@ -186,10 +236,10 @@ const handleSocketMessage = (
 			return;
 		}
 		advanceResumeCursor(cursorFromMessage(message));
-		if (message.type === 'scp' || message.type === 'heartbeat') {
+		if (message.type === 'scp' || message.type === 'scpGraph' || message.type === 'heartbeat') {
 			advanceResumeCursor(message.cursor);
 		}
-		if (message.type === 'scp') {
+		if (message.type === 'scp' || message.type === 'scpGraph') {
 			setStreamState({ truncated: message.truncated === true });
 		}
 		recordActivity(candidate);
@@ -205,6 +255,9 @@ const handleSocketMessage = (
 
 const connectLiveNetworkStream = (): void => {
 	if (typeof window === 'undefined') return;
+	if (listeners.size === 0 || !visible()) return;
+	const profile = getSubscriptionProfile();
+	if (profile.channels.length === 0) return;
 	if (
 		socket &&
 		(socket.readyState === WebSocket.OPEN ||
@@ -213,7 +266,7 @@ const connectLiveNetworkStream = (): void => {
 		return;
 
 	clearReconnectTimeout();
-	const candidate = new WebSocket(buildLiveNetworkUrl());
+	const candidate = new WebSocket(buildLiveNetworkUrl(profile));
 	socket = candidate;
 	setStreamState({
 		cursor: resumeCursor,
@@ -244,24 +297,81 @@ const closeSocket = (): void => {
 	clearWatchdogTimeout();
 	currentSocket?.close(1000, 'no live stream subscribers');
 };
+const onVisibilityChange = (): void => {
+	if (!visible()) {
+		clearReconnectTimeout();
+		closeSocket();
+		setStreamState({ status: 'idle' });
+		return;
+	}
+	resumeCursor = null;
+	reconnectAttempt = 0;
+	activeProfileKey = '';
+	updateSubscriptionConnection();
+};
+
+const updateSubscriptionConnection = (): void => {
+	if (listeners.size === 0) return;
+	if (!visible()) {
+		clearReconnectTimeout();
+		closeSocket();
+		setStreamState({ status: 'idle' });
+		return;
+	}
+	const profile = getSubscriptionProfile();
+	const nextKey = profileKey(profile);
+	if (nextKey === activeProfileKey) {
+		connectLiveNetworkStream();
+		return;
+	}
+	const previousChannels = activeProfileKey.split('|')[0]?.split(',') ?? [];
+	const previousMode = activeProfileKey.split('|')[1] ?? '';
+	if (previousChannels.includes('scp') !== profile.channels.includes('scp') ||
+		previousMode !== (profile.scpMode ?? '')) resumeCursor = null;
+	activeProfileKey = nextKey;
+	clearReconnectTimeout();
+	closeSocket();
+	connectLiveNetworkStream();
+};
+
+const installVisibilityListener = (): void => {
+	if (visibilityListenerInstalled || typeof document === 'undefined') return;
+	document.addEventListener('visibilitychange', onVisibilityChange);
+	visibilityListenerInstalled = true;
+};
+
+const removeVisibilityListener = (): void => {
+	if (!visibilityListenerInstalled || typeof document === 'undefined') return;
+	document.removeEventListener('visibilitychange', onVisibilityChange);
+	visibilityListenerInstalled = false;
+};
 
 export const subscribeToLiveNetworkStream = (
 	listener: LiveNetworkListener,
-	stateListener?: LiveNetworkStateListener
+	stateListener?: LiveNetworkStateListener,
+	options: LiveNetworkSubscriptionOptions = { channels: ['summary', 'network', 'scp'] }
 ): (() => void) => {
 	listeners.add(listener);
+	subscriptionOptions.set(listener, options);
 	if (stateListener !== undefined) {
 		stateListeners.add(stateListener);
 		stateListener(streamState);
 	}
-	connectLiveNetworkStream();
+	installVisibilityListener();
+	updateSubscriptionConnection();
 
 	return () => {
 		listeners.delete(listener);
+		subscriptionOptions.delete(listener);
 		if (stateListener !== undefined) stateListeners.delete(stateListener);
-		if (listeners.size > 0) return;
+		if (listeners.size > 0) {
+			updateSubscriptionConnection();
+			return;
+		}
 		clearReconnectTimeout();
 		closeSocket();
+		removeVisibilityListener();
+		activeProfileKey = '';
 		reconnectAttempt = 0;
 		resumeCursor = null;
 		streamState = createIdleState();

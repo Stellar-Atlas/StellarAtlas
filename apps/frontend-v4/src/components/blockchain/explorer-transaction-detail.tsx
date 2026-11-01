@@ -313,7 +313,10 @@ export function ExplorerTransactionDetail({
 										{relation.charAt(0).toUpperCase() + relation.slice(1)}
 									</h3>
 									{items.length && relation === 'events' ? (
-										<ExplorerContractEventTable rows={items} />
+										<ExplorerContractEventTable
+											rows={items}
+											showTransaction={false}
+										/>
 									) : items.length ? (
 										items.map((row, index) => (
 											<RelationRecord

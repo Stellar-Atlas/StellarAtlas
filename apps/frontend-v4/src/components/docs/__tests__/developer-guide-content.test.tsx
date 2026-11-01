@@ -6,6 +6,8 @@ import {
 	getDeveloperGuidePage
 } from '../developer-guide-content';
 import { graphqlAnalyticsExamples } from '../graphql-analytics-examples';
+import { contractEventExample } from '../../blockchain/contract-event-query';
+import { contractActivityPath } from '../../../api/explorer-contract-activity';
 
 function render(slug: string): string {
 	const page = getDeveloperGuidePage(slug);
@@ -32,6 +34,8 @@ describe('developer guides', () => {
 			'querying',
 			'rest',
 			'contract-events',
+			'assets-and-issuers',
+			'live-updates',
 			'graphql-guide',
 			'services'
 		]);
@@ -109,6 +113,39 @@ describe('developer guides', () => {
 			'not an alternate URL for the ClickHouse'
 		);
 		expect(render('services')).toContain('https://api.stellaratlas.io/rpc');
+	});
+	it('connects the shared first-page example to response interpretation and a guarded second request', () => {
+		const page = getDeveloperGuidePage('contract-events')!;
+		expect(page.sections[0]!.id).toBe('try-events');
+		expect(page.sections.at(-1)!.id).toBe('build-provenance');
+		const html = render('contract-events');
+		const path = contractActivityPath(
+			contractEventExample.contract_id,
+			'events',
+			contractEventExample
+		).replaceAll('&', '&amp;');
+		expect(html.split(path)).toHaveLength(3);
+		for (const text of [
+			'page-1.json',
+			'summary.total',
+			'nextCursor // empty',
+			'--data-urlencode',
+			'after=$after',
+			'/docs/querying',
+			'/docs/live-updates'
+		])
+			expect(html).toContain(text);
+		expect(html).toContain(
+			graphqlAnalyticsExamples.events.query.split('\n')[0]!
+		);
+		const live = render('live-updates');
+		for (const text of [
+			'https://stellaratlas.io',
+			'not a general cross-origin',
+			'not a replayable event log',
+			'graphql-ws'
+		])
+			expect(live).toContain(text);
 	});
 	it('documents the working contract event workflow without conflating events with successful transfers', () => {
 		const html = render('contract-events');

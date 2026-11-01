@@ -44,6 +44,19 @@ describe('explorer balance observation presentation', () => {
 			expect(html).not.toContain('No balances');
 		}
 	);
+	it('labels automatically loaded account balances as parsed observations', () => {
+		const html = renderToStaticMarkup(
+			createElement(ExplorerBalanceObservations, {
+				autoLoad: true,
+				kind: 'balances',
+				identifier: 'GACCOUNT'
+			})
+		);
+		expect(html).toContain('Refresh first page');
+		expect(html).not.toContain('Load balances');
+		expect(html).toContain('Latest ingested observations');
+		expect(html).toContain('not current-chain or historical as-of balances');
+	});
 	it('renders observed amounts, relationship links, raw precision and ledger coverage without false current claims', () => {
 		const html = renderToStaticMarkup(
 			createElement(BalanceObservationResults, { kind: 'balances', page })

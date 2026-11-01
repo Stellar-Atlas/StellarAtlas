@@ -16,6 +16,11 @@ import {
 } from '../../domain/contract-event-value';
 import { flattenContractEventValue } from '../../domain/contract-event-fields';
 import {
+	contractEventText as valueText,
+	contractEventOutcome,
+	summarizeContractEvent
+} from '../../domain/contract-event-summary';
+import {
 	formatAtomic,
 	formatDecimal,
 	timestampValue
@@ -27,17 +32,6 @@ export interface EventTokenContext {
 	readonly assetId: string;
 	readonly symbol: string;
 	readonly decimals: number;
-}
-
-function valueText(value: ContractEventValue): string {
-	if (value.kind === 'typed') return valueText(value.value);
-	if (
-		value.kind === 'string' ||
-		value.kind === 'number' ||
-		value.kind === 'boolean'
-	)
-		return String(value.value);
-	return '';
 }
 
 function eventTopics(row: EntityRecord): readonly ContractEventValue[] {
@@ -56,21 +50,26 @@ function payload(row: EntityRecord): ContractEventValue {
 
 export function ExplorerContractEventTable({
 	rows,
-	token
+	token,
+	showTransaction = true
 }: {
 	readonly rows: readonly EntityRecord[];
 	readonly token?: EventTokenContext;
+	readonly showTransaction?: boolean;
 }): React.JSX.Element {
 	const [selected, setSelected] = useState<EntityRecord | null>(null);
 	return (
 		<div className={styles.workspace}>
 			<div className={styles.scroll}>
-				<table className={styles.table} aria-label="Contract events">
+				<table
+					className={`${styles.table} ${showTransaction ? '' : styles.transactionEvents}`}
+					aria-label="Contract events"
+				>
 					<colgroup>
 						<col className={styles.ledgerColumn} />
 						<col className={styles.eventColumn} />
 						<col className={styles.dataColumn} />
-						<col className={styles.txColumn} />
+						{showTransaction && <col className={styles.txColumn} />}
 						<col className={styles.detailsColumn} />
 					</colgroup>
 					<thead>
@@ -78,7 +77,7 @@ export function ExplorerContractEventTable({
 							<th>Ledger / time</th>
 							<th>Event</th>
 							<th>Data</th>
-							<th>Transaction</th>
+							{showTransaction && <th>Transaction</th>}
 							<th>
 								<span className={styles.srOnly}>Details</span>
 							</th>
@@ -92,9 +91,8 @@ export function ExplorerContractEventTable({
 								entityText(recordValue(row.classification), 'eventKind') ||
 								'event';
 							const topics = eventTopics(row);
-							const topic = valueText(
-								topics[0] ?? decodeContractEventValue(null)
-							);
+							const summary = summarizeContractEvent(kind, topics);
+							const outcome = contractEventOutcome(row.successful);
 							return (
 								<tr key={entityText(row, 'id') || index}>
 									<td className={styles.ledgerCell}>
@@ -112,41 +110,35 @@ export function ExplorerContractEventTable({
 									</td>
 									<td>
 										<div className={styles.eventName}>
-											<strong>{topic || 'Event'}</strong>
-											<span
-												title={
-													row.successful === true
-														? 'Transaction succeeded'
-														: 'Transaction failed'
-												}
-											>
-												{row.successful === true ? '✓' : '!'}
+											<strong title={summary.title}>{summary.title}</strong>
+											<span title={outcome.label} aria-label={outcome.label}>
+												{outcome.mark}
 											</span>
 										</div>
-										<div className={styles.muted}>
-											{kind === 'diagnostic'
-												? 'Diagnostic'
-												: kind === 'contract'
-													? 'Contract'
-													: kind}{' '}
-											· {topics.length} topics
+										<div
+											className={`${styles.muted} ${styles.eventContext}`}
+											title={summary.context}
+										>
+											{summary.context}
 										</div>
 									</td>
 									<td>
 										<PayloadPreview row={row} token={token} />
 									</td>
-									<td>
-										<Link
-											className={styles.transaction}
-											href={buildEntityHref(
-												'transactions',
-												tx,
-												ledger ? { ledger_sequence: ledger } : {}
-											)}
-										>
-											<code>{tx}</code>
-										</Link>
-									</td>
+									{showTransaction && (
+										<td>
+											<Link
+												className={styles.transaction}
+												href={buildEntityHref(
+													'transactions',
+													tx,
+													ledger ? { ledger_sequence: ledger } : {}
+												)}
+											>
+												<code>{tx}</code>
+											</Link>
+										</td>
+									)}
 									<td>
 										<button
 											type="button"
@@ -161,7 +153,7 @@ export function ExplorerContractEventTable({
 						})}
 						{rows.length === 0 && (
 							<tr>
-								<td colSpan={5} className={styles.empty}>
+								<td colSpan={showTransaction ? 5 : 4} className={styles.empty}>
 									No events match these filters.
 								</td>
 							</tr>
@@ -197,7 +189,7 @@ function PayloadPreview({
 		['mint', 'burn', 'transfer', 'clawback'].includes(topic) &&
 		/^-?\d+$/.test(amount);
 	if (row.dataJson === 'void' || value.kind === 'void')
-		return <span className={styles.muted}>No return value</span>;
+		return <span className={styles.muted}>No value</span>;
 	if (tokenAmount)
 		return (
 			<div className={styles.preview}>
@@ -317,6 +309,10 @@ function EventDialog({
 		return () => element?.close();
 	}, []);
 	const { fields, truncated } = flattenContractEventValue(payload(row));
+	const summary = summarizeContractEvent(
+		entityText(recordValue(row.classification), 'eventKind'),
+		eventTopics(row)
+	);
 	return (
 		<dialog
 			ref={dialog}
@@ -326,11 +322,46 @@ function EventDialog({
 			onClose={onClose}
 		>
 			<div className={styles.rawHeading}>
-				<h3 id="event-details-title">Event details</h3>
+				<h3 id="event-details-title">{summary.title}</h3>
 				<button type="button" autoFocus onClick={onClose}>
 					Close
 				</button>
 			</div>
+			<p className={styles.muted}>{summary.context}</p>
+			<dl className={styles.fields}>
+				{(['contractId', 'ledgerSequence', 'transactionHash'] as const).map(
+					(field) => {
+						const id = entityText(row, field);
+						const [collection, label] =
+							field === 'contractId'
+								? (['contracts', 'Contract'] as const)
+								: field === 'ledgerSequence'
+									? (['ledgers', 'Ledger'] as const)
+									: (['transactions', 'Transaction'] as const);
+						return id ? (
+							<div className={styles.field} key={field}>
+								<dt>{label}</dt>
+								<dd>
+									<Link
+										className={styles.reference}
+										href={buildEntityHref(
+											collection,
+											id,
+											field === 'transactionHash'
+												? { ledger_sequence: entityText(row, 'ledgerSequence') }
+												: {}
+										)}
+									>
+										<code>
+											{field === 'ledgerSequence' ? formatDecimal(id, 0) : id}
+										</code>
+									</Link>
+								</dd>
+							</div>
+						) : null;
+					}
+				)}
+			</dl>
 			<PayloadPreview row={row} token={token} />
 			<h4>Topics</h4>
 			<dl className={styles.fields}>

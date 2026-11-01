@@ -30,6 +30,8 @@ interface UseGraphLiveDataResult {
 	network: PublicNetwork;
 	scpReadMetadata: PublicScpStatementReadMetadata | null;
 	scpStatements: PublicScpGraphStatement[];
+	liveEnabled: boolean;
+	setLiveEnabled: (enabled: boolean) => void;
 }
 
 export const useGraphLiveData = (
@@ -47,6 +49,7 @@ export const useGraphLiveData = (
 	const [liveStreamState, setLiveStreamState] = useState(
 		getLiveNetworkStreamState
 	);
+	const [liveEnabled, setLiveEnabled] = useState(true);
 	const latestObservedScpSlotIndex = getHighestLedgerSequence(
 		scpState.statements.map((statement) => statement.slotIndex)
 	);
@@ -70,9 +73,10 @@ export const useGraphLiveData = (
 		[]
 	);
 
-	useEffect(
-		() =>
-			subscribeToLiveNetworkStream((message) => {
+	useEffect(() => {
+		if (!liveEnabled) return;
+		return subscribeToLiveNetworkStream(
+			(message) => {
 				if (message.type === 'network') {
 					setNetwork(message.payload);
 					publishLatestLedger(message.payload.latestLedger);
@@ -87,12 +91,23 @@ export const useGraphLiveData = (
 						getNewerLedger(current, message.payload.sequence)
 					);
 				}
-				if (message.type === 'scp') {
+				if (message.type === 'scpGraph' || message.type === 'scp') {
 					setScpState((current) => applyLiveScpMessage(current, message));
+					const highestLedger = getHighestLedgerSequence(
+						message.payload.map((statement) => statement.slotIndex)
+					);
+					if (highestLedger) {
+						publishLatestLedger(highestLedger);
+						setLatestLedger((current) =>
+							getNewerLedger(current, highestLedger)
+						);
+					}
 				}
-			}, setLiveStreamState),
-		[]
-	);
+			},
+			setLiveStreamState,
+			{ channels: ['network', 'scp'], scpMode: 'graph' }
+		);
+	}, [liveEnabled]);
 
 	return {
 		latestLedger,
@@ -101,6 +116,8 @@ export const useGraphLiveData = (
 		liveStreamState,
 		network,
 		scpReadMetadata: scpState.metadata,
-		scpStatements: scpState.statements
+		scpStatements: scpState.statements,
+		liveEnabled,
+		setLiveEnabled
 	};
 };

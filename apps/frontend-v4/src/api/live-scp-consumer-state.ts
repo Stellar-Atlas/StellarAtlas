@@ -18,18 +18,27 @@ export const createLiveScpConsumerState = (
 
 export const applyLiveScpMessage = (
 	current: LiveScpConsumerState,
-	message: Extract<LiveNetworkMessage, { type: 'scp' }>
+	message: Extract<LiveNetworkMessage, { type: 'scp' | 'scpGraph' }>
 ): LiveScpConsumerState => ({
 	metadata: resolveMetadata(current.metadata, message),
 	statements: mergeStatements(
 		current.statements,
-		message.payload.map(toGraphStatement)
+		message.type === 'scp'
+			? message.payload.map(toGraphStatement)
+			: message.payload
 	)
+});
+export const applyLiveScpGraphMessage = (
+	current: LiveScpConsumerState,
+	message: Extract<LiveNetworkMessage, { type: 'scpGraph' }>
+): LiveScpConsumerState => ({
+	metadata: resolveMetadata(current.metadata, message),
+	statements: mergeStatements(current.statements, message.payload)
 });
 
 const resolveMetadata = (
 	current: PublicScpStatementReadMetadata | null,
-	message: Extract<LiveNetworkMessage, { type: 'scp' }>
+	message: Extract<LiveNetworkMessage, { type: 'scp' | 'scpGraph' }>
 ): PublicScpStatementReadMetadata => {
 	const cursor = message.cursor ?? current?.cursor;
 	const truncated = message.truncated ?? current?.truncated;

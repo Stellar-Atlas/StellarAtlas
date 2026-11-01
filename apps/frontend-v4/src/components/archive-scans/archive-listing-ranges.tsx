@@ -17,8 +17,8 @@ export function ArchiveListingRanges({
 				filename listings
 			</summary>
 			<small>
-				Complete listings omit the required checkpoint files. These are not
-				individual HTTP failures.
+				Provider listings omit the required checkpoint filenames within this
+				range. These are listing observations, not individual HTTP failures.
 			</small>
 			<ul>
 				{ranges.map((range) => (
@@ -31,7 +31,7 @@ export function ArchiveListingRanges({
 						</strong>
 						<small>
 							{formatInteger(range.checkpointCount)} checkpoint positions ·{' '}
-							{range.kind.replaceAll('-', ' ')}
+							{range.kind.replaceAll('-', ' ')} · Observed {range.observedAt}
 						</small>
 					</li>
 				))}

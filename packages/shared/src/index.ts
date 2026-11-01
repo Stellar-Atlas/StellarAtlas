@@ -113,6 +113,12 @@ export {
 	HistoryArchiveObjectSummaryV1Schema,
 	type HistoryArchiveObjectTypeSummaryV1
 } from './dto/history-archive-object-summary-v1.js';
+export type {
+	PublicGoodsCheckStatusV1,
+	PublicGoodsHealthCheckV1,
+	PublicGoodsHealthV1,
+	PublicGoodsMetricsV1
+} from './dto/public-goods-v1.js';
 export {
 	type HistoryArchiveCanonicalProofProgressV1,
 	type HistoryArchiveStatusSourceV1,

@@ -11,6 +11,7 @@ import {
 } from '../../domain/contract-event-value';
 import { flattenContractEventValue } from '../../domain/contract-event-fields';
 import { LocalDateTime } from '../local-date-time';
+import { formatAtomic } from './explorer-format-values';
 import styles from './explorer-contract-state-change-table.module.css';
 
 function labelText(value: string): string {
@@ -99,14 +100,23 @@ function valueHref(text: string, field: string, ledger: string): string | null {
 function LeafValue({
 	value,
 	field,
-	ledger
+	ledger,
+	type
 }: {
 	readonly value: ContractEventValue;
 	readonly field: string;
 	readonly ledger: string;
+	readonly type?: string;
 }): React.JSX.Element {
 	if (value.kind === 'typed')
-		return <LeafValue value={value.value} field={field} ledger={ledger} />;
+		return (
+			<LeafValue
+				value={value.value}
+				field={field}
+				ledger={ledger}
+				type={value.typeName}
+			/>
+		);
 	if (value.kind === 'object')
 		return (
 			<span className={styles.muted}>
@@ -136,13 +146,15 @@ function LeafValue({
 		);
 	const text = String(value.value);
 	const href = valueHref(text, field, ledger);
+	const numeric =
+		value.kind === 'number' || /^(?:u|i)(?:32|64|128|256)$/.test(type ?? '');
 	return href ? (
 		<Link className={styles.reference} href={href}>
 			<code>{text}</code>
 		</Link>
 	) : (
-		<code className={value.kind === 'number' ? styles.number : styles.text}>
-			{text}
+		<code className={numeric ? styles.number : styles.text}>
+			{numeric ? formatAtomic(text, 0) : text}
 		</code>
 	);
 }
@@ -223,6 +235,7 @@ function StateValue({
 															<LeafValue
 																value={field.value}
 																field={column}
+																type={field.type}
 																ledger={ledger}
 															/>
 														) : (
@@ -253,7 +266,12 @@ function StateValue({
 									: labelText(name)}
 							</dt>
 							<dd>
-								<LeafValue value={field.value} field={name} ledger={ledger} />
+								<LeafValue
+									value={field.value}
+									field={name}
+									ledger={ledger}
+									type={field.type}
+								/>
 							</dd>
 						</div>
 					);
@@ -312,7 +330,7 @@ export function ExplorerContractStateChangeTable({
 												className={styles.reference}
 												href={buildEntityHref('ledgers', ledger)}
 											>
-												{ledger}
+												{formatAtomic(ledger, 0)}
 											</Link>
 										) : (
 											'Not reported'

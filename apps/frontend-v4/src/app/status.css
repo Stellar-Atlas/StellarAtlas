@@ -453,3 +453,35 @@
 		margin-block-end: 0.2rem;
 	}
 }
+.archive-root-progress-table {
+	min-inline-size: 760px;
+	table-layout: fixed;
+}
+
+.archive-root-progress-table th:first-child {
+	width: 24%;
+}
+
+.archive-root-progress-table th:nth-child(2),
+.archive-root-progress-table th:nth-child(3) {
+	width: 27%;
+}
+
+.archive-root-progress-table th:last-child {
+	width: 22%;
+}
+
+.archive-root-progress-table progress {
+	width: min(100%, 15rem);
+	display: block;
+	margin-block-end: 0.25rem;
+}
+
+.archive-root-progress-table td,
+.archive-root-progress-table th {
+	overflow-wrap: anywhere;
+}
+
+.archive-source-detail-table {
+	margin-block-start: 0.75rem;
+}

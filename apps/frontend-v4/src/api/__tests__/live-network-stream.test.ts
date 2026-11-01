@@ -17,6 +17,76 @@ import {
 const jest = import.meta.jest;
 
 describe('live network WebSocket ownership', () => {
+	it('upgrades and downgrades one shared subscription and keeps SCP out of the header', () => {
+		const harness = installWebSocketHarness();
+		const header = jest.fn();
+		const stopHeader = subscribeToLiveNetworkStream(header, undefined, { channels: ['summary'] });
+		let stopGraph: () => void = () => undefined;
+		try {
+			expect(new URL(harness.sockets[0]!.url).searchParams.get('channels')).toBe('summary');
+			stopGraph = subscribeToLiveNetworkStream(() => undefined, undefined,
+				{ channels: ['network', 'scp'], scpMode: 'graph' });
+			const graphUrl = new URL(harness.sockets[1]!.url);
+			expect(graphUrl.searchParams.get('channels')?.split(',').sort()).toEqual(['network', 'scp', 'summary']);
+			expect(graphUrl.searchParams.get('scpMode')).toBe('graph');
+			expect(harness.sockets[0]?.closeCalls).toBe(1);
+			harness.sockets[1]?.emit('message', { data: JSON.stringify(createScpMessage([
+				{ observedAt: '2026-07-18T00:00:00.000Z', statementHash: 'a' }
+			], false)) });
+			expect(header).not.toHaveBeenCalled();
+			const ledgerMessage = { type: 'latestLedger', payload: {
+				sequence: '70000001', closedAt: '2026-07-18T00:00:00.000Z', protocolVersion: null
+			} };
+			harness.sockets[1]?.emit('message', { data: JSON.stringify(ledgerMessage) });
+			expect(header).toHaveBeenCalledWith(expect.objectContaining(ledgerMessage));
+			stopGraph();
+			expect(harness.sockets[1]?.closeCalls).toBe(1);
+			const headerUrl = new URL(harness.sockets[2]!.url);
+			expect(headerUrl.searchParams.get('channels')).toBe('summary');
+			expect(headerUrl.searchParams.has('scpMode')).toBe(false);
+			expect(headerUrl.searchParams.has('afterStatementHash')).toBe(false);
+		} finally {
+			stopGraph();
+			stopHeader();
+			harness.restore();
+		}
+	});
+
+	it('disconnects hidden tabs without reconnect timers and resumes with a fresh bounded snapshot', () => {
+		jest.useFakeTimers();
+		const harness = installWebSocketHarness();
+		const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+		const visibilityListeners = new Set<() => void>();
+		const page = { visibilityState: 'visible',
+			addEventListener: (_type: string, listener: () => void) => visibilityListeners.add(listener),
+			removeEventListener: (_type: string, listener: () => void) => visibilityListeners.delete(listener) };
+		Object.defineProperty(globalThis, 'document', { configurable: true, value: page });
+		const stop = subscribeToLiveNetworkStream(() => undefined, undefined, { channels: ['scp'], scpMode: 'graph' });
+		try {
+			harness.sockets[0]?.emit('message', { data: JSON.stringify(createScpMessage([
+				{ observedAt: '2026-07-18T00:00:00.000Z', statementHash: 'a' }
+			], false)) });
+			expect(getLiveNetworkStreamState().cursor).not.toBeNull();
+			page.visibilityState = 'hidden';
+			for (const listener of visibilityListeners) listener();
+			expect(harness.sockets[0]?.closeCalls).toBe(1);
+			expect(jest.getTimerCount()).toBe(0);
+			jest.advanceTimersByTime(60_000);
+			expect(harness.sockets).toHaveLength(1);
+			page.visibilityState = 'visible';
+			for (const listener of visibilityListeners) listener();
+			expect(harness.sockets).toHaveLength(2);
+			expect(new URL(harness.sockets[1]!.url).searchParams.has('afterStatementHash')).toBe(false);
+		} finally {
+			stop();
+			expect(visibilityListeners.size).toBe(0);
+			if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+			else Reflect.deleteProperty(globalThis, 'document');
+			harness.restore();
+			jest.useRealTimers();
+		}
+	});
+
 	it('shares one socket until the final subscriber leaves', () => {
 		const harness = installWebSocketHarness();
 		try {
