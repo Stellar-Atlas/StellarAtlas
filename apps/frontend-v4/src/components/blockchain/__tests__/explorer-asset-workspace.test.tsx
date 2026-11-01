@@ -138,6 +138,12 @@ jest.unstable_mockModule('../explorer-asset-workspace.module.css', () => ({
 jest.unstable_mockModule('../explorer-entity-navigation', () => ({
 	ExplorerEntityNavigation: () => null
 }));
+jest.unstable_mockModule('../explorer-asset-tabs', () => ({
+	ExplorerAssetTabs: () => null
+}));
+jest.unstable_mockModule('../explorer-investigation', () => ({
+	ExplorerLink: (props: { children?: unknown }) => props.children
+}));
 jest.unstable_mockModule('../explorer-asset-holders', () => ({
 	ExplorerAssetHolders: () => null
 }));
