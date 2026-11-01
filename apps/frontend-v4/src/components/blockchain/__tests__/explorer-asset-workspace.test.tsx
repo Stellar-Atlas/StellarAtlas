@@ -354,7 +354,7 @@ describe('asset detail presentation', () => {
 				}
 			]
 		});
-		const text = renderedText(ParsedIssuerMetadata({ metadata: record.metadata }));
+		const text = renderedText(tree);
 		const links = elements(tree, (element) => 'href' in element.props).map(
 			(element) => element.props.href
 		);
@@ -392,7 +392,7 @@ describe('asset detail presentation', () => {
 			AssetDetails({ record, onRefresh: () => undefined, pending: false })
 		);
 		const logo = Logo({ asset, metadata: record.metadata });
-		const text = renderedText(tree);
+		const text = renderedText(ParsedIssuerMetadata({ metadata: record.metadata }));
 		const links = elements(tree, (element) => 'href' in element.props).map(
 			(element) => element.props.href
 		);
