@@ -13,6 +13,7 @@ import { ExplorerPoolTable, type PoolSort } from './explorer-pool-table';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-pool-table.module.css';
 import { subscribeWarehousePublication } from '../../api/warehouse-publication-stream';
+import { poolContextFromRequest } from './pool-history-links';
 
 type Page = {
 	rows: readonly EntityRecord[];
@@ -212,6 +213,7 @@ export function ExplorerPoolBrowser({
 						rows={page.rows}
 						sort={page.sort}
 						order={page.order}
+						context={page.historical ? poolContextFromRequest(page.requestPath, page.window) : undefined}
 						onSort={(key) => {
 							reset();
 							setSort(key);
