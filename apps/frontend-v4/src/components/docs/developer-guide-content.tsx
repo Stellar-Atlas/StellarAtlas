@@ -206,8 +206,16 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							Account balances and asset holders use the latest ingested
 							observations. Their watermarks expose the catalog position and{' '}
 							<code>snapshotPinned: false</code>; they are not current-chain or
-							arbitrary-height balance proofs. These routes do not accept
-							current/as-of state parameters.
+							arbitrary-height balance proofs. Account balances accept only{' '}
+							<code>after</code> and <code>limit</code>, not as-of filters.
+							Asset holder lists accept <code>as_of_ledger</code> (GraphQL:{' '}
+							<code>asOfLedger</code>) as an upper bound on ingested
+							observations, up to the catalog’s maximum observed ledger. This
+							does not pin a snapshot or prove complete state at that height;
+							inspect{' '}
+							<code>watermark.selectedLedger</code> and{' '}
+							<code>watermark.coverageStatus</code> and retain the same bound
+							while paging.
 						</p>
 						<p>
 							Offer queries return historical changes, not a live order book.
