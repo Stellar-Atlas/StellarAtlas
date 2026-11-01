@@ -17,6 +17,7 @@ import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { EntityLink } from './explorer-entity-table';
 import { ExplorerContractEventTable } from './explorer-contract-event-table';
 import { ExplorerOperationCall } from './explorer-operation-call';
+import { OperationResultFields } from './explorer-operation-result';
 import { operationInvocation } from './explorer-operation-invocation';
 import { formatAtomic } from './explorer-format-values';
 import { ExplorerLink as Link } from './explorer-investigation';
@@ -84,6 +85,7 @@ function RelationRecord({
 				/>
 			)}
 			<dl className={styles.details}>
+				{relation === 'operations' && <OperationResultFields row={row} />}
 				{amounts.flatMap((amount, index) => [
 					<dt key={'a' + index}>{entityText(amount, 'field')}</dt>,
 					<dd key={'v' + index}>
