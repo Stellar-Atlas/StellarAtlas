@@ -195,7 +195,7 @@ curl --fail-with-body '${api}/v1/issuers/GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3I
 					</p>
 					<p>
 						Next: <a href="/docs/querying">Filtering and pagination</a> ·{' '}
-						<a href="/docs/api">Asset API directory</a>
+						<a href="/docs/api">Endpoint directory</a>
 					</p>
 				</>
 			)
