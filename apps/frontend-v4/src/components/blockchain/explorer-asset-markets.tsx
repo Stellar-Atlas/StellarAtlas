@@ -1,7 +1,8 @@
 'use client';
 
 import { ExplorerLink as Link } from './explorer-investigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
 	entityText,
 	parseEntityPage,
@@ -17,6 +18,7 @@ import ui from './explorer-asset-workspace.module.css';
 import { ExplorerPoolBrowser } from './explorer-pool-browser';
 import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
 import { formatMarketAmount, marketAssetLabel } from './explorer-market-values';
+import { assetMarketRouteHref, defaultAssetMarketRoute, readAssetMarketRoute, type AssetMarketRoute } from './asset-market-route';
 
 type View = 'trades' | 'liquidity-pools';
 type Result = {
@@ -42,16 +44,17 @@ export function ExplorerAssetMarkets({
 	asset: Asset;
 }): React.JSX.Element | null {
 	const maximum = asset.lastObservedLedger ?? 2;
-	const [view, setView] = useState<View>('trades');
-	const [selection, setSelection] = useState<{
-		view: View;
-		min: string;
-		max: string;
-	}>({
-		view: 'trades',
-		min: String(Math.max(2, maximum - 2047)),
-		max: String(maximum)
-	});
+	const pathname = usePathname();
+	const params = useSearchParams();
+	const { view, min, max } = readAssetMarketRoute(params, maximum);
+	const selection = useMemo(() => ({ view, min, max }), [view, min, max]);
+	const [refresh, setRefresh] = useState(0);
+	const navigate = (next: AssetMarketRoute) => {
+		const href = assetMarketRouteHref(pathname, window.location.search, next, maximum, window.location.hash);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+		else if (next.view === 'trades') setRefresh(value => value + 1);
+	};
 	const [result, setResult] = useState<Result | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -118,7 +121,7 @@ export function ExplorerAssetMarkets({
 				if (!abort.signal.aborted) setBusy(false);
 			});
 		return () => abort.abort();
-	}, [selection, asset.id]);
+	}, [selection, asset.id, refresh]);
 	const pairMetadata = usePairMetadata(result?.rows ?? [], [
 		'sellingAsset',
 		'buyingAsset'
@@ -143,11 +146,7 @@ export function ExplorerAssetMarkets({
 				className={ui.holderControls}
 				onSubmit={(event) => {
 					event.preventDefault();
-					setSelection({
-						view,
-						min: String(Math.max(2, maximum - 2047)),
-						max: String(maximum)
-					});
+					navigate(defaultAssetMarketRoute(maximum));
 				}}
 			>
 				<label>
@@ -156,8 +155,7 @@ export function ExplorerAssetMarkets({
 						value={view}
 						onChange={(event) => {
 							const next = event.currentTarget.value as View;
-							setView(next);
-							setSelection((current) => ({ ...current, view: next }));
+							navigate({ ...selection, view: next });
 						}}
 					>
 						<option value="trades">Trades</option>
@@ -168,11 +166,11 @@ export function ExplorerAssetMarkets({
 					disabled={busy || Number(selection.min) <= 2}
 					type="button"
 					onClick={() =>
-						setSelection((current) => ({
-							...current,
-							min: String(Math.max(2, Number(current.min) - 2048)),
-							max: String(Math.max(2, Number(current.min) - 1))
-						}))
+						navigate({
+							...selection,
+							min: String(Math.max(2, Number(selection.min) - 2048)),
+							max: String(Math.max(2, Number(selection.min) - 1))
+						})
 					}
 				>
 					Earlier activity
