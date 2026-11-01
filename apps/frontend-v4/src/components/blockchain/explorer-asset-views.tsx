@@ -295,7 +295,7 @@ export function AssetDetails({
 				)}
 				{asset.firstObservedLedger !== undefined && (
 					<>
-						<dt>First indexed ledger</dt>
+						<dt title="First observation in indexed asset discovery; not proof of the asset’s creation ledger.">Asset first observed</dt>
 						<dd>
 							<Link href={'/explorer/ledgers/' + asset.firstObservedLedger}>
 								{asset.firstObservedLedger.toLocaleString()}
@@ -305,7 +305,7 @@ export function AssetDetails({
 				)}
 				{asset.lastObservedLedger !== undefined && (
 					<>
-						<dt>Latest indexed ledger</dt>
+						<dt title="Latest observation in indexed asset discovery, independent of holder and trade coverage.">Asset last observed</dt>
 						<dd>
 							<Link href={'/explorer/ledgers/' + asset.lastObservedLedger}>
 								{asset.lastObservedLedger.toLocaleString()}

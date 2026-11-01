@@ -166,7 +166,7 @@ export function ExplorerAssetHolders({
 						<span>
 							{current.page.selectedLedger ? (
 								<>
-									Changes through{' '}
+									Holder observations through{' '}
 									<Link
 										href={'/explorer/ledgers/' + current.page.selectedLedger}
 									>
@@ -174,9 +174,10 @@ export function ExplorerAssetHolders({
 									</Link>
 								</>
 							) : (
-								'Latest indexed changes'
+								'Latest holder observations'
 							)}
 						</span>
+						<span title="Incoming ingestion can change later pages; these observations are not a frozen chain-state snapshot.">Unpinned observations ⓘ</span>
 						{current.page.coverageStatus !== 'complete' && (
 							<span title="The indexed history has gaps. These results are not a complete chain-state snapshot.">
 								Partial history

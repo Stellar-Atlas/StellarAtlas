@@ -201,7 +201,7 @@ export function ExplorerAssetMarkets({
 					<div className={ui.holderSummary}>
 						<span>{result.rows.length} observations</span>
 						<span title="Returned trade window; the latest default is anchored to the asset’s last observed ledger, not a live-market watermark.">
-							Ledgers {result.pages[0]!.window.minLedger.toLocaleString('en-US')}–{result.pages[0]!.window.maxLedger.toLocaleString('en-US')}
+							Trade ledgers {result.pages[0]!.window.minLedger.toLocaleString('en-US')}–{result.pages[0]!.window.maxLedger.toLocaleString('en-US')}
 						</span>
 						<span>
 							{result.pages.some((page) => page.coverageStatus !== 'complete')
