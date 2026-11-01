@@ -37,7 +37,8 @@ describe('developer guides', () => {
 			'assets-and-issuers',
 			'live-updates',
 			'graphql-guide',
-			'services'
+			'services',
+			'sdk-plan'
 		]);
 		for (const page of developerGuidePages) {
 			expect(page.title.length).toBeGreaterThan(0);

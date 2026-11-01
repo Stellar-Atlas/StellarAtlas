@@ -9,6 +9,7 @@ import { developerGuideReferencePages } from './developer-guide-reference-conten
 import { contractEventsGuide } from './developer-guide-contract-events';
 import { assetsAndIssuersGuide } from './developer-guide-assets-and-issuers';
 import { liveUpdatesGuide } from './developer-guide-live-updates';
+import { sdkPlanGuide } from './developer-guide-sdk-plan';
 export type {
 	DeveloperGuidePage,
 	DeveloperGuideSection
@@ -244,7 +245,8 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 	contractEventsGuide,
 	assetsAndIssuersGuide,
 	liveUpdatesGuide,
-	...developerGuideReferencePages
+	...developerGuideReferencePages,
+	sdkPlanGuide
 ];
 
 export function getDeveloperGuidePage(
