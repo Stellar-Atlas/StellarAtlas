@@ -22,6 +22,7 @@ import { assetMarketRouteHref, defaultAssetMarketRoute, readAssetMarketRoute, ty
 
 type View = 'trades' | 'liquidity-pools';
 type Result = {
+	assetId: string;
 	rows: readonly EntityRecord[];
 	pages: readonly AnalyticsEntityPage[];
 	view: View;
@@ -55,7 +56,7 @@ export function ExplorerAssetMarkets({
 			window.history.pushState(null, '', href);
 		else if (next.view === 'trades') setRefresh(value => value + 1);
 	};
-	const [result, setResult] = useState<Result | null>(null);
+	const [loaded, setResult] = useState<Result | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const generation = useRef(0);
@@ -109,7 +110,7 @@ export function ExplorerAssetMarkets({
 						return true;
 					})
 					.sort((a, b) => Number(b.ledgerSequence) - Number(a.ledgerSequence));
-				setResult({ rows, pages, view: selection.view });
+				setResult({ assetId: asset.id, rows, pages, view: selection.view });
 			})
 			.catch((cause: unknown) => {
 				if (!abort.signal.aborted)
@@ -122,6 +123,7 @@ export function ExplorerAssetMarkets({
 			});
 		return () => abort.abort();
 	}, [selection, asset.id, refresh]);
+	const result = loaded?.assetId === asset.id ? loaded : null;
 	const pairMetadata = usePairMetadata(result?.rows ?? [], [
 		'sellingAsset',
 		'buyingAsset'
