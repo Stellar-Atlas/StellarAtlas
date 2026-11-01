@@ -16,6 +16,7 @@ import { formatDecimal, formatAtomic } from './explorer-format-values';
 type Sort = 'balance-desc' | 'balance-asc' | 'account-asc' | 'account-desc';
 type Loaded = {
 	page: BalanceObservationPage;
+	selection: BalanceObservationOptions;
 	cursor: string | null;
 	history: readonly (string | null)[];
 };
@@ -55,6 +56,7 @@ export function ExplorerAssetHolders({
 						selection
 					),
 					cursor,
+					selection,
 					history
 				};
 			});
@@ -66,6 +68,11 @@ export function ExplorerAssetHolders({
 		return () => controller.current?.abort();
 	}, [enabled, load]);
 	const current = request.result;
+	const matchesSelection = !current || (
+		current.selection.sort === selection.sort &&
+		current.selection.order === selection.order &&
+		Boolean(current.selection.includeZero) === Boolean(selection.includeZero)
+	);
 	return (
 		<section
 			className={ui.holderSection}
@@ -125,6 +132,9 @@ export function ExplorerAssetHolders({
 				error={request.error}
 				onRetry={request.retry}
 			/>
+			{current && !matchesSelection && (
+				<p className={styles.muted}>Showing previous holder results.</p>
+			)}
 			{current && (
 				<>
 					<div className={ui.holderSummary}>
@@ -231,12 +241,14 @@ export function ExplorerAssetHolders({
 					</div>
 					{current.page.rows.length === 0 && (
 						<p className={styles.muted}>
-							No positive balances in the selected indexed history.
+							{current.selection.includeZero
+								? 'No balances or trustlines in the selected indexed history.'
+								: 'No positive balances in the selected indexed history.'}
 						</p>
 					)}
 					<div className={styles.actions}>
 						<button
-							disabled={request.loading || !current.history.length}
+							disabled={request.loading || !matchesSelection || !current.history.length}
 							onClick={() =>
 								load(
 									current.history.at(-1) ?? null,
@@ -247,7 +259,7 @@ export function ExplorerAssetHolders({
 							Previous
 						</button>
 						<button
-							disabled={request.loading || !current.page.nextCursor}
+							disabled={request.loading || !matchesSelection || !current.page.nextCursor}
 							onClick={() =>
 								load(current.page.nextCursor, [
 									...current.history,
