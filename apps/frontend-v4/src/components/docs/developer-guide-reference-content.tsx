@@ -51,9 +51,11 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 					<>
 						<GraphqlExample example="operations" />
 						<p>
-							The returned <code>nextOffset</code> continues the same window.
-							Operations link to their transaction by hash when the parsed
-							relationship is available.
+							Set <code>input.offset</code> to the returned{' '}
+							<code>nextOffset</code> with the other inputs unchanged; stop when
+							it is null. This is offset pagination, not an{' '}
+							<code>input.after</code> cursor. Operations link to their
+							transaction by hash when the parsed relationship is available.
 						</p>
 					</>
 				)

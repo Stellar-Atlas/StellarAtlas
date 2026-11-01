@@ -1,9 +1,6 @@
-import {
-	api,
-	sampleWindow,
-	Code,
-	type DeveloperGuidePage
-} from './developer-guide-elements';
+import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
+import { graphqlAnalyticsExamples } from './graphql-analytics-examples';
+import { buildEntityApiPath } from '../../api/explorer-analytics';
 import { developerGuideQueryPages } from './developer-guide-query-content';
 import { developerGuideReferencePages } from './developer-guide-reference-content';
 import { contractEventsGuide } from './developer-guide-contract-events';
@@ -14,6 +11,18 @@ export type {
 	DeveloperGuidePage,
 	DeveloperGuideSection
 } from './developer-guide-elements';
+
+const operationInput = graphqlAnalyticsExamples.operations.variables.input;
+const operationUrl = new URL(
+	buildEntityApiPath('operations', undefined, {
+		min_ledger: String(operationInput.minLedger),
+		max_ledger: String(operationInput.maxLedger),
+		type: operationInput.type,
+		limit: String(operationInput.limit)
+	}),
+	api
+);
+operationUrl.searchParams.delete('offset');
 
 export const developerGuidePages: readonly DeveloperGuidePage[] = [
 	{
@@ -74,7 +83,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 				title: '2. Read payment operations',
 				content: (
 					<>
-						<Code>{`curl --fail-with-body '${api}/v1/analytics/operations?${sampleWindow}&type=payment&limit=10&offset=0'`}</Code>
+						<Code>{`curl --fail-with-body '${operationUrl}&offset=${operationInput.offset}' --output operations-page-1.json`}</Code>
 						<p>
 							This two-ledger window is an example, not a promise of current
 							coverage. Replace it with a range from your catalog response. The
@@ -102,6 +111,20 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							For the operations list, repeat the same filters with the returned{' '}
 							<code>nextOffset</code>. Stop when it is <code>null</code>. Check
 							coverage before interpreting an empty result as absence.
+						</p>
+						<p>
+							With <code>jq</code> installed, continue the saved response only
+							when it supplies a <code>nextOffset</code>:
+						</p>
+						<Code>{`offset=$(jq -er '.nextOffset // empty' operations-page-1.json) &&
+curl --fail-with-body --get '${operationUrl}' \\
+  --data-urlencode "offset=$offset"`}</Code>
+						<p>
+							Keep the first request’s window, filters and limit in the second
+							URL. Use the returned offset rather than calculating it from row
+							count. These offset pages can change during backfill; for long
+							results, narrow the window instead of exceeding the route’s offset
+							limit. See <a href="/docs/querying">pagination rules</a>.
 						</p>
 						<p>
 							Next: <a href="/docs/querying">Filtering and pagination</a> ·{' '}
