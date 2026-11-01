@@ -41,6 +41,13 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							to execute a request. No wallet signature or private key is needed
 							for these reads.
 						</p>
+						<p>
+							For a wallet or token project, follow the{' '}
+							<a href="/docs/assets-and-issuers#wallet-and-holders">
+								KALE, wallet balances and asset holders quickstart
+							</a>
+							.
+						</p>
 					</>
 				)
 			},
