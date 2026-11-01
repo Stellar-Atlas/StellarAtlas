@@ -16,7 +16,7 @@ import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 import { ExplorerPoolBrowser } from './explorer-pool-browser';
 import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
-import { formatDecimal } from './explorer-format-values';
+import { formatMarketAmount, marketAssetLabel } from './explorer-market-values';
 
 type View = 'trades' | 'liquidity-pools';
 type Result = {
@@ -57,7 +57,11 @@ export function ExplorerAssetMarkets({
 	const [busy, setBusy] = useState(false);
 	const generation = useRef(0);
 	useEffect(() => {
-		if (!selection || selection.view === 'liquidity-pools') return;
+		if (selection.view === 'liquidity-pools') {
+			setBusy(false);
+			setError(null);
+			return;
+		}
 		const abort = new AbortController();
 		const current = ++generation.current;
 		setBusy(true);
@@ -160,7 +164,7 @@ export function ExplorerAssetMarkets({
 						<option value="liquidity-pools">Liquidity pools</option>
 					</select>
 				</label>
-				<button
+				{view === 'trades' && <><button
 					disabled={busy || Number(selection.min) <= 2}
 					type="button"
 					onClick={() =>
@@ -174,12 +178,19 @@ export function ExplorerAssetMarkets({
 					Earlier activity
 				</button>
 				<button disabled={busy} type="submit">
-					Latest indexed activity
+					Latest asset window
 				</button>
+				</>}
 			</form>
+			{view === 'trades' && busy && (
+				<p className={styles.muted} role="status">
+					Loading trades…{result ? ' Showing previous results.' : ''}
+				</p>
+			)}
 			{error && (
 				<p className={styles.error} role="alert">
 					{error}
+					{view === 'trades' && result ? ' Showing previous results.' : ''}
 				</p>
 			)}
 			{view === 'liquidity-pools' && (
@@ -189,6 +200,9 @@ export function ExplorerAssetMarkets({
 				<>
 					<div className={ui.holderSummary}>
 						<span>{result.rows.length} observations</span>
+						<span title="Returned trade window; the latest default is anchored to the asset’s last observed ledger, not a live-market watermark.">
+							Ledgers {result.pages[0]!.window.minLedger.toLocaleString('en-US')}–{result.pages[0]!.window.maxLedger.toLocaleString('en-US')}
+						</span>
 						<span>
 							{result.pages.some((page) => page.coverageStatus !== 'complete')
 								? 'Partial history'
@@ -222,15 +236,15 @@ export function ExplorerAssetMarkets({
 											/>
 										</td>
 										<td className={ui.numeric}>
-											{entityText(
+											{formatMarketAmount(entityText(
 												row,
 												result.view === 'trades' ? 'sellingAmount' : 'reserveA'
-											)}{' '}
+											))} {marketAssetLabel(row.sellingAsset)}{' '}
 											{result.view === 'trades' ? '→' : '/'}{' '}
-											{entityText(
+											{formatMarketAmount(entityText(
 												row,
 												result.view === 'trades' ? 'buyingAmount' : 'reserveB'
-											)}
+											))} {marketAssetLabel(row.buyingAsset)}
 										</td>
 										<td>
 											<Link
