@@ -85,7 +85,7 @@ describe('ExplorerContractStateChangeTable', () => {
 					] }))
 				} }] } }]
 		}));
-		expect(html).toContain('price data · 10 records');
+		expect(html).toContain('Price data · 10 records');
 		expect((html.match(/<table/g) ?? [])).toHaveLength(1);
 		expect(html).not.toContain('123456789012345678901234567890');
 		expect(html).not.toContain('<pre');

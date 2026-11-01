@@ -15,8 +15,13 @@ export function ExplorerDetailDialog({
 	const dialog = useRef<HTMLDialogElement>(null);
 	useEffect(() => {
 		const element = dialog.current;
+		const previousFocus = document.activeElement;
 		element?.showModal();
-		return () => element?.close();
+		return () => {
+			element?.close();
+			if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
+				previousFocus.focus({ preventScroll: true });
+		};
 	}, []);
 	return (
 		<dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId} onCancel={onClose} onClose={onClose}>

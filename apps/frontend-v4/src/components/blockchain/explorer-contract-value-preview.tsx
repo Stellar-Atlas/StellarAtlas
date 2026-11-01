@@ -34,12 +34,14 @@ export function ContractValuePreview({ value, ledger, kind = 'value' }: {
 		const first = plain.kind === 'object' ? plain.entries[0] : undefined;
 		const name = first ? (first.key ? contractEventText(first.key) : first.label).replaceAll('_', ' ') : '';
 		const nested = first ? containerText(first.value) : '';
+		const named = name && name.length <= 16 && nested;
+		const additional = plain.kind === 'object' ? plain.entries.length - 1 : 0;
 		return <span className={styles.preview}>
-			<strong>{name && name.length <= 40 && nested ? `${name} · ${nested}` : containerText(plain)}</strong>
-			{plain.kind === 'object' && plain.entries.length > 1 && <span className={styles.muted}>{plain.entries.length - (nested ? 1 : 0)} {nested ? 'other fields' : 'fields'} · open details</span>}
+			<strong>{named ? `${name.charAt(0).toUpperCase() + name.slice(1)} · ${nested}` : containerText(plain)}</strong>
+			{named && additional > 0 && <span className={styles.muted}>{additional} additional {additional === 1 ? 'field' : 'fields'}</span>}
 		</span>;
 	}
-	if (plain.kind === 'raw') return <span className={styles.muted}>{plain.reason === 'limit-exceeded' ? 'Complex value · open details' : 'Unrecognized value · open details'}</span>;
+	if (plain.kind === 'raw') return <span className={styles.muted}>{plain.text === 'void' ? 'No value' : plain.reason === 'limit-exceeded' ? 'Complex value · open details' : 'Unrecognized value · open details'}</span>;
 	const text = contractEventText(plain);
 	if (/^-?\d+$/.test(text) && text.replace('-', '').length > 48) {
 		return <span className={styles.muted}>Integer · {text.replace('-', '').length} digits</span>;

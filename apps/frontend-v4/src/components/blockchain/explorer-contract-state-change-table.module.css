@@ -124,11 +124,19 @@
 	white-space: pre-wrap;
 	word-break: break-word;
 }
-.ledgerColumn { width: 14%; }
-.keyColumn { width: 22%; }
-.valueColumn { width: 29%; }
+.ledgerColumn { width: 20%; }
+.keyColumn { width: 24%; }
+.valueColumn { width: 21%; }
 .transactionColumn { width: 28%; }
 .actionColumn { width: 7%; }
+.table > thead > tr > th:last-child,
+.table > tbody > tr > td:last-child {
+	position: sticky;
+	right: 0;
+	z-index: 1;
+	background: var(--panel);
+	border-left: 1px solid var(--border);
+}
 .scroll .table code,
 .identity code,
 .fields code,
@@ -192,6 +200,7 @@
 .transaction { display: block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; }
 .detailsButton {
 	font: inherit;
+	white-space: nowrap;
 	font-size: 0.75rem;
 	padding: 0.35rem 0.5rem;
 	border: 1px solid var(--border);
