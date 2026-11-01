@@ -1,7 +1,8 @@
 'use client';
 
 import { ExplorerLink as Link } from './explorer-investigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
 	fetchBalanceObservations,
 	type BalanceObservationOptions,
@@ -12,18 +13,14 @@ import { ExplorerRequestNotice } from './explorer-browse-ui';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 import { formatDecimal, formatAtomic } from './explorer-format-values';
+import { holderRouteHref, readHolderRoute, type HolderSort, type HolderRoute } from './asset-holder-route';
 
-type Sort = 'balance-desc' | 'balance-asc' | 'account-asc' | 'account-desc';
 type Loaded = {
 	page: BalanceObservationPage;
 	selection: BalanceObservationOptions;
 	cursor: string | null;
 	history: readonly (string | null)[];
 };
-const INITIAL: BalanceObservationOptions = Object.freeze({
-	sort: 'balance',
-	order: 'desc'
-});
 
 export function ExplorerAssetHolders({
 	identifier,
@@ -32,9 +29,18 @@ export function ExplorerAssetHolders({
 	identifier: string;
 	autoLoad?: boolean;
 }): React.JSX.Element {
-	const [sort, setSort] = useState<Sort>('balance-desc');
-	const [includeZero, setIncludeZero] = useState(false);
-	const [selection, setSelection] = useState(INITIAL);
+	const pathname = usePathname();
+	const params = useSearchParams();
+	const route = readHolderRoute(params);
+	const { sort: selectedSort, includeZero: selectedZero, after } = route;
+	const [sort, setSort] = useState<HolderSort>(selectedSort);
+	const [includeZero, setIncludeZero] = useState(selectedZero);
+	const selection = useMemo<BalanceObservationOptions>(() => {
+		const [field, direction] = selectedSort.split('-');
+		return { sort: field as 'balance' | 'account', order: direction as 'asc' | 'desc', includeZero: selectedZero };
+	}, [selectedSort, selectedZero]);
+	const histories = useMemo(() => new Map<string, readonly (string | null)[]>(), [selection]);
+	useEffect(() => { setSort(selectedSort); setIncludeZero(selectedZero); }, [selectedSort, selectedZero]);
 	const [enabled, setEnabled] = useState(autoLoad);
 	const request = useExplorerRequest<Loaded | null>(
 		null,
@@ -64,11 +70,19 @@ export function ExplorerAssetHolders({
 		[identifier, selection, request.run]
 	);
 	useEffect(() => {
-		if (enabled) load(null, []);
+		if (enabled) load(after, histories.get(after ?? '') ?? []);
 		return () => controller.current?.abort();
-	}, [enabled, load]);
+	}, [enabled, load, after, histories]);
+	const navigate = (next: HolderRoute) => {
+		const href = holderRouteHref(pathname, window.location.search, next, window.location.hash);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+		else if (enabled) load(next.after, histories.get(next.after ?? '') ?? []);
+		setEnabled(true);
+	};
 	const current = request.result;
 	const matchesSelection = !current || (
+		current.cursor === after &&
 		current.selection.sort === selection.sort &&
 		current.selection.order === selection.order &&
 		Boolean(current.selection.includeZero) === Boolean(selection.includeZero)
@@ -92,13 +106,7 @@ export function ExplorerAssetHolders({
 				className={ui.holderControls}
 				onSubmit={(event) => {
 					event.preventDefault();
-					const [field, direction] = sort.split('-');
-					setSelection({
-						includeZero,
-						sort: field as 'balance' | 'account',
-						order: direction as 'asc' | 'desc'
-					});
-					setEnabled(true);
+					navigate({ sort, includeZero, after: null });
 				}}
 			>
 				<label>
@@ -115,7 +123,7 @@ export function ExplorerAssetHolders({
 					Order
 					<select
 						value={sort}
-						onChange={(event) => setSort(event.currentTarget.value as Sort)}
+						onChange={(event) => setSort(event.currentTarget.value as HolderSort)}
 					>
 						<option value="balance-desc">Largest balance</option>
 						<option value="balance-asc">Smallest balance</option>
@@ -250,25 +258,23 @@ export function ExplorerAssetHolders({
 						<button
 							disabled={request.loading || !matchesSelection || !current.history.length}
 							onClick={() =>
-								load(
-									current.history.at(-1) ?? null,
-									current.history.slice(0, -1)
-								)
+								navigate({ ...route, after: current.history.at(-1) ?? null })
 							}
 						>
 							Previous
 						</button>
 						<button
 							disabled={request.loading || !matchesSelection || !current.page.nextCursor}
-							onClick={() =>
-								load(current.page.nextCursor, [
-									...current.history,
-									current.cursor
-								])
-							}
+							onClick={() => {
+								if (!current.page.nextCursor) return;
+								histories.set(current.page.nextCursor, [...current.history, current.cursor]);
+								if (histories.size > 64) histories.delete(histories.keys().next().value!);
+								navigate({ ...route, after: current.page.nextCursor });
+							}}
 						>
 							Next
 						</button>
+						{after && <button disabled={request.loading} onClick={() => navigate({ ...route, after: null })}>First page</button>}
 						<span className={styles.muted}>
 							{current.page.rows.length} holders shown
 						</span>
