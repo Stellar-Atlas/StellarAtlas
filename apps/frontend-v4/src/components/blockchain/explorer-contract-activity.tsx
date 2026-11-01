@@ -362,7 +362,7 @@ export function ContractActivityView({
 			<div className={ui.pagination}>
 				<span>
 					{page
-						? `${page.rows.length} ${tab === 'events' ? 'events' : 'changes'}${state.positions[0] ? ' · Continued query' : ` · Page ${state.pageIndex + 1}`}`
+						? `${page.rows.length} ${tab === 'events' ? page.rows.length === 1 ? 'event' : 'events' : page.rows.length === 1 ? 'change' : 'changes'}${state.positions[0] ? ' · Continued query' : ` · Page ${state.pageIndex + 1}`}`
 						: ''}
 				</span>
 				<div>

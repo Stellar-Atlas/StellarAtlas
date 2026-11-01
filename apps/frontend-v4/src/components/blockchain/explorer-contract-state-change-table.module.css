@@ -151,10 +151,10 @@
 	color: inherit;
 }
 .table[data-transactions='false'] { min-width: 780px; }
-.table[data-transactions='false'] .ledgerColumn { width: 16%; }
-.table[data-transactions='false'] .keyColumn { width: 26%; }
-.table[data-transactions='false'] .valueColumn { width: 50%; }
-.table[data-transactions='false'] .actionColumn { width: 8%; }
+.table[data-transactions='false'] .ledgerColumn { width: 26%; }
+.table[data-transactions='false'] .keyColumn { width: 28%; }
+.table[data-transactions='false'] .valueColumn { width: 36%; }
+.table[data-transactions='false'] .actionColumn { width: 10%; }
 .valueGroup {
 	margin-bottom: 0.6rem;
 }
