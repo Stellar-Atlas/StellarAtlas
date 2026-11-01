@@ -6,7 +6,7 @@
 }
 .table {
 	width: 100%;
-	min-width: 1020px;
+	min-width: 1040px;
 	table-layout: fixed;
 	border-collapse: collapse;
 	text-align: left;
@@ -43,7 +43,7 @@
 	font-size: 0.75rem;
 }
 .keyParts {
-	font-size: 0.9rem;
+	font-size: 0.8rem;
 	font-weight: 600;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
@@ -124,23 +124,15 @@
 	white-space: pre-wrap;
 	word-break: break-word;
 }
-.table th:first-child,
-.table td:first-child {
-	width: 14%;
-}
-.table th:nth-child(2),
-.table td:nth-child(2) {
-	width: 20%;
-}
-.table th:nth-child(3),
-.table td:nth-child(3) {
-	width: 44%;
-}
-.table th:nth-child(4),
-.table td:nth-child(4) {
-	width: 22%;
-}
-.scroll .table code {
+.ledgerColumn { width: 14%; }
+.keyColumn { width: 22%; }
+.valueColumn { width: 29%; }
+.transactionColumn { width: 28%; }
+.actionColumn { width: 7%; }
+.scroll .table code,
+.identity code,
+.fields code,
+.valueTable code {
 	background: transparent;
 	border: 0;
 	box-shadow: none;
@@ -150,12 +142,11 @@
 	line-height: inherit;
 	color: inherit;
 }
-.table[data-transactions='false'] > thead > tr > th:nth-child(3) {
-	width: 58%;
-}
-.table[data-transactions='false'] > thead > tr > th:nth-child(4) {
-	width: 8%;
-}
+.table[data-transactions='false'] { min-width: 780px; }
+.table[data-transactions='false'] .ledgerColumn { width: 16%; }
+.table[data-transactions='false'] .keyColumn { width: 26%; }
+.table[data-transactions='false'] .valueColumn { width: 50%; }
+.table[data-transactions='false'] .actionColumn { width: 8%; }
 .valueGroup {
 	margin-bottom: 0.6rem;
 }
@@ -168,13 +159,13 @@
 	max-width: 100%;
 	overflow-x: auto;
 }
-.table .valueTable {
+.valueTable {
 	width: 100%;
 	table-layout: auto;
 	border-collapse: collapse;
 }
-.table .valueTable th,
-.table .valueTable td {
+.valueTable th,
+.valueTable td {
 	width: auto;
 	min-width: 0;
 	max-width: none;
@@ -188,9 +179,33 @@
 	font-size: 0.78rem;
 	white-space: nowrap;
 }
-.table .valueTable th {
+.valueTable th {
 	font-weight: 500;
 }
-.table .valueTable tbody tr:last-child td {
+.valueTable tbody tr:last-child td {
 	border-bottom: 0;
 }
+.preview { display: grid; gap: 0.2rem; font-size: 0.8rem; }
+.preview strong { font-weight: 500; text-transform: none; }
+.scalarPreview { font-size: 0.78rem; }
+.scalarPreview .number { white-space: normal; overflow: visible; }
+.transaction { display: block; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.4; }
+.detailsButton {
+	font: inherit;
+	font-size: 0.75rem;
+	padding: 0.35rem 0.5rem;
+	border: 1px solid var(--border);
+	border-radius: 0.3rem;
+	background: var(--button-secondary);
+	color: var(--ink);
+	cursor: pointer;
+}
+.detailsButton:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.empty { text-align: center; color: var(--muted); }
+.identity { display: grid; gap: 0.5rem; margin: 0; }
+.identity > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 0.8rem; }
+.identity dt { color: var(--muted); font-size: 0.8rem; }
+.identity dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (pointer: coarse) { .detailsButton { min-height: 44px; } }
+@media (max-width: 600px) { .identity > div { grid-template-columns: 1fr; gap: 0.2rem; } }

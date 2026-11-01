@@ -7,17 +7,18 @@ jest.unstable_mockModule(
 	() => ({ default: {} })
 );
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
-const { ExplorerContractStateChangeTable } =
+jest.unstable_mockModule('../explorer-detail-dialog.module.css', () => ({ default: {} }));
+const { ExplorerContractStateChangeTable, ExplorerContractStateDetails } =
 	await import('../explorer-contract-state-change-table');
 
 const address = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const hash = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 describe('ExplorerContractStateChangeTable', () => {
-	it('renders typed vector keys and nested price data as readable exact fields', () => {
+	it('opens typed vector keys and nested price data as readable exact fields', () => {
 		const html = renderToStaticMarkup(
-			createElement(ExplorerContractStateChangeTable, {
-				rows: [
+			createElement(ExplorerContractStateDetails, {
+				row:
 					{
 						id: 'state-1',
 						ledger_sequence: '64877689',
@@ -53,8 +54,8 @@ describe('ExplorerContractStateChangeTable', () => {
 								}
 							]
 						}
-					}
-				]
+					},
+				onClose: () => undefined
 			})
 		);
 		expect(html).toContain('Feed</span><span> / EUROC/EUR');
@@ -70,8 +71,28 @@ describe('ExplorerContractStateChangeTable', () => {
 		expect(html).toContain(
 			`href="/explorer/transactions/${hash}?ledger_sequence=64877689"`
 		);
-		expect(html).toContain('View raw');
+		expect(html).toContain('Original record');
 		expect(html).not.toContain('"price_data"');
+	});
+
+	it('keeps nested records and raw serialization out of primary rows', () => {
+		const html = renderToStaticMarkup(createElement(ExplorerContractStateChangeTable, {
+			rows: [{ id: 'many', ledger_sequence: '64877689', transaction_hash: hash,
+				key_decoded: { vec: [{ symbol: 'feed' }, { string: 'EUROC/EUR' }] },
+				val_decoded: { map: [{ key: { symbol: 'price_data' }, val: {
+					vec: Array.from({ length: 10 }, () => ({ map: [
+						{ key: { symbol: 'price' }, val: { u256: '123456789012345678901234567890123456789012345678901234567890123456789012345678' } }
+					] }))
+				} }] } }]
+		}));
+		expect(html).toContain('price data · 10 records');
+		expect((html.match(/<table/g) ?? [])).toHaveLength(1);
+		expect(html).not.toContain('123456789012345678901234567890');
+		expect(html).not.toContain('<pre');
+		expect(html).not.toContain('<dialog');
+		expect(html).toContain('aria-haspopup="dialog"');
+		expect(html).toContain(hash);
+		expect(html).toContain('Feed</span><span> / EUROC/EUR');
 	});
 
 	it('keeps unknown bytes explicit and escapes untrusted key text', () => {
@@ -91,7 +112,7 @@ describe('ExplorerContractStateChangeTable', () => {
 		expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
 		expect(html).not.toContain('<img src=x onerror=alert(1)>');
 		expect(html).toContain('Binary payload · 2 bytes');
-		expect(html).toContain('View raw');
+		expect(html).toContain('Details');
 	});
 
 	it('shows empty containers and explicit void values', () => {
