@@ -128,7 +128,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							Examples include <code>history_transactions</code>,{' '}
 							<code>history_operations</code>,{' '}
 							<code>history_contract_events</code>, <code>history_trades</code>,{' '}
-							<code>accounts</code>, <code>trust_lines</code> and{' '}
+							<code>accounts</code>, <code>trustlines</code> and{' '}
 							<code>offers</code>. The catalog, rather than a hard-coded table
 							list, is the contract for your deployment.
 						</p>

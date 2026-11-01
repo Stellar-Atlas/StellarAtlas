@@ -10,7 +10,8 @@ import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { LocalDateTime } from '../local-date-time';
 
 const networkStripSubscription: LiveNetworkSubscriptionOptions = {
-	channels: ['summary']
+	// Older servers emit network snapshots and do not negotiate summary channels.
+	channels: ['summary', 'network']
 };
 
 export function NetworkStrip(): React.JSX.Element {
@@ -21,7 +22,7 @@ export function NetworkStrip(): React.JSX.Element {
 	useEffect(
 		() =>
 			subscribeToLiveNetworkStream((message) => {
-				if (message.type === 'summary') {
+				if (message.type === 'summary' || message.type === 'network') {
 					setNetworkName(message.payload.name);
 					setNetworkTime(message.payload.time);
 					publishLatestLedger(message.payload.latestLedger);
