@@ -4,6 +4,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { parseContractActivityPage } from '../../../api/explorer-contract-activity';
 import { initialContractActivityState } from '../explorer-contract-activity-model';
 import { contractId, eventResponse } from './contract-activity-fixtures';
+let search = '';
+jest.unstable_mockModule('next/navigation', () => ({
+	usePathname: () => '/explorer/contracts/' + contractId,
+	useSearchParams: () => new URLSearchParams(search)
+}));
+jest.unstable_mockModule('../explorer-detail-dialog.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
 }));
@@ -105,5 +111,16 @@ describe('typed contract activity presentation', () => {
 		expect(html).toContain('State changes');
 		expect(html).toContain('All events');
 		expect(html).toContain('Loading…');
+	});
+	it('restores a shared state tab without event controls or event continuation', () => {
+		search = '?activity=state&after=event-cursor';
+		try {
+			const html = renderToStaticMarkup(createElement(ExplorerContractActivity, {
+				contractId, filters: { min_ledger: '63490364', max_ledger: '63490365', after: 'event-cursor' }
+			}));
+			expect(html).toContain('aria-pressed="true">State changes');
+			expect(html).not.toContain('All events');
+			expect(html).not.toContain('event-cursor');
+		} finally { search = ''; }
 	});
 });
