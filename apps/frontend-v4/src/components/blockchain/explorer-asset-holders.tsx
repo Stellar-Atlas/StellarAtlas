@@ -16,6 +16,7 @@ import { formatDecimal, formatAtomic } from './explorer-format-values';
 import { holderRouteHref, readHolderRoute, type HolderSort, type HolderRoute } from './asset-holder-route';
 
 type Loaded = {
+	identifier: string;
 	page: BalanceObservationPage;
 	selection: BalanceObservationOptions;
 	cursor: string | null;
@@ -31,7 +32,7 @@ export function ExplorerAssetHolders({
 }): React.JSX.Element {
 	const pathname = usePathname();
 	const params = useSearchParams();
-	const route = readHolderRoute(params);
+	const route = readHolderRoute(params, identifier);
 	const { sort: selectedSort, includeZero: selectedZero, after } = route;
 	const [sort, setSort] = useState<HolderSort>(selectedSort);
 	const [includeZero, setIncludeZero] = useState(selectedZero);
@@ -39,7 +40,7 @@ export function ExplorerAssetHolders({
 		const [field, direction] = selectedSort.split('-');
 		return { sort: field as 'balance' | 'account', order: direction as 'asc' | 'desc', includeZero: selectedZero };
 	}, [selectedSort, selectedZero]);
-	const histories = useMemo(() => new Map<string, readonly (string | null)[]>(), [selection]);
+	const histories = useMemo(() => new Map<string, readonly (string | null)[]>(), [identifier, selection]);
 	useEffect(() => { setSort(selectedSort); setIncludeZero(selectedZero); }, [selectedSort, selectedZero]);
 	const [enabled, setEnabled] = useState(autoLoad);
 	const request = useExplorerRequest<Loaded | null>(
@@ -54,6 +55,7 @@ export function ExplorerAssetHolders({
 				const abort = new AbortController();
 				controller.current = abort;
 				return {
+					identifier,
 					page: await fetchBalanceObservations(
 						'holders',
 						identifier,
@@ -74,13 +76,14 @@ export function ExplorerAssetHolders({
 		return () => controller.current?.abort();
 	}, [enabled, load, after, histories]);
 	const navigate = (next: HolderRoute) => {
-		const href = holderRouteHref(pathname, window.location.search, next, window.location.hash);
+		const href = holderRouteHref(pathname, window.location.search, next, identifier, window.location.hash);
 		if (href !== window.location.pathname + window.location.search + window.location.hash)
 			window.history.pushState(null, '', href);
 		else if (enabled) load(next.after, histories.get(next.after ?? '') ?? []);
 		setEnabled(true);
 	};
-	const current = request.result;
+	// A preserved component must never relabel another asset's rows or cursor.
+	const current = request.result?.identifier === identifier ? request.result : null;
 	const matchesSelection = !current || (
 		current.cursor === after &&
 		current.selection.sort === selection.sort &&
