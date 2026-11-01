@@ -113,7 +113,14 @@ export const contractEventsGuide: DeveloperGuidePage = {
 						<dt>
 							<code>min_ledger / max_ledger</code>
 						</dt>
-						<dd>Inclusive bounds, up to 1,000,000 ledgers per typed query.</dd>
+						<dd>
+							Inclusive bounds. The Explorer limits its window to 1,000,000
+							ledgers. Keep API requests narrow and consult the{' '}
+							<a href="/docs/api/listAnalyticsContractEvents">
+								endpoint reference
+							</a>{' '}
+							for API bounds.
+						</dd>
 						<dt>
 							<code>start_time / end_time</code>
 						</dt>
