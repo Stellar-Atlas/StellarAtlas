@@ -6,6 +6,7 @@ jest.unstable_mockModule(
 	'../explorer-contract-state-change-table.module.css',
 	() => ({ default: {} })
 );
+jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 const { ExplorerContractStateChangeTable } =
 	await import('../explorer-contract-state-change-table');
 
