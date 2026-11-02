@@ -70,6 +70,7 @@ function EntityBrowser({
 		() => new ExplorerEntityRequest(collection, identifier),
 		[collection, identifier]
 	);
+	useEffect(() => () => requests.cancel(), [requests]);
 	const load = useCallback(
 		async (
 			nextFilters: ExplorerFilters,
@@ -127,8 +128,7 @@ function EntityBrowser({
 		if (acceptedSelection.current === selectionKey) return;
 		setFilters(selection.filters);
 		void load(selection.filters, selection.offset, 'reset', 'replace');
-		return () => requests.cancel();
-	}, [load, selectionKey, selection.filters, selection.offset, requests]);
+	}, [load, selectionKey, selection.filters, selection.offset]);
 	const chosenWindow: ExplorerFilters = page
 		? {
 				min_ledger: String(page.window.minLedger),
