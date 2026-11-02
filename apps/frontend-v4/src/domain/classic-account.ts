@@ -1,9 +1,17 @@
-/** Public-account StrKey: 33 payload bytes plus little-endian CRC16-XMODEM.
+/** G/C StrKey: 33 payload bytes plus little-endian CRC16-XMODEM.
  * https://github.com/stellar/js-stellar-base/blob/master/src/strkey.js
  * This checks identity encoding, not whether the account exists on-chain.
  */
 export function isClassicAccount(value: string): boolean {
-	if (!/^G[A-Z2-7]{55}$/.test(value)) return false;
+	return validAccountEncoding(value, 'G', 48);
+}
+
+export function isContractAccount(value: string): boolean {
+	return validAccountEncoding(value, 'C', 16);
+}
+
+function validAccountEncoding(value: string, prefix: 'G' | 'C', version: number): boolean {
+	if (value[0] !== prefix || !/^[A-Z2-7]{56}$/.test(value)) return false;
 	const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 	const bytes = new Uint8Array(35);
 	let buffer = 0, bits = 0, position = 0;
@@ -16,7 +24,7 @@ export function isClassicAccount(value: string): boolean {
 			buffer &= (1 << bits) - 1;
 		}
 	}
-	if (position !== 35 || bytes[0] !== 48) return false;
+	if (position !== 35 || bytes[0] !== version) return false;
 	let crc = 0;
 	for (const byte of bytes.subarray(0, 33)) {
 		crc ^= byte << 8;
