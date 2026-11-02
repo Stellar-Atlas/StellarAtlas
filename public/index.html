@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>StellarAtlas · System status</title>
+  <meta name="description" content="StellarAtlas service availability, failover readiness and recorded incidents.">
+  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/history.css"><script type="module" src="/status.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="https://stellaratlas.io/"><span class="logo">SA</span>StellarAtlas</a><a class="app-link" href="https://stellaratlas.io/">Open app <span aria-hidden="true">↗</span></a></header>
+  <main>
+    <div class="eyebrow">SYSTEM STATUS</div>
+    <section class="summary" aria-live="polite">
+      <div class="summary-title"><span id="overall-dot" class="dot unknown"></span><h1 id="overall">Checking services</h1></div>
+      <p id="summary-detail">Loading the latest independent checks.</p>
+      <div class="check-time" id="checked">—</div>
+    </section>
+    <section class="services" aria-label="Current availability">
+      <article><div><h2>Primary server</h2><p>Website and public APIs</p></div><span id="primary" class="badge unknown">Checking</span></article>
+      <article><div><h2>Data server</h2><p>Data service readiness</p></div><span id="data" class="badge unknown">Checking</span></article>
+      <article><div><h2>Failover service</h2><p>Failover service when both primary servers are degraded or offline.</p></div><span id="failover" class="badge unknown">Checking</span></article>
+    </section>
+    <section class="history-section">
+      <div class="section-heading"><h2>Availability history</h2><div id="history-ranges" class="range-controls" role="group" aria-label="History zoom"></div></div>
+      <div class="history-navigation"><button id="history-back" type="button" aria-label="Earlier period">←</button><span id="history-window"></span><button id="history-forward" type="button" aria-label="Later period">→</button><button id="history-latest" type="button">Latest</button></div>
+      <div id="history" class="history" aria-label="Service availability timeline"></div>
+      <div id="history-axis" class="history-axis" aria-hidden="true"></div>
+      <div id="history-selection" class="history-selection" aria-live="polite">Select an interval to see its duration and zoom in.</div>
+      <div class="legend"><span><i class="key operational"></i>No recorded outage</span><span><i class="key degraded"></i>Recorded outage</span><span><i class="key unknown"></i>Not monitored</span></div>
+      <p id="monitoring-since" class="footnote"></p>
+    </section>
+    <section class="snapshot-section">
+      <div class="section-heading"><h2>Failover data</h2><span>Last data refresh</span></div>
+      <dl><div><dt>Network and archives</dt><dd id="core-snapshot">—</dd></div><div><dt>Explorer</dt><dd id="explorer-snapshot">—</dd></div></dl>
+      <p class="footnote">Data may be older than live services during an interruption.</p>
+    </section>
+    <section class="incidents-section"><div class="section-heading"><h2>Incident history</h2><span>Downtime intervals only</span></div><div id="incidents" aria-live="polite"><p class="muted">Loading incidents.</p></div></section>
+  </main>
+  <footer><span>StellarAtlas status · Checks every minute. Incident times are observations.</span><span>Hosted independently · Times in UTC</span></footer>
+</body>
+</html>

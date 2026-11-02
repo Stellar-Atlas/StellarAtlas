@@ -1,0 +1,19 @@
+.history-section>.section-heading{align-items:center;flex-wrap:wrap}
+.range-controls{display:flex;flex-wrap:wrap;gap:4px}
+.range-controls button,.history-navigation button{font:inherit;font-size:11px;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--muted);cursor:pointer;padding:5px 9px}
+.range-controls button[aria-pressed=true]{color:var(--text);background:var(--panel);border-color:var(--accent)}
+.range-controls button:hover,.history-navigation button:not(:disabled):hover{color:var(--text);border-color:var(--accent)}
+.history-navigation{display:flex;gap:9px;align-items:center;margin:18px 0;font-size:11px;color:var(--muted)}
+.history-navigation span{flex:1;text-align:center;font-variant-numeric:tabular-nums}
+.history-navigation button:disabled{opacity:.35;cursor:default}
+.history{display:grid;grid-template-columns:1fr;gap:18px}
+.history-row{min-width:0}
+.history-row-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:12px;margin-bottom:7px}
+.history-row-heading span:last-child{color:var(--muted);font-size:11px;text-align:right}
+.history-track{display:grid;grid-template-columns:repeat(var(--slots),minmax(0,1fr));gap:2px}
+.history-slot{border:0;padding:0;height:21px;min-width:0;border-radius:2px;cursor:zoom-in}
+.history-slot:hover{outline:1px solid var(--text);outline-offset:1px}
+.history-axis{display:flex;justify-content:space-between;gap:10px;margin-top:9px;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.history-axis span:nth-child(2){text-align:center}.history-axis span:last-child{text-align:right}
+.history-selection{min-height:34px;padding-top:10px;color:var(--muted);font-size:11px}
+@media(max-width:600px){.range-controls{gap:3px}.range-controls button{padding:5px 8px}.history-navigation{flex-wrap:wrap;gap:6px}.history-navigation span{font-size:10px}.history-slot{height:25px}.history-track{gap:1px}.history-row-heading{font-size:11px}.history-axis{font-size:9px}.history-axis span:nth-child(2){display:none}.history-selection{min-height:48px}}
