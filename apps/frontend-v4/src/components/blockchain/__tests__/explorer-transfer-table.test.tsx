@@ -1,8 +1,9 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { jest } from '@jest/globals';
+import { buildEntityHref, type ExplorerFilters } from '../../../api/explorer-analytics';
 jest.unstable_mockModule('../explorer-entity.module.css',()=>({default:{}}));
-jest.unstable_mockModule('../explorer-investigation',()=>({ExplorerLink:({href,children}:{href:string;children:React.ReactNode})=>createElement('a',{href},children)}));
+jest.unstable_mockModule('../explorer-entity-table',()=>({EntityLink:({collection,id,filters,label}:{collection:string;id:string;filters?:ExplorerFilters;label?:string})=>createElement('a',{href:buildEntityHref(collection,id,filters)},label??id)}));
 const { ExplorerTransferTable } = await import('../explorer-transfer-table');
 const ga='G'+'A'.repeat(55), contract='C'+'A'.repeat(55);
 const row={id:'one',ledgerSequence:100,closedAt:'2026-11-02T00:00:00Z',transactionHash:'a'.repeat(64),transactionId:'429496729600',operationId:'429496729601',from:ga,to:contract,toMuxed:null,asset:{id:'USD:'+ga,type:'credit_alphanum4',code:'USD',issuer:ga},contractId:contract,eventTopic:'transfer',amountRaw:'9007199254740993123',amountScale:7};
