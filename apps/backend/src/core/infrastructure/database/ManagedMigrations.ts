@@ -1,3 +1,4 @@
+import { HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1793384400000-HistoryArchiveHeaderProofRepairQueueKindMigration.js';
 import { HistoryArchiveFailureSummarySnapshotMigration1788832000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1788832000000-HistoryArchiveFailureSummarySnapshotMigration.js';
 import { HistoryArchiveListingGapMigration1788735600000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
 import { HistoryArchiveCheckpointScanCoverageMigration1788831000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1788831000000-HistoryArchiveCheckpointScanCoverageMigration.js';
@@ -68,6 +69,7 @@ import { HistoryArchiveRepairActionIndexMigration1785370000000 } from '@history-
 import { FullHistoryStateStatementValidationMigration1785380000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785380000000-FullHistoryStateStatementValidationMigration.js';
 import { FullHistoryCanonicalCoverageDecouplingMigration1785390000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785390000000-FullHistoryCanonicalCoverageDecouplingMigration.js';
 import { HistoryArchiveCheckpointProofVersionRollupMigration1785400000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785400000000-HistoryArchiveCheckpointProofVersionRollupMigration.js';
+import { HistoryArchiveCheckpointProofVersionRollupCurrentVersionMigration1791588948000 } from '@history-scan-coordinator/infrastructure/database/migrations/1791588948000-HistoryArchiveCheckpointProofVersionRollupCurrentVersionMigration.js';
 import { FullHistoryOperationProjectionProgressMigration1785410000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785410000000-FullHistoryOperationProjectionProgressMigration.js';
 import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
 import { HistoryArchiveAvailabilityFailureChannelMigration1785430000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785430000000-HistoryArchiveAvailabilityFailureChannelMigration.js';
@@ -165,6 +167,7 @@ export const managedMigrations = [
 	FullHistoryStateStatementValidationMigration1785380000000,
 	FullHistoryCanonicalCoverageDecouplingMigration1785390000000,
 	HistoryArchiveCheckpointProofVersionRollupMigration1785400000000,
+	HistoryArchiveCheckpointProofVersionRollupCurrentVersionMigration1791588948000,
 	FullHistoryOperationProjectionProgressMigration1785410000000,
 	HistoryArchiveCheckpointProofAttestationMigration1785420000000,
 	HistoryArchiveAvailabilityFailureChannelMigration1785430000000,
@@ -206,7 +209,9 @@ export const managedMigrations = [
 	HistoryArchiveBrokerFirstPassIndexesMigration1791201600000,
 	HistoryArchiveBrokerRecoveryCandidateIndexMigration1791310800000,
 	HistoryArchiveRamFeedNotificationsMigration1791324000000,
-	HistoryArchiveDbCompactTemplateMigration1791331200000
+	HistoryArchiveDbCompactTemplateMigration1791331200000,
+	HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000,
+	HistoryArchiveFailureSummaryRevision1793577600000
 ] as const;
 import { HistoryArchiveTransientSourceRetryMigration1791072000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791072000000-HistoryArchiveTransientSourceRetryMigration.js';
 import { HistoryArchiveManualRecheckIntentMigration1791088200000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791088200000-HistoryArchiveManualRecheckIntentMigration.js';
@@ -217,3 +222,4 @@ import { HistoryArchiveBrokerFirstPassIndexesMigration1791201600000 } from '../.
 import { HistoryArchiveBrokerRecoveryCandidateIndexMigration1791310800000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791310800000-HistoryArchiveBrokerRecoveryCandidateIndexMigration.js';
 import { HistoryArchiveRamFeedNotificationsMigration1791324000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791324000000-HistoryArchiveRamFeedNotificationsMigration.js';
 import { HistoryArchiveDbCompactTemplateMigration1791331200000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791331200000-HistoryArchiveDbCompactTemplateMigration.js';
+import { HistoryArchiveFailureSummaryRevision1793577600000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1793577600000-HistoryArchiveFailureSummaryRevisionMigration.js';

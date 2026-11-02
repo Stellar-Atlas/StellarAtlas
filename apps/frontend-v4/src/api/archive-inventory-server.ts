@@ -25,5 +25,5 @@ export const fetchArchiveInventorySnapshot = unstable_cache(
 		return { summary, ...advertisers };
 	},
 	['archive-inventory-snapshot-v1'],
-	{ revalidate: 15 }
+	{ revalidate: 30 }
 );

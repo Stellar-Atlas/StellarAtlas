@@ -9,6 +9,7 @@ import {
 	historyArchiveCanonicalFirstAdmissionSql,
 	historyArchiveCanonicalFirstScopeSelectSql
 } from './HistoryArchiveCanonicalFirst.js';
+import { getCanonicalFallbackRoot } from './HistoryArchiveCanonicalFallbackAnchorSql.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 import { remoteCheckpointFailureExistsSql } from './HistoryArchiveCheckpointRemoteFailureSql.js';
 import {
@@ -16,6 +17,11 @@ import {
 	historyArchiveListingGapResumeSql
 } from './HistoryArchiveListingGapSql.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import {
+	getCanonicalFrontierAlternateCanonicalCompletions,
+	getCanonicalFrontierAlternateTargets,
+	materializeCanonicalFrontierAlternateCheckpoint
+} from './HistoryArchiveCanonicalFallbackTargets.js';
 
 const maximumCheckpointFanoutBatch = historyArchiveCheckpointFanoutBatchSize;
 const maximumCheckpointCursorBatch = 128;
@@ -33,31 +39,10 @@ export async function findVerifiedCheckpointsNeedingFanout(
 
 	const query = repository
 		.createQueryBuilder('object')
-		.addCommonTableExpression(
-			historyArchiveCanonicalFirstScopeSelectSql(
-				'cast(:canonicalRoot as text)'
-			),
-			'canonical_scope',
-			{ materialized: true }
-		)
-		.innerJoin(
-			'history_archive_checkpoint_scan_cursor',
-			'fanout_cursor',
-			`fanout_cursor."archiveUrlIdentity" = object."archiveUrlIdentity"
-				and object."checkpointLedger" =
-					fanout_cursor."nextHistoricalCheckpointLedger" - 64`
-		)
 		.where('object.objectType = :objectType', {
 			objectType: 'checkpoint-state'
 		})
 		.andWhere('object.status = :status', { status: 'verified' })
-		.andWhere(
-			historyArchiveCanonicalFirstAdmissionSql(
-				'object."archiveUrlIdentity"',
-				'cast(:canonicalRoot as text)'
-			),
-			{ canonicalRoot: getHistoryArchiveCanonicalFirstRoot() }
-		)
 		.andWhere(
 			`(
 				object."descendantsPlannedAt" is null
@@ -127,12 +112,62 @@ export async function findVerifiedCheckpointsNeedingFanout(
 		)
 		.orderBy('object.checkpointLedger', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.verifiedAt', 'ASC', 'NULLS LAST')
-		.addOrderBy('object.id', 'ASC')
-		// The cursor primary key makes this join one-to-one. LIMIT avoids
-		// TypeORM's redundant DISTINCT-ID query followed by the same lookup.
+		.addOrderBy('object.id', 'ASC');
+
+	const canonicalRoot = getHistoryArchiveCanonicalFirstRoot();
+	const ordinary = query
+		.clone()
+		.addCommonTableExpression(
+			historyArchiveCanonicalFirstScopeSelectSql(
+				'cast(:canonicalRoot as text)'
+			),
+			'canonical_scope',
+			{ materialized: true }
+		)
+		.innerJoin(
+			'history_archive_checkpoint_scan_cursor',
+			'fanout_cursor',
+			`fanout_cursor."archiveUrlIdentity" = object."archiveUrlIdentity"
+				and object."checkpointLedger" =
+					fanout_cursor."nextHistoricalCheckpointLedger" - 64`
+		)
+		.andWhere(
+			historyArchiveCanonicalFirstAdmissionSql(
+				'object."archiveUrlIdentity"',
+				'cast(:canonicalRoot as text)'
+			),
+			{ canonicalRoot }
+		)
 		.limit(safeLimit);
 
-	return await query.getMany();
+	const fallbackTargets = await getCanonicalFrontierAlternateTargets(
+		repository.manager
+	);
+	const fallback =
+		fallbackTargets.length === 0
+			? Promise.resolve([] as HistoryArchiveObject[])
+			: query
+					.clone()
+					.andWhere('object.remoteId in (:...fallbackRemoteIds)', {
+						fallbackRemoteIds: fallbackTargets.map((target) => target.remoteId)
+					})
+					.limit(safeLimit)
+					.getMany();
+
+	const [ordinaryCheckpoints, fallbackCheckpoints] = await Promise.all([
+		ordinary.getMany(),
+		fallback
+	]);
+	return [
+		...fallbackCheckpoints,
+		...ordinaryCheckpoints.filter(
+			(ordinaryCheckpoint) =>
+				!fallbackCheckpoints.some(
+					(fallbackCheckpoint) =>
+						fallbackCheckpoint.remoteId === ordinaryCheckpoint.remoteId
+				)
+		)
+	].slice(0, safeLimit);
 }
 
 export async function markCheckpointDescendantsPlanned(
@@ -187,6 +222,12 @@ export async function materializeCompactCheckpointPlanResult(
 				);
 	if (targetedIdentities !== null && targetedIdentities.length === 0)
 		return { advanced: 0, planned: 0, ready: 0 };
+	const canonicalRoot = getCanonicalFallbackRoot();
+	const alternateFrontierTargets =
+		canonicalRoot !== null &&
+			(targetedIdentities === null || targetedIdentities.includes(canonicalRoot))
+			? await materializeCanonicalFrontierAlternateCheckpoint(manager)
+			: 0;
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
 		maximumCheckpointCursorBatch,
 		historyArchiveSequentialPrefetchDepth,
@@ -199,7 +240,7 @@ export async function materializeCompactCheckpointPlanResult(
 	}[];
 	const plan = {
 		advanced: Number(result?.advanced ?? 0),
-		planned: Number(result?.planned ?? 0),
+		planned: Number(result?.planned ?? 0) + alternateFrontierTargets,
 		ready: Number(result?.ready ?? 0)
 	};
 	if (plan.ready > 0 || plan.advanced > 0)
@@ -232,16 +273,40 @@ export async function materializeNextCompactCheckpointPlans(
 			checkpoint.checkpointLedger >= 63
 	);
 	if (validCheckpoints.length === 0) return 0;
-	await materializeCanonicalCheckpointSubstitutions(manager, validCheckpoints);
+	await materializeCanonicalFrontierAlternateCheckpoint(manager);
+	const canonicalAlternateCompletions =
+		await getCanonicalFrontierAlternateCanonicalCompletions(
+			manager,
+			validCheckpoints
+		);
+	const planningCheckpoints = [
+		...new Map(
+			[...validCheckpoints, ...canonicalAlternateCompletions].map(
+				(checkpoint) => [
+					`${checkpoint.archiveUrlIdentity}\u0000${checkpoint.checkpointLedger}`,
+					checkpoint
+				]
+			)
+		).values()
+	];
+	const canonicalSubstitutions =
+		await materializeCanonicalCheckpointSubstitutions(
+			manager,
+			planningCheckpoints
+		);
 	const [result] = (await manager.query(targetedCompactCheckpointPlanSql, [
-		JSON.stringify(validCheckpoints),
+		JSON.stringify(planningCheckpoints),
 		historyArchiveSequentialPrefetchDepth
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;
 		readonly advanced?: number | string;
 	}[];
-	if (Number(result?.ready ?? 0) > 0 || Number(result?.advanced ?? 0) > 0)
+	if (
+		Number(result?.ready ?? 0) > 0 ||
+		Number(result?.advanced ?? 0) > 0 ||
+		canonicalSubstitutions > 0
+	)
 		await notifyHistoryArchiveReadyWork(manager);
 	return Number(result?.planned ?? 0);
 }
@@ -269,7 +334,7 @@ async function materializeCanonicalCheckpointSubstitutions(
 	manager: EntityManager,
 	completedCheckpoints: readonly CompletedHistoryArchiveCheckpoint[]
 ): Promise<number> {
-	const canonicalRoot = getHistoryArchiveCanonicalFirstRoot();
+	const canonicalRoot = getCanonicalFallbackRoot();
 	const [result] = (await manager.query(targetedCheckpointSubstitutionSql, [
 		JSON.stringify(completedCheckpoints),
 		canonicalRoot

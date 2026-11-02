@@ -1,7 +1,8 @@
 'use client';
 
 import { ExplorerLink as Link } from './explorer-investigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
 	entityText,
 	parseEntityPage,
@@ -16,10 +17,12 @@ import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 import { ExplorerPoolBrowser } from './explorer-pool-browser';
 import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
-import { formatDecimal } from './explorer-format-values';
+import { formatMarketAmount, marketAssetLabel } from './explorer-market-values';
+import { assetMarketRouteHref, defaultAssetMarketRoute, readAssetMarketRoute, type AssetMarketRoute } from './asset-market-route';
 
 type View = 'trades' | 'liquidity-pools';
 type Result = {
+	assetId: string;
 	rows: readonly EntityRecord[];
 	pages: readonly AnalyticsEntityPage[];
 	view: View;
@@ -42,22 +45,27 @@ export function ExplorerAssetMarkets({
 	asset: Asset;
 }): React.JSX.Element | null {
 	const maximum = asset.lastObservedLedger ?? 2;
-	const [view, setView] = useState<View>('trades');
-	const [selection, setSelection] = useState<{
-		view: View;
-		min: string;
-		max: string;
-	}>({
-		view: 'trades',
-		min: String(Math.max(2, maximum - 2047)),
-		max: String(maximum)
-	});
-	const [result, setResult] = useState<Result | null>(null);
+	const pathname = usePathname();
+	const params = useSearchParams();
+	const { view, min, max } = readAssetMarketRoute(params, maximum);
+	const selection = useMemo(() => ({ view, min, max }), [view, min, max]);
+	const [refresh, setRefresh] = useState(0);
+	const navigate = (next: AssetMarketRoute) => {
+		const href = assetMarketRouteHref(pathname, window.location.search, next, maximum, window.location.hash);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+		else if (next.view === 'trades') setRefresh(value => value + 1);
+	};
+	const [loaded, setResult] = useState<Result | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const generation = useRef(0);
 	useEffect(() => {
-		if (!selection || selection.view === 'liquidity-pools') return;
+		if (selection.view === 'liquidity-pools') {
+			setBusy(false);
+			setError(null);
+			return;
+		}
 		const abort = new AbortController();
 		const current = ++generation.current;
 		setBusy(true);
@@ -102,7 +110,7 @@ export function ExplorerAssetMarkets({
 						return true;
 					})
 					.sort((a, b) => Number(b.ledgerSequence) - Number(a.ledgerSequence));
-				setResult({ rows, pages, view: selection.view });
+				setResult({ assetId: asset.id, rows, pages, view: selection.view });
 			})
 			.catch((cause: unknown) => {
 				if (!abort.signal.aborted)
@@ -114,7 +122,8 @@ export function ExplorerAssetMarkets({
 				if (!abort.signal.aborted) setBusy(false);
 			});
 		return () => abort.abort();
-	}, [selection, asset.id]);
+	}, [selection, asset.id, refresh]);
+	const result = loaded?.assetId === asset.id ? loaded : null;
 	const pairMetadata = usePairMetadata(result?.rows ?? [], [
 		'sellingAsset',
 		'buyingAsset'
@@ -139,11 +148,7 @@ export function ExplorerAssetMarkets({
 				className={ui.holderControls}
 				onSubmit={(event) => {
 					event.preventDefault();
-					setSelection({
-						view,
-						min: String(Math.max(2, maximum - 2047)),
-						max: String(maximum)
-					});
+					navigate(defaultAssetMarketRoute(maximum));
 				}}
 			>
 				<label>
@@ -152,34 +157,40 @@ export function ExplorerAssetMarkets({
 						value={view}
 						onChange={(event) => {
 							const next = event.currentTarget.value as View;
-							setView(next);
-							setSelection((current) => ({ ...current, view: next }));
+							navigate({ ...selection, view: next });
 						}}
 					>
 						<option value="trades">Trades</option>
 						<option value="liquidity-pools">Liquidity pools</option>
 					</select>
 				</label>
-				<button
+				{view === 'trades' && <><button
 					disabled={busy || Number(selection.min) <= 2}
 					type="button"
 					onClick={() =>
-						setSelection((current) => ({
-							...current,
-							min: String(Math.max(2, Number(current.min) - 2048)),
-							max: String(Math.max(2, Number(current.min) - 1))
-						}))
+						navigate({
+							...selection,
+							min: String(Math.max(2, Number(selection.min) - 2048)),
+							max: String(Math.max(2, Number(selection.min) - 1))
+						})
 					}
 				>
 					Earlier activity
 				</button>
 				<button disabled={busy} type="submit">
-					Latest indexed activity
+					Latest asset window
 				</button>
+				</>}
 			</form>
+			{view === 'trades' && busy && (
+				<p className={styles.muted} role="status">
+					Loading trades…{result ? ' Showing previous results.' : ''}
+				</p>
+			)}
 			{error && (
 				<p className={styles.error} role="alert">
 					{error}
+					{view === 'trades' && result ? ' Showing previous results.' : ''}
 				</p>
 			)}
 			{view === 'liquidity-pools' && (
@@ -189,6 +200,9 @@ export function ExplorerAssetMarkets({
 				<>
 					<div className={ui.holderSummary}>
 						<span>{result.rows.length} observations</span>
+						<span title="Returned trade window; the latest default is anchored to the asset’s last observed ledger, not a live-market watermark.">
+							Trade ledgers {result.pages[0]!.window.minLedger.toLocaleString('en-US')}–{result.pages[0]!.window.maxLedger.toLocaleString('en-US')}
+						</span>
 						<span>
 							{result.pages.some((page) => page.coverageStatus !== 'complete')
 								? 'Partial history'
@@ -222,15 +236,15 @@ export function ExplorerAssetMarkets({
 											/>
 										</td>
 										<td className={ui.numeric}>
-											{entityText(
+											{formatMarketAmount(entityText(
 												row,
 												result.view === 'trades' ? 'sellingAmount' : 'reserveA'
-											)}{' '}
+											))} {marketAssetLabel(row.sellingAsset)}{' '}
 											{result.view === 'trades' ? '→' : '/'}{' '}
-											{entityText(
+											{formatMarketAmount(entityText(
 												row,
 												result.view === 'trades' ? 'buyingAmount' : 'reserveB'
-											)}
+											))} {marketAssetLabel(row.buyingAsset)}
 										</td>
 										<td>
 											<Link

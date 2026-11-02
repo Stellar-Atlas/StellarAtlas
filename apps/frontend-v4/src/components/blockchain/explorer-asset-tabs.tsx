@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import type { AssetRecord } from './explorer-asset-types';
 import { ParsedIssuerMetadata } from './explorer-issuer-metadata';
 import { ExplorerAssetHolders } from './explorer-asset-holders';
@@ -10,31 +10,40 @@ import { ExplorerAssetActivity } from './explorer-asset-activity';
 import { ExplorerContractActivity } from './explorer-contract-activity';
 import { ExplorerSimilarAssets } from './explorer-similar-assets';
 import { ExplorerAssetReports } from './explorer-asset-reports';
+import {
+	assetTabHref,
+	assetTabOptions,
+	readAssetTab,
+	type AssetTab
+} from './asset-tab-route';
 import ui from './explorer-asset-workspace.module.css';
-
-const TABS = [
-	'Overview',
-	'Holders',
-	'Transfers',
-	'Markets',
-	'Contracts & events',
-	'Rankings',
-	'Balance history',
-	'Same symbol'
-] as const;
-type Tab = (typeof TABS)[number];
 
 export function ExplorerAssetTabs({
 	record
 }: {
 	record: AssetRecord;
 }): React.JSX.Element {
-	const [tab, setTab] = useState<Tab>('Overview');
+	const pathname = usePathname();
+	const params = useSearchParams();
+	const tab = readAssetTab(params.get('tab'));
+	const setTab = (next: AssetTab) => {
+		const href = assetTabHref(
+			pathname,
+			window.location.search,
+			next,
+			window.location.hash
+		);
+		if (
+			href !==
+			window.location.pathname + window.location.search + window.location.hash
+		)
+			window.history.pushState(null, '', href);
+	};
 	const { asset, metadata } = record;
 	return (
 		<div className={ui.assetTabs}>
 			<nav className={ui.tabBar} aria-label="Asset sections">
-				{TABS.map((value) => (
+				{assetTabOptions.map(({ label: value }) => (
 					<button
 						key={value}
 						aria-pressed={tab === value}

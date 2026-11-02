@@ -91,6 +91,8 @@
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
+.fee { display: grid; gap: .15rem; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.fee small { font-size: .68rem; color: var(--muted); }
 .success,
 .failed {
 	display: inline-block;

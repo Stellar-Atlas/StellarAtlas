@@ -10,13 +10,16 @@ import {
 	writeClipboardText
 } from './blockchain-explorer-format';
 import styles from './explorer-transaction-table.module.css';
+import { formatAtomic } from './explorer-format-values';
 
 export function ExplorerTransactionTable({
 	transactions,
-	onInspect
+	onInspect,
+	caption = 'Latest available transaction records. Dates are shown in your local time.'
 }: {
-	readonly transactions: PublicRecentTransactions;
+	readonly transactions: Pick<PublicRecentTransactions, 'records' | 'limit'>;
 	readonly onInspect: (hash: string, ledger: string) => void;
+	readonly caption?: string;
 }): React.JSX.Element {
 	const [expandedHash, setExpandedHash] = useState<string | null>(null);
 	const [copiedHash, setCopiedHash] = useState<string | null>(null);
@@ -50,10 +53,7 @@ export function ExplorerTransactionTable({
 			tabIndex={0}
 		>
 			<table className={styles.table}>
-				<caption>
-					Latest available transaction records. Dates are shown in your local
-					time.
-				</caption>
+				<caption>{caption}</caption>
 				<thead>
 					<tr>
 						{[
@@ -62,7 +62,7 @@ export function ExplorerTransactionTable({
 							'Closed',
 							'Ledger',
 							'Operations',
-							'Fee (stroops)',
+							'Fee (XLM)',
 							'Result',
 							'Details'
 						].map((label) => (
@@ -128,7 +128,7 @@ export function ExplorerTransactionTable({
 									href={buildEntityHref('accounts', tx.sourceAccount)}
 									title={tx.sourceAccount}
 								>
-									{formatTransactionHash(tx.sourceAccount)}
+									{tx.sourceAccount}
 								</ExplorerLink>
 							</td>
 							<td data-label="Closed">
@@ -142,8 +142,11 @@ export function ExplorerTransactionTable({
 							<td data-label="Operations" className={styles.numeric}>
 								{tx.operationCount}
 							</td>
-							<td data-label="Fee (stroops)" className={styles.numeric}>
-								{tx.feeCharged}
+							<td data-label="Fee (XLM)" className={styles.numeric}>
+								<div className={styles.fee}>{/^\d+$/.test(tx.feeCharged) ? <>
+									<span>{formatAtomic(tx.feeCharged, 7)}</span>
+									<small>{tx.feeCharged} stroops</small>
+								</> : '—'}</div>
 							</td>
 							<td data-label="Result">
 								<span

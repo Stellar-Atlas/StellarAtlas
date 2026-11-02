@@ -43,6 +43,9 @@ describe('generated documentation operation directory', () => {
 		expect(
 			operationGroup('/v1/analytics/contracts/{contract}/events', 'Analytics')
 		).toBe('Contracts & events');
+		expect(operationGroup("/v1/assets/{asset}", "Assets")).toBe("Assets");
+		expect(operationGroup("/v1/issuers/{issuer}/assets", "Issuers")).toBe("Assets");
+		expect(operationGroup("/v1/analytics/assets", "Analytics")).toBe("Assets");
 	});
 	it('fails a build on duplicate operation IDs rather than silently hiding endpoints', () => {
 		expect(() =>

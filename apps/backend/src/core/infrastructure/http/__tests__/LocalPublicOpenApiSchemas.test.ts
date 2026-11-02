@@ -2,6 +2,7 @@ import openApiDocument from '../../../../../openapi.json' with { type: 'json' };
 import networkSchema from 'shared/schemas/network.json' with { type: 'json' };
 import nodeSchema from 'shared/schemas/node.json' with { type: 'json' };
 import organizationSchema from 'shared/schemas/organization.json' with { type: 'json' };
+import reviewedPublicOperations from './fixtures/public-openapi-operations.json' with { type: 'json' };
 import { HistoryArchiveStatusSummaryV1Schema } from 'shared';
 import { createPublicOpenApiDocument } from '../PublicOpenApiDocument.js';
 import {
@@ -76,7 +77,7 @@ describe('self-contained public OpenAPI schemas', () => {
 			'head',
 			'options'
 		]);
-		let operationCount = 0;
+		const actualOperations: string[] = [];
 		for (const [path, item] of Object.entries(
 			document.paths as Record<string, OpenApiRecord>
 		)) {
@@ -97,10 +98,12 @@ describe('self-contained public OpenAPI schemas', () => {
 					(isolated.paths as Record<string, OpenApiRecord>)[path]?.[method]
 				).toEqual(operation);
 				expect(Object.keys(isolated.paths as OpenApiRecord)).toEqual([path]);
-				operationCount++;
+				actualOperations.push(`${method} ${path} ${(operation as OpenApiRecord).operationId}`);
 			}
 		}
-		expect(operationCount).toBe(117);
+		// Static reviewed method/path/id inventory, not computed from the policy
+		// under test. Update only alongside an explicitly reviewed public contract.
+		expect(actualOperations.toSorted()).toEqual(reviewedPublicOperations);
 	});
 	it('retains a referenced component when the only reference points into one property', () => {
 		const source = {

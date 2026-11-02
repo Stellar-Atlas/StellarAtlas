@@ -2,45 +2,120 @@ import type { DataSource } from 'typeorm';
 import type { Logger } from 'logger';
 import type { KnownArchiveFailureSummaryV1 } from 'shared';
 import { historyArchivePublicSourcePredicateSql } from './HistoryArchivePublicSourceScopeSql.js';
-import { queryKnownArchiveFailureSummary } from './KnownArchiveFailureSummaryQuery.js';
+import {
+	knownArchiveFailureSummaryTimeoutMs,
+	queryKnownArchiveFailureSummary
+} from './KnownArchiveFailureSummaryQuery.js';
+import {
+	archiveFailureSummarySchema,
+	archiveFailureSummarySourceStateSql,
+	archiveFailureSummaryDigestSql,
+	isArchiveFailureSummaryRootRevision,
+	queryFingerprint
+} from './KnownArchiveFailureSummaryVersion.js';
 
 /** Only trusted current roots with remote findings are grouped. Zero uses existing rollups.
  * Failed aggregates keep their last good snapshot and a durable per-root cooldown;
  * they must not repeatedly compete with verification for cold-table reads.
  */
 export const nextArchiveFailureSummaryRootSql = `
-	select root."archiveUrlIdentity"
+	select root."archiveUrlIdentity", source."rootRevision", source."retainedRevision",
+		snapshot.xmin::text as "snapshotWriteVersion"
 	from (select "archiveUrlIdentity" from history_archive_state_snapshot
 		where ${historyArchivePublicSourcePredicateSql}) root
-	left join history_archive_evidence_root_summary evidence using ("archiveUrlIdentity")
+	cross join lateral (${archiveFailureSummarySourceStateSql('root')}) source
 	left join history_archive_failure_summary_snapshot snapshot using ("archiveUrlIdentity")
-	where coalesce(evidence."remoteFailureObjects",0) + coalesce((
-		select sum("retainedObjects") from history_archive_retained_remote_summary retained
-		where retained."archiveUrlIdentity" = root."archiveUrlIdentity"),0) > 0
-		and (snapshot."lastAttemptAt" is null or snapshot."lastAttemptAt" <= now() -
-			case when snapshot."lastErrorCode" is not null then interval '5 minutes'
-				when snapshot.summary->>'attributionVersion' is distinct from '1' then interval '0 seconds'
-				else interval '5 minutes' end)
+	where source."remoteFailureCount"::numeric > 0
+		and (snapshot."lastAttemptAt" is null
+			or snapshot."lastAttemptAt" <= now() - interval '5 minutes')
+		and (snapshot.summary is null or snapshot."computedAt" is null
+			or snapshot."lastErrorCode" is not null
+			or snapshot.summary->>'attributionVersion' is distinct from '1'
+			or snapshot."sourceRootRevision"::text is distinct from source."rootRevision"
+			or snapshot."sourceRetainedRevision" is distinct from source."retainedRevision"
+			or snapshot."sourceQueryHash" is distinct from $1::text
+			or snapshot."sourceSummaryHash" is distinct from ${archiveFailureSummaryDigestSql('snapshot')}
+			or snapshot.summary->>'remoteFailureCount' is distinct from source."remoteFailureCount"
+			or snapshot.summary->>'workerIssueCount' is distinct from source."workerIssueCount")
 	order by snapshot."lastAttemptAt" nulls first, root."archiveUrlIdentity"
 	limit 1
+`;
+
+/** Recheck in the write statement: a racing mutation cannot acknowledge newer inputs. */
+export const persistArchiveFailureSummarySnapshotSql = `
+	with root as (select $1::text as "archiveUrlIdentity"), current_source as materialized (
+		select source.* from root
+		cross join lateral (${archiveFailureSummarySourceStateSql('root')}) source
+	), candidate_summary as (
+		select $2::jsonb as summary, $3::timestamptz as "computedAt"
+	), accepted as (
+		select candidate_summary.*, ${archiveFailureSummaryDigestSql('candidate_summary')}
+			as "sourceSummaryHash"
+		from current_source cross join candidate_summary
+		where $2::jsonb is not null and $4::text is null
+			and "rootRevision" = $5::text and "retainedRevision" = $6::text
+	)
+	insert into history_archive_failure_summary_snapshot as snapshot (
+		"archiveUrlIdentity",summary,"computedAt","lastAttemptAt","lastErrorCode",
+		"sourceRootRevision","sourceRetainedRevision","sourceQueryHash","sourceSummaryHash"
+	)
+	select $1, accepted.summary, accepted."computedAt", now(), $4,
+		case when accepted.summary is not null then $5::bigint end,
+		case when accepted.summary is not null then $6::text end,
+		case when accepted.summary is not null then $7::text end,
+		accepted."sourceSummaryHash"
+	from current_source left join accepted on true
+	on conflict ("archiveUrlIdentity") do update set
+		summary=coalesce(excluded.summary,snapshot.summary),
+		"computedAt"=coalesce(excluded."computedAt",snapshot."computedAt"),
+		"sourceRootRevision"=case when excluded.summary is not null
+			then excluded."sourceRootRevision" else snapshot."sourceRootRevision" end,
+		"sourceRetainedRevision"=case when excluded.summary is not null
+			then excluded."sourceRetainedRevision" else snapshot."sourceRetainedRevision" end,
+		"sourceQueryHash"=case when excluded.summary is not null
+			then excluded."sourceQueryHash" else snapshot."sourceQueryHash" end,
+		"sourceSummaryHash"=case when excluded.summary is not null
+			then excluded."sourceSummaryHash" else snapshot."sourceSummaryHash" end,
+		"lastAttemptAt"=excluded."lastAttemptAt", "lastErrorCode"=excluded."lastErrorCode"
+	where $8::text is not null and snapshot.xmin::text = $8::text
 `;
 
 export async function refreshNextKnownArchiveFailureSummary(
 	database: DataSource,
 	load: (
 		database: DataSource,
-		root: string
+		root: string,
+		statementTimeoutMs: typeof knownArchiveFailureSummaryTimeoutMs.refresh
 	) => Promise<KnownArchiveFailureSummaryV1> = queryKnownArchiveFailureSummary
 ): Promise<{ root: string; errorCode: string | null } | null> {
-	const candidates = await database.query<{ archiveUrlIdentity: string }[]>(
-		nextArchiveFailureSummaryRootSql
+	if (!(await archiveFailureSummarySchema(database.manager)).versionedReady)
+		return null;
+	const candidates = await database.query<{
+		archiveUrlIdentity: string;
+		rootRevision: string;
+		retainedRevision: string;
+		snapshotWriteVersion: string | null;
+	}[]>(
+		nextArchiveFailureSummaryRootSql,
+		[queryFingerprint]
 	);
-	const root = candidates[0]?.archiveUrlIdentity;
-	if (root === undefined) return null;
+	const candidate = candidates[0];
+	if (candidate === undefined) return null;
+	if (!isArchiveFailureSummaryRootRevision(candidate.rootRevision))
+		throw new Error('Invalid archive failure summary root revision');
+	const root = candidate.archiveUrlIdentity;
 	let summary: KnownArchiveFailureSummaryV1 | null = null;
 	let errorCode: string | null = null;
 	try {
-		summary = await load(database, root);
+		summary = await load(
+			database,
+			root,
+			knownArchiveFailureSummaryTimeoutMs.refresh
+		);
+		if (summary.computedAt === null || summary.attributionVersion !== 1) {
+			summary = null;
+			errorCode = 'SUMMARY_REFRESH_FAILED';
+		}
 	} catch (error: unknown) {
 		errorCode = safeErrorCode(error);
 	}
@@ -49,18 +124,16 @@ export async function refreshNextKnownArchiveFailureSummary(
 			"select set_config('statement_timeout','1500',true),set_config('lock_timeout','250',true)"
 		);
 		await manager.query(
-			`insert into history_archive_failure_summary_snapshot
-			("archiveUrlIdentity",summary,"computedAt","lastAttemptAt","lastErrorCode")
-			values ($1,$2::jsonb,$3::timestamptz,now(),$4)
-			on conflict ("archiveUrlIdentity") do update set
-				summary=coalesce(excluded.summary,history_archive_failure_summary_snapshot.summary),
-				"computedAt"=coalesce(excluded."computedAt",history_archive_failure_summary_snapshot."computedAt"),
-				"lastAttemptAt"=excluded."lastAttemptAt", "lastErrorCode"=excluded."lastErrorCode"`,
+			persistArchiveFailureSummarySnapshotSql,
 			[
 				root,
 				summary === null ? null : JSON.stringify(summary),
 				summary?.computedAt ?? null,
-				errorCode
+				errorCode,
+				candidate.rootRevision,
+				candidate.retainedRevision,
+				queryFingerprint,
+				candidate.snapshotWriteVersion
 			]
 		);
 	});

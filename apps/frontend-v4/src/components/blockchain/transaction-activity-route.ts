@@ -1,0 +1,49 @@
+import { transactionRelations, type TransactionCursors } from '../../api/explorer-transaction';
+
+export interface TransactionActivityRoute {
+	readonly ledger: string;
+	readonly cursors: TransactionCursors;
+}
+type Query = Pick<URLSearchParams, 'get' | 'getAll'>;
+const cursorKeys = transactionRelations.map((relation) => relation + '_after');
+
+export function readTransactionActivityRoute(params: Query, hash: string): TransactionActivityRoute {
+	const value = params.get('ledger_sequence') ?? '';
+	const ledger = params.getAll('ledger_sequence').length <= 1 && validLedger(value) ? value : '';
+	const cursors: TransactionCursors = {};
+	if (params.get('activity_for') !== hash || params.getAll('activity_for').length !== 1 ||
+		cursorKeys.some((key) => params.getAll(key).length > 1)) return { ledger, cursors };
+	for (const relation of transactionRelations) {
+		const cursor = params.get(relation + '_after');
+		if (validActivityCursor(cursor)) cursors[relation] = cursor;
+	}
+	return { ledger, cursors };
+}
+
+export function transactionActivityHref(path: string, search: string, route: TransactionActivityRoute, hash: string, fragment = ''): string {
+	const params = new URLSearchParams(search);
+	params.delete('ledger_sequence');
+	params.delete('activity_for');
+	for (const key of cursorKeys) params.delete(key);
+	if (route.ledger && validLedger(route.ledger)) params.set('ledger_sequence', route.ledger);
+	for (const relation of transactionRelations) {
+		const cursor = route.cursors[relation];
+		if (validActivityCursor(cursor)) {
+			params.set(relation + '_after', cursor);
+			params.set('activity_for', hash);
+		}
+	}
+	return path + (params.size ? '?' + params.toString() : '') + fragment;
+}
+
+export function validLedger(value: string): boolean {
+	return value === '' || (/^[1-9]\d{0,9}$/.test(value) && Number(value) <= 4294967295);
+}
+
+export function validActivityCursor(value: string | null | undefined): value is string {
+	return !!value && value.length <= 2048 && !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+export function transactionActivityKey(route: TransactionActivityRoute): string {
+	return JSON.stringify([route.ledger, ...transactionRelations.map((relation) => route.cursors[relation] ?? '')]);
+}

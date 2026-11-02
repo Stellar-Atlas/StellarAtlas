@@ -88,7 +88,7 @@ export function resolveExplorerSearch(
 	type = 'auto'
 ): string | null {
 	const value = query.trim();
-	if (!value) return null;
+	if (!value || value.length > 128) return null;
 	const selected =
 		type === 'auto'
 			? /^L[A-Z2-7]{55}$/.test(value)
@@ -116,7 +116,16 @@ export function resolveExplorerSearch(
 		operation: 'operations',
 		ledger: 'ledgers'
 	};
-	return selected && collections[selected]
+	const valid = selected === 'transaction'
+		? /^[a-fA-F0-9]{64}$/.test(value)
+		: selected === 'account' ? /^G[A-Z2-7]{55}$/.test(value)
+		: selected === 'contract' ? /^C[A-Z2-7]{55}$/.test(value)
+		: selected === 'pool' ? /^(L[A-Z2-7]{55}|[a-fA-F0-9]{64})$/.test(value)
+		: selected === 'asset' ? value === 'native' || /^[A-Za-z0-9]{1,12}:G[A-Z2-7]{55}$/.test(value)
+		: selected === 'ledger' || selected === 'operation'
+			? /^[1-9]\d*$/.test(value) && BigInt(value) <= (selected === 'ledger' ? 4294967295n : 18446744073709551615n)
+			: false;
+	return valid && selected && collections[selected]
 		? buildEntityHref(collections[selected], value)
 		: null;
 }

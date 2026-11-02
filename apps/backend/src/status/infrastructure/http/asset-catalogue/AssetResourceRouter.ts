@@ -13,6 +13,7 @@ import type { AssetIdentity } from './AssetIdentity.js';
 import { registerAssetRelatedRoutes } from './AssetRelatedRoutes.js';
 import { registerHubbleAssetSnapshotRoutes } from '../HubbleAssetSnapshotRoutes.js';
 import { registerHubblePoolSnapshotRoutes } from '../HubblePoolSnapshotRoutes.js';
+import { registerMarketCandleRoutes } from '../market-data/MarketCandleRoutes.js';
 import { registerHubbleAssetReportRoutes } from '../HubbleAssetReportRoutes.js';
 import { registerHubbleContractEventRoutes } from '../HubbleContractEventRoutes.js';
 import { HubbleWarehouseUnavailableError } from '../HubbleWarehouseErrors.js';
@@ -179,6 +180,7 @@ export function assetResourceRouter(config: AssetResourceConfig): Router {
 	registerHubbleAssetSnapshotRoutes(resources, config.warehouse);
 	registerHubbleAssetReportRoutes(resources, config.warehouse, executor);
 	registerHubblePoolSnapshotRoutes(resources, config.warehouse, executor);
+	registerMarketCandleRoutes(resources, config.warehouse, executor);
 	registerHubbleContractEventRoutes(resources, config.warehouse);
 	registerHubbleExplorerRoutes(resources, config.warehouse);
 	registerHubbleSemanticRoutes(resources, config.warehouse);

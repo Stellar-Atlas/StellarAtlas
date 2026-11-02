@@ -1,6 +1,10 @@
 import type { EntityManager } from 'typeorm';
 import { historyArchiveRootControlAllowedSql } from './HistoryArchiveRootFailureControl.js';
-import { historyArchiveMaximumWatermark } from '../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import {
+	historyArchiveCheckpointFanoutBatchSize,
+	historyArchiveMaximumWatermark,
+	historyArchiveMinimumWatermark
+} from '../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	historyArchiveHostScanAllowedSql,
 	historyArchiveReadyUrlScanAllowedSql
@@ -72,9 +76,17 @@ const readyAtSql = `case
 end`;
 
 export const cleanupReadyObjectsSql = `
-        with candidates as materialized (
-                select ready.ctid
+        with page as materialized (
+                select ready.ctid, ready."objectRemoteId"
                 from "history_archive_object_ready" ready
+                where $1::uuid is null
+                        or ready."objectRemoteId" > $1::uuid
+                order by ready."objectRemoteId"
+                limit $2::integer
+        ), candidates as materialized (
+                select ready.ctid, ready."objectRemoteId"
+                from "history_archive_object_ready" ready
+                join page on page.ctid = ready.ctid
                 where (
                         (
                                 ready."dispatchToken" is null
@@ -98,15 +110,24 @@ export const cleanupReadyObjectsSql = `
                 )
                 order by ready."objectRemoteId"
                 for update of ready skip locked
-                limit 4096
+                limit $2::integer
         ), removed as (
                 delete from "history_archive_object_ready" ready
                 using candidates
                 where ready.ctid = candidates.ctid
                 returning ready."objectRemoteId"
         )
-        select count(*)::integer as count from removed
+        select count(*)::integer as count,
+                (
+                        select page."objectRemoteId"
+                        from page
+                        order by page."objectRemoteId" desc
+                        limit 1
+                ) as "sweepCursor"
+        from removed
 `;
+
+const cleanupSweepCursorByDataSource = new WeakMap<object, string>();
 
 export const refillReadyObjectsSql = `
 	with ${canonicalRuntimePriorityCtesSql}, roots as materialized (
@@ -230,9 +251,19 @@ export async function synchronizeHistoryArchiveReadyQueue(
 		return { readyObjects: 0, removedObjects: 0, scheduledObjects: 0 };
 	}
 	const boundedLimit = normalizeLimit(limit);
-	const [removed] = (await manager.query(
-		cleanupReadyObjectsSql
-	)) as readonly CountRow[];
+	const cleanupLimit = Math.min(
+		boundedLimit,
+		historyArchiveCheckpointFanoutBatchSize
+	);
+	const [removed] = (await manager.query(cleanupReadyObjectsSql, [
+		cleanupSweepCursorByDataSource.get(manager.connection) ?? null,
+		cleanupLimit
+	])) as readonly CleanupCountRow[];
+	if (typeof removed?.sweepCursor === 'string') {
+		cleanupSweepCursorByDataSource.set(manager.connection, removed.sweepCursor);
+	} else {
+		cleanupSweepCursorByDataSource.delete(manager.connection);
+	}
 	const [scheduled] = (await manager.query(refillReadyObjectsSql, [
 		boundedLimit
 	])) as readonly CountRow[];
@@ -288,7 +319,8 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority(),
 	runtimeTargetCtesAvailable = false,
 	canonicalFirstRootSql?: string,
-	maximumCandidateChecks?: number
+	maximumCandidateChecks?: number,
+	stopAtAvailableSlots = false
 ): string {
 	const readySource =
 		maximumCandidateChecks === undefined
@@ -326,6 +358,12 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 					'object."archiveUrlIdentity"',
 					canonicalFirstRootSql
 				)}`;
+	// Frontier admission needs an exact count only below the remaining
+	// minimum-watermark capacity; once saturated, more ready rows cannot change
+	// the number of objects it may reserve.
+	const readyCountLimit = stopAtAvailableSlots
+		? `greatest(${historyArchiveMinimumWatermark}::integer - (select count from active), 0)`
+		: `${historyArchiveMaximumWatermark}::integer`;
 	return `
 	${runtimeTargetCtesAvailable ? canonicalRuntimeArchiveRootsCteSql : canonicalRuntimePriorityCtesSql}${canonicalScopeCte},
 	${boundedCandidates}
@@ -370,7 +408,7 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 		and (queued."publishedAt" is not null or ${historyArchiveRootControlAllowedSql('object')})
 		-- Admission cannot use capacity beyond this ceiling. Stop once full;
 		-- callers expose saturation instead of claiming an exact global total.
-		limit ${historyArchiveMaximumWatermark}::integer
+		limit ${readyCountLimit}
 		) bounded_ready
 	)
 `;
@@ -468,6 +506,10 @@ export async function requeueFailedHistoryArchiveBrokerReadyRow(
 
 interface CountRow {
 	readonly count?: number | string;
+}
+
+interface CleanupCountRow extends CountRow {
+	readonly sweepCursor?: string | null;
 }
 
 interface BootstrapGuardRow {

@@ -44,6 +44,19 @@ describe('explorer balance observation presentation', () => {
 			expect(html).not.toContain('No balances');
 		}
 	);
+	it('labels automatically loaded account balances as parsed observations', () => {
+		const html = renderToStaticMarkup(
+			createElement(ExplorerBalanceObservations, {
+				autoLoad: true,
+				kind: 'balances',
+				identifier: 'GACCOUNT'
+			})
+		);
+		expect(html).toContain('Refresh first page');
+		expect(html).not.toContain('Load balances');
+		expect(html).toContain('Latest ingested observations');
+		expect(html).toContain('not current-chain or historical as-of balances');
+	});
 	it('renders observed amounts, relationship links, raw precision and ledger coverage without false current claims', () => {
 		const html = renderToStaticMarkup(
 			createElement(BalanceObservationResults, { kind: 'balances', page })
@@ -52,9 +65,11 @@ describe('explorer balance observation presentation', () => {
 		expect(html).toContain('9223372036854775807');
 		expect(html).toContain('/explorer/assets/native');
 		expect(html).toContain('/explorer/ledgers/63490364');
-		expect(html).toContain('30000000 completed ledgers');
-		expect(html).toContain('1 gaps');
+		expect(html.replaceAll('<!-- -->', '')).toContain('30,000,000 completed ledgers');
+		expect(html.replaceAll('<!-- -->', '')).toContain('1 gap');
 		expect(html).toContain('not a frozen snapshot');
+		expect(html).toContain('Coverage &amp; precision');
+		expect(html).not.toContain('<details open');
 	});
 	it('links holders to their accounts and keeps empty observations distinct from absence', () => {
 		const html = renderToStaticMarkup(

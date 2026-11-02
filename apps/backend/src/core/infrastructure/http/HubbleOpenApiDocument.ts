@@ -48,6 +48,7 @@ import {
 	contractProvenancePaths,
 	contractProvenanceSchemas
 } from './ContractProvenanceOpenApi.js';
+import { marketCandlePaths, marketCandleSchemas } from './MarketCandleOpenApi.js';
 
 const analyticsTag = ['Analytics'];
 const publicAccess: readonly OpenApiRecord[] = [];
@@ -432,6 +433,7 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 	const components = readOpenApiRecord(source.components) ?? {};
 	const existingSchemas = readOpenApiRecord(components.schemas) ?? {};
 	const schemas = {
+		...marketCandleSchemas,
 		...contractProvenanceSchemas,
 		...hubbleAssetReportSchemas,
 		...hubbleAccountBalanceSchemas,
@@ -455,7 +457,8 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 			...paths,
 			...hubblePaths,
 			...datasetResourceOpenApiPaths(hubblePaths, columnSchema),
-			...contractProvenancePaths
+			...contractProvenancePaths,
+			...marketCandlePaths
 		}
 	};
 }

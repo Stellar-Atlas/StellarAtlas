@@ -66,6 +66,17 @@ describe('explorer entity routes', () => {
 		expect(resolveExplorerSearch('native')).toBe('/explorer/assets/native');
 		expect(resolveExplorerSearch('not an identifier')).toBeNull();
 	});
+	it('validates explicitly selected identifier types before navigation', () => {
+		for (const type of ['transaction', 'account', 'ledger', 'operation', 'asset', 'contract', 'pool', 'unknown']) {
+			expect(resolveExplorerSearch('not an identifier', type)).toBeNull();
+		}
+		expect(resolveExplorerSearch('a'.repeat(64), 'pool')).toBe('/explorer/liquidity-pools/' + 'a'.repeat(64));
+		expect(resolveExplorerSearch('a'.repeat(64))).toBe('/explorer/transactions/' + 'a'.repeat(64));
+		expect(resolveExplorerSearch('18446744073709551615', 'operation')).toBe('/explorer/operations/18446744073709551615');
+		for (const value of ['0', '01', '-1', '4294967296']) expect(resolveExplorerSearch(value, 'ledger')).toBeNull();
+		expect(resolveExplorerSearch('18446744073709551616', 'operation')).toBeNull();
+		expect(resolveExplorerSearch('1'.repeat(129))).toBeNull();
+	});
 	it('uses typed dynamic endpoints and preserves filters across links', () => {
 		expect(
 			buildEntityApiPath('operations', '272689036992143361', {})

@@ -11,7 +11,7 @@ import {
 } from '../status-dashboard';
 
 describe('StatusDashboard historical backfill', () => {
-	it('keeps index failures visible and separate from source-lake coverage', () => {
+	it('keeps source-lake coverage separate and omits compatibility-index diagnostics', () => {
 		const props = statusProps();
 		const promotion = props.fullHistory.canonicalPromotion;
 		if (promotion === null) throw new Error('Expected promotion fixture');
@@ -31,16 +31,11 @@ describe('StatusDashboard historical backfill', () => {
 		const source = markup.match(
 			/<section[^>]*aria-label="Source lake and parsed analytics"[\s\S]*?<\/section>/
 		)?.[0];
-		const indexes = markup.match(
-			/<section[^>]*aria-label="Compatibility indexes"[\s\S]*?<\/section>/
-		)?.[0];
 		expect(source).toContain('Retained source lake');
 		expect(source).toContain('not necessarily available to analytics yet');
 		expect(source).not.toContain('promotion-candidate-incomplete');
-		expect(indexes).toContain('Promotion failed');
-		expect(indexes).toContain('promotion-candidate-incomplete');
-		expect(indexes).toContain('not the parsed analytics dataset');
-		expect(indexes).toContain('not a separate archive prover');
+		expect(markup).not.toContain('Compatibility indexes');
+		expect(markup).not.toContain('promotion-candidate-incomplete');
 	});
 
 	it('does not turn wholly unavailable snapshots into zero or empty claims', () => {
@@ -80,7 +75,7 @@ describe('StatusDashboard historical backfill', () => {
 		);
 		expect(markup).toContain('Archive runtime telemetry is unavailable');
 		expect(markup).toContain('Network scan counts unavailable');
-		expect(markup).toContain('Telemetry unavailable');
+		expect(markup).toContain('Worker telemetry unavailable');
 		expect(markup).toContain('Retained source lake');
 		expect(markup).not.toContain('no active object checks at this instant');
 		expect(markup).not.toContain('0 configured worker slots');
@@ -88,7 +83,7 @@ describe('StatusDashboard historical backfill', () => {
 		expect(markup).not.toContain('No proof-gated checkpoint has been promoted');
 	});
 
-	it('includes quantified checkpoint progress in the compatibility index panel', () => {
+	it('keeps archive runtime status visible without compatibility-index diagnostics', () => {
 		const payload = createStatusLivePayload();
 		const fullHistory = record(payload.fullHistory);
 		const backfill = record(fullHistory.historicalBackfill);
@@ -121,14 +116,10 @@ describe('StatusDashboard historical backfill', () => {
 			/>
 		);
 
-		expect(markup).toContain('Historical index backfill');
-		expect(markup).toContain(
-			'182 checkpoints indexed; checkpoint 63,386,175 needs 9 more bucket checks on best source'
-		);
-		expect(markup).toContain('Remote checks pending');
-		expect(markup).toContain('1 remote file check awaiting retry');
-		expect(markup).toContain('root-checkpoint attestations');
-		expect(markup).not.toContain('current checkpoint proof');
+		expect(markup).not.toContain('Compatibility indexes');
+		expect(markup).not.toContain('Historical index backfill');
+		expect(markup).toContain('Archive verification runtime');
+		expect(markup).toContain('status-pill good');
 		expect(markup).toContain('data-label="Archive source"');
 		expect(markup).toContain('data-label="Root attestations verified"');
 		expect(markup).toContain('data-label="Scan time"');
