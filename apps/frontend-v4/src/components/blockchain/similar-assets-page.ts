@@ -1,5 +1,7 @@
 import { recordValue } from '../../api/explorer-analytics';
-export interface SimilarAssetRow { readonly id:string; readonly code:string; readonly issuer:string; readonly source:string|null }
+export type SimilarAssetRow =
+	| { readonly kind:'native'; readonly id:'native'; readonly code:'XLM'; readonly issuer:null; readonly source:string|null }
+	| { readonly kind:'classic'; readonly id:string; readonly code:string; readonly issuer:string; readonly source:string|null };
 export interface SimilarAssetsPage { readonly rows:readonly SimilarAssetRow[]; readonly next:string|null; readonly generatedAt:string|null }
 const validCursor=(value:string):boolean=>/^[A-Za-z0-9_-]{1,2048}$/.test(value);
 export function isClassicComparisonAsset(asset:string):boolean {
@@ -30,13 +32,15 @@ export function parseSimilarAssetsPage(value:unknown,asset:string,cursor:string|
 		!(data.nextCursor===null||typeof data.nextCursor==='string'&&validCursor(data.nextCursor)&&data.nextCursor!==cursor)||
 		!(data.generatedAt===null||typeof data.generatedAt==='string'&&Number.isFinite(Date.parse(data.generatedAt)))) throw new Error('Invalid or unrelated asset comparison page.');
 	const seen=new Set<string>();
-	const rows=data.data.map(value=>{
+	const rows=data.data.map((value):SimilarAssetRow=>{
 		const row=recordValue(value);
-		if(row.kind!=='classic'||row.code!==code||typeof row.issuer!=='string'||!/^G[A-Z2-7]{55}$/.test(row.issuer)||
-			typeof row.id!=='string'||row.id!==row.code+':'+row.issuer||row.id===asset||seen.has(row.id)||
+		const nativeRow=row.kind==='native'&&row.id==='native'&&row.code==='XLM'&&row.issuer===null;
+		const classicRow=row.kind==='classic'&&typeof row.issuer==='string'&&/^G[A-Z2-7]{55}$/.test(row.issuer)&&row.id===row.code+':'+row.issuer;
+		if(row.code!==code||(!nativeRow&&!classicRow)||typeof row.id!=='string'||row.id===asset||seen.has(row.id)||
 			!(row.source===null||typeof row.source==='string'&&row.source.length<=2048)) throw new Error('Invalid same-symbol asset record.');
 		seen.add(row.id);
-		return {id:row.id,code:row.code as string,issuer:row.issuer,source:row.source as string|null};
+		if(nativeRow)return {kind:'native',id:'native',code:'XLM',issuer:null,source:row.source as string|null};
+		return {kind:'classic',id:row.id,code:row.code as string,issuer:row.issuer as string,source:row.source as string|null};
 	});
 	return {rows,next:data.nextCursor as string|null,generatedAt:data.generatedAt as string|null};
 }

@@ -33,7 +33,7 @@ function SimilarAssets({asset}:{readonly asset:string}):React.JSX.Element {
 					const source=similarAssetSourceHref(row.source);
 					return <tr key={row.id}>
 						<td data-label="Asset"><div><Link href={'/explorer/assets/'+encodeURIComponent(row.id)}>{row.code}</Link></div></td>
-						<td data-label="Issuer"><div><Link className={styles.hash} href={'/explorer/issuers/'+row.issuer}>{row.issuer}</Link></div></td>
+						<td data-label="Issuer"><div>{row.kind==='native'?'Native asset':<Link className={styles.hash} href={'/explorer/issuers/'+row.issuer}>{row.issuer}</Link>}</div></td>
 						<td data-label="Identity source"><div>{source?<a href={source} target="_blank" rel="noopener noreferrer">Project reference</a>:row.source?'Reference unavailable':'Not supplied'}</div></td>
 					</tr>;
 				})}</tbody>
