@@ -188,11 +188,15 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 				description:
 					'The Stellar network the hackathon ran on. This is not necessarily the network of the contract.'
 			},
-			award: { type: 'string', nullable: true, enum: ['first', 'runner-up'] },
+			award: {
+				type: 'string',
+				nullable: true,
+				enum: ['first', 'runner-up', null]
+			},
 			track: {
 				type: 'string',
 				nullable: true,
-				enum: ['genesis', 'scale'],
+				enum: ['genesis', 'scale', null],
 				description: 'Only set when the team states its track itself.'
 			},
 			evidence: {
