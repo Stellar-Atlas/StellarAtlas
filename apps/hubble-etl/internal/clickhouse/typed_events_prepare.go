@@ -46,7 +46,7 @@ func typedEventsField(t reflect.Type, kind string) (func(reflect.Value) (any, er
 	// These four exact official field types retain the current JSON normalization.
 	if kind == "Dynamic" && (t == reflect.TypeOf([]interface{}{}) || t == reflect.TypeOf((*interface{})(nil)).Elem()) {
 		return func(v reflect.Value) (any, error) {
-			return prepareTypedDynamic(v.Interface())
+			return prepareRetainedTypedDynamic(v.Interface())
 		}, nil
 	}
 	exact := map[reflect.Kind]string{reflect.String: "String", reflect.Bool: "Bool", reflect.Int64: "Int64", reflect.Int32: "Int32", reflect.Uint32: "UInt32"}

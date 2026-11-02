@@ -45,7 +45,7 @@ func typedEffectsField(t reflect.Type, kind string) (func(reflect.Value) (any, e
 		// current integer-width, decimal-string, null, nested-map/array rules and
 		// JSON's rejection of nonfinite floats/custom MarshalJSON errors.
 		return func(v reflect.Value) (any, error) {
-			return prepareTypedDynamic(v.Interface())
+			return prepareRetainedTypedDynamic(v.Interface())
 		}, nil
 	}
 	exact := map[reflect.Kind]string{reflect.String: "String", reflect.Int64: "Int64", reflect.Int32: "Int32", reflect.Uint32: "UInt32"}

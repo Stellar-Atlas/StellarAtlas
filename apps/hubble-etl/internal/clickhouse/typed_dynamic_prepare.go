@@ -33,6 +33,32 @@ func prepareTypedDynamic(value any) (any, error) {
 	return legacyPreparedDynamic(value)
 }
 
+// prepareRetainedTypedDynamic preserves supported direct normalization without
+// re-marshaling unsupported values. The ordered writer already retained JSON;
+// declining the whole typed row makes that exact body the fallback authority.
+func prepareRetainedTypedDynamic(value any) (any, error) {
+	switch v := value.(type) {
+	case nil:
+		return nil, nil
+	case map[string]any:
+		if v == nil {
+			return nil, nil
+		}
+	case []any:
+		if v == nil {
+			return nil, nil
+		}
+	}
+	next, err := directTypedDynamic(value, 0)
+	if errors.Is(err, errDirectDynamicUnsupported) {
+		return nil, errTypedNativeUnsupported
+	}
+	if err != nil {
+		return nil, err
+	}
+	return next, nil
+}
+
 func legacyPreparedDynamic(value any) (any, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
