@@ -21,6 +21,7 @@ describe('observed authorization disclosure',()=>{
 	it('retains unknown and unavailable states instead of displaying authorized defaults',()=>{
 		expect(markup('USD:GA','credit_alphanum4',9)).toContain('Authorization unknown');
 		expect(markup('USD:GA','credit_alphanum4',9)).toContain('Unknown flag bits: 8 (0x8)');
+		expect(markup('USD:GA','credit_alphanum4',9)).toContain('Known flag bits:');
 		expect(markup('USD:GA','credit_alphanum4',3)).toContain('Both authorization bits');
 		expect(markup('USD:GA','credit_alphanum4','1')).toContain('Flag details unavailable');
 		expect(markup('native',undefined,3)).toContain('Flag details not recorded');
