@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { createServer, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
-import { createContext, Script } from 'node:vm';
 import { WebSocket, WebSocketServer } from 'ws';
-import { liveUpdatesExample } from '../../live-updates-example';
+import {
+	createLiveUpdatesSession,
+	type LiveUpdatesEnvironment
+} from './live-updates-session';
 import { contractEventExample } from '../../../blockchain/contract-event-query';
 import {
 	contractActivityPath,
@@ -97,7 +99,7 @@ interface Controls {
 	remembered(): number;
 }
 
-/** Trusted checked-in example text only; dependency adapters assert original URLs before loopback mapping. */
+/** Real loopback adapters for the normally imported, whole-body-parity-bound typed session. */
 export async function wireFixture() {
 	const outputs: Output[] = [],
 		reads: Read[] = [],
@@ -109,6 +111,8 @@ export async function wireFixture() {
 	const sessions: Controls[] = [],
 		timers = new Set<ReturnType<typeof setTimeout>>(),
 		held: ServerResponse[] = [];
+	const timerHandles = new Map<number, ReturnType<typeof setTimeout>>();
+	let nextTimerId = 0;
 	let mode: 'success' | 'http' | 'body' | 'hold' | 'slow-body' = 'success';
 	let active = 0,
 		maximumActive = 0,
@@ -194,72 +198,66 @@ export async function wireFixture() {
 	};
 	function start(): Controls {
 		const session = clients.length;
-		class LocalSocket extends WebSocket {
+		class LocalSocket {
+			onmessage?: (event: { data: unknown }) => void;
+			onclose?: () => void;
+			private readonly socket: WebSocket;
 			constructor(url: string) {
 				assert.equal(url, 'wss://api.stellaratlas.io/v1/stream/data');
-				super('ws://127.0.0.1:' + port + '/v1/stream/data', {
-					origin: 'https://stellaratlas.io'
-				});
-				clients.push(this);
-				this.on('message', (data, binary) =>
-					frames.push({ session, data: binary ? data : data.toString() })
+				this.socket = new WebSocket(
+					'ws://127.0.0.1:' + port + '/v1/stream/data',
+					{ origin: 'https://stellaratlas.io' }
 				);
+				clients.push(this.socket);
+				this.socket.on('message', (data, binary) => {
+					const payload = binary ? data : data.toString();
+					frames.push({ session, data: payload });
+					this.onmessage?.({ data: payload });
+				});
+				this.socket.on('close', () => this.onclose?.());
 				// Node's EventEmitter requires a listener; browser error events themselves do not throw.
-				this.on('error', (error) => failures.push(error));
+				this.socket.on('error', (error) => failures.push(error));
+			}
+			close(): void {
+				this.socket.close();
 			}
 		}
-		const context = createContext({
+		const environment: LiveUpdatesEnvironment = {
 			WebSocket: LocalSocket,
-			AbortController,
-			setTimeout: (callback: () => unknown, delay: number) => {
+			setTimeout: (callback, delay) => {
 				assert.ok([250, 10000].includes(delay));
+				const id = ++nextTimerId;
 				const timer = setTimeout(() => {
 					timers.delete(timer);
+					timerHandles.delete(id);
 					void Promise.resolve(callback()).catch((error) =>
 						failures.push(error)
 					);
 				}, delay);
 				timers.add(timer);
-				return timer;
+				timerHandles.set(id, timer);
+				return id;
 			},
-			clearTimeout: (timer: ReturnType<typeof setTimeout>) => {
+			clearTimeout: (id) => {
+				const timer = timerHandles.get(id);
+				if (timer === undefined) return;
 				clearTimeout(timer);
 				timers.delete(timer);
+				timerHandles.delete(id);
 			},
 			fetch: fetchLocal,
 			console: {
-				log: (...values: unknown[]) => outputs.push({ kind: 'log', values }),
-				error: (...values: unknown[]) =>
-					outputs.push({ kind: 'error', values }),
-				info: (...values: unknown[]) => outputs.push({ kind: 'info', values })
-			}
-		});
-		const value: unknown = new Script(
-			liveUpdatesExample +
-				'\n;({stop: stopUpdates, remembered: () => seen.size});',
-			{ filename: 'published-live-update-example.js' }
-		).runInContext(context, { timeout: 1000 });
-		if (
-			!value ||
-			typeof value !== 'object' ||
-			!('stop' in value) ||
-			typeof value.stop !== 'function' ||
-			!('remembered' in value) ||
-			typeof value.remembered !== 'function'
-		)
-			throw Error('Invalid example controls');
-		const stop = value.stop,
-			remembered = value.remembered;
-		const controls = {
-			stop: () => {
-				stop();
-			},
-			remembered: () => {
-				const count: unknown = remembered();
-				if (typeof count !== 'number') throw Error('Invalid remembered count');
-				return count;
+				log: (...values) => outputs.push({ kind: 'log', values }),
+				error: (...values) => outputs.push({ kind: 'error', values }),
+				info: (...values) => outputs.push({ kind: 'info', values })
 			}
 		};
+		const controls: Controls = createLiveUpdatesSession(
+			eventUrl,
+			minimum,
+			maximum,
+			environment
+		);
 		sessions.push(controls);
 		return controls;
 	}
@@ -306,6 +304,7 @@ export async function wireFixture() {
 			for (const session of sessions) session.stop();
 			for (const timer of timers) clearTimeout(timer);
 			timers.clear();
+			timerHandles.clear();
 			for (const client of clients) client.terminate();
 			for (const peer of peers) peer.terminate();
 			for (const response of held) response.destroy();

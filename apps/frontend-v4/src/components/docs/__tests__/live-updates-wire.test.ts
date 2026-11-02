@@ -18,7 +18,7 @@ afterEach(async () => {
 	for (const value of active.splice(0)) await value.close();
 });
 
-describe('exact published example over bounded loopback WebSocket and HTTP', () => {
+describe('parity-bound typed session over bounded loopback WebSocket and HTTP', () => {
 	it('accepts first ready without subscribing or reading, and handles wire ping/pong without a notice', async () => {
 		const h = await fixture();
 		h.start();
@@ -31,7 +31,7 @@ describe('exact published example over bounded loopback WebSocket and HTTP', () 
 		expect(h.reads).toHaveLength(0);
 		expect(h.messages).toHaveLength(0);
 	});
-	it('executes the copied text, preserves exact URL filters, ignores duplicates and malformed/unrelated frames', async () => {
+	it('runs the imported typed fixture, preserves exact URL filters, ignores duplicates and malformed/unrelated frames', async () => {
 		const h = await fixture();
 		const session = h.start();
 		await until(() => h.frames.length === 1, 'ready');
