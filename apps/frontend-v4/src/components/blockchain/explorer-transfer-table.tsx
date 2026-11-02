@@ -11,8 +11,7 @@ function Wallet({ address }: { readonly address: string | null }): React.JSX.Ele
 }
 /** A bounded page, not a client-side inventory or net-balance calculation. */
 export function ExplorerTransferTable({ rows }: { readonly rows: readonly TransferActivity[] }): React.JSX.Element {
-	return <div className={styles.tableWrap}><table className={styles.table}>
-		<caption className={styles.muted}>Indexed transfers · {rows.length} on this page</caption>
+	return <div className={styles.tableWrap}><p className={styles.muted}>Indexed transfers · {rows.length} on this page</p><table className={styles.table} aria-label="Indexed transfers">
 		<thead><tr><th scope="col">Asset / amount</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Details</th></tr></thead>
 		<tbody>{rows.map(row => <tr key={row.id}>
 			<td data-label="Asset / amount"><div>
