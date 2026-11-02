@@ -12,13 +12,11 @@ import {
 	type AnalyticsEntityPage
 } from '../../api/explorer-analytics';
 import type { Asset } from './explorer-asset-types';
-import { LocalDateTime } from '../local-date-time';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 import { ExplorerPoolBrowser } from './explorer-pool-browser';
-import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
-import { formatMarketAmount, marketAssetLabel } from './explorer-market-values';
-import { assetMarketRouteHref, defaultAssetMarketRoute, readAssetMarketRoute, type AssetMarketRoute } from './asset-market-route';
+import { ExplorerAssetTradeTable } from './explorer-asset-trade-table';
+import { assetMarketRouteHref, assetTradeSideHref, defaultAssetMarketRoute, readAssetMarketRoute, type AssetMarketRoute } from './asset-market-route';
 
 type View = 'trades' | 'liquidity-pools';
 type Result = {
@@ -27,16 +25,6 @@ type Result = {
 	pages: readonly AnalyticsEntityPage[];
 	view: View;
 };
-
-function PairAsset({ value }: { value: unknown }): React.JSX.Element {
-	const asset = recordValue(value);
-	const id = entityText(asset, 'id');
-	return (
-		<Link href={'/explorer/assets/' + encodeURIComponent(id)} title={id}>
-			{id === 'native' ? 'XLM' : entityText(asset, 'code') || id}
-		</Link>
-	);
-}
 
 /** Shows published observations, not an asserted current market inventory. */
 export function ExplorerAssetMarkets({
@@ -124,10 +112,6 @@ export function ExplorerAssetMarkets({
 		return () => abort.abort();
 	}, [selection, asset.id, refresh]);
 	const result = loaded?.assetId === asset.id ? loaded : null;
-	const pairMetadata = usePairMetadata(result?.rows ?? [], [
-		'sellingAsset',
-		'buyingAsset'
-	]);
 	if (asset.kind === 'contract') return null;
 	return (
 		<section
@@ -199,7 +183,7 @@ export function ExplorerAssetMarkets({
 			{view === 'trades' && result && (
 				<>
 					<div className={ui.holderSummary}>
-						<span>{result.rows.length} observations</span>
+						<span>{result.rows.length} observations in preview</span>
 						<span title="Returned trade window; the latest default is anchored to the asset’s last observed ledger, not a live-market watermark.">
 							Trade ledgers {result.pages[0]!.window.minLedger.toLocaleString('en-US')}–{result.pages[0]!.window.maxLedger.toLocaleString('en-US')}
 						</span>
@@ -209,137 +193,25 @@ export function ExplorerAssetMarkets({
 								: 'Selected range indexed'}
 						</span>
 					</div>
-					<div className={styles.tableWrap}>
-						<table className={styles.table}>
-							<thead>
-								<tr>
-									<th>Pair</th>
-									<th>
-										{result.view === 'trades'
-											? 'Sold → bought'
-											: 'Pool reserves'}
-									</th>
-									<th>{result.view === 'trades' ? 'Operation' : 'Pool'}</th>
-									<th>Ledger</th>
-									<th>Time</th>
-									<th>Report</th>
-								</tr>
-							</thead>
-							<tbody>
-								{result.rows.map((row, index) => (
-									<tr key={entityText(row, 'id') + ':' + index}>
-										<td>
-											<ExplorerAssetPair
-												a={row.sellingAsset}
-												b={row.buyingAsset}
-												metadata={pairMetadata}
-											/>
-										</td>
-										<td className={ui.numeric}>
-											{formatMarketAmount(entityText(
-												row,
-												result.view === 'trades' ? 'sellingAmount' : 'reserveA'
-											))} {marketAssetLabel(row.sellingAsset)}{' '}
-											{result.view === 'trades' ? '→' : '/'}{' '}
-											{formatMarketAmount(entityText(
-												row,
-												result.view === 'trades' ? 'buyingAmount' : 'reserveB'
-											))} {marketAssetLabel(row.buyingAsset)}
-										</td>
-										<td>
-											<Link
-												className={styles.hash}
-												href={
-													result.view === 'trades'
-														? '/explorer/operations/' +
-															entityText(row, 'operationId')
-														: '/explorer/liquidity-pools/' +
-															entityText(row, 'id') +
-															'?min_ledger=' +
-															entityText(row, 'ledgerSequence') +
-															'&max_ledger=' +
-															entityText(row, 'ledgerSequence')
-												}
-											>
-												{entityText(
-													row,
-													result.view === 'trades' ? 'operationId' : 'id'
-												)}
-											</Link>
-										</td>
-										<td>
-											<Link
-												href={
-													'/explorer/ledgers/' +
-													entityText(row, 'ledgerSequence')
-												}
-											>
-												{Number(row.ledgerSequence).toLocaleString()}
-											</Link>
-										</td>
-										<td>
-											{typeof row.closedAt === 'string' && (
-												<LocalDateTime dateTime={row.closedAt} />
-											)}
-										</td>
-										<td>
-											<Link
-												href={
-													'/explorer/markets?' +
-													new URLSearchParams({
-														asset_a: entityText(
-															recordValue(row.sellingAsset),
-															'id'
-														),
-														asset_b: entityText(
-															recordValue(row.buyingAsset),
-															'id'
-														),
-														min_ledger: String(
-															result.pages[0]!.window.minLedger
-														),
-														max_ledger: String(
-															result.pages[0]!.window.maxLedger
-														)
-													})
-												}
-											>
-												Pair report
-											</Link>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-					{result.rows.length === 0 && (
-						<p className={styles.muted}>No observations in this range.</p>
-					)}
+					<p className={styles.muted}>
+						Preview: up to 25 trades per side. Browse either side for more.
+					</p>
 					<div className={styles.actions}>
 						{result.pages.map((page, side) => (
 							<Link
 								key={side}
-								href={
-									'/explorer/' +
-									result.view +
-									'?' +
-									new URLSearchParams({
-										[result.view === 'trades'
-											? side === 0
-												? 'selling_asset'
-												: 'buying_asset'
-											: side === 0
-												? 'asset_a'
-												: 'asset_b']: asset.id,
-										min_ledger: String(page.window.minLedger),
-										max_ledger: String(page.window.maxLedger)
-									})
-								}
+								href={assetTradeSideHref(asset.id, side === 0 ? 'sell' : 'buy', page.window, pathname + (params.size ? '?' + params.toString() : ''))}
 							>
-								Browse {side === 0 ? 'sell side' : 'buy side'}
+								Browse {side === 0 ? 'sell-side' : 'buy-side'} trades
 							</Link>
 						))}
 					</div>
+					<ExplorerAssetTradeTable rows={result.rows} window={result.pages[0]!.window} />
+					<p className={styles.muted} title="Parsed trade amounts are floating-point observations, not exact raw-unit amounts.">Amounts: source Float64 precision.</p>
+					{result.rows.length === 0 && (
+						<p className={styles.muted}>No observations in this range.</p>
+					)}
+
 				</>
 			)}
 		</section>
