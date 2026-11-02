@@ -16,6 +16,22 @@ describe('asset market URL state', () => {
 		}
 		expect(assetTradeSideHref('native', 'sell', { minLedger: 99, maxLedger: 101 }, 'https://untrusted.invalid/')).not.toContain('return_to');
 	});
+	it('pins the return window to accepted results while preserving safe asset and tab context', () => {
+		const origin = '/explorer/assets/USD%3AGISSUER?tab=markets&market_trade_min=2&market_trade_max=98&holder_cursor=next&return_to=%2Fexplorer#ignored';
+		for (const side of ['sell', 'buy'] as const) {
+			const browse = new URL(assetTradeSideHref('USD:GISSUER', side, { minLedger: 99, maxLedger: 101 }, origin), 'https://explorer.invalid');
+			const back = new URL(browse.searchParams.get('return_to')!, 'https://explorer.invalid');
+			expect(back.pathname).toBe('/explorer/assets/USD%3AGISSUER');
+			expect(back.searchParams.get('tab')).toBe('markets');
+			expect(back.searchParams.get('holder_cursor')).toBe('next');
+			expect(back.searchParams.getAll('market_trade_min')).toEqual(['99']);
+			expect(back.searchParams.getAll('market_trade_max')).toEqual(['101']);
+			expect(back.searchParams.has('return_to')).toBe(false);
+			expect(back.hash).toBe('');
+		}
+		for (const origin of ['//outside.invalid/', 'javascript:alert(1)', '/explorer?x=%0a', '/explorer?x=%Q'])
+			expect(new URL(assetTradeSideHref('native', 'sell', { minLedger: 99, maxLedger: 101 }, origin), 'https://explorer.invalid').searchParams.has('return_to')).toBe(false);
+	});
 	it('restores the view and bounded explicit trade window, including newer-than-identity history', () => {
 		expect(readAssetMarketRoute(new URLSearchParams('market_view=liquidity-pools&market_trade_min=2000&market_trade_max=3000'), 1000))
 			.toEqual({ view: 'liquidity-pools', min: '2000', max: '3000' });

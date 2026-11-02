@@ -13,7 +13,13 @@ export function assetTradeSideHref(asset: string, side: 'sell' | 'buy', window: 
 		min_ledger: String(window.minLedger), max_ledger: String(window.maxLedger), limit: '25'
 	});
 	const returnTo = sanitizeExplorerReturnTo(origin);
-	if (returnTo) query.set('return_to', returnTo);
+	if (returnTo) {
+		// Previous results can remain visible while a different URL window fails or loads.
+		const acceptedOrigin = new URL(returnTo, 'https://explorer-return.invalid');
+		acceptedOrigin.searchParams.set('market_trade_min', String(window.minLedger));
+		acceptedOrigin.searchParams.set('market_trade_max', String(window.maxLedger));
+		query.set('return_to', acceptedOrigin.pathname + '?' + acceptedOrigin.searchParams);
+	}
 	return '/explorer/trades?' + query;
 }
 type Query = Pick<URLSearchParams, 'get' | 'getAll'>;
