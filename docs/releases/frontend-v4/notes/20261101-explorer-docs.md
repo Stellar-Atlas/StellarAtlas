@@ -74,3 +74,18 @@ These source changes are tracked separately from deployed release versions.
 - Keep the existing balance precision and provenance caveats visible. Observed
   flags do not establish current transfer eligibility, spendability or live
   balances; ingestion may advance between unpinned pages.
+
+## Unreleased transfer inspection and request guidance
+
+These source changes do not establish deployment or complete chain coverage.
+
+- Load indexed transaction transfers only on request, scoped to the resolved
+  transaction and ledger, with bounded pages and explicit retry/cancellation.
+  Preserve exact raw amounts and known scales; unknown contract scales remain
+  raw units. Indexed transfers are not net balance changes or spendability.
+- Clear stale asset activity rows and coverage when a replacement request fails.
+  Keep the failed page cursor available for an explicit retry and retain the
+  previous-page path without accepting late responses from a different context.
+- Read GraphQL error bodies before classifying HTTP status. Document negotiated
+  JSON response types, optional error codes, partial data and one bounded request
+  with a deadline. Keep original response text for exact numeric inspection.

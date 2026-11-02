@@ -27,6 +27,12 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 							<code>hubbleDatasets</code> for dataset schemas.
 						</p>
 						<p>
+							Request <code>application/json</code> or{' '}
+							<code>application/graphql-response+json</code> with{' '}
+							<code>Accept</code>. Both can return HTTP 200 with GraphQL errors;
+							inspect the response body as well as its status.
+						</p>
+						<p>
 							To call these fields from your application, copy the{' '}
 							<a href="/docs/querying#handle-errors">
 								JavaScript request with a timeout and error handling
