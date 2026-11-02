@@ -1,0 +1,2731 @@
+{
+	"source": "stellar-ecosystem-db@2d7dbc6",
+	"projects": {
+		"abroad": {
+			"name": "Abroad",
+			"rounds": ["SCF #32", "SCF #35"]
+		},
+		"accelar": {
+			"name": "Accelar",
+			"rounds": ["SCF #26"]
+		},
+		"account-demolisher": {
+			"name": "Account Demolisher",
+			"rounds": ["SCF #44"]
+		},
+		"acta": {
+			"name": "ACTA",
+			"rounds": ["SCF #42"]
+		},
+		"adamik": {
+			"name": "Adamik",
+			"rounds": ["SCF #37"]
+		},
+		"aerochain": {
+			"name": "Aerochain",
+			"rounds": ["SCF #38"]
+		},
+		"agama": {
+			"name": "Agama",
+			"rounds": ["SCF #45"]
+		},
+		"agnostic": {
+			"name": "Agnostic",
+			"rounds": ["SCF #38"]
+		},
+		"aha-labs": {
+			"name": "The Aha Company",
+			"rounds": ["SCF #41"]
+		},
+		"ai-transparency-token": {
+			"name": "AI Transparency Token",
+			"rounds": ["SCF #36"]
+		},
+		"airgap": {
+			"name": "AirGap",
+			"rounds": ["SCF #35"]
+		},
+		"airswift": {
+			"name": "Airswift",
+			"rounds": ["SCF #16"]
+		},
+		"allbridge": {
+			"name": "Allbridge",
+			"rounds": ["SCF #20", "SCF #23", "SCF #35"]
+		},
+		"almanax": {
+			"name": "Almanax",
+			"rounds": ["SCF #26", "SCF #32"]
+		},
+		"alternun": {
+			"name": "ALTERNUN",
+			"rounds": ["SCF #27"]
+		},
+		"alterscope": {
+			"name": "Alterscope",
+			"rounds": ["SCF #24", "SCF #26"]
+		},
+		"alula": {
+			"name": "Alula",
+			"rounds": ["SCF #34"]
+		},
+		"amber": {
+			"name": "Amber",
+			"rounds": ["SCF #20"]
+		},
+		"amero": {
+			"name": "Amero",
+			"rounds": ["SCF #28", "SCF #31"]
+		},
+		"anchain-ai": {
+			"name": "AnChain.AI",
+			"rounds": ["SCF #11", "SCF #15", "SCF #20", "SCF #23"]
+		},
+		"anclap": {
+			"name": "Anclap",
+			"rounds": ["SCF #7", "SCF #17", "SCF #26"]
+		},
+		"answerly": {
+			"name": "Answerly",
+			"rounds": ["SCF #9"]
+		},
+		"apay": {
+			"name": "Apay",
+			"rounds": ["SCF #4"]
+		},
+		"apicharge": {
+			"name": "ApiCharge",
+			"rounds": ["SCF #40"]
+		},
+		"aquarius": {
+			"name": "Aquarius",
+			"rounds": ["SCF #17", "SCF #23", "SCF #27"]
+		},
+		"arcturus": {
+			"name": "Arcturus",
+			"rounds": ["SCF #17"]
+		},
+		"arka-fund": {
+			"name": "Arka Fund",
+			"rounds": ["SCF #37"]
+		},
+		"art-club": {
+			"name": "ART Club",
+			"rounds": ["SCF #26"]
+		},
+		"artizen": {
+			"name": "Artizen",
+			"rounds": ["SCF #33"]
+		},
+		"assemblyscript-soroban-sdk": {
+			"name": "AssemblyScript Soroban SDK",
+			"rounds": ["SCF #10", "SCF #14", "SCF #18", "SCF #28"]
+		},
+		"assetdesk": {
+			"name": "AssetDesk",
+			"rounds": ["SCF #19"]
+		},
+		"astrocore": {
+			"name": "Astrocore",
+			"rounds": ["SCF #2"]
+		},
+		"astrograph": {
+			"name": "Astrograph",
+			"rounds": ["SCF #1"]
+		},
+		"attest": {
+			"name": "Attest",
+			"rounds": ["SCF #29", "SCF #32"]
+		},
+		"authline": {
+			"name": "Authline",
+			"rounds": ["SCF #44"]
+		},
+		"autoaction": {
+			"name": "AutoAction",
+			"rounds": ["SCF #29"]
+		},
+		"axal": {
+			"name": "Axal",
+			"rounds": ["SCF #35"]
+		},
+		"axis": {
+			"name": "AXIS",
+			"rounds": ["SCF #42"]
+		},
+		"band": {
+			"name": "Band",
+			"rounds": ["SCF #16"]
+		},
+		"basement": {
+			"name": "Basement",
+			"rounds": ["SCF #17"]
+		},
+		"beamable": {
+			"name": "Beamable",
+			"rounds": ["SCF #38"]
+		},
+		"beans": {
+			"name": "Beans",
+			"rounds": ["SCF #10", "SCF #15", "SCF #21", "SCF #29"]
+		},
+		"bebop": {
+			"name": "Bebop",
+			"rounds": ["SCF #28", "SCF #31"]
+		},
+		"ben-wallet": {
+			"name": "Ben Wallet",
+			"rounds": ["SCF #37"]
+		},
+		"benkiko": {
+			"name": "Benkiko",
+			"rounds": ["SCF #9"]
+		},
+		"bes-metaverse": {
+			"name": "BES Metaverse",
+			"rounds": ["SCF #13"]
+		},
+		"bevor": {
+			"name": "Bevor",
+			"rounds": ["SCF #40"]
+		},
+		"bigger": {
+			"name": "Bigger",
+			"rounds": ["SCF #23", "SCF #28"]
+		},
+		"bingtellar": {
+			"name": "Bingtellar",
+			"rounds": ["SCF #26"]
+		},
+		"bitgifty": {
+			"name": "BitGifty",
+			"rounds": ["SCF #27"]
+		},
+		"blade": {
+			"name": "Blade",
+			"rounds": ["SCF #25"]
+		},
+		"blaze": {
+			"name": "Blaze",
+			"rounds": ["SCF #18", "SCF #24"]
+		},
+		"blend": {
+			"name": "Blend Capital",
+			"rounds": ["Liquidity Award - '24 Q1"]
+		},
+		"blindpay": {
+			"name": "BlindPay",
+			"rounds": ["SCF #33"]
+		},
+		"blink": {
+			"name": "Blink",
+			"rounds": ["SCF #42", "SCF #44"]
+		},
+		"blip": {
+			"name": "Blip",
+			"rounds": ["SCF #28"]
+		},
+		"block-time-financial": {
+			"name": "Block Time Financial",
+			"rounds": ["SCF #14", "SCF #15"]
+		},
+		"blockeden-xyz": {
+			"name": "BlockEden.xyz",
+			"rounds": ["SCF #18"]
+		},
+		"blocknify": {
+			"name": "Blocknify",
+			"rounds": ["SCF #6", "SCF #7"]
+		},
+		"blockroll": {
+			"name": "Blockroll",
+			"rounds": ["SCF #43"]
+		},
+		"blue-orion": {
+			"name": "Blue Orion",
+			"rounds": ["SCF #3"]
+		},
+		"blux": {
+			"name": "Blux",
+			"rounds": ["SCF #36"]
+		},
+		"bondhive": {
+			"name": "Bondhive",
+			"rounds": ["SCF #27", "SCF #29"]
+		},
+		"borderdollar": {
+			"name": "BorderDollar",
+			"rounds": ["SCF #26", "SCF #29"]
+		},
+		"borderless": {
+			"name": "Borderless",
+			"rounds": ["SCF #20", "SCF #22"]
+		},
+		"boss-revolution": {
+			"name": "Boss Revolution",
+			"rounds": ["SCF #7"]
+		},
+		"boundless": {
+			"name": "Boundless (Bounties)",
+			"rounds": ["SCF #40"]
+		},
+		"bp-ventures": {
+			"name": "BP Ventures",
+			"rounds": ["SCF #10", "SCF #40"]
+		},
+		"btq": {
+			"name": "BTQ",
+			"rounds": ["SCF #14"]
+		},
+		"bwb": {
+			"name": "BWB",
+			"rounds": ["SCF #45"]
+		},
+		"calimero": {
+			"name": "Calimero",
+			"rounds": ["SCF #29"]
+		},
+		"catalyst": {
+			"name": "Catalyst",
+			"rounds": ["SCF #22"]
+		},
+		"catlog": {
+			"name": "Catlog",
+			"rounds": ["SCF #45"]
+		},
+		"cede": {
+			"name": "Cede",
+			"rounds": ["SCF #31"]
+		},
+		"centaurus": {
+			"name": "Centaurus",
+			"rounds": ["SCF #2"]
+		},
+		"centiiv": {
+			"name": "Centiiv",
+			"rounds": ["SCF #36"]
+		},
+		"certik": {
+			"name": "Certik",
+			"rounds": ["SCF #25"]
+		},
+		"chaincerts": {
+			"name": "Chaincerts",
+			"rounds": ["SCF #13", "SCF #18"]
+		},
+		"chaincred": {
+			"name": "ChainCred",
+			"rounds": ["SCF #27"]
+		},
+		"chainlink-oracles-relayer": {
+			"name": "Chainlink Oracles Relayer",
+			"rounds": ["SCF #15"]
+		},
+		"chainpatrol": {
+			"name": "ChainPatrol",
+			"rounds": ["SCF #40"]
+		},
+		"chainsatlas": {
+			"name": "ChainsAtlas",
+			"rounds": ["SCF #20"]
+		},
+		"chats": {
+			"name": "CHATS",
+			"rounds": ["SCF #30"]
+		},
+		"chef": {
+			"name": "Chef",
+			"rounds": ["SCF #22"]
+		},
+		"clickpesa-debt-fund": {
+			"name": "ClickPesa Debt Fund",
+			"rounds": ["SCF #26", "SCF #28"]
+		},
+		"clixpesa": {
+			"name": "Clixpesa",
+			"rounds": ["SCF #26"]
+		},
+		"clob": {
+			"name": "CLOB",
+			"rounds": ["SCF #20", "SCF #29"]
+		},
+		"coala-pay": {
+			"name": "Coala Pay",
+			"rounds": ["SCF #22", "SCF #35"]
+		},
+		"cobo": {
+			"name": "Cobo",
+			"rounds": ["SCF #35"]
+		},
+		"coindisco": {
+			"name": "Coindisco",
+			"rounds": ["SCF #30"]
+		},
+		"comet": {
+			"name": "Comet",
+			"rounds": ["SCF #13", "SCF #18"]
+		},
+		"command-robotics": {
+			"name": "Command Robotics",
+			"rounds": ["SCF #9"]
+		},
+		"communidao": {
+			"name": "CommuniDAO",
+			"rounds": ["SCF #14", "SCF #16", "SCF #20"]
+		},
+		"comunitaria": {
+			"name": "Comunitaria",
+			"rounds": ["SCF #34"]
+		},
+		"constellation": {
+			"name": "Constellation",
+			"rounds": ["SCF #19", "SCF #23"]
+		},
+		"contentdao": {
+			"name": "Content DAO",
+			"rounds": ["SCF #27", "SCF #31"]
+		},
+		"copperx": {
+			"name": "Copperx",
+			"rounds": ["SCF #29"]
+		},
+		"cosmic-link": {
+			"name": "Cosmic.link",
+			"rounds": ["SCF #3"]
+		},
+		"cosmic-vote": {
+			"name": "Cosmic.vote",
+			"rounds": ["SCF #5"]
+		},
+		"crebit-pay": {
+			"name": "Crebit Pay",
+			"rounds": ["SCF #45"]
+		},
+		"cross-platform-soroban-rpc-sdk": {
+			"name": "Cross platform Soroban RPC SDK",
+			"rounds": ["SCF #32"]
+		},
+		"crypto-link": {
+			"name": "Crypto Link",
+			"rounds": ["SCF #6"]
+		},
+		"cryptoconexi-n": {
+			"name": "Cryptoconexión",
+			"rounds": ["SCF #25"]
+		},
+		"cushion": {
+			"name": "Cushion",
+			"rounds": ["SCF #41"]
+		},
+		"cyvers": {
+			"name": "CyVers",
+			"rounds": ["SCF #26"]
+		},
+		"dapplooker": {
+			"name": "Dapplooker",
+			"rounds": ["SCF #24"]
+		},
+		"dappradar": {
+			"name": "DappRadar",
+			"rounds": ["SCF #27", "SCF #34"]
+		},
+		"decaf": {
+			"name": "Decaf",
+			"rounds": ["SCF #17"]
+		},
+		"decentrio": {
+			"name": "Decentrio",
+			"rounds": ["SCF #24", "SCF #29"]
+		},
+		"defarm": {
+			"name": "DeFarm",
+			"rounds": ["SCF #40"]
+		},
+		"defindex": {
+			"name": "DeFindex",
+			"rounds": ["SCF #28", "SCF #32", "SCF #42"]
+		},
+		"derisk": {
+			"name": "DeRisk",
+			"rounds": ["SCF #20"]
+		},
+		"devasign": {
+			"name": "DevAsign",
+			"rounds": ["SCF #39"]
+		},
+		"devtrak": {
+			"name": "DevTrak",
+			"rounds": ["SCF #25"]
+		},
+		"dfns": {
+			"name": "DFNS",
+			"rounds": ["SCF #25"]
+		},
+		"dfs-labs": {
+			"name": "DFS Labs",
+			"rounds": ["SCF #24"]
+		},
+		"dia": {
+			"name": "DIA",
+			"rounds": ["SCF #20"]
+		},
+		"did-stellar": {
+			"name": "DID:STELLAR",
+			"rounds": ["SCF #16"]
+		},
+		"dig": {
+			"name": "Dig",
+			"rounds": ["SCF #43"]
+		},
+		"digicus": {
+			"name": "Digicus",
+			"rounds": ["SCF #26", "SCF #29"]
+		},
+		"dobprotocol": {
+			"name": "Dobprotocol",
+			"rounds": ["SCF #37"]
+		},
+		"dogstar": {
+			"name": "Dogstar",
+			"rounds": ["SCF #16", "SCF #24"]
+		},
+		"dolphinze": {
+			"name": "dolphinze",
+			"rounds": ["SCF #39"]
+		},
+		"domipago": {
+			"name": "DomiPago",
+			"rounds": ["SCF #37"]
+		},
+		"dropzey": {
+			"name": "Dropzey",
+			"rounds": ["SCF #23"]
+		},
+		"ea-kazi": {
+			"name": "EA Kazi",
+			"rounds": ["SCF #29"]
+		},
+		"eascrow": {
+			"name": "Eascrow",
+			"rounds": ["SCF #23", "SCF #32"]
+		},
+		"edunode": {
+			"name": "EduNode",
+			"rounds": ["SCF #6", "SCF #10"]
+		},
+		"elementpay": {
+			"name": "ElementPay",
+			"rounds": ["SCF #44"]
+		},
+		"elio-dao": {
+			"name": "Elio DAO",
+			"rounds": ["SCF #15"]
+		},
+		"elixir-stellar-sdk": {
+			"name": "Elixir Stellar SDK",
+			"rounds": ["SCF #10"]
+		},
+		"elsa": {
+			"name": "Elsa",
+			"rounds": ["SCF #11"]
+		},
+		"emigro": {
+			"name": "Emigro",
+			"rounds": ["SCF #17", "SCF #20", "SCF #25"]
+		},
+		"enerdao": {
+			"name": "EnerDAO",
+			"rounds": ["SCF #24"]
+		},
+		"equilibre": {
+			"name": "Equilibre",
+			"rounds": ["SCF #1"]
+		},
+		"equitx": {
+			"name": "EquitX",
+			"rounds": ["SCF #26", "SCF #31"]
+		},
+		"escala": {
+			"name": "Escala",
+			"rounds": ["SCF #44"]
+		},
+		"etesia": {
+			"name": "Etesia",
+			"rounds": ["SCF #44"]
+		},
+		"every-finance": {
+			"name": "Every Finance",
+			"rounds": ["SCF #30"]
+		},
+		"excellar": {
+			"name": "Excellar",
+			"rounds": ["SCF #17", "SCF #26", "Liquidity Award - '24 Q1"]
+		},
+		"expand": {
+			"name": "Expand",
+			"rounds": ["SCF #24", "SCF #26"]
+		},
+		"extractor": {
+			"name": "Extractor",
+			"rounds": ["SCF #21"]
+		},
+		"fairblock": {
+			"name": "Fairblock",
+			"rounds": ["SCF #40"]
+		},
+		"fastbuka": {
+			"name": "Fastbuka",
+			"rounds": ["SCF #38", "SCF #44"]
+		},
+		"fewticket": {
+			"name": "Fewticket",
+			"rounds": ["SCF #43"]
+		},
+		"fiatsend": {
+			"name": "Fiatsend",
+			"rounds": ["SCF #43"]
+		},
+		"findtruman": {
+			"name": "FindTruman",
+			"rounds": ["SCF #26"]
+		},
+		"flashback": {
+			"name": "Flashback",
+			"rounds": ["SCF #34"]
+		},
+		"flutter-wallet-sdk": {
+			"name": "Flutter Wallet SDK",
+			"rounds": [
+				"SCF #22",
+				"SCF #24",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"fluxity": {
+			"name": "Fluxity",
+			"rounds": ["SCF #21"]
+		},
+		"for-yield": {
+			"name": "For Yield",
+			"rounds": ["SCF #44"]
+		},
+		"freelii": {
+			"name": "Freelii",
+			"rounds": ["SCF #32"]
+		},
+		"frost-implementation": {
+			"name": "FROST Implementation",
+			"rounds": ["SCF #25"]
+		},
+		"fundable": {
+			"name": "Fundable",
+			"rounds": ["SCF #43"]
+		},
+		"fuul": {
+			"name": "Fuul",
+			"rounds": ["SCF #44"]
+		},
+		"fxdao": {
+			"name": "FxDAO",
+			"rounds": ["SCF #13", "Liquidity Award - '25 Q3"]
+		},
+		"galactictalk": {
+			"name": "GalacticTalk",
+			"rounds": ["SCF #1"]
+		},
+		"gateway-fm": {
+			"name": "Gateway.fm",
+			"rounds": ["SCF #16", "SCF #44"]
+		},
+		"gearup": {
+			"name": "Gearup",
+			"rounds": ["SCF #28", "SCF #32"]
+		},
+		"givecredit": {
+			"name": "GiveCredit",
+			"rounds": ["SCF #22", "SCF #28"]
+		},
+		"giveth": {
+			"name": "Giveth",
+			"rounds": ["SCF #28"]
+		},
+		"gladius": {
+			"name": "Gladius",
+			"rounds": ["SCF #23"]
+		},
+		"glo-dollar": {
+			"name": "Glo Dollar",
+			"rounds": ["SCF #21"]
+		},
+		"globachain": {
+			"name": "Globachain",
+			"rounds": ["SCF #29", "SCF #36"]
+		},
+		"goldsky": {
+			"name": "Goldsky",
+			"rounds": ["SCF #19"]
+		},
+		"governance-modules-library": {
+			"name": "Governance Modules Library",
+			"rounds": ["SCF #22", "SCF #26"]
+		},
+		"grantfox": {
+			"name": "GrantFox",
+			"rounds": ["SCF #40"]
+		},
+		"grantpicks": {
+			"name": "GrantPicks",
+			"rounds": ["SCF #27"]
+		},
+		"greeppay": {
+			"name": "Greeppay",
+			"rounds": ["SCF #34"]
+		},
+		"hana": {
+			"name": "Hana",
+			"rounds": ["SCF #22", "SCF #25"]
+		},
+		"handlpay": {
+			"name": "HandlPay",
+			"rounds": ["SCF #30"]
+		},
+		"hatom-protocol": {
+			"name": "Hatom Protocol",
+			"rounds": ["SCF #41"]
+		},
+		"hedgepay": {
+			"name": "HedgePay",
+			"rounds": ["SCF #40"]
+		},
+		"hito-wallet": {
+			"name": "Hito Wallet",
+			"rounds": ["SCF #38"]
+		},
+		"hoops": {
+			"name": "Hoops",
+			"rounds": ["SCF #29", "SCF #30"]
+		},
+		"horizon-as-a-service": {
+			"name": "Horizon-as-a-Service",
+			"rounds": ["SCF #11", "SCF #13"]
+		},
+		"huma": {
+			"name": "Huma",
+			"rounds": ["SCF #27"]
+		},
+		"human-tech": {
+			"name": "human.tech",
+			"rounds": ["SCF #34"]
+		},
+		"humanitylink": {
+			"name": "HumanityLink",
+			"rounds": ["SCF #45"]
+		},
+		"icanproveit": {
+			"name": "ICanProveIt",
+			"rounds": ["SCF #26"]
+		},
+		"ichi": {
+			"name": "Ichi",
+			"rounds": ["SCF #26"]
+		},
+		"idos": {
+			"name": "idOS",
+			"rounds": ["SCF #31"]
+		},
+		"inferera": {
+			"name": "Inferera",
+			"rounds": ["SCF #39", "SCF #41"]
+		},
+		"infinity-wallet": {
+			"name": "Infinity Wallet",
+			"rounds": ["SCF #16"]
+		},
+		"infstones": {
+			"name": "InfStones",
+			"rounds": ["SCF #26", "SCF #29"]
+		},
+		"interlinked": {
+			"name": "Interlinked",
+			"rounds": ["SCF #36"]
+		},
+		"interstellar": {
+			"name": "Interstellar",
+			"rounds": ["SCF #5"]
+		},
+		"investar": {
+			"name": "InveStar",
+			"rounds": ["SCF #43"]
+		},
+		"ios-mac-stellar-sdk": {
+			"name": "iOS Mac Stellar SDK",
+			"rounds": [
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"irl": {
+			"name": "IRL",
+			"rounds": ["SCF #38"]
+		},
+		"java-stellar-sdk": {
+			"name": "Java Stellar SDK",
+			"rounds": [
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"jetpad": {
+			"name": "JetPad",
+			"rounds": ["SCF #34", "SCF #43"]
+		},
+		"joona-pay": {
+			"name": "Joona Pay",
+			"rounds": ["SCF #41"]
+		},
+		"js-capacitor-passkey-kit": {
+			"name": "JS-Capacitor Passkey Kit",
+			"rounds": ["SCF #40"]
+		},
+		"js-worker-sdk": {
+			"name": "JS Worker SDK",
+			"rounds": ["SCF #24", "SCF #27"]
+		},
+		"jumpa": {
+			"name": "Jumpa",
+			"rounds": ["SCF #44"]
+		},
+		"k3-labs": {
+			"name": "K3 Labs",
+			"rounds": ["SCF #31"]
+		},
+		"kata-games": {
+			"name": "Kata.Games",
+			"rounds": ["SCF #11"]
+		},
+		"keizai": {
+			"name": "Keizai",
+			"rounds": ["SCF #21", "SCF #28"]
+		},
+		"kindfi": {
+			"name": "KindFi",
+			"rounds": ["SCF #35"]
+		},
+		"kmac-state-machine-template": {
+			"name": "KMAC State Machine Template",
+			"rounds": ["SCF #20"]
+		},
+		"kmp-stellar-sdk": {
+			"name": "KMP Stellar SDK",
+			"rounds": ["SCF #41", "SCF Public Goods - Q3 '26"]
+		},
+		"komunitin": {
+			"name": "Komunitin",
+			"rounds": ["SCF #26"]
+		},
+		"kotlin-stellar-sdk": {
+			"name": "Kotlin Stellar SDK",
+			"rounds": ["SCF #9"]
+		},
+		"kryptos": {
+			"name": "Kryptos",
+			"rounds": ["SCF #30"]
+		},
+		"kura": {
+			"name": "Kura",
+			"rounds": ["SCF #27", "SCF #31"]
+		},
+		"kutana": {
+			"name": "Kutana",
+			"rounds": ["SCF #45"]
+		},
+		"kwickbit": {
+			"name": "Kwickbit",
+			"rounds": ["SCF #20", "SCF #24"]
+		},
+		"kyc-token": {
+			"name": "KYC Token",
+			"rounds": ["SCF #22"]
+		},
+		"laina": {
+			"name": "Laina",
+			"rounds": ["SCF #34"]
+		},
+		"lantern": {
+			"name": "Lantern",
+			"rounds": ["SCF #29"]
+		},
+		"ledger": {
+			"name": "Ledger",
+			"rounds": ["SCF Public Goods - Q3 '26"]
+		},
+		"legacy-suite": {
+			"name": "Legacy Suite",
+			"rounds": ["SCF #24"]
+		},
+		"legasi": {
+			"name": "Legasi",
+			"rounds": ["SCF #40"]
+		},
+		"lendoor": {
+			"name": "Lendoor",
+			"rounds": ["SCF #45"]
+		},
+		"lendwise": {
+			"name": "LendWise",
+			"rounds": ["SCF #45"]
+		},
+		"lettuce": {
+			"name": "Lettuce",
+			"rounds": ["SCF #5"]
+		},
+		"lightecho": {
+			"name": "Lightecho",
+			"rounds": ["SCF #16"]
+		},
+		"lightsail": {
+			"name": "Lightsail",
+			"rounds": [
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q4 '25"
+			]
+		},
+		"link": {
+			"name": "LINK",
+			"rounds": ["SCF #10", "SCF #15", "SCF #28"]
+		},
+		"linq": {
+			"name": "Linq",
+			"rounds": ["SCF #43"]
+		},
+		"liquidsfi": {
+			"name": "LiquidsFi",
+			"rounds": ["SCF #28", "SCF #36"]
+		},
+		"liquify": {
+			"name": "Liquify",
+			"rounds": ["SCF #27"]
+		},
+		"liqvid": {
+			"name": "Liqvid",
+			"rounds": ["SCF #37", "SCF #45"]
+		},
+		"litemint": {
+			"name": "Litemint",
+			"rounds": ["SCF #3", "SCF #7", "SCF #19"]
+		},
+		"loam": {
+			"name": "LOAM",
+			"rounds": ["SCF #24", "SCF #29"]
+		},
+		"lobster": {
+			"name": "Lobster",
+			"rounds": ["SCF #36", "SCF #42"]
+		},
+		"lobstr": {
+			"name": "Lobstr",
+			"rounds": ["SCF #2", "SCF #17", "SCF #22"]
+		},
+		"localcoin": {
+			"name": "LocalCoin",
+			"rounds": ["SCF #21"]
+		},
+		"logistech": {
+			"name": "Logistech",
+			"rounds": ["SCF #34"]
+		},
+		"loto-punto": {
+			"name": "Loto Punto",
+			"rounds": ["SCF #34"]
+		},
+		"lulpay": {
+			"name": "LulPay",
+			"rounds": ["SCF #29", "SCF #38"]
+		},
+		"lumagg": {
+			"name": "LumAgg",
+			"rounds": ["SCF #44"]
+		},
+		"lumen-later": {
+			"name": "Lumen Later",
+			"rounds": ["SCF #39"]
+		},
+		"lumen-loop": {
+			"name": "Lumen Loop",
+			"rounds": ["SCF #26", "SCF #35"]
+		},
+		"lumenshade": {
+			"name": "LumenShade",
+			"rounds": ["SCF #37"]
+		},
+		"lumenswap": {
+			"name": "Lumenswap",
+			"rounds": ["SCF #6"]
+		},
+		"lumenwipe": {
+			"name": "LumenWipe",
+			"rounds": ["SCF #44"]
+		},
+		"lumosdao": {
+			"name": "LumosDAO",
+			"rounds": ["SCF #21"]
+		},
+		"lunar-finance": {
+			"name": "Lunar Finance",
+			"rounds": ["SCF #45"]
+		},
+		"lusty": {
+			"name": "Lusty",
+			"rounds": ["SCF #44"]
+		},
+		"mercury": {
+			"name": "Mercury",
+			"rounds": ["SCF #19", "SCF #25"]
+		},
+		"mercuryo": {
+			"name": "Mercuryo",
+			"rounds": ["SCF #31"]
+		},
+		"metafyed": {
+			"name": "Metafyed",
+			"rounds": ["SCF #27"]
+		},
+		"mica": {
+			"name": "Mica",
+			"rounds": ["SCF #16"]
+		},
+		"microvault": {
+			"name": "Microvault",
+			"rounds": ["SCF #42"]
+		},
+		"mimoto": {
+			"name": "Mimoto",
+			"rounds": ["SCF #26"]
+		},
+		"minah": {
+			"name": "Minah",
+			"rounds": ["SCF #38"]
+		},
+		"mobula-labs": {
+			"name": "Mobula Labs",
+			"rounds": ["SCF #34"]
+		},
+		"mojoflower": {
+			"name": "Mojoflower",
+			"rounds": ["SCF #7", "SCF #11", "SCF #17"]
+		},
+		"moonlight": {
+			"name": "Moonlight",
+			"rounds": ["SCF #37"]
+		},
+		"mugglepay": {
+			"name": "MugglePay",
+			"rounds": ["SCF #30"]
+		},
+		"multiclique": {
+			"name": "MultiClique",
+			"rounds": ["SCF #19"]
+		},
+		"mxlet": {
+			"name": "MXlet",
+			"rounds": ["SCF #5"]
+		},
+		"myaza": {
+			"name": "Myaza",
+			"rounds": ["SCF #26", "SCF #32"]
+		},
+		"mystic": {
+			"name": "Mystic",
+			"rounds": ["SCF #29"]
+		},
+		"nearx": {
+			"name": "NearX",
+			"rounds": ["SCF #25", "SCF #29"]
+		},
+		"nebula": {
+			"name": "Nebula",
+			"rounds": ["SCF #18"]
+		},
+		"nebulavrf": {
+			"name": "NebulaVRF",
+			"rounds": ["SCF #34"]
+		},
+		"nectar-network": {
+			"name": "Nectar Network",
+			"rounds": ["SCF #42"]
+		},
+		"neko": {
+			"name": "Neko",
+			"rounds": ["SCF #45"]
+		},
+		"neon-wallet": {
+			"name": "Neon Wallet",
+			"rounds": ["SCF #41"]
+		},
+		"neovestor": {
+			"name": "Neovestor",
+			"rounds": ["SCF #28"]
+		},
+		"net-sdk": {
+			"name": ".NET SDK",
+			"rounds": [
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"nirvana-labs": {
+			"name": "Nirvana Labs",
+			"rounds": ["SCF #26"]
+		},
+		"nobak": {
+			"name": "Nobak",
+			"rounds": ["SCF #23"]
+		},
+		"nodies": {
+			"name": "Nodies",
+			"rounds": ["SCF #30"]
+		},
+		"normal-finance": {
+			"name": "Normal Finance",
+			"rounds": ["SCF #31", "SCF #35", "Liquidity Award - '25 Q4"]
+		},
+		"nouns": {
+			"name": "Nouns",
+			"rounds": ["SCF #44"]
+		},
+		"nownodes": {
+			"name": "NOWNodes",
+			"rounds": ["SCF #19"]
+		},
+		"obsrvr": {
+			"name": "Obsrvr",
+			"rounds": ["SCF #35", "SCF #41", "SCF Public Goods - Q3 '26"]
+		},
+		"octarine": {
+			"name": "Octarine",
+			"rounds": ["SCF #44"]
+		},
+		"offer-hub": {
+			"name": "Offer Hub",
+			"rounds": ["SCF #44"]
+		},
+		"okashi": {
+			"name": "Okashi",
+			"rounds": ["SCF #13", "SCF #15", "SCF #20", "SCF #24"]
+		},
+		"omnilumen": {
+			"name": "OmniLumen",
+			"rounds": ["SCF #28"]
+		},
+		"onboarding-club": {
+			"name": "OnBoarding Club",
+			"rounds": ["SCF #21", "SCF #26"]
+		},
+		"one-click": {
+			"name": "One Click",
+			"rounds": ["SCF #32"]
+		},
+		"onekey": {
+			"name": "OneKey",
+			"rounds": ["SCF #39"]
+		},
+		"open-gamefi-sdk": {
+			"name": "Open GameFi SDK",
+			"rounds": ["SCF #28"]
+		},
+		"opengrants": {
+			"name": "OpenGrants",
+			"rounds": [
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"opensolar": {
+			"name": "OpenSolar",
+			"rounds": ["SCF #5"]
+		},
+		"orally": {
+			"name": "Orally",
+			"rounds": ["SCF #27"]
+		},
+		"orbitcdp": {
+			"name": "OrbitCDP",
+			"rounds": [
+				"SCF #21",
+				"SCF #21",
+				"SCF #25",
+				"SCF #29",
+				"Liquidity Award - '25 Q2"
+			]
+		},
+		"ortege": {
+			"name": "Ortege",
+			"rounds": ["SCF #18", "SCF #22", "SCF #26"]
+		},
+		"ottersec": {
+			"name": "OtterSec",
+			"rounds": ["SCF #18"]
+		},
+		"paid": {
+			"name": "P'aid",
+			"rounds": ["SCF #26"]
+		},
+		"pakana": {
+			"name": "Pakana",
+			"rounds": ["SCF #21"]
+		},
+		"palremit": {
+			"name": "Palremit",
+			"rounds": ["SCF #32"]
+		},
+		"pathpulse-ai": {
+			"name": "PathPulse AI",
+			"rounds": ["SCF #44"]
+		},
+		"payala": {
+			"name": "Payala",
+			"rounds": ["SCF #41"]
+		},
+		"paycashless": {
+			"name": "Paycashless",
+			"rounds": ["SCF #44"]
+		},
+		"paychant": {
+			"name": "Paychant",
+			"rounds": ["SCF #16", "SCF #21"]
+		},
+		"paykit": {
+			"name": "Paykit",
+			"rounds": ["SCF #40"]
+		},
+		"payqin": {
+			"name": "PayQin",
+			"rounds": ["SCF #28", "SCF #31"]
+		},
+		"payrit": {
+			"name": "PAYRIT",
+			"rounds": ["SCF #34"]
+		},
+		"paysapp": {
+			"name": "Paysapp",
+			"rounds": ["SCF #3"]
+		},
+		"paystreme": {
+			"name": "Paystreme",
+			"rounds": ["SCF #11"]
+		},
+		"payzoll": {
+			"name": "PayZoll",
+			"rounds": ["SCF #36"]
+		},
+		"peerpesa": {
+			"name": "PeerPesa",
+			"rounds": ["SCF #33"]
+		},
+		"peridot-finance": {
+			"name": "Peridot Finance",
+			"rounds": ["SCF #38"]
+		},
+		"perun": {
+			"name": "Perun",
+			"rounds": ["SCF #17", "SCF #24"]
+		},
+		"pg-atlas": {
+			"name": "PG Atlas",
+			"rounds": ["SCF #41"]
+		},
+		"phoenix": {
+			"name": "Phoenix",
+			"rounds": ["SCF #16", "SCF #20", "SCF #25", "Liquidity Award - '24 Q1"]
+		},
+		"php-anchor-sdk": {
+			"name": "PHP Anchor SDK",
+			"rounds": ["SCF #22", "SCF #24", "SCF #27"]
+		},
+		"pigfi": {
+			"name": "PigFi",
+			"rounds": ["SCF #45"]
+		},
+		"pipeline": {
+			"name": "Pipeline",
+			"rounds": ["SCF #43"]
+		},
+		"pipeops": {
+			"name": "PipeOps",
+			"rounds": ["SCF #25"]
+		},
+		"planet-pay": {
+			"name": "Planet Pay",
+			"rounds": ["SCF #14", "SCF #21"]
+		},
+		"pluto-loans": {
+			"name": "Pluto Loans",
+			"rounds": ["SCF #10", "SCF #15"]
+		},
+		"plutope": {
+			"name": "Plutope",
+			"rounds": ["SCF #27"]
+		},
+		"plutus": {
+			"name": "Plutus",
+			"rounds": ["SCF #17"]
+		},
+		"polaris-lend": {
+			"name": "Polaris Lend",
+			"rounds": ["SCF #21"]
+		},
+		"policywright": {
+			"name": "Policywright",
+			"rounds": ["SCF #44"]
+		},
+		"pretium": {
+			"name": "Pretium",
+			"rounds": ["SCF #26"]
+		},
+		"prism": {
+			"name": "Prism",
+			"rounds": ["SCF #44"]
+		},
+		"proofbridge": {
+			"name": "ProofBridge",
+			"rounds": ["SCF #43"]
+		},
+		"prophe": {
+			"name": "Prophe",
+			"rounds": ["SCF #28"]
+		},
+		"providencia-onchain": {
+			"name": "Providencia Onchain",
+			"rounds": ["SCF #42"]
+		},
+		"public-node": {
+			"name": "Public Node",
+			"rounds": ["SCF #3", "SCF #13"]
+		},
+		"python-stellar-sdk": {
+			"name": "Python Stellar SDK",
+			"rounds": [
+				"SCF #1",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"qolaq": {
+			"name": "Qolaq",
+			"rounds": ["SCF #13"]
+		},
+		"qstn": {
+			"name": "QSTN",
+			"rounds": ["SCF #20"]
+		},
+		"quilltip": {
+			"name": "QuillTip",
+			"rounds": ["SCF #39"]
+		},
+		"rahat": {
+			"name": "Rahat",
+			"rounds": ["SCF #30"]
+		},
+		"rail402": {
+			"name": "Rail402",
+			"rounds": ["SCF #45"]
+		},
+		"ramm": {
+			"name": "RAMM",
+			"rounds": ["SCF #22"]
+		},
+		"rampmedaddy": {
+			"name": "RampMeDaddy",
+			"rounds": ["SCF #30"]
+		},
+		"range": {
+			"name": "Range",
+			"rounds": ["SCF #34"]
+		},
+		"rango": {
+			"name": "Rango",
+			"rounds": ["SCF #31"]
+		},
+		"rarible": {
+			"name": "Rarible",
+			"rounds": ["SCF #30"]
+		},
+		"raumfi": {
+			"name": "RaumFi",
+			"rounds": ["SCF #27", "SCF #29"]
+		},
+		"reapp": {
+			"name": "REAPP",
+			"rounds": ["SCF #43"]
+		},
+		"reblue": {
+			"name": "reBlue",
+			"rounds": ["SCF #37"]
+		},
+		"reclaim": {
+			"name": "Reclaim",
+			"rounds": ["SCF #21", "SCF #36"]
+		},
+		"reflector": {
+			"name": "Reflector",
+			"rounds": ["SCF #15", "SCF #20", "SCF #26", "SCF #29"]
+		},
+		"refractor": {
+			"name": "Refractor",
+			"rounds": ["SCF Public Goods - Q2 '26", "SCF Public Goods - Q3 '26"]
+		},
+		"rehoboth": {
+			"name": "Rehoboth",
+			"rounds": ["SCF #27"]
+		},
+		"remittease": {
+			"name": "RemittEase",
+			"rounds": ["SCF #36"]
+		},
+		"rendbit": {
+			"name": "RendBit",
+			"rounds": ["SCF #39"]
+		},
+		"renesis": {
+			"name": "Renesis",
+			"rounds": ["SCF #34"]
+		},
+		"ripe": {
+			"name": "Ripe",
+			"rounds": ["SCF #17"]
+		},
+		"rivool-finance": {
+			"name": "Rivool Finance",
+			"rounds": ["SCF #37"]
+		},
+		"rosen": {
+			"name": "ROSEN",
+			"rounds": ["SCF #37"]
+		},
+		"rozo": {
+			"name": "Rozo",
+			"rounds": ["SCF #38", "SCF #44"]
+		},
+		"rubic": {
+			"name": "Rubic",
+			"rounds": ["SCF #38"]
+		},
+		"rumble-fish": {
+			"name": "Rumble Fish",
+			"rounds": ["SCF #41", "SCF #42", "SCF #45"]
+		},
+		"runtime-verification": {
+			"name": "Runtime Verification",
+			"rounds": ["SCF #28", "SCF #30"]
+		},
+		"rust-soroban-client-library": {
+			"name": "Rust Soroban Client Library",
+			"rounds": ["SCF #17", "SCF #32"]
+		},
+		"safu": {
+			"name": "SAFU",
+			"rounds": ["SCF #44"]
+		},
+		"sanctum": {
+			"name": "Sanctum",
+			"rounds": ["SCF #23", "SCF #25"]
+		},
+		"satellite": {
+			"name": "Satellite",
+			"rounds": ["SCF #20", "SCF #24"]
+		},
+		"saw": {
+			"name": "SAW",
+			"rounds": ["SCF #20", "SCF #23", "SCF #27"]
+		},
+		"scaffold-stellar": {
+			"name": "Scaffold Stellar",
+			"rounds": [
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"scalps": {
+			"name": "Scalps",
+			"rounds": ["SCF #18"]
+		},
+		"scopuly": {
+			"name": "Scopuly",
+			"rounds": ["SCF #44"]
+		},
+		"scorechain": {
+			"name": "Scorechain",
+			"rounds": ["SCF #36"]
+		},
+		"scout": {
+			"name": "Scout",
+			"rounds": [
+				"SCF #20",
+				"SCF #23",
+				"SCF #27",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q1 '26"
+			]
+		},
+		"sendin": {
+			"name": "SendIN",
+			"rounds": ["SCF #29", "SCF #36"]
+		},
+		"sentinel": {
+			"name": "Sentinel",
+			"rounds": ["SCF #36"]
+		},
+		"siborg": {
+			"name": "SiBorg",
+			"rounds": ["SCF #31"]
+		},
+		"sikadesk": {
+			"name": "Sikadesk",
+			"rounds": ["SCF #44"]
+		},
+		"silicore": {
+			"name": "Silicore",
+			"rounds": ["SCF #29"]
+		},
+		"simbolik": {
+			"name": "Simbolik",
+			"rounds": ["SCF #41"]
+		},
+		"simple-signer": {
+			"name": "Simple Signer",
+			"rounds": ["SCF #9"]
+		},
+		"simplytokenized": {
+			"name": "SimplyTokenized",
+			"rounds": ["SCF #42"]
+		},
+		"skopa": {
+			"name": "Skopa",
+			"rounds": ["SCF #20"]
+		},
+		"skyhitz": {
+			"name": "Skyhitz",
+			"rounds": ["SCF #9", "SCF #10", "SCF #30"]
+		},
+		"slender": {
+			"name": "Slender",
+			"rounds": ["SCF #17", "SCF #21", "Liquidity Award - '24 Q1"]
+		},
+		"slimepay": {
+			"name": "Slimepay",
+			"rounds": ["SCF #45"]
+		},
+		"smart-deploy": {
+			"name": "Smart Deploy",
+			"rounds": ["SCF #14", "SCF #16", "SCF #21"]
+		},
+		"smart-treasury": {
+			"name": "Smart Treasury",
+			"rounds": ["SCF #44"]
+		},
+		"snnac": {
+			"name": "SNNAC",
+			"rounds": ["SCF #11"]
+		},
+		"socketfi": {
+			"name": "SocketFi",
+			"rounds": ["SCF #32"]
+		},
+		"sodax": {
+			"name": "SODAX",
+			"rounds": ["SCF #25", "SCF #29"]
+		},
+		"solang": {
+			"name": "Solang",
+			"rounds": [
+				"SCF #20",
+				"SCF #23",
+				"SCF #33",
+				"SCF #41",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"solarkraft": {
+			"name": "Solarkraft",
+			"rounds": ["SCF #24", "SCF #29"]
+		},
+		"sollpay": {
+			"name": "Sollpay",
+			"rounds": ["SCF #38"]
+		},
+		"soracle": {
+			"name": "Soracle",
+			"rounds": ["SCF #22"]
+		},
+		"soroban-elk": {
+			"name": "Soroban ELK",
+			"rounds": ["SCF #29"]
+		},
+		"soroban-explorer": {
+			"name": "Soroban Explorer",
+			"rounds": ["SCF #19", "SCF #23"]
+		},
+		"soroban-governor": {
+			"name": "Soroban Governor",
+			"rounds": ["SCF #22", "SCF #24"]
+		},
+		"soroban-learn": {
+			"name": "Soroban Learn",
+			"rounds": ["SCF #14", "SCF #16", "SCF #21"]
+		},
+		"soroban-optimistic-oracle": {
+			"name": "Soroban Optimistic Oracle",
+			"rounds": ["SCF #33"]
+		},
+		"soroban-polygon-interop": {
+			"name": "Soroban  Polygon - Interop",
+			"rounds": ["SCF #27"]
+		},
+		"soroban-pre-order-contract": {
+			"name": "Soroban Pre-Order Contract",
+			"rounds": ["SCF #12"]
+		},
+		"soroban-react": {
+			"name": "Soroban React",
+			"rounds": ["SCF #20"]
+		},
+		"soroban-resource-usage-reporter": {
+			"name": "Soroban Resource Usage Reporter",
+			"rounds": ["SCF #31"]
+		},
+		"soroban-sdk-tools": {
+			"name": "Soroban SDK Tools",
+			"rounds": ["SCF #39"]
+		},
+		"soroban-timelock-contract": {
+			"name": "Soroban Timelock Contract",
+			"rounds": ["SCF #27"]
+		},
+		"sorobanhooks": {
+			"name": "SorobanHooks",
+			"rounds": ["SCF #33", "SCF #37"]
+		},
+		"sorobanhub": {
+			"name": "SorobanHub",
+			"rounds": ["SCF #25", "SCF #28"]
+		},
+		"sorobanmath": {
+			"name": "SorobanMath",
+			"rounds": ["SCF #20"]
+		},
+		"sorobanpulse": {
+			"name": "SorobanPulse",
+			"rounds": ["SCF #11", "SCF #16", "SCF #20"]
+		},
+		"sorobix": {
+			"name": "Sorobix",
+			"rounds": ["SCF #13"]
+		},
+		"sorobuilder": {
+			"name": "SoroBuilder",
+			"rounds": ["SCF #29"]
+		},
+		"sorodrop": {
+			"name": "Sorodrop",
+			"rounds": ["SCF #28"]
+		},
+		"soropass": {
+			"name": "Soropass",
+			"rounds": ["SCF #44"]
+		},
+		"soropg": {
+			"name": "soropg",
+			"rounds": ["SCF Public Goods - Q2 '26"]
+		},
+		"sorosorcerer": {
+			"name": "Sorosorcerer",
+			"rounds": ["SCF #16"]
+		},
+		"sorosplits": {
+			"name": "SoroSplits",
+			"rounds": ["SCF #19", "SCF #23"]
+		},
+		"sorostarter": {
+			"name": "SoroStarter",
+			"rounds": ["SCF #29"]
+		},
+		"soroswap": {
+			"name": "Soroswap",
+			"rounds": ["SCF #15", "SCF #17", "SCF #21", "Liquidity Award - '24 Q1"]
+		},
+		"soundness": {
+			"name": "Soundness",
+			"rounds": ["SCF #40"]
+		},
+		"source-of-tales": {
+			"name": "Source of Tales",
+			"rounds": ["SCF #10"]
+		},
+		"spacewalk": {
+			"name": "Spacewalk",
+			"rounds": ["SCF #11"]
+		},
+		"spinach": {
+			"name": "Spinach",
+			"rounds": ["SCF #35"]
+		},
+		"splito": {
+			"name": "Splito",
+			"rounds": ["SCF #40"]
+		},
+		"splyce-finance": {
+			"name": "Splyce Finance",
+			"rounds": ["SCF #36"]
+		},
+		"spydra": {
+			"name": "Spydra",
+			"rounds": ["SCF #31"]
+		},
+		"sstream": {
+			"name": "SStream",
+			"rounds": ["SCF #16"]
+		},
+		"stabble": {
+			"name": "Stabble",
+			"rounds": ["SCF #43"]
+		},
+		"stallion": {
+			"name": "stallion",
+			"rounds": ["SCF #39"]
+		},
+		"steepx": {
+			"name": "Steepx",
+			"rounds": ["SCF #16", "SCF #20"]
+		},
+		"stellar-ai-agent-kit": {
+			"name": "Stellar AI Agent Kit",
+			"rounds": ["SCF #37"]
+		},
+		"stellar-c-sdk": {
+			"name": "Stellar C SDK",
+			"rounds": ["SCF #9"]
+		},
+		"stellar-defi-dune-dashboards": {
+			"name": "Stellar DeFi Dune Dashboards",
+			"rounds": ["SCF #35"]
+		},
+		"stellar-light": {
+			"name": "Stellar Light",
+			"rounds": [
+				"SCF #22",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"stellar-metamask": {
+			"name": "Stellar-MetaMask",
+			"rounds": ["SCF #19"]
+		},
+		"stellar-nest": {
+			"name": "Stellar-Nest",
+			"rounds": ["SCF #25"]
+		},
+		"stellar-passport": {
+			"name": "Stellar Passport",
+			"rounds": ["SCF #40"]
+		},
+		"stellar-php-sdk": {
+			"name": "Stellar PHP SDK",
+			"rounds": [
+				"SCF #8",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '25",
+				"SCF Public Goods - Q4 '25",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"stellar-qt-sdk": {
+			"name": "Stellar Qt SDK",
+			"rounds": ["SCF #4"]
+		},
+		"stellar-razor-and-blazor-suite": {
+			"name": "Stellar Razor and Blazor Suite",
+			"rounds": ["SCF #25", "SCF #27", "SCF #31"]
+		},
+		"stellar-registry": {
+			"name": "Stellar Registry",
+			"rounds": ["SCF Public Goods - Q2 '26", "SCF Public Goods - Q3 '26"]
+		},
+		"stellar-router-sdk": {
+			"name": "Stellar Router SDK",
+			"rounds": ["SCF #36"]
+		},
+		"stellar-rust-sdk": {
+			"name": "Stellar Rust SDK",
+			"rounds": ["SCF #18", "SCF #22"]
+		},
+		"stellar-security-portal": {
+			"name": "Stellar Security Portal",
+			"rounds": [
+				"SCF #36",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"stellar-tip": {
+			"name": "Stellar Tip",
+			"rounds": ["SCF #4"]
+		},
+		"stellar-token-launchpad": {
+			"name": "Stellar Token Launchpad",
+			"rounds": ["SCF #24"]
+		},
+		"stellar-tools": {
+			"name": "Stellar Tools",
+			"rounds": ["SCF #26"]
+		},
+		"stellar-transaction-visualizer": {
+			"name": "Stellar Transaction Visualizer",
+			"rounds": ["SCF #37"]
+		},
+		"stellar-unity-developer-kit": {
+			"name": "Stellar Unity Developer Kit",
+			"rounds": ["SCF #40"]
+		},
+		"stellar-vrf": {
+			"name": "Stellar-VRF",
+			"rounds": ["SCF #44"]
+		},
+		"stellarauth": {
+			"name": "StellarAuth",
+			"rounds": ["SCF #2"]
+		},
+		"stellarbroker": {
+			"name": "StellarBroker",
+			"rounds": ["SCF #33"]
+		},
+		"stellarcarbon": {
+			"name": "Stellarcarbon",
+			"rounds": ["SCF #11", "SCF #25", "SCF #33"]
+		},
+		"stellarchain": {
+			"name": "Stellarchain",
+			"rounds": [
+				"SCF #19",
+				"SCF #23",
+				"SCF Public Goods - Q2 '26",
+				"SCF Public Goods - Q1 '26",
+				"SCF Public Goods - Q3 '26"
+			]
+		},
+		"stellargpt": {
+			"name": "StellarGPT",
+			"rounds": ["SCF #20"]
+		},
+		"stellarguard": {
+			"name": "StellarGuard",
+			"rounds": ["SCF #1"]
+		},
+		"stellarpay": {
+			"name": "StellarPay",
+			"rounds": ["SCF #2"]
+		},
+		"stellarport": {
+			"name": "Stellarport",
+			"rounds": ["SCF #2"]
+		},
+		"stellarpro-dev": {
+			"name": "stellarpro.dev",
+			"rounds": ["SCF #17", "SCF #29"]
+		},
+		"stellars-finance": {
+			"name": "Stellars Finance",
+			"rounds": ["SCF #40"]
+		},
+		"stellarterm": {
+			"name": "StellarTerm",
+			"rounds": ["SCF #3"]
+		},
+		"stellot": {
+			"name": "Stellot",
+			"rounds": ["SCF #4"]
+		},
+		"stex": {
+			"name": "sTeX",
+			"rounds": ["SCF #11"]
+		},
+		"streamingfast": {
+			"name": "StreamingFast",
+			"rounds": ["SCF #31"]
+		},
+		"styx": {
+			"name": "Styx",
+			"rounds": ["SCF #23"]
+		},
+		"subquery": {
+			"name": "SubQuery",
+			"rounds": ["SCF #18"]
+		},
+		"subs": {
+			"name": "Subs",
+			"rounds": ["SCF #30"]
+		},
+		"swift-wallet-sdk": {
+			"name": "Swift Wallet SDK",
+			"rounds": ["SCF #31", "SCF #36"]
+		},
+		"swiftex": {
+			"name": "SwiftEx",
+			"rounds": ["SCF #35", "SCF #45"]
+		},
+		"switchly": {
+			"name": "Switchly",
+			"rounds": ["SCF #29"]
+		},
+		"swplug": {
+			"name": "SWPLUG",
+			"rounds": ["SCF #1"]
+		},
+		"sytemap": {
+			"name": "Sytemap",
+			"rounds": ["SCF #29"]
+		},
+		"talwex": {
+			"name": "Talwex",
+			"rounds": ["SCF #43"]
+		},
+		"tansu": {
+			"name": "Tansu",
+			"rounds": ["SCF #28", "SCF #30", "SCF Public Goods - Q3 '26"]
+		},
+		"task-io": {
+			"name": "Task.io",
+			"rounds": ["SCF #7"]
+		},
+		"tauvlo": {
+			"name": "Tauvlo",
+			"rounds": ["SCF #23", "SCF #26"]
+		},
+		"techfiesta": {
+			"name": "Techfiesta",
+			"rounds": ["SCF #27"]
+		},
+		"teken": {
+			"name": "Teken",
+			"rounds": ["SCF #28"]
+		},
+		"tellus-cooperative": {
+			"name": "Tellus Cooperative",
+			"rounds": ["SCF #8", "SCF #13"]
+		},
+		"terwa": {
+			"name": "TERWA",
+			"rounds": ["SCF #43"]
+		},
+		"the-blue-marble": {
+			"name": "The Blue Marble",
+			"rounds": ["SCF #10", "SCF #13"]
+		},
+		"the-give-hub": {
+			"name": "The Give Hub",
+			"rounds": ["SCF #33"]
+		},
+		"the-hub": {
+			"name": "THE HUB",
+			"rounds": ["SCF #29"]
+		},
+		"tilt-pay": {
+			"name": "Tilt Pay",
+			"rounds": ["SCF #45"]
+		},
+		"token-tails": {
+			"name": "Token Tails",
+			"rounds": ["SCF #26", "SCF #30"]
+		},
+		"tokenops": {
+			"name": "TokenOps",
+			"rounds": ["SCF #30"]
+		},
+		"transfuse": {
+			"name": "Transfuse",
+			"rounds": ["SCF #20"]
+		},
+		"tricorn": {
+			"name": "Tricorn",
+			"rounds": ["SCF #21"]
+		},
+		"trilobyte": {
+			"name": "Trilobyte",
+			"rounds": ["SCF #15"]
+		},
+		"troqpay": {
+			"name": "TroqPay",
+			"rounds": ["SCF #44"]
+		},
+		"trustful": {
+			"name": "Trustful",
+			"rounds": ["SCF #27", "SCF #30"]
+		},
+		"trustless-work": {
+			"name": "Trustless Work",
+			"rounds": ["SCF #31", "SCF #41"]
+		},
+		"trustline": {
+			"name": "Trustline",
+			"rounds": ["SCF #44"]
+		},
+		"tucambio": {
+			"name": "TuCambio",
+			"rounds": ["SCF #37", "SCF #43"]
+		},
+		"tumbl": {
+			"name": "Tumbl",
+			"rounds": ["SCF #33"]
+		},
+		"unstoppable-wallet": {
+			"name": "Unstoppable Wallet",
+			"rounds": ["SCF #34", "SCF #42"]
+		},
+		"untangled": {
+			"name": "Untangled",
+			"rounds": ["SCF #31", "SCF #41", "SCF #44", "Liquidity Award - '25 Q3"]
+		},
+		"upwealth": {
+			"name": "Upwealth",
+			"rounds": ["SCF #34"]
+		},
+		"usher": {
+			"name": "Usher",
+			"rounds": ["SCF #22"]
+		},
+		"utoken": {
+			"name": "Utoken",
+			"rounds": ["SCF #28", "SCF #35", "SCF #42"]
+		},
+		"vanna-finance": {
+			"name": "Vanna Finance",
+			"rounds": ["SCF #38"]
+		},
+		"vaquita": {
+			"name": "Vaquita",
+			"rounds": ["SCF #42"]
+		},
+		"venerez": {
+			"name": "Venerez",
+			"rounds": ["SCF #36"]
+		},
+		"verseprop": {
+			"name": "Verseprop",
+			"rounds": ["SCF #33"]
+		},
+		"verso": {
+			"name": "VERSO",
+			"rounds": ["SCF #44"]
+		},
+		"via-labs": {
+			"name": "VIA Labs",
+			"rounds": ["SCF #35"]
+		},
+		"vottun": {
+			"name": "Vottun",
+			"rounds": ["SCF #27", "SCF #41"]
+		},
+		"wadzzo": {
+			"name": "Wadzzo",
+			"rounds": ["SCF #27"]
+		},
+		"wagelink": {
+			"name": "Wagelink",
+			"rounds": ["SCF #24"]
+		},
+		"wagent": {
+			"name": "Wagent",
+			"rounds": ["SCF #26"]
+		},
+		"walletban": {
+			"name": "Walletban",
+			"rounds": ["SCF #20"]
+		},
+		"warmancer": {
+			"name": "Warmancer",
+			"rounds": ["SCF #33"]
+		},
+		"warpdrive": {
+			"name": "WarpDrive",
+			"rounds": ["SCF #41"]
+		},
+		"web3-antivirus": {
+			"name": "Web3 Antivirus",
+			"rounds": ["SCF #28"]
+		},
+		"websoroban-ide": {
+			"name": "WebSoroban IDE",
+			"rounds": ["SCF #38"]
+		},
+		"wellspring": {
+			"name": "Wellspring",
+			"rounds": ["SCF #41"]
+		},
+		"whalestack": {
+			"name": "Whalestack",
+			"rounds": ["SCF #4", "SCF #7"]
+		},
+		"wirecash": {
+			"name": "Wirecash",
+			"rounds": ["SCF #11"]
+		},
+		"wombat": {
+			"name": "Wombat",
+			"rounds": ["SCF #18"]
+		},
+		"womenbiz": {
+			"name": "Womenbiz",
+			"rounds": ["SCF #29"]
+		},
+		"xbull": {
+			"name": "xBull",
+			"rounds": ["SCF #9"]
+		},
+		"xcapit": {
+			"name": "xcapit",
+			"rounds": ["SCF #32"]
+		},
+		"xccy": {
+			"name": "XCCY",
+			"rounds": ["SCF #43"]
+		},
+		"xlm-sh": {
+			"name": "xlm.sh",
+			"rounds": ["SCF #31"]
+		},
+		"xoxno": {
+			"name": "XOXNO",
+			"rounds": ["SCF #43"]
+		},
+		"xycloans": {
+			"name": "XycLoans",
+			"rounds": ["SCF #13", "Liquidity Award - '24 Q1"]
+		},
+		"yieldback-cash": {
+			"name": "YieldBack.Cash",
+			"rounds": ["SCF #38"]
+		},
+		"yieldblox": {
+			"name": "Yieldblox",
+			"rounds": ["SCF #7"]
+		},
+		"zenex": {
+			"name": "Zenex",
+			"rounds": ["SCF #32"]
+		},
+		"zentra": {
+			"name": "Zentra",
+			"rounds": ["SCF #23"]
+		},
+		"zig3v2": {
+			"name": "Zig3v2",
+			"rounds": ["SCF #11"]
+		},
+		"ziriz": {
+			"name": "Ziriz",
+			"rounds": ["SCF #22"]
+		},
+		"zkcross": {
+			"name": "zkCross",
+			"rounds": ["SCF #25", "SCF #30", "Liquidity Award - '25 Q4"]
+		}
+	},
+	"repositories": {
+		"57blocks/stellar-autoaction": ["autoaction"],
+		"57blocks/stellar-resource-usage-report": [
+			"soroban-resource-usage-reporter"
+		],
+		"57blocks/stellar-timelock-contract": ["soroban-timelock-contract"],
+		"abroad-finance/abroad": ["abroad"],
+		"agnosticeng/ch-stellar": ["agnostic"],
+		"airswiftio/scf": ["airswift"],
+		"alinkon0207/payqin_stellar-web": ["payqin"],
+		"alkeops/it-s-not-another-package": ["stellar-nest"],
+		"allbridge-public/allbridge-core-soroban-contracts": ["allbridge"],
+		"antontat27/interlinked-backend": ["interlinked"],
+		"aolieman/cfce-monorepo": ["givecredit"],
+		"aolieman/soroban-pre-order": ["soroban-pre-order-contract"],
+		"arbach/stelien": ["plutus"],
+		"argo-navis-dev/js-capacitor-passkey-kit": ["js-capacitor-passkey-kit"],
+		"argo-navis-dev/php-anchor-sdk": ["php-anchor-sdk"],
+		"asterizm-protocol/asterizm-contracts-stellar": ["liqvid"],
+		"astroband/astrocore": ["astrocore"],
+		"astroband/astrograph": ["astrograph"],
+		"avento-labs/legacy-suite-contracts": ["legacy-suite"],
+		"bandprotocol/band-std-reference-contracts-soroban": ["band"],
+		"baseflow/stellar-rust-sdk": ["stellar-rust-sdk"],
+		"beamable/stellar-project": ["beamable"],
+		"beans-bv/dotnet-stellar-sdk": ["net-sdk"],
+		"benkikodao/benkiko-api": ["benkiko"],
+		"bingtellar/bingtellar-serverside": ["bingtellar"],
+		"blaineheffron/soroban-sdk-tools": ["soroban-sdk-tools"],
+		"blockful/trustful-stellar-v1": ["trustful"],
+		"blockscience/gov-modules-demos": ["governance-modules-library"],
+		"blockscience/scf-gml-contributions": ["governance-modules-library"],
+		"blockshangerous/snnac": ["snnac"],
+		"blocktimefinancial/option": ["block-time-financial"],
+		"bnogalm/stellarqtsdk": ["stellar-qt-sdk"],
+		"bond-hive/soroban_contracts": ["bondhive"],
+		"bp-ventures/lightecho-stellar-oracle": ["lightecho"],
+		"btc-wine/terwa-rwa-vault": ["terwa"],
+		"bytemaster333/account-demolisher": ["account-demolisher"],
+		"bytemaster333/soroban-elk": ["soroban-elk"],
+		"cedelabs/sdk-examples": ["cede"],
+		"centiiv/protocol-node": ["centiiv"],
+		"chatch/stellarexplorer": ["steepx"],
+		"chatpay-go-labs-oficial/smartpig_stellar-37o": ["pigfi"],
+		"christopherkarani/escrowcotract": ["bebop"],
+		"cityofzion/neon-wallet-desktop": ["neon-wallet"],
+		"cloudouble/stellar-js-worker-sdk": ["js-worker-sdk"],
+		"coindisco/galaxy-ramp": ["coindisco"],
+		"coinfabrik/scout-audit": ["scout"],
+		"collaborativeeconomics/give-credit": ["givecredit"],
+		"community-exchange-network/komunitin": ["komunitin"],
+		"cosmic-plus/https-cosmic-link": ["cosmic-link"],
+		"cosmic-plus/https-cosmic-vote": ["cosmic-vote"],
+		"cosmic-plus/https-equilibre-io": ["equilibre"],
+		"creit-tech/sorobanhub-app": ["sorobanhub"],
+		"creit-tech/xbull-wallet": ["xbull"],
+		"crosschainlabs-stellar/sorobanpulse-webapp": ["sorobanpulse"],
+		"cryptixag/tokenlaunchpad": ["stellar-token-launchpad"],
+		"crypto-link-payments/crypto-link": ["crypto-link"],
+		"daccred/attest.so": ["attest"],
+		"damzylance/bigiftyxsoroban": ["bitgifty"],
+		"darthbenro008/walletban": ["walletban"],
+		"decentrio/sorobook": ["decentrio"],
+		"deep-ink-ventures/multiclique-protocol": ["multiclique"],
+		"dev-api-new.skopadev.com/api": ["skopa"],
+		"dobprotocol/stellar-distribution-contracts": ["dobprotocol"],
+		"docs.google.com/document": ["payrit"],
+		"dogstarapps/arka.fund": ["arka-fund"],
+		"e2liotp/tiltpayappstellar": ["tilt-pay"],
+		"eascrow/eascrow": ["eascrow"],
+		"eigerco/nebula": ["nebula"],
+		"enerdao/mvp_smart_contract": ["enerdao"],
+		"eq-lab/pipeline": ["pipeline"],
+		"eq-lab/slender": ["slender"],
+		"excellar-labs/excellar-contracts": ["excellar"],
+		"explore-beyond-innovations/proofbridge": ["proofbridge"],
+		"falparis/aitt": ["ai-transparency-token"],
+		"farihanrahman/investar": ["investar"],
+		"few-digital-services/fewticket-stellar-bridge": ["fewticket"],
+		"financial-empowerment-partners/impala": ["payala"],
+		"findolor/sorodrop": ["sorodrop"],
+		"findolor/sorosplits": ["sorosplits"],
+		"fiono11/threshold_stellar": ["frost-implementation"],
+		"flashbacknetwork/flashonstellar": ["flashback"],
+		"frankszendzielarz/sorobanrpcsdk": ["cross-platform-soroban-rpc-sdk"],
+		"freespek/solarkraft": ["solarkraft"],
+		"frihat-dev/every_finance": ["every-finance"],
+		"fsodano/simple-stellar-signer": ["simple-signer"],
+		"gakpe/minah_blockchain_v0.2": ["minah"],
+		"galoisinc/formal-verso": ["saw"],
+		"gaudiatech/pyved-engine": ["kata-games"],
+		"getaxal/verified-signer": ["axal"],
+		"gitlab.com/dolphinze": ["dolphinze"],
+		"gitlab.com/rivool-finance": ["rivool-finance"],
+		"gitlab.com/soroban-explorer": ["soroban-explorer"],
+		"gitlab.com/tales": ["source-of-tales"],
+		"glo-foundation/glo-wallet": ["glo-dollar"],
+		"gorosen/rosen-stellar": ["rosen"],
+		"grants-projects/ea_kazi_backend_ic": ["ea-kazi"],
+		"grmarkkes/artcc": ["art-club"],
+		"haas-labs/extractor": ["extractor"],
+		"heylmstoned/prism-stellar-earn": ["prism"],
+		"holosoe/human-wallet-on-stellar": ["human-tech"],
+		"horizontalsystems/stellarkit.swift ": ["unstoppable-wallet"],
+		"houseafrica/steller-blockchain-integration": ["sytemap"],
+		"huitemagico/kmac": ["kmac-state-machine-template"],
+		"hunnykumar/swiftex": ["swiftex"],
+		"hurley87/refraction": ["irl"],
+		"hyperledger/solang": ["solang"],
+		"icon-project/sodax-sdks": ["sodax"],
+		"idos-network/idos-sdk-js": ["idos"],
+		"imobi/scalps-core-api": ["scalps"],
+		"indexed-xyz/docs": ["goldsky"],
+		"inferara/soroban-security-portal": ["stellar-security-portal"],
+		"itrmachines/viio_poc": ["providencia-onchain"],
+		"jamesbachini/soroban-playground": ["soropg"],
+		"jamiels/ramm.ai": ["ramm"],
+		"jet-lab/polaris": ["polaris-lend"],
+		"jetpad-digital-limited/jetpad-wallet": ["jetpad"],
+		"jj7302/styx-bridge": ["styx"],
+		"joaquinsoza/stellar-tools": ["stellar-tools"],
+		"josectoscano/stellar-cli": ["stellar-ai-agent-kit"],
+		"josectoscano/stellar-mcp": ["stellar-ai-agent-kit"],
+		"justmert/soropass": ["soropass"],
+		"kalepail/stellarauth-serverless": ["stellarauth"],
+		"kommitters/chaincerts-smart-contracts": ["chaincerts", "chaincred"],
+		"kommitters/stellar_sdk": ["elixir-stellar-sdk"],
+		"kunaldrall29/policywright": ["policywright"],
+		"kuyawa/paysapp": ["paysapp"],
+		"legasicrypto/borrowing-protocol": ["legasi"],
+		"lightsail-network/java-stellar-sdk": ["java-stellar-sdk"],
+		"lightsail-network/libstellar": ["stellar-c-sdk"],
+		"lockb0x-llc/pakana-stellar-razor-components": [
+			"pakana",
+			"stellar-razor-and-blazor-suite"
+		],
+		"luanlabs/fluxity-v1-core": ["fluxity"],
+		"luanlabs/wagent-payment": ["wagent"],
+		"lucholeonel/lendoor-stellar": ["lendoor"],
+		"luisao8/sorobuilder": ["sorobuilder"],
+		"lum-agg/stellar-dex-agg": ["lumagg"],
+		"lumenlater/lumen-later": ["lumen-later"],
+		"lumenwipe/lumenwipe": ["lumenwipe"],
+		"mael-wnb/dig-stellar": ["dig"],
+		"mattpearce/xlet": ["mxlet"],
+		"mavennet/stellar-did": ["did-stellar"],
+		"melomar10/domipago": ["domipago"],
+		"mercury-labs-dev/stellar-sollpay": ["sollpay"],
+		"metagov/daostar": ["opengrants"],
+		"micatechnology/escrow_api": ["mica"],
+		"michaelxhjiang/stellar-tip": ["stellar-tip"],
+		"mishabunte/hito-firmware-rust": ["hito-wallet"],
+		"mks044/reapp-poc": ["reapp"],
+		"mrkanchwala/safu-protocol": ["safu"],
+		"mugglepay/stellar-pay": ["mugglepay"],
+		"mukmalone/adaptivegoalmanagement": ["command-robotics"],
+		"mystic-finance/stellar-rfq": ["octarine"],
+		"nasdex-marketplace/md-stellar_wallet_service": ["metafyed"],
+		"nathanofzion/zi-playground": ["zig3v2"],
+		"naveed-siddiqi/lumos-dao": ["lumosdao"],
+		"nectar-network/nectar": ["nectar-network"],
+		"nibrasd/stellar-transaction-visualizer": [
+			"stellar-transaction-visualizer"
+		],
+		"nibrasd/stellar-vrf": ["stellar-vrf"],
+		"nkoorty/mimoto": ["mimoto"],
+		"nossicasystems/soroban_extend": ["sorosorcerer"],
+		"paltalabs/defindex": ["defindex"],
+		"paltalabs/soroban-react": ["soroban-react"],
+		"paulfears/stellarsnap": ["stellar-metamask"],
+		"peerpesa-dapp/peerpesa-web3": ["peerpesa"],
+		"pellartech/coala-pay-weather-oracle": ["coala-pay"],
+		"pendulum-chain/spacewalk": ["spacewalk"],
+		"peridotfinance/peridot-soroban": ["peridot-finance"],
+		"plutopein/plutope-merchant-stellar": ["plutope"],
+		"potlock/grantpicks-stellar": ["grantpicks"],
+		"pragya-shar/quilltip": ["quilltip"],
+		"rahimklaber/sstream": ["sstream"],
+		"rahimklaber/stellar_kt": ["kotlin-stellar-sdk"],
+		"rahul-soshte/rs-soroban-client": ["rust-soroban-client-library"],
+		"rahul-soshte/soroban-math": ["sorobanmath"],
+		"reclaimprotocol/stellar-sdk-onchain-integration": ["reclaim"],
+		"richafltr/stellargpt": ["stellargpt"],
+		"rinku-labs/linqb2b": ["linq"],
+		"runtimeverification/komet": ["runtime-verification"],
+		"runtimeverification/simbolik-vscode": ["simbolik"],
+		"scalemote/flow": ["planet-pay"],
+		"script3/soroban-governor": ["soroban-governor"],
+		"sebwingleet/aerochain-stellar": ["aerochain"],
+		"sendin-org/sendin": ["sendin"],
+		"seunsanyaa/prophe": ["prophe"],
+		"shamba-records-limited/microvault": ["microvault"],
+		"siborg-ads/stellar-client": ["siborg"],
+		"slideloft/swplug-plugin": ["swplug"],
+		"soneso/arcturus": ["arcturus"],
+		"soneso/as-soroban-sdk": ["assemblyscript-soroban-sdk"],
+		"soneso/kmp-stellar-sdk": ["kmp-stellar-sdk"],
+		"soneso/stellar-ios-mac-sdk": ["ios-mac-stellar-sdk"],
+		"soneso/stellar-php-sdk": ["stellar-php-sdk"],
+		"soneso/stellar-swift-wallet-sdk": ["swift-wallet-sdk"],
+		"soneso/stellar_wallet_flutter_sdk": ["flutter-wallet-sdk"],
+		"soroban-learn/soroban-learn": ["soroban-learn"],
+		"spaceboatdvlp/hello-soroban": ["satellite"],
+		"spinachfi/spinach": ["spinach"],
+		"spydra-tech/erc3643": ["spydra"],
+		"stackman27/soo": ["soroban-optimistic-oracle"],
+		"stallionsassemble/stallion-contract": ["stallion"],
+		"stanbar/stellot": ["stellot"],
+		"stellar-chef/stellar-chef": ["catalyst", "chef"],
+		"stellar-expert/refractor": ["refractor"],
+		"stellar-scaffold/cli": ["scaffold-stellar"],
+		"stellarcn/py-stellar-base": ["python-stellar-sdk"],
+		"stellarguard/stellarguard": ["stellarguard"],
+		"streamcharge/apicharge": ["apicharge"],
+		"streamingfast/firehose-stellar": ["streamingfast"],
+		"subquery/subql-stellar": ["subquery"],
+		"talwex-inc/stellar-vault": ["talwex"],
+		"techlibs/bwb-stellar": ["bwb"],
+		"tenk-dao/smart-deploy": ["smart-deploy"],
+		"the-brookes-project/soroban-sc": ["verseprop"],
+		"theahaco/authline": ["authline"],
+		"theahaco/scaffold-stellar": ["stellar-registry"],
+		"tigerblocks/bbf": ["kyc-token"],
+		"tolgayayci/rail402": ["rail402"],
+		"tosinshada/tide-streaming": ["zentra"],
+		"towa-hi/solid-parakeet": ["warmancer"],
+		"towa-hi/stellarunitydevtoolkit": ["stellar-unity-developer-kit"],
+		"trumanstellar/story-creation": ["findtruman"],
+		"trustek-io/rampmedaddy-frontend": ["rampmedaddy", "wellspring"],
+		"trustek-io/wellspring-mvp-treasurymanagement": ["wellspring"],
+		"untangledfinance/soroban-vault-contract": ["untangled"],
+		"usepaykit/stellar-tools": ["paykit"],
+		"usherlabs/stellar-transparency": ["usher"],
+		"utkurock/lusty": ["lusty"],
+		"vannafinance/protocol_v1_soroban": ["vanna-finance"],
+		"venture-23/localcoin": ["localcoin"],
+		"vestinglabs/stellar_vesting": ["tokenops"],
+		"vialabs-io/via-drivers": ["via-labs"],
+		"victuol/stellar": ["loto-punto"],
+		"walletban/walletban": ["walletban"],
+		"walletgurullc/paystreme": ["paystreme"],
+		"walletgurullc/wg-docs": ["paystreme"],
+		"wanchain/message-bridge-contracts": ["soroban-polygon-interop"],
+		"web3wizardz/remi-p": ["remittease"],
+		"withobsrvr/flowctl": ["obsrvr"],
+		"withobsrvr/nomad-pack-web3-registry": ["horizon-as-a-service", "obsrvr"],
+		"xcapit/shelter": ["xcapit"],
+		"xycloo/documents-marketplace-devenv": ["stex"],
+		"xycloo/xycloans": ["xycloans"],
+		"yaleopenlab/opensolar": ["opensolar"],
+		"yanis7774/stellar-gamefi-integration": ["open-gamefi-sdk"],
+		"zainh332/dropzey": ["dropzey"],
+		"zbagdzevicius/tokentails": ["token-tails"],
+		"zenith-protocols/hermes": ["zenex"],
+		"zkbricks/mpc-zexe": ["sanctum"],
+		"zkbricks/sanctum": ["sanctum"]
+	},
+	"owners": {
+		"00labs": ["huma"],
+		"57blocks": [
+			"soroban-resource-usage-reporter",
+			"soroban-timelock-contract"
+		],
+		"accelar-labs": ["accelar"],
+		"acta-team": ["acta"],
+		"adamikhq": ["adamik"],
+		"agamafinance": ["agama"],
+		"airgap-it": ["airgap"],
+		"airswiftio": ["airswift"],
+		"allbridge-io": ["allbridge"],
+		"almanax-ai": ["almanax"],
+		"alternun-development": ["alternun"],
+		"ambergroup-io": ["amber"],
+		"amerogithub": ["amero"],
+		"amonprivacy": ["lumenshade"],
+		"anchainai": ["anchain-ai"],
+		"anclap": ["anclap"],
+		"answerly-app": ["answerly"],
+		"apay-io": ["apay"],
+		"aquariusdefi": ["aquarius"],
+		"artizen-fund": ["artizen"],
+		"assetdesk": ["assetdesk"],
+		"autowhale": ["renesis"],
+		"axis-markets": ["axis"],
+		"bandprotocol": ["band"],
+		"baseflow": ["paid", "stellar-rust-sdk"],
+		"basementdev": ["basement"],
+		"beamable": ["beamable"],
+		"beans-bv": ["beans", "logistech"],
+		"ben-platform": ["ben-wallet"],
+		"benkikodao": ["benkiko"],
+		"besmetaverse": ["bes-metaverse"],
+		"bevor-protocol": ["bevor"],
+		"bigger-tech": ["bigger"],
+		"bingtellar": ["blink"],
+		"blade-labs": ["blade"],
+		"blaze-xyz": ["blaze"],
+		"blend-capital": ["blend"],
+		"blindpaylabs": ["blindpay"],
+		"blipmonitor": ["blip"],
+		"blockedenhq": ["blockeden-xyz"],
+		"blocknify": ["blocknify"],
+		"blockroll-tech": ["blockroll"],
+		"blueorionblockchain": ["blue-orion"],
+		"bluxcc": ["blux"],
+		"bond-hive": ["bondhive"],
+		"boostylabs": ["tricorn"],
+		"borderless-payments": ["borderless"],
+		"boundlessfi": ["boundless"],
+		"bp-ventures": ["bp-ventures", "joona-pay"],
+		"btq-ag": ["btq"],
+		"buildeross": ["nouns"],
+		"calimero-network": ["calimero"],
+		"carmineoptions": ["derisk"],
+		"catlog-shop": ["catlog"],
+		"cedelabs": ["cede"],
+		"centaurus-project": ["centaurus"],
+		"certikproject": ["certik"],
+		"chainpatrol": ["chainpatrol"],
+		"chainsatlas": ["chainsatlas"],
+		"clickpesa": ["clickpesa-debt-fund"],
+		"clickpesa-debt-fund": ["clickpesa-debt-fund"],
+		"clixpesa": ["clixpesa"],
+		"coboglobal": ["cobo"],
+		"coindisco": ["coindisco"],
+		"coinfabrik": ["scout"],
+		"cometdex": ["comet"],
+		"communidao": ["communidao"],
+		"comunitaria": ["comunitaria"],
+		"constellation-protocol": ["constellation"],
+		"contentdao": ["contentdao"],
+		"convexityteam": ["chats"],
+		"copperxhq": ["copperx"],
+		"cordilleradev": ["tumbl"],
+		"crebitpay": ["crebit-pay"],
+		"creit-tech": ["stellar-router-sdk"],
+		"cryptoconexion": ["cryptoconexi-n"],
+		"cryptorubic": ["rubic"],
+		"cushyon": ["cushion"],
+		"cyvers-ai": ["cyvers"],
+		"dapplooker": ["dapplooker"],
+		"dappradar": ["dappradar"],
+		"dclob": ["clob"],
+		"decafteam": ["decaf"],
+		"decentrio": ["decentrio"],
+		"deep-ink-ventures": ["elio-dao"],
+		"defarm-repo": ["defarm"],
+		"derrickbundi": ["pretium"],
+		"devasignhq": ["devasign"],
+		"dfns": ["dfns"],
+		"dfsventures": ["dfs-labs"],
+		"diadata-org": ["dia"],
+		"dogstarcoin": ["dogstar"],
+		"edunodeorg": ["edunode"],
+		"ekolance-official": ["techfiesta"],
+		"elementpayhq": ["elementpay"],
+		"elsa-care": ["elsa"],
+		"emigro": ["emigro"],
+		"enerdao": ["enerdao"],
+		"equitxcompany": ["equitx"],
+		"escala-dev": ["escala"],
+		"etesia-research": ["etesia"],
+		"everyfinance": ["every-finance"],
+		"expand-network": ["expand"],
+		"fairblock": ["fairblock"],
+		"fastbuka": ["fastbuka"],
+		"fiatsend": ["fiatsend"],
+		"foryield": ["for-yield"],
+		"freelii": ["freelii"],
+		"fundable-protocol": ["fundable"],
+		"fuul-protocol": ["fuul"],
+		"fxdao": ["fxdao"],
+		"gateway-fm": ["gateway-fm"],
+		"gearup-market": ["gearup"],
+		"giveth": ["giveth"],
+		"gladiusclub": ["gladius"],
+		"glo-foundation": ["glo-dollar"],
+		"globachain": ["globachain"],
+		"grantchain": ["grantfox"],
+		"greeppay": ["greeppay"],
+		"hana-technology": ["hana"],
+		"handlpay": ["handlpay"],
+		"hatomprotocol": ["hatom-protocol"],
+		"hedgepayapp": ["hedgepay"],
+		"holonym-foundation": ["human-tech"],
+		"hoops-finance": ["hoops"],
+		"horizontalsystems": ["unstoppable-wallet"],
+		"humanitylink": ["humanitylink"],
+		"ichifarm": ["ichi"],
+		"idos-network": ["idos"],
+		"idtdesign": ["boss-revolution"],
+		"ilanklim": ["silicore"],
+		"inferara": ["inferera"],
+		"infinitywallet": ["infinity-wallet"],
+		"infstones-com": ["infstones"],
+		"interstellartech": ["interstellar"],
+		"k3-labs": ["k3-labs"],
+		"keizai-tools": ["keizai"],
+		"kindfi-org": ["kindfi"],
+		"kommitters": ["chaincerts"],
+		"kryptoskatt": ["kryptos"],
+		"kuraapp": ["kura"],
+		"kutana-technologies": ["kutana"],
+		"kwickbit": ["kwickbit"],
+		"laina-defi": ["laina"],
+		"lanternfi": ["lantern"],
+		"ledgerhq": ["ledger"],
+		"lendwise-fi": ["lendwise"],
+		"lightsail-network": ["lightsail", "xlm-sh"],
+		"linkioafrica": ["link"],
+		"liquidsfi": ["liquidsfi"],
+		"liquify-validation": ["liquify"],
+		"litemint": ["litemint"],
+		"loambuild": ["loam"],
+		"lobster-protocol": ["lobster"],
+		"lobstrco": ["lobstr"],
+		"lockb0x-llc": ["pakana"],
+		"luanlabs": ["fluxity", "wagent"],
+		"lumenloop": ["lumen-loop"],
+		"lumenswap": ["lumenswap"],
+		"lunarfi-eclipse": ["lunar-finance"],
+		"mercuryoio": ["mercuryo"],
+		"mfactory-lab": ["alula"],
+		"mobulafi": ["mobula-labs"],
+		"mojoflower-garden": ["mojoflower"],
+		"moonbite-gmbh": ["teken"],
+		"moonlight-protocol": ["moonlight"],
+		"mowblox": ["devtrak"],
+		"mugglepay": ["mugglepay"],
+		"myazahq": ["myaza"],
+		"mystic-finance": ["mystic"],
+		"nebulavrf": ["nebulavrf"],
+		"neko-protocol": ["neko"],
+		"neovestor-tech": ["neovestor"],
+		"nirvana-labs": ["nirvana-labs"],
+		"nobak-net": ["nobak"],
+		"nodiesorg": ["nodies"],
+		"normalfinance": ["normal-finance"],
+		"nownodes": ["nownodes"],
+		"nrxschool": ["nearx"],
+		"offer-hub": ["offer-hub"],
+		"official-jumpa": ["jumpa"],
+		"okashi-dev": ["okashi"],
+		"omeganetwork-tech": ["stellarpro-dev"],
+		"omnilumen": ["omnilumen"],
+		"onboardingclub": ["onboarding-club"],
+		"one-click-crypto": ["one-click"],
+		"onekeyhq": ["onekey"],
+		"orally-network": ["orally"],
+		"orbitcdp": ["orbitcdp"],
+		"ortege-xyz": ["ortege"],
+		"orunpay": ["trilobyte"],
+		"otter-sec": ["ottersec"],
+		"palremit": ["palremit"],
+		"paltalabs": ["stellar-defi-dune-dashboards"],
+		"pathpulse-ai": ["pathpulse-ai"],
+		"paycashless": ["paycashless"],
+		"paychant": ["paychant"],
+		"payzoll-orgs": ["payzoll"],
+		"pendulum-chain": ["spacewalk"],
+		"perun-network": ["perun"],
+		"phoenix-protocol-group": ["phoenix"],
+		"pipeops-dev": ["pipeops"],
+		"pipeopshq": ["pipeops"],
+		"plutodao": ["pluto-loans"],
+		"postedapp": ["soracle"],
+		"potlock": ["grantpicks"],
+		"publicnode": ["public-node"],
+		"pyved-solution": ["kata-games"],
+		"qolaq": ["qolaq"],
+		"qstn-us": ["qstn"],
+		"rahataid": ["rahat"],
+		"randomacy": ["borderdollar"],
+		"rangesecurity": ["range"],
+		"rango-exchange": ["rango"],
+		"rarible": ["rarible"],
+		"raum-network": ["raumfi"],
+		"rebluedev": ["reblue"],
+		"reclaimprotocol": ["reclaim"],
+		"reflector-network": ["reflector"],
+		"rehoboth-finance": ["rehoboth"],
+		"relinkservices": ["chainlink-oracles-relayer"],
+		"rendbit": ["rendbit"],
+		"ripe-money": ["ripe"],
+		"robertdurst": ["digicus"],
+		"rozoai": ["rozo"],
+		"rumblefishdev": ["rumble-fish"],
+		"runtimeverification": ["runtime-verification"],
+		"scalemote": ["planet-pay"],
+		"scf-public-goods-maintenance": ["pg-atlas"],
+		"scopuly": ["scopuly"],
+		"scorechain": ["scorechain"],
+		"sentinelfi": ["sentinel"],
+		"sikadesk": ["sikadesk"],
+		"simplytokenized": ["simplytokenized"],
+		"skyhitz": ["skyhitz"],
+		"slimepay": ["slimepay"],
+		"smart-treasury-account-sta": ["smart-treasury"],
+		"socket-fi": ["socketfi"],
+		"solity-network": ["alterscope"],
+		"sorobanhooks": ["sorobanhooks"],
+		"sorobix": ["sorobix"],
+		"sorostarter": ["sorostarter"],
+		"soroswap": ["soroswap"],
+		"soundnesslabs": ["soundness"],
+		"spaced-out-thoughts-dev-foundation": ["digicus"],
+		"splitoio": ["splito"],
+		"splyce-finance": ["splyce-finance"],
+		"spydra-tech": ["spydra"],
+		"stabbleorg": ["stabble"],
+		"stellar-broker": ["stellarbroker"],
+		"stellar-light": ["stellar-light"],
+		"stellar-merchants": ["lettuce"],
+		"stellarcarbon": ["stellarcarbon"],
+		"stellarchain": ["stellarchain"],
+		"stellarpay": ["stellarpay"],
+		"stellarport": ["stellarport"],
+		"stellarsfinance": ["stellars-finance"],
+		"stellarterm": ["galactictalk", "interstellar", "stellarterm"],
+		"streamingfast": ["streamingfast"],
+		"subquery": ["subquery"],
+		"subs-protocol": ["subs"],
+		"switchlyprotocol": ["switchly"],
+		"taskdotio": ["task-io", "the-blue-marble"],
+		"tauvlo": ["tauvlo"],
+		"tellus-cooperative": ["stellar-passport", "tellus-cooperative"],
+		"the-brookes-project": ["verseprop"],
+		"theahaco": ["aha-labs"],
+		"thegivehub": ["the-give-hub"],
+		"thehubdao": ["the-hub"],
+		"transfuselabs": ["transfuse"],
+		"troqpay": ["troqpay"],
+		"trustless-work": ["trustless-work"],
+		"trustline-id": ["trustline"],
+		"tucambioapp": ["tucambio"],
+		"tupui": ["tansu"],
+		"tuvalusoftware": ["icanproveit"],
+		"untangledfinance": ["untangled"],
+		"usepaykit": ["paykit"],
+		"usherlabs": ["usher"],
+		"utokens": ["utoken"],
+		"vaquita-fi": ["vaquita"],
+		"venerezhugo": ["venerez"],
+		"vestinglabs": ["tokenops"],
+		"vialabs-io": ["via-labs"],
+		"vottundev": ["vottun"],
+		"wadzzo2023": ["wadzzo"],
+		"walletban": ["walletban"],
+		"warp-driver": ["warpdrive"],
+		"wealthsquare": ["upwealth"],
+		"web3-antivirus": ["web3-antivirus"],
+		"websoroban": ["websoroban-ide"],
+		"whalestackhq": ["whalestack"],
+		"wildorap": ["verso"],
+		"wirecash": ["wirecash"],
+		"withobsrvr": ["horizon-as-a-service", "obsrvr"],
+		"wombat-exchange": ["wombat"],
+		"womenbiz": ["womenbiz"],
+		"xcapit": ["xcapit"],
+		"xccy-labs": ["xccy"],
+		"xoxno": ["xoxno"],
+		"xycloo": ["mercury"],
+		"yieldback-cash": ["yieldback-cash"],
+		"yieldblox": ["yieldblox"],
+		"zebec-protocol": ["wagelink"],
+		"zenith-protocols": ["orbitcdp"],
+		"zerie5": ["lulpay"],
+		"zirizapp": ["ziriz"],
+		"zkcross-network": ["zkcross"]
+	}
+}

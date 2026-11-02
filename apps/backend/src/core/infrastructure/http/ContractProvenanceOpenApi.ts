@@ -88,6 +88,7 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 			'metadata',
 			'build',
 			'hackathons',
+			'scfProjects',
 			'securityAudit'
 		],
 		properties: {
@@ -120,6 +121,12 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 				description:
 					'Hackathons the embedded source repository took part in. This describes the repository, so it is only as reliable as the repository named in the Wasm metadata, which the developer supplies unless the build is verified. Empty when there is no source repository or it took part in none.',
 				items: { $ref: '#/components/schemas/ContractProvenanceHackathon' }
+			},
+			scfProjects: {
+				type: 'array',
+				description:
+					'Stellar Community Fund projects whose GitHub repository, or GitHub organization, matches the embedded source repository. Like hackathons, this is only as reliable as the repository named in the Wasm metadata. Empty when there is no match.',
+				items: { $ref: '#/components/schemas/ContractProvenanceScfProject' }
 			},
 			securityAudit: {
 				type: 'string',
@@ -198,6 +205,19 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 				nullable: true,
 				enum: ['genesis', 'scale', null],
 				description: 'Only set when the team states its track itself.'
+			}
+		}
+	},
+	ContractProvenanceScfProject: {
+		type: 'object',
+		required: ['slug', 'name', 'rounds'],
+		properties: {
+			slug: { type: 'string' },
+			name: { type: 'string' },
+			rounds: {
+				type: 'array',
+				items: { type: 'string' },
+				description: 'The funding rounds the project was awarded in.'
 			}
 		}
 	},

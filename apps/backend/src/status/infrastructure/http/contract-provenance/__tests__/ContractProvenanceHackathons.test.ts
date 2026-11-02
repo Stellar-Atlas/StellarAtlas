@@ -154,4 +154,12 @@ describe('contract provenance hackathons', () => {
 		expect(body.build).toEqual({ status: 'not_published', record: null });
 		expect(body.securityAudit).toBe('not_assessed');
 	});
+
+	it('should name the Stellar Community Fund project of the source repository', async () => {
+		const body = await provenanceFor('github:stellar-scaffold/cli');
+
+		expect(body.scfProjects).toEqual([
+			expect.objectContaining({ slug: 'scaffold-stellar' })
+		]);
+	});
 });

@@ -15,6 +15,7 @@ import {
 	hackathonsOf,
 	type HackathonParticipation
 } from './HackathonParticipation.js';
+import { scfProjectsOf, type ScfProject } from './ScfParticipation.js';
 import { readContractCode, ContractRpcUnavailable } from './ContractRpcCode.js';
 import { readContractWasmMetadata } from './ContractWasmMetadata.js';
 
@@ -45,6 +46,7 @@ export interface ContractProvenance {
 		readonly record: ContractBuildRecord | null;
 	};
 	readonly hackathons: readonly HackathonParticipation[];
+	readonly scfProjects: readonly ScfProject[];
 	readonly securityAudit: 'not_assessed';
 }
 
@@ -137,6 +139,7 @@ export class ContractProvenanceService {
 			metadata,
 			build,
 			hackathons: hackathonsOf(metadata.sourceRepository),
+			scfProjects: scfProjectsOf(metadata.sourceRepository),
 			securityAudit: 'not_assessed'
 		};
 	}
