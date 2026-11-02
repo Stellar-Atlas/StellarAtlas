@@ -1,5 +1,5 @@
 import { err, ok, Result } from 'neverthrow';
-import { Url } from '@core/domain/Url.js';
+import { normalizeHistoryArchiveRootUrl } from 'shared';
 import type {
 	CrossCheckRadarHistoryArchiveScanSource,
 	RadarHistoryArchiveScanDTO,
@@ -128,11 +128,8 @@ function parseRadarHistoryArchiveScan(
 			)
 		);
 	}
-	const payloadRoot = Url.create(url);
-	if (
-		payloadRoot.isErr() ||
-		payloadRoot.value.value !== dto.requestedArchiveUrl
-	) {
+	const payloadRoot = safeRootIdentity(url);
+	if (payloadRoot === null || payloadRoot !== dto.requestedArchiveUrl) {
 		return err(
 			radarHistoryArchiveScanFailure(
 				'invalid_payload',
@@ -153,15 +150,15 @@ function parseRadarHistoryArchiveScan(
 		latestVerifiedLedger: readNullableLedger(payload.latestVerifiedLedger),
 		sourceId: 'withobsrvr-radar',
 		startDate,
-		url
+		url: payloadRoot
 	});
 }
 
 function encodeArchiveUrl(
 	archiveUrl: string
 ): Result<string, RadarHistoryArchiveScanFailureDTO> {
-	const urlOrError = Url.create(archiveUrl);
-	if (urlOrError.isErr()) {
+	const normalized = safeRootIdentity(archiveUrl);
+	if (normalized === null) {
 		return err(
 			radarHistoryArchiveScanFailure(
 				'invalid_archive_url',
@@ -170,7 +167,24 @@ function encodeArchiveUrl(
 		);
 	}
 
-	return ok(encodeURIComponent(urlOrError.value.value));
+	return ok(encodeURIComponent(normalized));
+}
+
+function safeRootIdentity(value: string): string | null {
+	try {
+		const url = new URL(value);
+		if (
+			url.href.includes('?') ||
+			url.href.includes('#') ||
+			url.username ||
+			url.password ||
+			!['http:', 'https:'].includes(url.protocol)
+		)
+			return null;
+		return normalizeHistoryArchiveRootUrl(value);
+	} catch {
+		return null;
+	}
 }
 
 function parseJson(

@@ -112,6 +112,96 @@ function project(
 	});
 }
 describe('per-root observed archive reports', () => {
+	it('rejects unsafe roots even when neither source is loaded', () => {
+		for (const requestedRoot of [
+			'https://user:secret@history.example.com/History',
+			'ftp://history.example.com/History',
+			root + '?token=x',
+			root + '#fragment'
+		]) {
+			const result = projectArchiveVerificationObservations({
+				requestedRoot,
+				radar: { status: 'not_loaded' },
+				atlas: { status: 'not_loaded' },
+				policy,
+				limit: 10
+			});
+			expect(result.identityState).toBe('invalid_root');
+			expect(result.archiveUrl).toBeNull();
+			expect(result.reports).toEqual([]);
+		}
+	});
+	it('canonicalizes host, default port and well-known aliases across all loaded identities', () => {
+		const alias =
+			'https://HISTORY.EXAMPLE.COM:443/History/.well-known/stellar-history.json';
+		const evidence = atlas();
+		const result = projectArchiveVerificationObservations({
+			requestedRoot: alias,
+			radar: { status: 'loaded', scan: { ...radar(), url: alias } },
+			atlas: {
+				status: 'loaded',
+				evidence: {
+					...evidence,
+					archiveUrl: alias,
+					remoteFailures: {
+						...evidence.remoteFailures,
+						filters: {
+							...evidence.remoteFailures.filters,
+							archiveUrlIdentity: alias
+						}
+					},
+					workerIssues: {
+						...evidence.workerIssues,
+						filters: {
+							...evidence.workerIssues.filters,
+							archiveUrlIdentity: alias
+						}
+					}
+				}
+			},
+			policy,
+			limit: 10
+		});
+		expect(result.identityState).toBe('matched');
+		expect(result.archiveUrl).toBe(root);
+	});
+	it('rejects unsafe loaded source and page identities without publishing reports', () => {
+		for (const unsafe of [
+			'https://user:secret@history.example.com/History',
+			'ftp://history.example.com/History',
+			root + '?token=x',
+			root + '#fragment'
+		]) {
+			const evidence = atlas();
+			for (const result of [
+				project({ ...radar(), url: unsafe }),
+				project(radar(), { ...evidence, archiveUrl: unsafe }),
+				project(radar(), {
+					...evidence,
+					remoteFailures: {
+						...evidence.remoteFailures,
+						filters: {
+							...evidence.remoteFailures.filters,
+							archiveUrlIdentity: unsafe
+						}
+					}
+				}),
+				project(radar(), {
+					...evidence,
+					workerIssues: {
+						...evidence.workerIssues,
+						filters: {
+							...evidence.workerIssues.filters,
+							archiveUrlIdentity: unsafe
+						}
+					}
+				})
+			]) {
+				expect(result.identityState).toBe('identity_mismatch');
+				expect(result.reports).toEqual([]);
+			}
+		}
+	});
 	it('labels Radar, Atlas and both as observations,never missed-error conclusions', () => {
 		expect(project().reports[0]!.reportedBy).toBe('radar');
 		expect(
@@ -146,11 +236,31 @@ describe('per-root observed archive reports', () => {
 			}).identityState
 		).toBe('identity_mismatch');
 		const wrongWorkerPage = atlas();
-		expect(project(radar(), { ...wrongWorkerPage, workerIssues: {
-			...wrongWorkerPage.workerIssues, filters: { archiveUrlIdentity: 'https://another.example.com', objectType: null }
-		} }).identityState).toBe('identity_mismatch');
+		expect(
+			project(radar(), {
+				...wrongWorkerPage,
+				workerIssues: {
+					...wrongWorkerPage.workerIssues,
+					filters: {
+						archiveUrlIdentity: 'https://another.example.com',
+						objectType: null
+					}
+				}
+			}).identityState
+		).toBe('identity_mismatch');
 		const wrongObject = failure();
-		const ignored = project(radar(false), atlas([{ ...wrongObject, object: { ...wrongObject.object, archiveUrl: 'https://another.example.com' } }]));
+		const ignored = project(
+			radar(false),
+			atlas([
+				{
+					...wrongObject,
+					object: {
+						...wrongObject.object,
+						archiveUrl: 'https://another.example.com'
+					}
+				}
+			])
+		);
 		expect(ignored.reports).toEqual([]);
 		expect(ignored.invalidObjectIdentity).toBe(true);
 	});

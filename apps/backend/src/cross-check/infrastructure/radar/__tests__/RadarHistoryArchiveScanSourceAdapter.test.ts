@@ -4,6 +4,62 @@ import {
 } from '../RadarHistoryArchiveScanSourceAdapter.js';
 
 describe('RadarHistoryArchiveScanSourceAdapter', () => {
+	it('rejects unsafe requested roots before any outbound request', async () => {
+		let calls = 0;
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(async () => {
+			calls++;
+			throw new Error('Unexpected request');
+		});
+		for (const root of [
+			'https://user:secret@history.example.com',
+			'ftp://history.example.com',
+			'https://history.example.com?token=x',
+			'https://history.example.com#fragment'
+		]) {
+			const result = await adapter.fetchHistoryArchiveScan(root);
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('invalid_archive_url');
+		}
+		expect(calls).toBe(0);
+	});
+	it('canonicalizes safe root aliases and rejects unsafe payload roots', async () => {
+		let requested = '';
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(async (input) => {
+			requested = String(input);
+			return new Response(
+				JSON.stringify({
+					...createHistoryArchiveScan(),
+					url: 'https://HISTORY.EXAMPLE.COM:443/.well-known/stellar-history.json'
+				})
+			);
+		});
+		const result = await adapter.fetchHistoryArchiveScan(
+			'https://HISTORY.EXAMPLE.COM:443/.well-known/stellar-history.json'
+		);
+		expect(result.isOk()).toBe(true);
+		if (result.isOk())
+			expect(result.value?.url).toBe('https://history.example.com');
+		expect(requested).toBe(
+			RadarHistoryArchiveScanSourceAdapter.defaultBaseUrl +
+				encodeURIComponent('https://history.example.com')
+		);
+		for (const url of [
+			'https://user:secret@history.example.com',
+			'ftp://history.example.com',
+			'https://history.example.com?token=x',
+			'https://history.example.com#fragment'
+		]) {
+			const unsafe = new RadarHistoryArchiveScanSourceAdapter(
+				async () =>
+					new Response(JSON.stringify({ ...createHistoryArchiveScan(), url }))
+			);
+			const response = await unsafe.fetchHistoryArchiveScan(
+				'https://history.example.com'
+			);
+			expect(response.isErr()).toBe(true);
+			if (response.isErr()) expect(response.error.kind).toBe('invalid_payload');
+		}
+	});
 	it('rejects a different payload root and preserves case-sensitive root paths', async () => {
 		for (const payloadUrl of [
 			'https://different.example.com/History',

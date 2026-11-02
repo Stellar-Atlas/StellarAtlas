@@ -1,6 +1,6 @@
-import { Url } from '@core/domain/Url.js';
 import {
 	isHistoryArchiveInconclusiveTransportFailure,
+	normalizeHistoryArchiveRootUrl,
 	type HistoryArchiveEvidenceV2
 } from 'shared';
 import type { RadarHistoryArchiveScanDTO } from './RadarHistoryArchiveScan.js';
@@ -40,8 +40,20 @@ export interface ArchiveObservedReport {
 }
 
 function rootIdentity(value: string): string | null {
-	const result = Url.create(value);
-	return result.isOk() ? result.value.value : null;
+	try {
+		const url = new URL(value);
+		if (
+			url.href.includes('?') ||
+			url.href.includes('#') ||
+			url.username ||
+			url.password ||
+			!['http:', 'https:'].includes(url.protocol)
+		)
+			return null;
+		return normalizeHistoryArchiveRootUrl(value);
+	} catch {
+		return null;
+	}
 }
 function observationTime(value: string, policy: ArchiveObservationPolicy) {
 	const observed = Date.parse(value);
@@ -114,8 +126,12 @@ export function projectArchiveVerificationObservations(input: {
 			: (radar && rootIdentity(radar.url) !== root) ||
 				  (atlas && rootIdentity(atlas.archiveUrl) !== root) ||
 				  (atlas &&
-						(atlas.remoteFailures.filters.archiveUrlIdentity !== root ||
-							atlas.workerIssues.filters.archiveUrlIdentity !== root))
+						(rootIdentity(
+							atlas.remoteFailures.filters.archiveUrlIdentity ?? ''
+						) !== root ||
+							rootIdentity(
+								atlas.workerIssues.filters.archiveUrlIdentity ?? ''
+							) !== root))
 				? 'identity_mismatch'
 				: 'matched';
 	const reports: ArchiveObservedReport[] = [];
@@ -214,15 +230,13 @@ export function projectArchiveVerificationObservations(input: {
 			workerIssueCount: atlas?.workerIssues.total ?? null,
 			workerIssuesExcludedFromReports: true as const
 		},
-		reports: reports
-			.slice(0, input.limit)
-			.map((report) => ({
-				...report,
-				atlasTiming: report.atlas
-					? observationTime(report.atlas.observedAt, input.policy)
-					: null,
-				conclusion: 'observed_reports_only' as const
-			})),
+		reports: reports.slice(0, input.limit).map((report) => ({
+			...report,
+			atlasTiming: report.atlas
+				? observationTime(report.atlas.observedAt, input.policy)
+				: null,
+			conclusion: 'observed_reports_only' as const
+		})),
 		truncated:
 			reports.length > input.limit ||
 			(page?.failures.length ?? 0) > input.limit,
