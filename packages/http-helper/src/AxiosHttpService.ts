@@ -33,7 +33,7 @@ export class AxiosHttpService implements HttpService {
 		url: Url,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, axios.delete, httpOptions);
+		return await this.performRequest(url, (config) => axios.delete<unknown>(url.value, config), httpOptions);
 	}
 
 	async post(
@@ -41,26 +41,26 @@ export class AxiosHttpService implements HttpService {
 		data: Record<string, unknown>,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, axios.post, httpOptions, data);
+		return await this.performRequest(url, (config) => axios.post<unknown>(url.value, data, config), httpOptions);
 	}
 
 	async head(
 		url: Url,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, axios.head, httpOptions);
+		return await this.performRequest(url, (config) => axios.head<unknown>(url.value, config), httpOptions);
 	}
 
 	async get(
 		url: Url,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, axios.get, httpOptions);
+		return await this.performRequest(url, (config) => axios.get<unknown>(url.value, config), httpOptions);
 	}
 
 	protected mapHttpOptionsToAxiosRequestConfig(
 		httpOptions?: HttpOptions
-	): AxiosRequestConfig {
+	): AxiosRequestConfig<unknown> {
 		if (!httpOptions) return {};
 
 		const timeoutMs = httpOptions.socketTimeoutMs
@@ -92,18 +92,8 @@ export class AxiosHttpService implements HttpService {
 
 	private async performRequest(
 		url: Url,
-		operation:
-			| (<T = any, R = AxiosResponse<T, T>, D = any>(
-					url: string,
-					data?: D,
-					config?: AxiosRequestConfig<D> | undefined
-			  ) => Promise<R>)
-			| (<T = any, R = AxiosResponse<T, T>, D = any>(
-					url: string,
-					config?: AxiosRequestConfig<D> | undefined
-			  ) => Promise<R>),
-		httpOptions?: HttpOptions,
-		data?: unknown
+		operation: (config: AxiosRequestConfig<unknown>) => Promise<AxiosResponse<unknown>>,
+		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
 		let connectionTimeout: NodeJS.Timeout | undefined;
 		let connectionTimeoutMs: number;
@@ -139,9 +129,7 @@ export class AxiosHttpService implements HttpService {
 				this.mapHttpOptionsToAxiosRequestConfig(httpOptions);
 			requestConfig.cancelToken = source.token;
 
-			let axiosResponse: AxiosResponse;
-			if (data) axiosResponse = await operation(url.value, data, requestConfig);
-			else axiosResponse = await operation(url.value, requestConfig);
+			const axiosResponse = await operation(requestConfig);
 
 			if (connectionTimeout) clearTimeout(connectionTimeout);
 			return ok(this.mapAxiosResponseToHttpResponse(axiosResponse));
