@@ -80,6 +80,9 @@
 	font-size: 0.85rem;
 	line-height: 1.5;
 }
+.provenance { display: grid; gap: .4rem; min-width: 0; }
+.provenance p { margin: 0; }
+.provenance summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .form {
 	display: grid;
 	gap: 0.7rem;
