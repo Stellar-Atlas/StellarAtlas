@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { graphqlAnalyticsExamples } from './graphql-analytics-examples';
+import { DeveloperGuideCode } from './developer-guide-code';
 
 export interface DeveloperGuideSection {
 	readonly id: string;
@@ -24,11 +25,7 @@ export function Code({
 	readonly children: string;
 	readonly language?: string;
 }): React.JSX.Element {
-	return (
-		<pre>
-			<code className={`language-${language}`}>{children}</code>
-		</pre>
-	);
+	return <DeveloperGuideCode source={children} language={language} />;
 }
 export function GraphqlExample({
 	example
