@@ -78,7 +78,7 @@ function PoolBrowser({
 	const [search, setSearch] = useState(asset || initialFilters.asset || '');
 	const [hasUpdates, setHasUpdates] = useState(false);
 	const navigate = (selection: PoolBrowserRoute): void => {
-		window.history.pushState(window.history.state, '', poolBrowserHref(pathname, queryString, selection, embedded, window.location.hash));
+		window.history.pushState(null, '', poolBrowserHref(pathname, queryString, selection, embedded, window.location.hash));
 	};
 	useEffect(() => setSearch(asset || filters.asset || ''), [asset, filters.asset]);
 	useEffect(

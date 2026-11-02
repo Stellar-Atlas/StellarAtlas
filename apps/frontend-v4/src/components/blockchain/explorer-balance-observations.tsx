@@ -46,7 +46,7 @@ function WalletBalances(props: Props): React.JSX.Element {
 	const after = readWalletCursor(new URLSearchParams(query), props.identifier);
 	const previousPages = useRef(new Map<string, string | null>());
 	const navigate = (cursor: string | null): void => {
-		window.history.pushState(window.history.state, '', walletBalanceHref(pathname, query, props.identifier, cursor, window.location.hash));
+		window.history.pushState(null, '', walletBalanceHref(pathname, query, props.identifier, cursor, window.location.hash));
 	};
 	return <ObservationPanel key={after ?? ''} {...props} autoLoad={props.autoLoad || after !== null}
 		pagination={{ after,

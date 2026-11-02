@@ -23,7 +23,7 @@ function LedgerActivity({ ledger }: { readonly ledger: string }): React.JSX.Elem
 	const filters = { min_ledger: ledger, max_ledger: ledger, return_to: sanitizeExplorerReturnTo(returnTo ?? pathname + (query ? '?' + query : '')) ?? '/explorer' };
 	const previous = adjacentLedgerHref(ledger, -1), next = adjacentLedgerHref(ledger, 1);
 	const navigate = (visible: boolean, page = 0): void => {
-		window.history.pushState(window.history.state, '', ledgerActivityHref(pathname, query, ledger, visible, page, window.location.hash));
+		window.history.pushState(null, '', ledgerActivityHref(pathname, query, ledger, visible, page, window.location.hash));
 	};
 	return <section className={styles.workspace} aria-label="Ledger activity">
 		<div className={styles.actions}>

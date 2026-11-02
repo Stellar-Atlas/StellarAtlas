@@ -36,7 +36,7 @@ function SearchForm({ initialQuery, initialType }: {
 			current.searchParams.set('search_type', type);
 			const origin = current.pathname + current.search + current.hash;
 			// Save the submitted search in this history entry, not on every keystroke.
-			window.history.replaceState(window.history.state, '', origin);
+			window.history.replaceState(null, '', origin);
 			router.push(withExplorerReturnTo(route, origin));
 		}}>
 			<input aria-label="Explorer search" aria-invalid={error ? true : undefined}

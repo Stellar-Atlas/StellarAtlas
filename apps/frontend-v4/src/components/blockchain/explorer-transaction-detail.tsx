@@ -166,7 +166,7 @@ function TransactionDetail({ hash, route }: {
 	const previousPages = useRef(new Map<string, TransactionActivityRoute>());
 	const [retry, setRetry] = useState(0);
 	const navigate = (selection: TransactionActivityRoute): void => {
-		window.history.pushState(window.history.state, '', transactionActivityHref(pathname, params.toString(), selection, hash, window.location.hash));
+		window.history.pushState(null, '', transactionActivityHref(pathname, params.toString(), selection, hash, window.location.hash));
 	};
 	useEffect(() => {
 		let disposed = false;
