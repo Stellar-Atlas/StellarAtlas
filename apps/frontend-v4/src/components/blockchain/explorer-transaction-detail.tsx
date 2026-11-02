@@ -20,18 +20,15 @@ import { ExplorerContractEventTable } from './explorer-contract-event-table';
 import { ExplorerOperationCall } from './explorer-operation-call';
 import { OperationResultFields } from './explorer-operation-result';
 import { ExplorerRecordFields } from './explorer-record-fields';
+import { ExplorerEffectFields } from './explorer-effect-fields';
+import { recordFieldInput } from './record-field-tree';
 import { operationInvocation } from './explorer-operation-invocation';
 import { formatAtomic } from './explorer-format-values';
 import { ExplorerLink as Link } from './explorer-investigation';
 import styles from './explorer-entity.module.css';
 
 function decoded(value: unknown): unknown {
-	if (typeof value !== 'string') return value;
-	try {
-		return JSON.parse(value) as unknown;
-	} catch {
-		return value;
-	}
+	return recordFieldInput(value);
 }
 function JsonValue({ value }: { readonly value: unknown }): React.JSX.Element {
 	const parsed = decoded(value);
@@ -88,6 +85,7 @@ function RelationRecord({
 			)}
 			<dl className={styles.details}>
 				{relation === 'operations' && <OperationResultFields row={row} />}
+				{relation === 'effects' && <ExplorerEffectFields row={row} ledger={ledger} />}
 				{amounts.flatMap((amount, index) => [
 					<dt key={'a' + index}>{entityText(amount, 'field')}</dt>,
 					<dd key={'v' + index}>
@@ -108,7 +106,7 @@ function RelationRecord({
 					</>
 				)}
 			</dl>
-			<ExplorerRecordFields value={details} filters={{ min_ledger: ledger, max_ledger: ledger }}
+			<ExplorerRecordFields value={row.detailsJson} filters={{ min_ledger: ledger, max_ledger: ledger }}
 				exclude={hasInvocation ? ['type', 'function', 'contract_id'] : []} rawFallback={false} />
 			<details>
 				<summary>

@@ -342,7 +342,13 @@ export function buildAdmitCanonicalFrontierSql(
 			and reserved."executionReason" = 'canonical-frontier-reserve'
 	), protected_roots as materialized (
 		select "archiveUrlIdentity" from canonical_roots
-	), ${buildHistoryArchiveOutstandingReadyCountCtesSql(maximumPriority, true)}, outstanding as materialized (
+	), ${buildHistoryArchiveOutstandingReadyCountCtesSql(
+		maximumPriority,
+		true,
+		undefined,
+		undefined,
+		true
+	)}, outstanding as materialized (
 		select (active.count + ready.count)::integer as count
 		from active, ready
 	), candidates as materialized (

@@ -1,6 +1,7 @@
 import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { historyArchiveCheckpointBucketDependencyRangeSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 import { historyArchiveAdaptiveProbeCohortSql } from './HistoryArchiveAdaptiveProbeCohort.js';
+import { historyArchiveProofCompletionReserveMemberSql } from './HistoryArchiveProofCompletionReserveSql.js';
 
 export const historyArchiveSequentialPrefetchLedgerSpan =
 	(historyArchiveSequentialPrefetchDepth - 1) * 64;
@@ -11,6 +12,7 @@ export function historyArchiveObjectOpenSequentialCohortSql(
 	return `(
         ${objectAlias}."checkpointLedger" is null
         or ${historyArchiveAdaptiveProbeCohortSql(objectAlias)}
+        or ${historyArchiveProofCompletionReserveMemberSql(objectAlias)}
         or exists (
             select 1
             from "history_archive_checkpoint_scan_cursor" chain_cursor

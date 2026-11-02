@@ -10,6 +10,7 @@ import type {
 	HubbleCatalog,
 	HubbleWarehouse
 } from './HubbleWarehouseContracts.js';
+import type { PublicGoodsReadinessSnapshot, PublicationReadinessSnapshot } from './PublicGoodsReadinessReader.js';
 
 const measurementFreshnessMs = 60_000;
 const publicationFreshnessMs = 24 * 60 * 60 * 1000;
@@ -24,6 +25,7 @@ export interface PublicGoodsRouterConfig {
 		GetHistoryArchiveObjectStatusSummary,
 		'execute'
 	>;
+	readonly readReadinessSnapshot: () => Promise<PublicGoodsReadinessSnapshot>;
 }
 
 export function publicGoodsRouter(config: PublicGoodsRouterConfig): Router {
@@ -31,17 +33,8 @@ export function publicGoodsRouter(config: PublicGoodsRouterConfig): Router {
 	const readSnapshot = createSnapshotReader(config);
 
 	router.get('/health', async (_request, response) => {
-		const generatedAt = new Date().toISOString();
-		const checks = await readChecks(config, generatedAt, readSnapshot);
-		const ready = Object.values(checks).every(
-			(check) => check.status === 'ready'
-		);
-		const body: PublicGoodsHealthV1 = {
-			generatedAt,
-			status: ready ? 'ready' : 'not_ready',
-			checks
-		};
-		sendNoCacheJson(response, ready ? 200 : 503, body);
+		const body = await readChecks(config);
+		sendNoCacheJson(response, body.status === 'ready' ? 200 : 503, body);
 	});
 
 	router.get('/metrics', async (_request, response) => {
@@ -169,16 +162,16 @@ function createSnapshotReader(config: PublicGoodsRouterConfig) {
 }
 
 async function readChecks(
-	config: PublicGoodsRouterConfig,
-	generatedAt: string,
-	readSnapshot: ReturnType<typeof createSnapshotReader>
-): Promise<PublicGoodsHealthV1['checks']> {
+	config: PublicGoodsRouterConfig
+): Promise<PublicGoodsHealthV1> {
 	const [probeResult, snapshotResult] = await Promise.allSettled([
 		config.warehouse.probe === undefined
 			? Promise.reject(new Error('ClickHouse probe unavailable'))
 			: config.warehouse.probe(),
-		readSnapshot()
+		config.readReadinessSnapshot()
 	]);
+	// Timestamp the finished observation, not the start of potentially slow I/O.
+	const generatedAt = new Date().toISOString();
 	const snapshot =
 		snapshotResult.status === 'fulfilled'
 			? snapshotResult.value
@@ -197,14 +190,9 @@ async function readChecks(
 		manifestStatus !== 'ready' ? manifestStatus : catalogStatus;
 	const archiveComplete =
 		summary !== null &&
-		!summary.sourcesTruncated &&
-		summary.sourceCount === summary.sources.length &&
-		summary.sourceCount > 0 &&
-		summary.sources.every((source) => isTimestamp(source.observedAt));
-	const recentRootCount =
-		summary?.sources.filter((source) =>
-			isRecentTimestamp(source.observedAt, generatedAt)
-		).length ?? 0;
+		summary.complete &&
+		summary.sourceCount > 0;
+	const recentRootCount = summary?.checkedRoots ?? 0;
 	const archiveMeasurementStatus = summary
 		? ageStatus(summary.generatedAt, generatedAt)
 		: 'unavailable';
@@ -218,7 +206,7 @@ async function readChecks(
 					: recentRootCount === 0
 						? 'stale'
 						: 'ready';
-	return {
+	const checks: PublicGoodsHealthV1['checks'] = {
 		clickhouse: {
 			status: probeResult.status === 'fulfilled' ? 'ready' : 'unavailable',
 			observedAt: probeResult.status === 'fulfilled' ? generatedAt : null
@@ -226,7 +214,7 @@ async function readChecks(
 		publication: {
 			status: publicationStatus,
 			observedAt: catalog?.generatedAt ?? null,
-			latestCompletedAt: catalog?.ingestion.latestCompletedAt ?? null
+			latestCompletedAt: catalog?.latestCompletedAt ?? null
 		},
 		archive: {
 			status: archiveStatus,
@@ -237,21 +225,25 @@ async function readChecks(
 			complete: archiveComplete
 		}
 	};
+	return {
+		generatedAt,
+		status: Object.values(checks).every(check => check.status === 'ready') ? 'ready' : 'not_ready',
+		checks
+	};
 }
 
 function publicationReadiness(
-	catalog: HubbleCatalog | null,
+	catalog: PublicationReadinessSnapshot | null,
 	now: string
 ): PublicGoodsCheckStatusV1 {
 	if (catalog === null) return 'unavailable';
-	if (catalog.datasets.length === 0) return 'empty';
 	if (
-		!isPositiveInteger(catalog.ingestion.completedBatches) ||
-		!isPositiveInteger(catalog.ingestion.totalRows)
+		!isPositiveInteger(catalog.completedBatches) ||
+		!isPositiveInteger(catalog.totalRows)
 	) {
 		return 'empty';
 	}
-	const latest = catalog.ingestion.latestCompletedAt;
+	const latest = catalog.latestCompletedAt;
 	if (latest === undefined || latest === null) return 'unavailable';
 	return ageStatus(latest, now, publicationFreshnessMs);
 }

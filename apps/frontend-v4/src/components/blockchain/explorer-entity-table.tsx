@@ -230,7 +230,7 @@ export function ExplorerEntityDetails({
 }): React.JSX.Element {
 	const details = recordValue(row.details);
 	const excluded = entityText(row, 'type') === 'invoke_host_function' ? ['function', 'type', 'contract_id'] : [];
-	const hasDetails = Object.keys(details).some((key) => !excluded.includes(key));
+	const hasDetails = typeof row.details === 'string' ? row.details.length > 0 : Array.isArray(row.details) ? row.details.length > 0 : Object.keys(details).some((key) => !excluded.includes(key));
 	return (
 		<>
 			<dl className={styles.details}>
@@ -249,7 +249,7 @@ export function ExplorerEntityDetails({
 			{hasDetails && (
 				<section>
 					<h3>{collection === 'operations' ? 'Operation details' : 'Record details'}</h3>
-					<ExplorerRecordFields value={details} filters={filters} exclude={excluded} />
+					<ExplorerRecordFields value={row.details} filters={filters} exclude={excluded} />
 				</section>
 			)}
 			{collection === 'assets' && (

@@ -9,6 +9,7 @@ import {
 } from './HistoryArchiveCanonicalFirst.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { getCanonicalFrontierAlternateTargets } from './HistoryArchiveCanonicalFallbackTargets.js';
 
 export async function materializeOrderedCheckpointPrefetch(
 	manager: EntityManager,
@@ -35,12 +36,14 @@ export async function activateCurrentCheckpointDependencies(
 	manager: EntityManager,
 	archiveUrlIdentity: string | null = null
 ): Promise<{ readonly activated: number; readonly ready: number }> {
+	const alternateTargets = await getCanonicalFrontierAlternateTargets(manager);
 	const [result] = (await manager.query(
 		activateCurrentCheckpointDependenciesSql,
 		[
 			archiveUrlIdentity,
 			historyArchiveSequentialPrefetchDepth,
-			historyArchiveConsumerCount
+			historyArchiveConsumerCount,
+			alternateTargets.map((target) => target.remoteId)
 		]
 	)) as readonly {
 		readonly activated: number | string;
@@ -153,34 +156,60 @@ export const activateCurrentCheckpointDependenciesSql = `
 		where cursor."nextHistoricalCheckpointLedger" is not null
 			and cursor."nextHistoricalCheckpointLedger" - 64 >= 63
 			and ${historyArchiveCanonicalFirstAdmissionSql('cursor."archiveUrlIdentity"', '$1::text')}
+		union
+		select alternate."archiveUrlIdentity", alternate."checkpointLedger"
+		from unnest($4::uuid[]) target("remoteId")
+		join "history_archive_object_queue" alternate
+			on alternate."remoteId" = target."remoteId"
+			and alternate."objectType" = 'checkpoint-state'
+			and alternate."executionReason" = 'canonical-frontier-alternate'
+			and alternate.status = 'verified'
 	), candidate_keys as materialized (
 		select object.id, current."checkpointLedger",
 			(object.status = 'verified') as "needsReverification"
 		from current_checkpoints current
-		join "history_archive_object_queue" object
-			on object."archiveUrlIdentity" = current."archiveUrlIdentity"
-			and object."checkpointLedger" = current."checkpointLedger"
-			and object."objectType" <> 'bucket'
+		cross join lateral (values
+			('checkpoint-state'::text),
+			('ledger'::text),
+			('transactions'::text),
+			('results'::text),
+			('scp'::text)
+		) expected("objectType")
+		join lateral (
+			select candidate_object.*
+			from "history_archive_object_queue" candidate_object
+			where candidate_object."archiveUrlIdentity" =
+				current."archiveUrlIdentity"
+				and candidate_object."objectType" = expected."objectType"
+				and candidate_object."objectKey" = expected."objectType" || ':' ||
+					lpad(to_hex(current."checkpointLedger"), 8, '0')
+			limit 1
+		) object on object."checkpointLedger" = current."checkpointLedger"
+			and not (
+				object."objectType" = 'checkpoint-state'
+				and object."executionReason" = 'canonical-frontier-alternate'
+			)
 		where (
 			object.status = 'pending'
 			or (
 				object.status = 'verified'
 				and object."objectType" = 'ledger'
-				and coalesce(
-					object."verificationFacts"#>>
-						'{ledgerCategory,headerHashesVerified}',
-					'false'
-				) <> 'true'
-				and exists (
-					select 1
-					from "history_archive_checkpoint_proof" proof
-					where proof."archiveUrlIdentity" =
-						object."archiveUrlIdentity"
-						and proof."checkpointLedger" =
-							current."checkpointLedger"
-						and proof.status = 'not-evaluable'
-						and proof."failureKind" = 'proof-facts-incomplete'
-				)
+				and case when exists (
+						select 1
+						from "history_archive_checkpoint_proof" proof
+						where proof."archiveUrlIdentity" =
+							object."archiveUrlIdentity"
+							and proof."checkpointLedger" =
+								current."checkpointLedger"
+							and proof.status = 'not-evaluable'
+							and proof."failureKind" = 'proof-facts-incomplete'
+					) then coalesce(
+						object."verificationFacts"#>>
+							'{ledgerCategory,headerHashesVerified}',
+						'false'
+					) <> 'true'
+					else false
+				end
 			)
 		)
 			and (
@@ -217,10 +246,16 @@ export const activateCurrentCheckpointDependenciesSql = `
 				'current."checkpointLedger"'
 			)}
 		) dependency
-		join "history_archive_object_queue" object
-			on object."archiveUrlIdentity" = current."archiveUrlIdentity"
-			and object."bucketHash" = dependency."bucketHash"
-			and object."objectType" = 'bucket'
+		join lateral (
+			select bucket_object.*
+			from "history_archive_object_queue" bucket_object
+			where bucket_object."archiveUrlIdentity" =
+				current."archiveUrlIdentity"
+				and bucket_object."objectType" = 'bucket'
+				and bucket_object."objectKey" = 'bucket:' ||
+					lower(dependency."bucketHash")
+			limit 1
+		) object on object."bucketHash" = dependency."bucketHash"
 		where object.status = 'pending'
 			and (object."executionDisposition" is null
 				or object."executionDisposition" = 'deferred')

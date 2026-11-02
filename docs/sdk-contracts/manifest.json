@@ -1,12 +1,12 @@
 {
   "status": "synthetic design fixtures; no SDK release",
-  "sourceRevision": "f14988c49e23fbb4e02bde72bc11709c5f866b5a",
-  "sourceUrl": "https://github.com/Stellar-Atlas/StellarAtlas/tree/f14988c49e23fbb4e02bde72bc11709c5f866b5a",
+  "sourceRevision": "2a59b5d292a7aad6466a2cae24006d8382567079",
+  "sourceUrl": "https://github.com/Stellar-Atlas/StellarAtlas/tree/2a59b5d292a7aad6466a2cae24006d8382567079",
   "schemaProjection": "Selected OpenAPI operations and three reachable GraphQL workflow fields; full GraphQL digest retained.",
   "sourceFiles": [
     {
       "path": "apps/backend/src/core/infrastructure/http/api.ts",
-      "sha256": "81035e2899c9b92f7400e048ba8f662c31805ebd5872f9df1ce8e778d4682d3f"
+      "sha256": "24d8a3fadb48a6265ab3b107a2fc0c9d0b4a198db277845fdb3136064c45b0ae"
     },
     {
       "path": "apps/backend/src/core/infrastructure/http/PublicOpenApiDocument.ts",
@@ -14,7 +14,7 @@
     },
     {
       "path": "apps/backend/src/core/infrastructure/http/HubbleOpenApiDocument.ts",
-      "sha256": "d7558e6a1104eb9efb65ceddccd605f44347e34572104e6451637f383e2ed0b8"
+      "sha256": "b5c9d80f52b7386ca21f2f047559f178bb52b3567fec4efed763559a291b4cce"
     },
     {
       "path": "apps/backend/src/core/infrastructure/http/AssetResourceOpenApi.ts",
@@ -146,7 +146,19 @@
     },
     {
       "path": "apps/backend/src/status/infrastructure/http/asset-catalogue/AssetResourceRouter.ts",
-      "sha256": "6b5e5066506fc7912d9f1940d0ccd3af9e17a757d31a225e9b2d56514dba3646"
+      "sha256": "6a3e321f6bb09c8e7ee5760b562bb6f814c2e0ec591883ebe0836fb5f2e876f6"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/PublicDataRoutes.ts",
+      "sha256": "769105ed90fcc86bc114102c7d306888222e5474c4f79bf9d08c5bd99d37ac82"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/PublicGoodsRouter.ts",
+      "sha256": "fb3692d0db437c1a0860e7099ef6cd5765dff107b79b44662fca2e5aab79dc72"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/PublicGoodsReadinessReader.ts",
+      "sha256": "8225ae4f013435281832a7c83994f2e59944228edf0e16e9b55d1fd8e9199cce"
     },
     {
       "path": "apps/backend/src/status/infrastructure/http/__tests__/HubbleAccountBalanceGraphql.test.ts",
@@ -159,6 +171,14 @@
     {
       "path": "apps/backend/src/status/infrastructure/http/__tests__/HubbleTransactionFixture.ts",
       "sha256": "39e9c6c0eaba7a4054dffca5391c1dd01595e749b3d17fcd1744251e555f5701"
+    },
+    {
+      "path": "apps/backend/package.json",
+      "sha256": "090ac0d3d26a059d63bce37e5d9f6f2c53fc01d3d28a347dd0e29297d7ef3aa9"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "ce2c86e590b24fc8053176fb9d3a5655e2ca8e5bfb4d637267be5ffa27ad9876"
     }
   ],
   "fixtures": [
@@ -180,7 +200,7 @@
     },
     {
       "path": "fixtures/account-request-rejections.json",
-      "sha256": "9e5b807a10a3b47e0b611b2003ef65bfe6ebf825e30584a26f00312add091d1b"
+      "sha256": "e64c6ab2e6ead921f23456864acfb331fff2253122d99c029f988631ef864401"
     },
     {
       "path": "fixtures/account-terminal.json",
@@ -196,11 +216,11 @@
     },
     {
       "path": "fixtures/graphql-request-budget.json",
-      "sha256": "721025b2b1be795a3da3a58b1dffb87b59d8bbd3a25c9add457826bc21272a1a"
+      "sha256": "fabd2cceb734163015e27ea201e08db91c9963d317c0f71cb6ba071724cbaee1"
     },
     {
       "path": "fixtures/graphql-unknown-field.json",
-      "sha256": "85a18c981762157393bba6f1ba68bc8f6a23e1b82737fcc03eabffa3393090a7"
+      "sha256": "5fb27ecaa44fc60033b86647c38d9fe5b0f27c3487d967a4e0b4f4a8c752e470"
     },
     {
       "path": "fixtures/holder-cursor-changed-sort.json",
@@ -216,7 +236,11 @@
     },
     {
       "path": "fixtures/holder-uint32-input.json",
-      "sha256": "22d803c88a8d66103246a27ca03ace532156945e5cb248364b9978d1164194e0"
+      "sha256": "0e055ef3065ff144b6d4d0f5b2b4c9fb82acfb91bef99577166fe9f1abcfa411"
+    },
+    {
+      "path": "fixtures/http-negotiation.json",
+      "sha256": "38323bc82814c8bc884aad130543400d9489c2bdb71cd071bc8d9a2dabd3912b"
     },
     {
       "path": "fixtures/invalid-limit.json",
@@ -225,6 +249,10 @@
     {
       "path": "fixtures/openapi-selected.json",
       "sha256": "162ca8d7fe4de244e2fcee29c89717787426a02f735fdc6005df25e63015fd13"
+    },
+    {
+      "path": "fixtures/rest-mount.json",
+      "sha256": "59fd02a9a6db59c67a732746a8894bc9340d25481dcf2f46a4b0a34b4798f22e"
     },
     {
       "path": "fixtures/schema-digests.json",

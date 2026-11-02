@@ -54,6 +54,6 @@
       ]
     }
   },
-  "expectedHttpStatus": null,
-  "statusNote": "Actual registered validation rule checked; HTTP adapter excluded. Split the query rather than retrying unchanged."
+  "expectedHttpStatus": 200,
+  "statusNote": "Actual HTTP adapter returns200 for application/json budget errors; inspect errors and split the query."
 }

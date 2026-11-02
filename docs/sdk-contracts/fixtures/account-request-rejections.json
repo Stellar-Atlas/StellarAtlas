@@ -52,7 +52,7 @@
         }
       ]
     },
-    "expectedHttpStatus": null,
-    "statusNote": "Variable coercion checked; adapter HTTP status is not asserted by this socket-free test."
+    "expectedHttpStatus": 200,
+    "statusNote": "Actual HTTP adapter returns200 for this application/json coercion error; inspect errors."
   }
 }

@@ -19,6 +19,6 @@
       }
     ]
   },
-  "expectedHttpStatus": null,
-  "statusNote": "Registered schema validation checked; HTTP adapter excluded."
+  "expectedHttpStatus": 200,
+  "statusNote": "Actual HTTP adapter returns200 for application/json schema errors; inspect errors."
 }

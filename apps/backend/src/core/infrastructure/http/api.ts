@@ -2,7 +2,6 @@ import express from 'express';
 import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
 import { resolve } from 'node:path';
-import { assetResourceRouter } from '@status/infrastructure/http/asset-catalogue/AssetResourceRouter.js';
 import { type Config, getConfigFromEnv } from '../../config/Config.js';
 import type { ExceptionLogger } from 'exception-logger';
 import type { Logger } from 'logger';
@@ -113,10 +112,8 @@ import { mountExplorerRoutes } from './ExplorerRoutes.js';
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
-import { hubbleWarehouseRouter } from '@status/infrastructure/http/HubbleWarehouseRouter.js';
-import { hubbleWarehouseGraphqlHandler } from '@status/infrastructure/http/HubbleWarehouseGraphql.js';
 import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
-import { publicGoodsRouter } from '@status/infrastructure/http/PublicGoodsRouter.js';
+import { mountPublicDataRoutes } from '@status/infrastructure/http/PublicDataRoutes.js';
 import { withHubbleTransactionLedgerHints } from '@status/infrastructure/http/HubbleTransactionLedgerHints.js';
 import { createPostgresHubbleTransactionLedgerLocator } from '@status/infrastructure/http/HubbleTransactionLedgerLocator.js';
 import { corsMiddleware } from './CorsMiddleware.js';
@@ -204,28 +201,12 @@ const listen = async () => {
 		})
 	);
 
-	api.use(
-		'/v1/analytics',
-		hubbleWarehouseRouter({ warehouse: hubbleWarehouse })
-	);
-	api.use(
-		'/v1',
-		assetResourceRouter({
-			warehouse: hubbleWarehouse,
-			networkPassphrase: config.networkConfig.networkPassphrase
-		})
-	);
-	api.use(
-		'/v1/public-goods',
-		publicGoodsRouter({
-			warehouse: hubbleWarehouse,
-			getArchiveStatusSummary: kernel.container.get(
-				GetHistoryArchiveObjectStatusSummary
-			)
-		})
-	);
-
-	api.all('/graphql', hubbleWarehouseGraphqlHandler(hubbleWarehouse));
+	mountPublicDataRoutes(api, {
+		warehouse: hubbleWarehouse,
+		manager: kernel.container.get(DataSource).manager,
+		networkPassphrase: config.networkConfig.networkPassphrase,
+		getArchiveStatusSummary: kernel.container.get(GetHistoryArchiveObjectStatusSummary)
+	});
 
 	mountOpenApiDocumentation(api, {
 		document: openApiDocument

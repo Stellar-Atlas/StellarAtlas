@@ -24,9 +24,10 @@ const contractFiles = [
   'HubbleTransactionQuery.ts', 'HubbleTransactionMapper.ts', 'HubbleTransactionEnvelope.ts',
   'HubbleAccountBalanceCursor.ts', 'HubbleTransactionCursor.ts', 'HubbleLedgerCoverage.ts',
   'HubbleWarehouseErrors.ts', 'asset-catalogue/AssetResourceRouter.ts',
+  'PublicDataRoutes.ts', 'PublicGoodsRouter.ts', 'PublicGoodsReadinessReader.ts',
   '__tests__/HubbleAccountBalanceGraphql.test.ts', '__tests__/HubbleTransactionApi.integration.test.ts',
   '__tests__/HubbleTransactionFixture.ts'
-].map(name => http + name));
+].map(name => http + name), ['apps/backend/package.json', 'pnpm-lock.yaml']);
 const sourceFiles = contractFiles.map(file => {
   const committed = execFileSync('git', ['show', revision + ':' + file], {
     cwd: root, env: { ...process.env, GIT_NO_LAZY_FETCH: '1' }

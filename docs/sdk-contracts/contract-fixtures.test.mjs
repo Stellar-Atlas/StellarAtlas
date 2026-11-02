@@ -2,19 +2,13 @@ import { jest, test, expect } from '@jest/globals';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { parse, validate, execute, specifiedRules, printSchema, GraphQLSchema, GraphQLObjectType } from 'graphql';
+import { getIntrospectionQuery, buildClientSchema, printSchema, GraphQLSchema, GraphQLObjectType } from 'graphql';
 import { account, issuer, asset, accountQuery, holderQuery, transactionHash, transactionQuery, designWarehouse } from './design-data.mjs';
 import { rest } from './in-memory-rest.mjs';
 import { normalizeTransactionInput } from '../../apps/backend/src/status/infrastructure/http/HubbleTransactionCursor.js';
 import { HubbleWarehouseUnavailableError } from '../../apps/backend/src/status/infrastructure/http/HubbleWarehouseErrors.js';
+import { fixtureHttp } from './http-fixture.mjs';
 
-// Capture the actual registered schema/root resolvers. Transport adaptation is
-// intentionally excluded: no Express listener or HTTP socket is opened.
-let registration;
-jest.unstable_mockModule('graphql-http/lib/use/express', () => ({
-  createHandler(options) { registration = options; return () => { throw new Error('HTTP transport excluded'); }; }
-}), { virtual: true });
-const { hubbleWarehouseGraphqlHandler } = await import('../../apps/backend/src/status/infrastructure/http/HubbleWarehouseGraphql.js');
 const { withHubbleOpenApiPaths } = await import('../../apps/backend/src/core/infrastructure/http/HubbleOpenApiDocument.js');
 const { withAssetResourceOpenApiPaths } = await import('../../apps/backend/src/core/infrastructure/http/AssetResourceOpenApi.js');
 const folder = fileURLToPath(new URL('./fixtures/', import.meta.url));
@@ -31,15 +25,10 @@ function pinned(name, value) {
   expect(fs.readFileSync(file, 'utf8')).toBe(text);
 }
 async function graph(warehouse, query, variables) {
-  hubbleWarehouseGraphqlHandler(warehouse);
-  let document;
-  try { document = parse(query); }
-  catch (error) { return JSON.parse(JSON.stringify({ errors: [error] })); }
-  const args = { schema: registration.schema, rootValue: registration.rootValue, document, variableValues: variables };
-  const rules = registration.validationRules({}, args, specifiedRules);
-  const errors = validate(registration.schema, document, rules);
-  if (errors.length) return JSON.parse(JSON.stringify({ errors }));
-  return JSON.parse(JSON.stringify(await execute(args)));
+  const response = await fixtureHttp(warehouse, { body: { query, variables } });
+  expect(response.status).toBe(200);
+  expect(response.contentType).toContain('application/json');
+  return response.body;
 }
 async function pair(name, path, query, variables, warehouse = designWarehouse(), expectedStatus = 200) {
   const response = await rest(warehouse, path);
@@ -49,14 +38,14 @@ async function pair(name, path, query, variables, warehouse = designWarehouse(),
     kind: 'synthetic-design-fixture',
     rest: { request: { method: 'GET', path }, response },
     graphql: { request: { method: 'POST', path: '/graphql', accept: 'application/json', body: { query, variables } },
-      // HTTP200 for resolver errors is pinned by registered API tests, not an HTTP assertion in this socket-free test.
+      // The separate HTTP matrix verifies the negotiated status and media type.
       expectedHttpStatus: 200, responseBody: result }
   };
   pinned(name + '.json', value);
   return { rest: response.body, graphql: result, warehouse };
 }
 
-test('pin selected OpenAPI projection and actual registered GraphQL schema', () => {
+test('pin selected OpenAPI projection and actual registered GraphQL schema', async () => {
   const document = withAssetResourceOpenApiPaths(withHubbleOpenApiPaths({ openapi: '3.0.3', paths: {}, components: { schemas: {} } }));
   const selected = ['/v1/analytics/accounts/{account}/balances', '/v1/assets/{asset}/holders', '/v1/analytics/transactions/{transactionHash}'];
   const paths = Object.fromEntries(selected.map(path => { expect(document.paths[path]).toBeDefined(); return [path, document.paths[path]]; }));
@@ -71,14 +60,17 @@ test('pin selected OpenAPI projection and actual registered GraphQL schema', () 
     pending.push(...Object.values(value));
   }
   pinned('openapi-selected.json', { openapi: document.openapi, paths, components: { schemas } });
-  hubbleWarehouseGraphqlHandler(designWarehouse());
-  const query = registration.schema.getQueryType().toConfig();
+  const introspection = await fixtureHttp(designWarehouse(), { body: { query: getIntrospectionQuery() } });
+  expect(introspection.status).toBe(200);
+  expect(introspection.body.errors).toBeUndefined();
+  const schema = buildClientSchema(introspection.body.data);
+  const query = schema.getQueryType().toConfig();
   const selectedQuery = new GraphQLObjectType({ ...query, fields: Object.fromEntries(
     ['hubbleAccountBalances', 'hubbleAssetHolders', 'hubbleTransaction'].map(key => [key, query.fields[key]])
   ) });
   const selectedSchema = printSchema(new GraphQLSchema({ query: selectedQuery })) + '\n';
   pinned('schema.graphql', selectedSchema);
-  pinned('schema-digests.json', { fullRegisteredSchemaSha256: createHash('sha256').update(printSchema(registration.schema) + '\n').digest('hex'),
+  pinned('schema-digests.json', { fullRegisteredSchemaSha256: createHash('sha256').update(printSchema(schema) + '\n').digest('hex'),
     selectedSchemaSha256: createHash('sha256').update(selectedSchema).digest('hex') });
 });
 
@@ -160,7 +152,7 @@ test('REST holder UInt32 upper bound is valid but GraphQL variable coercion cann
   expect(result.errors[0].message).toContain('Int cannot represent non 32-bit signed integer value');
   pinned('holder-uint32-input.json', { kind: 'synthetic-design-fixture', rest: { response }, graphql: {
     request: { query: holderQuery, variables }, responseBody: result,
-    expectedHttpStatus: null, statusNote: 'Schema coercion checked; adapter HTTP status is not asserted by this socket-free test.' } });
+    expectedHttpStatus: 200, statusNote: 'Actual HTTP adapter returns200 for this application/json coercion error; inspect errors.' } });
 });
 
 test('account cursor cannot move to another account and reserved characters do not imply a valid cursor', async () => {
@@ -247,8 +239,8 @@ test('unsupported account state selection and duplicate REST keys fail without w
   expect(warehouse.calls).toHaveLength(0);
   pinned('account-request-rejections.json', { kind: 'synthetic-design-fixture', rest: [
     { request: { method: 'GET', path }, response }, { request: { method: 'GET', path: duplicatePath }, response: duplicate }
-  ], graphql: { request: { query: accountQuery, variables }, responseBody: result, expectedHttpStatus: null,
-    statusNote: 'Variable coercion checked; adapter HTTP status is not asserted by this socket-free test.' } });
+  ], graphql: { request: { query: accountQuery, variables }, responseBody: result, expectedHttpStatus: 200,
+    statusNote: 'Actual HTTP adapter returns200 for this application/json coercion error; inspect errors.' } });
 });
 
 test('unknown GraphQL response fields fail schema validation before warehouse work', async () => {
@@ -259,7 +251,7 @@ test('unknown GraphQL response fields fail schema validation before warehouse wo
   expect(result.errors[0].message).toContain('Cannot query field "currentBalance"');
   expect(warehouse.calls).toHaveLength(0);
   pinned('graphql-unknown-field.json', { kind: 'synthetic-design-fixture', request: { query, variables },
-    responseBody: result, expectedHttpStatus: null, statusNote: 'Registered schema validation checked; HTTP adapter excluded.' });
+    responseBody: result, expectedHttpStatus: 200, statusNote: 'Actual HTTP adapter returns200 for application/json schema errors; inspect errors.' });
 });
 
 test('registered GraphQL work budget accepts cost32 and rejects cost40 before warehouse work', async () => {
@@ -274,6 +266,6 @@ test('registered GraphQL work budget accepts cost32 and rejects cost40 before wa
   expect(rejected.errors[0].extensions).toMatchObject({ code: 'QUERY_TOO_COMPLEX', limits: { maximumQueryCost: 32 } });
   expect(warehouse.calls).toHaveLength(0);
   pinned('graphql-request-budget.json', { kind: 'synthetic-design-fixture', accepted: { request: { query: query(4), variables: { account } }, responseBody: accepted },
-    rejected: { request: { query: query(5), variables: { account } }, responseBody: rejected }, expectedHttpStatus: null,
-    statusNote: 'Actual registered validation rule checked; HTTP adapter excluded. Split the query rather than retrying unchanged.' });
+    rejected: { request: { query: query(5), variables: { account } }, responseBody: rejected }, expectedHttpStatus: 200,
+    statusNote: 'Actual HTTP adapter returns200 for application/json budget errors; inspect errors and split the query.' });
 });
