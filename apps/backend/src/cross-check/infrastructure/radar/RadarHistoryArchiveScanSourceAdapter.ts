@@ -46,14 +46,21 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 			RadarHistoryArchiveScanSourceAdapter.defaultTimeoutMs;
 		const maxBytes =
 			options.maxBytes ?? RadarHistoryArchiveScanSourceAdapter.defaultMaxBytes;
+		const deadline = new AbortController();
+		const timer = setTimeout(() => deadline.abort(new DOMException('Radar deadline', 'TimeoutError')), timeoutMs);
+		const signal = options.signal ? AbortSignal.any([deadline.signal, options.signal]) : deadline.signal;
 
 		try {
+			signal.throwIfAborted();
 			const response = await this.fetchFn(url, {
 				headers: { accept: 'application/json' },
-				signal: AbortSignal.timeout(timeoutMs)
+				signal,
+				redirect: 'manual'
 			});
-			if (response.status === 404) return ok(null);
-			if (!response.ok) {
+			if (signal.aborted) { await response.body?.cancel().catch(() => undefined); signal.throwIfAborted(); }
+			if (response.status === 404 && !response.redirected) { await response.body?.cancel(); return ok(null); }
+			if (!response.ok || response.redirected) {
+				await response.body?.cancel();
 				return err(
 					radarHistoryArchiveScanFailure(
 						'http_status',
@@ -66,7 +73,8 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 			const bodyOrError = await readBoundedRadarText(
 				response,
 				maxBytes,
-				'RADAR history archive scan'
+				'RADAR history archive scan',
+				signal
 			);
 			if (bodyOrError.isErr()) {
 				return err(
@@ -85,11 +93,12 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 				requestedArchiveUrl: decodeURIComponent(encodedUrlOrError.value)
 			});
 		} catch (error) {
+			if (options.signal?.aborted) return err(radarHistoryArchiveScanFailure('cancelled', 'RADAR request cancelled'));
 			const mappedError = mapRadarFetchError(error);
 			return err(
 				radarHistoryArchiveScanFailure(mappedError.kind, mappedError.message)
 			);
-		}
+		} finally { clearTimeout(timer); }
 	}
 }
 

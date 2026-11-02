@@ -44,6 +44,7 @@ import { mountParsedHistoryRequestBodyParser } from '@history-scan-coordinator/i
 import { createHistoryScanRouter } from './HistoryScanRouteFactory.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { archiveEvidenceRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveEvidenceRouter.js';
+import { archiveRadarObservationRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveRadarObservationRouter.js';
 import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
@@ -264,6 +265,10 @@ const listen = async () => {
 		})
 	);
 
+	api.use(
+		'/v2/archive-scans',
+		archiveRadarObservationRouter()
+	);
 	api.use(
 		'/v2/archive-scans',
 		archiveEvidenceRouter({

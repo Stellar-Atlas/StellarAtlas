@@ -8,6 +8,7 @@ import {
 import { useId, useRef, useState } from 'react';
 import { ArchiveSourceOverview } from './archive-source-overview';
 import { ArchiveSourceErrorSummary } from './archive-source-error-summary';
+import { ArchiveRadarObservationPanel } from './archive-radar-observation';
 import { ArchiveSourceListingSummary } from './archive-source-listing-summary';
 import { ArchiveHealthPill } from '@components/status/status-ui';
 import {
@@ -116,6 +117,7 @@ export function KnownArchiveEvidence({
 						}}
 					/>
 					<ArchiveSourceListingSummary root={sourceRoot} />
+					<ArchiveRadarObservationPanel archiveUrl={sourceRoot.archiveUrlIdentity} failures={liveEvidence.remoteFailures} />
 				</div>
 			) : null}
 			<div
