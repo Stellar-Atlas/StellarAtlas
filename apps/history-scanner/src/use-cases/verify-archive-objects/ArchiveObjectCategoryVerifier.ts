@@ -277,7 +277,7 @@ export class ArchiveObjectCategoryVerifier {
 			replay === undefined
 				? await this.httpService.get(urlResult.value, {
 						responseType: 'stream',
-						connectionTimeoutMs: 10_000,
+						connectionTimeoutMs: 60_000,
 						socketTimeoutMs: 60_000
 					})
 				: ok({

@@ -130,8 +130,8 @@ export class VerifyArchiveObjects {
 					bytesDownloaded,
 					bytesTotal
 				),
-			(remoteId, workerStage, bytesDownloaded, bytesTotal) =>
-				this.workerTelemetry.updateProgressAndFlush(
+			async (remoteId, workerStage, bytesDownloaded, bytesTotal) =>
+				this.workerTelemetry.updateProgress(
 					remoteId,
 					workerStage,
 					bytesDownloaded,
@@ -317,7 +317,7 @@ export class VerifyArchiveObjects {
 		try {
 			const response = await this.httpService.get(urlResult.value, {
 				responseType: 'stream',
-				connectionTimeoutMs: 10_000,
+				connectionTimeoutMs: 60_000,
 				socketTimeoutMs: 60_000
 			});
 			if (response.isErr())
@@ -353,7 +353,7 @@ export class VerifyArchiveObjects {
 				},
 				async () => {
 					activeWorkerStage = 'verifying_bucket';
-					await this.workerTelemetry.updateProgressAndFlush(
+					this.workerTelemetry.updateProgress(
 						job.remoteId,
 						activeWorkerStage,
 						bytesDownloaded,

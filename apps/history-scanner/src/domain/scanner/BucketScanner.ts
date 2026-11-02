@@ -135,7 +135,7 @@ export class BucketScanner {
 					httpsAgent: scanState.httpsAgent,
 					responseType: 'stream',
 					socketTimeoutMs: 60000,
-					connectionTimeoutMs: 10000
+					connectionTimeoutMs: 60000
 				}
 			},
 			async (readStream, request) => {

@@ -631,6 +631,9 @@ importers:
       neverthrow:
         specifier: ^8.2.0
         version: 8.2.0
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
       saxes:
         specifier: 6.0.0
         version: 6.0.0
@@ -659,9 +662,6 @@ importers:
       express:
         specifier: 4.22.2
         version: 4.22.2
-      reflect-metadata:
-        specifier: ^0.2.2
-        version: 0.2.2
       supertest:
         specifier: ^7.2.2
         version: 7.2.2
