@@ -72,12 +72,15 @@ describe('explicit per-root Radar route', () => {
 			calls++; if (calls > 1) return scan();
 			return new Response(new ReadableStream({ start() { started?.(); }, cancel() { cleaning?.(); return cleanup; } }));
 		});
-		const first = request(server).get(path()); const completion = first.then(() => undefined, () => undefined);
+		const listener = server.listen(0, '127.0.0.1');
+		const first = request(listener).get(path()); const completion = first.then(() => undefined, () => undefined);
+		try {
 		await began;
-		await request(server).get(path()).expect(429).expect('Retry-After', '1');
+		await request(listener).get(path()).expect(429).expect('Retry-After', '1');
 		first.abort(); await cleanupStarted;
-		await request(server).get(path()).expect(429); expect(calls).toBe(1);
+		await request(listener).get(path()).expect(429); expect(calls).toBe(1);
 		release?.(); await completion; await tick();
-		await request(server).get(path()).expect(200); expect(calls).toBe(2);
+		await request(listener).get(path()).expect(200); expect(calls).toBe(2);
+		} finally { release?.(); first.abort(); await new Promise<void>(resolve => listener.close(() => resolve())); }
 	});
 });
