@@ -14,6 +14,8 @@ import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { BalanceObservationProvenance } from './explorer-balance-provenance';
 import { ObservedBalanceFlags } from './explorer-balance-flags';
+import { formatAtomic } from './explorer-format-values';
+import { formatObservedAmount, observedTrustlineLimit, ObservedAmountSource } from './explorer-observed-amount';
 import styles from './explorer-entity.module.css';
 
 interface LoadedPage {
@@ -218,19 +220,20 @@ export function BalanceObservationResults({
 									</td>
 									<td data-label="Observed balance">
 										<div>
-										{String(row.balance)}
-										{row.trustLineLimit !== null && (
+										{formatObservedAmount(row.balance)}
+										{kind === 'balances' && observedTrustlineLimit(row) !== null && (
 											<div className={styles.muted}>
-												Trustline limit (raw): {row.trustLineLimit}
+												Trustline limit: {observedTrustlineLimit(row)}
 											</div>
 										)}
+										<ObservedAmountSource row={row} />
 										</div>
 									</td>
 									<td data-label="Liabilities">
 										<div>
-										Buying: {String(row.buyingLiabilities)}
+										Buying: {formatObservedAmount(row.buyingLiabilities)}
 										<br />
-										Selling: {String(row.sellingLiabilities)}
+										Selling: {formatObservedAmount(row.sellingLiabilities)}
 										</div>
 									</td>
 									<td data-label="Ledger evidence">
@@ -241,10 +244,10 @@ export function BalanceObservationResults({
 												String(row.observedLedger)
 											)}
 										>
-											Observed {row.observedLedger}
+											Observed {formatAtomic(String(row.observedLedger), 0)}
 										</Link>
 										<div className={styles.muted}>
-											Last modified {row.lastModifiedLedger}
+											<Link href={buildEntityHref('ledgers', String(row.lastModifiedLedger))}>Last modified {formatAtomic(String(row.lastModifiedLedger), 0)}</Link>
 										</div>
 										</div>
 									</td>

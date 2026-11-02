@@ -79,10 +79,12 @@ export function ExplorerInvestigation({
 /** Detail links keep the original investigation without growing nested URLs. */
 export function ExplorerLink({
 	href,
+	collectionContext = false,
 	...props
 }: Omit<ComponentProps<'a'>, 'href'> & {
 	readonly href: string;
+	readonly collectionContext?: boolean;
 }): React.JSX.Element {
 	const { origin } = useContext(InvestigationOrigin);
-	return <a {...props} href={withExplorerReturnTo(href, origin)} />;
+	return <a {...props} href={withExplorerReturnTo(href, origin, collectionContext)} />;
 }

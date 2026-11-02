@@ -16,6 +16,8 @@ import {
 } from '../../api/explorer-record-lookup';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import { ExplorerLedgerActivity } from './explorer-ledger-activity';
+import { ExplorerAccountRelations } from './explorer-account-relations';
+import { isClassicAccount, isContractAccount } from '../../domain/classic-account';
 import styles from './explorer-entity.module.css';
 
 export function ExplorerRecordLookup({
@@ -25,6 +27,22 @@ export function ExplorerRecordLookup({
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
 }): React.JSX.Element {
+	if (collection === 'accounts' && !isClassicAccount(identifier)) {
+		const contract = isContractAccount(identifier);
+		return <div className={styles.workspace}>
+			<ExplorerEntityNavigation active="accounts" />
+			<section className={styles.panel} aria-label={contract ? 'Contract account' : 'Invalid account address'}>
+				<h2>{contract ? 'Contract ' + identifier : 'Invalid account address'}</h2>
+				{contract ? <>
+					<p className={styles.muted}>Contract balances are not supported in this account view.</p>
+					<div className={styles.actions}><Link href={buildEntityHref('contracts', identifier)}>View contract</Link></div>
+				</> : <>
+					<p role="alert">Enter a checksum-valid Stellar G-address.</p>
+					<div className={styles.actions}><Link collectionContext href="/explorer">Search explorer</Link></div>
+				</>}
+			</section>
+		</div>;
+	}
 	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier} />;
 }
 
@@ -122,6 +140,7 @@ function RecordLookup({
 						</>
 					) : null}
 				</div>}
+				{collection === 'accounts' && <ExplorerAccountRelations account={identifier} />}
 			</section>
 			{collection === 'accounts' && (
 				<ExplorerBalanceObservations
