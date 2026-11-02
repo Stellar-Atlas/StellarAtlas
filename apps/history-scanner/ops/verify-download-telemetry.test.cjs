@@ -1,14 +1,12 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { lstat, readFile } = require('node:fs/promises');
-const path = require('node:path');
 const { Readable, Transform } = require('node:stream');
 const test = require('node:test');
-const vm = require('node:vm');
+const { pathToFileURL } = require('node:url');
 
-// Test only this checkout's emitted verifier. Never select evaluated code from
-// environment variables, command-line arguments, or caller-provided paths.
-const modulePath = path.resolve(__dirname, '../lib/use-cases/verify-archive-objects/VerifyArchiveObjects.js');
+// Run with --experimental-test-module-mocks. Import the emitted verifier normally;
+// no source text, filesystem precheck, environment selector, or custom evaluator.
+const verifierUrl = new URL('../lib/use-cases/verify-archive-objects/VerifyArchiveObjects.js', pathToFileURL(__filename));
 
 const ok = (value) => ({ value, isErr: () => false });
 const err = (error) => ({ error, isErr: () => true });
@@ -27,7 +25,8 @@ async function promptly(promise) {
   }
 }
 
-async function loadCandidate({ httpService = {}, bucketCache = {}, verifyBucketHash = () => ok() } = {}) {
+async function loadCandidate(t, testCase, { httpService = {}, bucketCache = {}, verifyBucketHash = () => ok() } = {}) {
+  assert.ok(testCase === 'category' || testCase === 'bucket');
   const progress = [];
   let flushCalls = 0;
   let categoryComplete;
@@ -86,36 +85,28 @@ async function loadCandidate({ httpService = {}, bucketCache = {}, verifyBucketH
       scannerIssueFailure: (value) => value
     }
   };
-  const moduleInfo = await lstat(modulePath);
-  assert.ok(moduleInfo.isFile() && !moduleInfo.isSymbolicLink(),
-    'Expected the regular emitted verifier file in this checkout');
-  // Evaluate the candidate file unchanged: only its imported dependencies are replaced.
-  const candidate = new vm.SourceTextModule(
-    await readFile(modulePath, 'utf8'),
-    { identifier: modulePath }
-  );
-  await candidate.link((specifier) => {
-    assert.ok(Object.hasOwn(mocks, specifier), `Unexpected import: ${specifier}`);
-    const exports = mocks[specifier];
-    return new vm.SyntheticModule(Object.keys(exports), function () {
-      for (const [name, value] of Object.entries(exports)) this.setExport(name, value);
-    });
-  });
-  await candidate.evaluate();
-  const scanner = new candidate.namespace.VerifyArchiveObjects(
+  for (const [specifier, exports] of Object.entries(mocks)) {
+    t.mock.module(specifier.startsWith('.') ? new URL(specifier, verifierUrl) : specifier, { exports });
+  }
+  // Two literal cache identities keep each test's native module mocks independent.
+  // Node restores t.mock registrations at test completion; tests run sequentially.
+  const candidate = testCase === 'category'
+    ? await import('../lib/use-cases/verify-archive-objects/VerifyArchiveObjects.js?telemetry-category')
+    : await import('../lib/use-cases/verify-archive-objects/VerifyArchiveObjects.js?telemetry-bucket');
+  const scanner = new candidate.VerifyArchiveObjects(
     {}, {}, {}, httpService, {}, bucketCache, { captureException() {} }, {}, 1, 1, {}
   );
   return { scanner, progress, completeCategory: (...args) => categoryComplete(...args), flushCalls: () => flushCalls };
 }
 
-test('category download completion enqueues stage and bytes without waiting for telemetry flush', async () => {
-  const harness = await loadCandidate();
+test('category download completion enqueues stage and bytes without waiting for telemetry flush', { concurrency: false }, async (t) => {
+  const harness = await loadCandidate(t, 'category');
   await promptly(harness.completeCategory('category-1', 'verifying_ledger', 7, 7));
   assert.deepEqual(harness.progress, [['category-1', 'verifying_ledger', 7, 7]]);
   assert.equal(harness.flushCalls(), 0, 'The never-resolving flush must not be called');
 });
 
-test('bucket download releases its permit before verification finishes, with idempotent finally release', async () => {
+test('bucket download releases its permit before verification finishes, with idempotent finally release', { concurrency: false }, async (t) => {
   const payload = Buffer.from('tiny bucket');
   const hash = createHash('sha256').update(payload).digest('hex');
   const job = { remoteId: 'bucket-1', objectType: 'bucket', bucketHash: hash.toUpperCase(), objectUrl: 'https://unused.invalid/bucket' };
@@ -133,7 +124,7 @@ test('bucket download releases its permit before verification finishes, with ide
   let finishVerification;
   const verificationGate = new Promise((resolve) => { finishVerification = resolve; });
   let hashChecks = 0;
-  const harness = await loadCandidate({
+  const harness = await loadCandidate(t, 'bucket', {
     httpService: { get: async () => ok({ data: Readable.from([payload]), status: 200, headers: { 'content-length': String(payload.length) } }) },
     bucketCache: {
       async verifyAndStore(expectedHash, stream, verify) {
