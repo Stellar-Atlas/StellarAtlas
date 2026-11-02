@@ -64,6 +64,9 @@ describe('reviewed consumer OpenAPI policy', () => {
 	it.each([
 		{ security: [{ basicAuth: [] }] },
 		{ 'x-internal': true },
+		{ tags: ['Archive scanner operators'] },
+		{ tags: ['Community scanner operators'] },
+		{ tags: ['CrossCheck'] },
 		{ deprecated: true }
 	])(
 		'never overrides a protected or historical declaration %j',
@@ -77,4 +80,20 @@ describe('reviewed consumer OpenAPI policy', () => {
 			).toBe(false);
 		}
 	);
+	it.each([
+		['get', '/v1/contracts', 'listParsedContractsResource'],
+		['get', '/v1/analytics/contracts', 'listParsedContracts']
+	])('retains reviewed resource and original operation %s %s', (method, path, operationId) => {
+		expect(isPublicOpenApiOperation({ method, path, operation: { operationId } })).toBe(true);
+	});
+	it.each([
+		['post', '/v1/contracts', 'listParsedContractsResource'],
+		['get', '/v1/contracts/new-private', 'listParsedContractsResource'],
+		['get', '/v1/new-private', 'listParsedContractsResource'],
+		['get', '/v1/contracts', 'unknownResource'],
+		['get', '/v1/contracts', 'getNetwork'],
+		['get', '/v1/cross-check', 'getNetwork']
+	])('rejects resource alias/name reuse %s %s %s', (method, path, operationId) => {
+		expect(isPublicOpenApiOperation({ method, path, operation: { operationId } })).toBe(false);
+	});
 });
