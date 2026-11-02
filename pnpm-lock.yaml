@@ -139,6 +139,9 @@ importers:
       '@sentry/node':
         specifier: ^7.119.1
         version: 7.120.3
+      '@stellar/stellar-sdk':
+        specifier: 17.2.1
+        version: 17.2.1
       '@stellaratlas/stellar-analysis-nodejs':
         specifier: workspace:*
         version: link:../../packages/stellar-analysis-nodejs
@@ -717,12 +720,24 @@ importers:
 
   packages/crawler:
     dependencies:
+      '@stellar/stellar-sdk':
+        specifier: 17.2.1
+        version: 17.2.1
       async:
         specifier: ^3.2.6
         version: 3.2.6
+      lru-cache:
+        specifier: 11.5.1
+        version: 11.5.1
+      neverthrow:
+        specifier: 8.2.0
+        version: 8.2.0
       node-connector:
         specifier: workspace:*
         version: link:../node-connector
+      pino:
+        specifier: 10.3.1
+        version: 10.3.1
       shared:
         specifier: workspace:*
         version: link:../shared
@@ -796,6 +811,9 @@ importers:
       neverthrow:
         specifier: ^8.2.0
         version: 8.2.0
+      reflect-metadata:
+        specifier: 0.2.2
+        version: 0.2.2
       shared:
         specifier: workspace:*
         version: link:../shared
@@ -808,9 +826,27 @@ importers:
 
   packages/node-connector:
     dependencies:
+      '@stellar/stellar-sdk':
+        specifier: 17.2.1
+        version: 17.2.1
       async:
         specifier: ^3.2.6
         version: 3.2.6
+      bignumber.js:
+        specifier: 11.1.4
+        version: 11.1.4
+      dotenv:
+        specifier: 17.4.2
+        version: 17.4.2
+      lru-cache:
+        specifier: 11.5.1
+        version: 11.5.1
+      neverthrow:
+        specifier: 8.2.0
+        version: 8.2.0
+      pino:
+        specifier: 10.3.1
+        version: 10.3.1
       sodium-native:
         specifier: ^4.1.1
         version: 4.3.3
@@ -827,9 +863,6 @@ importers:
       '@types/sodium-native':
         specifier: ^2.3.9
         version: 2.3.9
-      bignumber.js:
-        specifier: 11.1.4
-        version: 11.1.4
 
   packages/scp-simulation:
     dependencies:
