@@ -13,6 +13,7 @@ import {
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { BalanceObservationProvenance } from './explorer-balance-provenance';
+import { ObservedBalanceFlags } from './explorer-balance-flags';
 import styles from './explorer-entity.module.css';
 
 interface LoadedPage {
@@ -213,6 +214,7 @@ export function BalanceObservationResults({
 										>
 											{row.id === 'native' ? 'XLM (native)' : row.id}
 										</Link>
+										{kind === 'balances' && <ObservedBalanceFlags evidence={row} />}
 									</td>
 									<td data-label="Observed balance">
 										{String(row.balance)}
