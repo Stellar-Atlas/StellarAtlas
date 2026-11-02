@@ -16,6 +16,7 @@ import styles from './explorer-entity.module.css';
 import ui from './explorer-pool-table.module.css';
 import { subscribeWarehousePublication } from '../../api/warehouse-publication-stream';
 import { poolContextFromRequest } from './pool-history-links';
+import { ExplorerInvestigationScope } from './explorer-investigation';
 
 type Page = {
 	rows: readonly EntityRecord[];
@@ -24,6 +25,7 @@ type Page = {
 };
 type DisplayedPage = Page & {
 	requestPath: string;
+	origin: string;
 	sort: PoolSort;
 	order: 'asc' | 'desc';
 	historical: boolean;
@@ -103,13 +105,14 @@ function PoolBrowser({
 	}, [filters, limit, sort, order, asset, historical, position]);
 	useEffect(() => {
 		const abort = new AbortController();
+		const origin = poolBrowserHref(pathname, queryString, route, embedded, window.location.hash);
 		setBusy(true);
 		setError(null);
 		setHasUpdates(false);
 		void requestExplorerJson(path, abort.signal)
 			.then((value) => {
 				if (!abort.signal.aborted)
-					setPage({ ...parsePage(value, historical), requestPath: path, sort, order, historical });
+					setPage({ ...parsePage(value, historical), requestPath: path, origin, sort, order, historical });
 			})
 			.catch((cause: unknown) => {
 				if (!abort.signal.aborted)
@@ -203,6 +206,7 @@ function PoolBrowser({
 					</p>
 				)}
 				{page && (
+					<ExplorerInvestigationScope origin={page.origin}>
 					<ExplorerPoolTable
 						rows={page.rows}
 						sort={page.sort}
@@ -212,6 +216,7 @@ function PoolBrowser({
 							navigate({ ...route, sort: key, order: page.sort === key && page.order === 'desc' ? 'asc' : 'desc', position: '' });
 						}}
 					/>
+					</ExplorerInvestigationScope>
 				)}
 				<div className={ui.pagination}>
 					<span>{page && !matchesQuery ? 'Previous results' : historical && page ? page.rows.length ? `Rows ${Number(position || 0) + 1}–${Number(position || 0) + page.rows.length}` : 'No rows on this page' : position ? 'Continued page' : 'First page'}</span>
