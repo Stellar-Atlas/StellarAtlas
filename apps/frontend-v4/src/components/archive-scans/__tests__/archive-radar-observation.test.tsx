@@ -49,6 +49,10 @@ const render = (result = loaded, page = failures): string =>
 	);
 
 describe('Radar beside already-loaded archive evidence', () => {
+	it('keeps a reversed source scan window explicitly invalid', () => {
+		if (loaded.observation === null) throw new Error('Expected fixture observation');
+		expect(render({ ...loaded, observation: { ...loaded.observation, scanStartedAt: '2026-03-01T00:00:00Z' } })).toContain('Radar scan window is invalid');
+	});
 	it('renders an explicit initial action without loading a source or inventing a result', () => {
 		const html = renderToStaticMarkup(
 			createElement(ArchiveRadarObservationPanel, {

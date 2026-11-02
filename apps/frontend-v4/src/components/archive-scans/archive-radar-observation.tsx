@@ -200,6 +200,9 @@ export function ObservationResult({
 						reports are unclassified, not proof of an archive defect or worker
 						fault.
 					</p>
+					{Date.parse(observation.scanStartedAt) > Date.parse(observation.scanEndedAt) ? (
+						<p>Radar scan window is invalid; its timing cannot establish correspondence with Atlas.</p>
+					) : null}
 					{observation.hasError ? (
 						<p>
 							{shared ? 'Reported by both sources' : 'Reported by Radar'}:{' '}
