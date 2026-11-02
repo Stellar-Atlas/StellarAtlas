@@ -66,6 +66,7 @@ it('converts only known classic raw trustline limits and preserves original amou
 	expect(observedTrustlineLimit(row)).toBe('922,337,203,685.4775807');
 	expect(observedTrustlineLimit({ ...row, assetType: undefined })).toBeNull();
 	expect(observedTrustlineLimit({ ...row, assetType: 'native' })).toBeNull();
+	expect(observedTrustlineLimit({ ...row, id: 'C' + 'A'.repeat(55) })).toBeNull();
 	expect(observedTrustlineLimit({ ...row, trustLineLimit: '1.5' })).toBeNull();
 	const html = renderToStaticMarkup(createElement(ObservedAmountSource, { row }));
 	expect(html).toContain('Float64'); expect(html).toContain('1e-7'); expect(html).toContain('1e-21');

@@ -7,7 +7,8 @@ import styles from './explorer-entity.module.css';
 export function ExplorerAccountRelations({ account }: { readonly account: string }): React.JSX.Element | null {
 	if (!isClassicAccount(account)) return null;
 	return <section aria-label="Account relationships" className={styles.provenance}>
-		<div className={styles.actions}>
+		<h3>Related account data</h3>
+		<div className={styles.accountRelations}>
 			<Link href={buildEntityHref('issuers', account)}>Issuer details</Link>
 			<Link collectionContext href={buildEntityHref('assets', undefined, { issuer: account })}>Observed issued assets</Link>
 			<Link collectionContext href={buildEntityHref('operations', undefined, { source_account: account, type: 'create_account' })}>Funded account creations</Link>

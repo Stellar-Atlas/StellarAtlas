@@ -83,7 +83,12 @@
 .provenance { display: grid; gap: .4rem; min-width: 0; }
 .identityFilter { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; min-width: 0; }
 .identityFilter > span { min-width: 0; overflow-wrap: anywhere; }
-.identityFilter button { flex: none; }
+.identityFilter button { flex: none; font: inherit; font-size: .78rem; padding: .3rem .6rem; border: 1px solid var(--border); border-radius: .3rem; color: var(--ink); background: var(--button-secondary); cursor: pointer; }
+.identityFilter button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.accountRelations { display: flex; flex-wrap: wrap; gap: .35rem 1rem; min-width: 0; }
+.accountRelations a { color: var(--blue); font-size: .85rem; text-decoration: underline; text-underline-offset: .15em; padding-block: .3rem; }
+.accountRelations a:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+@media (pointer: coarse) { .identityFilter button, .accountRelations a { min-height: 44px; display: inline-flex; align-items: center; } }
 .amountSource { margin-top: .4rem; font-size: .78rem; color: var(--muted); min-width: 0; }
 .amountSource summary { cursor: pointer; }
 .amountSource summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
