@@ -12,7 +12,7 @@ import {
 } from '../../api/explorer-balance-observations';
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
-import { LocalDateTime } from '../local-date-time';
+import { BalanceObservationProvenance } from './explorer-balance-provenance';
 import styles from './explorer-entity.module.css';
 
 interface LoadedPage {
@@ -114,18 +114,7 @@ function ObservationPanel({
 			aria-busy={request.loading}
 		>
 			<h2>{kind === 'balances' ? 'Account balances' : 'Asset holders'}</h2>
-			<p className={styles.muted}>
-				Latest ingested observations, not current-chain or historical as-of
-				balances. This view is independent of the selected activity window.
-				Amounts retain source Float64 precision; they are not exact stroop
-				values.
-			</p>
-			{kind === 'holders' && (
-				<p className={styles.muted}>
-					Positive observed balances, ordered by account—not a complete
-					current-chain holder list or balance ranking.
-				</p>
-			)}
+			<BalanceObservationProvenance kind={kind} page={current?.page} />
 			<div className={styles.actions}>
 				<button
 					type="button"
@@ -142,7 +131,7 @@ function ObservationPanel({
 			/>
 			{current && (
 				<>
-					<BalanceObservationResults kind={kind} page={current.page} />
+					<BalanceObservationResults kind={kind} page={current.page} showProvenance={false} />
 					<div className={styles.actions}>
 						<button
 							type="button"
@@ -178,30 +167,17 @@ function ObservationPanel({
 
 export function BalanceObservationResults({
 	kind,
-	page
+	page,
+	showProvenance = true
 }: {
 	readonly kind: BalanceObservationKind;
 	readonly page: BalanceObservationPage;
+	readonly showProvenance?: boolean;
 }): React.JSX.Element {
 	const label = kind === 'balances' ? 'Asset' : 'Account';
 	return (
 		<>
-			<div className={styles.status}>
-				<span>
-					Catalog snapshot <LocalDateTime dateTime={page.catalogGeneratedAt} />
-				</span>
-				<span>
-					{page.totalLedgerCount} completed ledgers · contiguous through{' '}
-					{page.contiguousLastLedger ?? 'unavailable'} · {page.gapCount} gaps
-				</span>
-				<span>
-					Maximum observed catalog ledger {page.maximumLedger ?? 'unavailable'}
-				</span>
-			</div>
-			<p className={styles.muted}>
-				Pages are not a frozen snapshot; incoming ingestion can change
-				observations between requests.
-			</p>
+			{showProvenance && <BalanceObservationProvenance kind={kind} page={page} />}
 			{page.rows.length === 0 ? (
 				<p>
 					No {kind} returned from the ingested observations. This does not
