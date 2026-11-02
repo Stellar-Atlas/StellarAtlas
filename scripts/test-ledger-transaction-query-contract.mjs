@@ -11,10 +11,11 @@ const backend = 'apps/backend/src/status/infrastructure/http/';
 // Unrelated router registrations/imports are not needed for this pure contract check.
 async function loadSource(path, exposed, globals = {}) {
 	const source = await readFile(new URL(path, root), 'utf8');
-	const compiled = ts.transpileModule(source, {
-		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-		transformers: { before: [() => (file) => ts.factory.updateSourceFile(file,
-			file.statements.filter((statement) => !ts.isImportDeclaration(statement)))] }
+	const parsed = ts.createSourceFile(path, source, ts.ScriptTarget.ES2022, true);
+	const isolated = ts.createPrinter().printFile(ts.factory.updateSourceFile(parsed,
+		parsed.statements.filter((statement) => !ts.isImportDeclaration(statement))));
+	const compiled = ts.transpileModule(isolated, {
+		compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 	}).outputText;
 	return runInNewContext(compiled + '\n;(' + exposed + ');', {
 		exports: {}, URLSearchParams, ...globals
