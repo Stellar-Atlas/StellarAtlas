@@ -28,7 +28,7 @@ export function validateReportQuery(kind: AssetReportKind, input: AssetReportQue
 	if (query.min_ledger && query.max_ledger && Number(query.min_ledger) > Number(query.max_ledger)) throw new Error('First ledger must not exceed last ledger.');
 	for (const field of ['start_time', 'end_time'] as const) {
 		const value = query[field];
-		if (value && (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?Z$/.test(value) || !Number.isFinite(Date.parse(value)))) throw new Error('Enter a valid report date range.');
+		if (value && (!value.endsWith('Z') || !validReportDate(value, true))) throw new Error('Enter a valid report date range.');
 	}
 	if (query.start_time && query.end_time && Date.parse(query.start_time) > Date.parse(query.end_time)) throw new Error('From must not be after To.');
 	return query;
@@ -58,15 +58,26 @@ export function assetReportHref(pathname: string, search: string, asset: string,
 }
 /** datetime-local is only the input shape; report controls explicitly use UTC. */
 export function reportDateInput(value: string): string {
-	if (!value) return '';
+	if (!value || !validReportDate(value, true)) return '';
 	const date = new Date(value);
 	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 23) : '';
 }
 export function utcReportDate(value: string, original = ''): string {
-	if (original && Number.isFinite(Date.parse(original)) && value === reportDateInput(original)) return original;
+	if (original && validReportDate(original, true) && value === reportDateInput(original)) return original;
 	if (!value) return '';
-	if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d{1,3})?)?$/.test(value)) throw new Error('Enter a valid UTC report date.');
+	if (!validReportDate(value, false)) throw new Error('Enter a valid UTC report date.');
 	const date = new Date(value + 'Z');
 	if (!Number.isFinite(date.getTime())) throw new Error('Enter a valid report date.');
 	return date.toISOString();
+}
+
+/** Reject impossible wall-clock components before Date can normalize them. */
+function validReportDate(value: string, instant: boolean): boolean {
+	const parts = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d)(?:\.(\d{1,3}))?)?(Z|[+-]\d\d:\d\d)?$/.exec(value);
+	if (!parts || (instant ? !parts[6] || !parts[8] : parts[8] !== undefined)) return false;
+	const year = Number(parts[1]), month = Number(parts[2]), day = Number(parts[3]);
+	const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+	const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+	if (month < 1 || month > 12 || day < 1 || day > days[month - 1]! || Number(parts[4]) > 23 || Number(parts[5]) > 59 || Number(parts[6] ?? 0) > 59) return false;
+	return Number.isFinite(Date.parse(instant ? value : value + 'Z'));
 }

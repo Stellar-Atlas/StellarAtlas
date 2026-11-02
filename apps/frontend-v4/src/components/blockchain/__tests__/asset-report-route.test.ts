@@ -24,7 +24,7 @@ describe('asset report route identity', () => {
 		expect(() => validateReportQuery('rankings', {metric:'unknown'})).toThrow();
 		expect(() => validateReportQuery('rankings', {counter_asset:'https://bad.invalid'})).toThrow();
 	});
-	it('preserves UTC milliseconds through local form display and removes the cursor on Apply', () => {
+	it('preserves UTC milliseconds through UTC form display and removes the cursor on Apply', () => {
 		expect(utcReportDate(reportDateInput(query.start_time))).toBe(query.start_time);
 		const url = urlFor();
 		const reset = new URL(assetReportHref(url.pathname, url.search, 'native', 'rankings', query), url);
@@ -49,5 +49,43 @@ describe('asset report route identity', () => {
 		expect(utcReportDate('2026-11-01T06:45')).toBe('2026-11-01T06:45:00.000Z');
 		expect(utcReportDate('',query.start_time)).toBe('');
 		expect(()=>utcReportDate('2026-11-01T06:45Z')).toThrow();
+	});
+	it.each([
+		'2026-02-30T12:30', '2025-02-29T12:30', '1900-02-29T12:30',
+		'2026-04-31T12:30', '2026-06-31T12:30', '2026-09-31T12:30', '2026-11-31T12:30',
+		'2026-00-01T12:30', '2026-13-01T12:30', '2026-01-00T12:30', '2026-01-32T12:30',
+		'2026-01-01T24:00', '2026-01-01T12:60', '2026-01-01T12:30:60',
+		'2026-01-01T12:30:00.1234', '2026-1-01T12:30'
+	])('rejects impossible calendar/time control and restored URL %s', (input) => {
+		expect(() => utcReportDate(input)).toThrow();
+		const timestamp = (input.length === 16 ? input + ':00' : input) + 'Z';
+		expect(reportDateInput(timestamp)).toBe('');
+		for (const field of ['start_time', 'end_time']) {
+			expect(() => validateReportQuery('balance-history', {[field]: timestamp})).toThrow();
+			const route = readAssetReportRoute(new URLSearchParams({['history_' + field]: timestamp}), 'native', 'balance-history');
+			expect(route.error).not.toBeNull();
+			expect(route.query).toEqual({});
+			expect(route.after).toBe('');
+		}
+	});
+	it.each(['2000-02-29', '2024-02-29', '2026-02-28', '2026-04-30', '2026-12-31'])('accepts actual month boundary %s', (day) => {
+		const timestamp = day + 'T23:59:59.123Z';
+		expect(utcReportDate(timestamp.slice(0, -1))).toBe(timestamp);
+		expect(validateReportQuery('balance-history', {start_time:timestamp}).start_time).toBe(timestamp);
+	});
+	it.each([
+		['2026-11-01T01:30:00.123-04:00', '2026-11-01T05:30:00.123'],
+		['2026-11-01T01:30:00.123-05:00', '2026-11-01T06:30:00.123'],
+		['2024-03-01T00:15:00.001+05:30', '2024-02-29T18:45:00.001'],
+		['2026-07-01T12:34:56+00:00', '2026-07-01T12:34:56.000']
+	])('retains supported offset instant spelling through an untouched UTC control %s', (original, input) => {
+		expect(reportDateInput(original)).toBe(input);
+		expect(utcReportDate(input, original)).toBe(original);
+		// Route contract remains UTC-Z only; helpers do not widen accepted URLs.
+		expect(() => validateReportQuery('balance-history', {start_time: original})).toThrow();
+	});
+	it('never preserves a normalized impossible original or invalid offset', () => {
+		expect(utcReportDate('2026-03-02T12:30:00.000', '2026-02-30T12:30:00Z')).toBe('2026-03-02T12:30:00.000Z');
+		for (const value of ['2026-02-30T12:30:00+01:00', '2026-01-01T12:30:00+24:00', '2026-01-01T12:30:00+01:60']) expect(reportDateInput(value)).toBe('');
 	});
 });
