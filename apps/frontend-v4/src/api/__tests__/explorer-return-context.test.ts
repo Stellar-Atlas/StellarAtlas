@@ -4,6 +4,14 @@ import {
 } from '../explorer-return-context';
 
 describe('explorer return context', () => {
+	it('allows an explicit collection journey without changing default collection links or nesting/external return paths', () => {
+		const result = withExplorerReturnTo('/explorer/assets?issuer=GA&return_to=%2Funsafe', '/explorer/accounts/GA?return_to=%2Fnested#ignored', true);
+		const url = new URL(result, 'https://explorer.invalid');
+		expect(url.searchParams.get('issuer')).toBe('GA');
+		expect(url.searchParams.get('return_to')).toBe('/explorer/accounts/GA');
+		expect(withExplorerReturnTo('/explorer/assets?issuer=GA&return_to=%2Funsafe', '//evil.test', true)).toBe('/explorer/assets?issuer=GA');
+		expect(withExplorerReturnTo('//evil.test/explorer/assets', '/explorer', true)).toBe('//evil.test/explorer/assets');
+	});
 	it('accepts explorer-relative paths and removes fragments and nested return_to', () => {
 		expect(
 			sanitizeExplorerReturnTo(

@@ -1,5 +1,6 @@
 import { PageHeading } from '@components/layout/page-heading';
 import { ExplorerAssetWorkspace } from '@components/blockchain/explorer-asset-workspace';
+import { isAssetDiscoveryReference, normalizeAssetRef } from '@components/blockchain/asset-data';
 
 export default async function ExplorerAssetPage({
 	params,
@@ -13,7 +14,7 @@ export default async function ExplorerAssetPage({
 	);
 	return (
 		<main className="shell">
-			<PageHeading title="Asset details" eyebrow="Explorer" />
+			<PageHeading title={isAssetDiscoveryReference(normalizeAssetRef(assetRef)) ? 'Assets' : 'Asset details'} eyebrow="Explorer" />
 			<ExplorerAssetWorkspace
 				assetRef={assetRef}
 				initialFilters={initialFilters}

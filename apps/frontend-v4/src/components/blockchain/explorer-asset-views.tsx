@@ -129,7 +129,7 @@ export function AssetTable({
 				<tbody>
 					{assets.map((asset) => (
 						<tr key={asset.id}>
-							<td>
+							<td data-label="Asset"><div>
 								<Link href={assetHref(asset, filters)}>
 									<span className={ui.assetName}>
 										<Logo asset={asset} />
@@ -141,15 +141,15 @@ export function AssetTable({
 										</span>
 									</span>
 								</Link>
-							</td>
-							<td>
+							</div></td>
+							<td data-label="Type"><div>
 								{asset.kind === 'classic'
 									? 'Classic asset'
 									: asset.kind === 'native'
 										? 'Native asset'
 										: 'Contract'}
-							</td>
-							<td>
+							</div></td>
+							<td data-label="Issuer / contract"><div>
 								{asset.issuer ? (
 									<Link
 										href={
@@ -170,11 +170,11 @@ export function AssetTable({
 								) : (
 									'—'
 								)}
-							</td>
-							<td>
+							</div></td>
+							<td data-label="First observed"><div>
 								{asset.firstObservedLedger !== undefined ? (
 									<Link href={'/explorer/ledgers/' + asset.firstObservedLedger}>
-										{asset.firstObservedLedger}
+										{asset.firstObservedLedger.toLocaleString('en-US')}
 									</Link>
 								) : (
 									'—'
@@ -184,11 +184,11 @@ export function AssetTable({
 										{new Date(asset.firstObservedAt).toLocaleString()}
 									</small>
 								)}
-							</td>
-							<td>
+							</div></td>
+							<td data-label="Last observed"><div>
 								{asset.lastObservedLedger !== undefined ? (
 									<Link href={'/explorer/ledgers/' + asset.lastObservedLedger}>
-										{asset.lastObservedLedger}
+										{asset.lastObservedLedger.toLocaleString('en-US')}
 									</Link>
 								) : (
 									'—'
@@ -198,7 +198,7 @@ export function AssetTable({
 										{new Date(asset.lastObservedAt).toLocaleString()}
 									</small>
 								)}
-							</td>
+							</div></td>
 						</tr>
 					))}
 				</tbody>

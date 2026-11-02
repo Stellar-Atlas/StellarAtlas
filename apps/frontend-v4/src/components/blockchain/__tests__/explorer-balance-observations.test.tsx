@@ -65,6 +65,9 @@ describe('explorer balance observation presentation', () => {
 		expect(html).toContain('9223372036854775807');
 		expect(html).toContain('/explorer/assets/native');
 		expect(html).toContain('/explorer/ledgers/63490364');
+		expect(html).toContain('/explorer/ledgers/63490360');
+		expect(html.replaceAll('<!-- -->', '')).toContain('Observed 63,490,364');
+		expect(html.replaceAll('<!-- -->', '')).toContain('Last modified 63,490,360');
 		expect(html.replaceAll('<!-- -->', '')).toContain('30,000,000 completed ledgers');
 		expect(html.replaceAll('<!-- -->', '')).toContain('1 gap');
 		expect(html).toContain('not a frozen snapshot');
