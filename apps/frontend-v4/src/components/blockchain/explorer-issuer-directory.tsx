@@ -4,7 +4,7 @@ import { ExplorerLink as Link } from './explorer-investigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { LocalDateTime } from '../local-date-time';
-import { readIssuerSelection, issuerDirectoryHref, issuerSelectionKey, type IssuerSelection } from './issuer-directory-page';
+import { readIssuerSelection, issuerDirectoryHref, issuerSelectionKey, issuerRecoveryQuery, type IssuerSelection } from './issuer-directory-page';
 import { useIssuerDirectoryPage } from './use-issuer-directory-page';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import styles from './explorer-entity.module.css';
@@ -16,8 +16,9 @@ export function ExplorerIssuerDirectory(): React.JSX.Element {
 	const selection=route.selection, state=useIssuerDirectoryPage(selection), {page,busy}=state;
 	const [inputError,setInputError]=useState<string|null>(null);
 	const error=route.error||state.error||inputError;
-	const [query,setQuery]=useState(selection?.q??'');
-	useEffect(()=>setQuery(selection?.q??''),[selection?.q]);
+	const restoredQuery=selection?.q??issuerRecoveryQuery(search);
+	const [query,setQuery]=useState(restoredQuery);
+	useEffect(()=>setQuery(restoredQuery),[restoredQuery]);
 	const previousPages=useRef(new Map<string,IssuerSelection>());
 	const previous=selection?previousPages.current.get(issuerSelectionKey(selection)):undefined;
 	const navigate=(next:IssuerSelection):void=>{
@@ -97,7 +98,7 @@ export function ExplorerIssuerDirectory(): React.JSX.Element {
 							</table>
 						</div>
 						{!page.rows.length && (
-							<p className={styles.muted}>No matching indexed issuers.</p>
+							<p className={styles.muted}>{page.generatedAt === null ? 'Issuer catalog is not available yet.' : 'No matching indexed issuers.'}</p>
 						)}
 							{!page.domainsReady && (
 								<span className={ui.observationLabel}>

@@ -11,6 +11,12 @@ export function readIssuerSelection(params:Pick<URLSearchParams,'get'|'getAll'>)
 	return {q,cursor};
 }
 export const issuerSelectionKey=(selection:IssuerSelection):string=>JSON.stringify([selection.q,selection.cursor]);
+/** Recover a valid query from a stale cursor URL without issuing a widened request. */
+export function issuerRecoveryQuery(search:string):string {
+	const params=new URLSearchParams(search);
+	params.delete('cursor');params.delete('cursor_for');
+	try{return readIssuerSelection(params).q;}catch{return '';}
+}
 export function issuerDirectoryHref(pathname:string,search:string,selection:IssuerSelection,hash=''):string {
 	const params=new URLSearchParams(search);
 	for(const key of ['q','cursor','cursor_for']) params.delete(key);

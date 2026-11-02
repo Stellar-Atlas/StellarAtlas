@@ -1,4 +1,4 @@
-import { issuerDirectoryHref, issuerDirectoryPath, issuerSelectionKey, parseIssuerPage, readIssuerSelection } from '../issuer-directory-page';
+import { issuerDirectoryHref, issuerDirectoryPath, issuerSelectionKey, issuerRecoveryQuery, parseIssuerPage, readIssuerSelection } from '../issuer-directory-page';
 const row={id:'G'+'A'.repeat(55),homeDomain:'example.org',assetCount:9007199254740991};
 const page={data:[row],nextCursor:'page_2',domainsReady:false,generatedAt:'2026-11-02T00:00:00Z'};
 describe('bounded issuer directory selection',()=>{
@@ -16,6 +16,8 @@ describe('bounded issuer directory selection',()=>{
 	it('blocks repeated, malformed, oversized and cross-query continuations without silently querying',()=>{
 		for(const query of ['q=a&q=b','q=%00bad','q='+ 'x'.repeat(2049),'cursor=page_2','cursor_for=a','q=a&cursor=page_2&cursor_for=b','q=a&cursor=a%2B%2F%3D&cursor_for=a','q=a&cursor=page_2&cursor=page_3&cursor_for=a']) expect(()=>readIssuerSelection(new URLSearchParams(query))).toThrow();
 		expect(()=>issuerDirectoryPath({q:'a',cursor:'x'.repeat(2049)})).toThrow();
+		expect(issuerRecoveryQuery('?q=example.org&cursor=stale&cursor_for=other.org')).toBe('example.org');
+		expect(issuerRecoveryQuery('?q=one&q=two&cursor=stale')).toBe('');
 	});
 	it('keeps one page, exact counts and incomplete-domain semantics',()=>{
 		expect(parseIssuerPage(page,null)).toEqual({rows:[row],next:'page_2',domainsReady:false,generatedAt:page.generatedAt});
