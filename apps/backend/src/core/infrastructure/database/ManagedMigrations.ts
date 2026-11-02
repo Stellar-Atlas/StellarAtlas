@@ -1,3 +1,4 @@
+import { ArchiveIntegrityNotificationState1793635200000 } from './migrations/1793635200000-ArchiveIntegrityNotificationState.js';
 import { HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1793384400000-HistoryArchiveHeaderProofRepairQueueKindMigration.js';
 import { HistoryArchiveFailureSummarySnapshotMigration1788832000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1788832000000-HistoryArchiveFailureSummarySnapshotMigration.js';
 import { HistoryArchiveListingGapMigration1788735600000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788735600000-HistoryArchiveListingGapMigration.js';
@@ -102,6 +103,7 @@ import { FullHistoryPromotionCheckpointIndexMigration1788592000000 } from '@hist
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
 export const managedMigrations = [
+	ArchiveIntegrityNotificationState1793635200000,
 	HistoryArchiveObjectClaimCursorMigration1784780000000,
 	HistoryArchiveWorkerStatusMigration1784790000000,
 	OrganizationTomlEvidenceMigration1784795000000,

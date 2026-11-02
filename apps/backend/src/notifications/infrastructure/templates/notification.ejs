@@ -164,6 +164,15 @@
                                                         <p style="margin-bottom: 0; margin-top: 0; color: #595f66">
                                                             <%= event.description %>
                                                         </p>
+														<% if(event.archiveIntegrity){ %>
+															<p style="margin-bottom: 5px; margin-top: 5px; color: #595f66">
+																Archive: <%= event.archiveIntegrity.archiveRoot %><br>
+																Object: <%= event.archiveIntegrity.objectKey %><br>
+																Failure: <%= event.archiveIntegrity.failureCode %><br>
+																Observed: <%= event.archiveIntegrity.observedAt %>
+															</p>
+															<a class="action" href="<%= event.archiveIntegrity.href %>">Archive verification details</a>
+														<% } %>
 
                                                         <a class="action" href="<%= event.liveLink %>">Live</a>
                                                         <a class="action"
