@@ -31,6 +31,7 @@
 		"logger": "workspace:*",
 		"nats": "2.29.3",
 		"neverthrow": "^8.2.0",
+		"reflect-metadata": "^0.2.2",
 		"saxes": "6.0.0",
 		"shared": "workspace:*",
 		"validator": "^13.15.35",
@@ -42,7 +43,6 @@
 		"@types/jest": "30.0.0",
 		"@types/node": "^26.0.1",
 		"express": "4.22.2",
-		"reflect-metadata": "^0.2.2",
 		"supertest": "^7.2.2",
 		"typescript": "^6.0.3"
 	},

@@ -61,4 +61,33 @@ describe('HTTP response deadlines', () => {
 		expect(result.isErr()).toBe(true);
 		if (result.isErr()) expect(result.error.code).toBe('ERR_CANCELED');
 	});
+	it.each(['get', 'head', 'delete'] as const)('preserves the %s method and mapped request headers', async (method) => {
+		let observedMethod: string | undefined;
+		let observedHeader: string | string[] | undefined;
+		server.on('request', (request) => {
+			observedMethod = request.method;
+			observedHeader = request.headers['x-release-check'];
+		});
+		const result = await new AxiosHttpService('test')[method](url, {
+			proxy: false, requestTimeoutMs: 1000, headers: { 'X-Release-Check': 'mapped' }
+		});
+		expect(result.isOk()).toBe(true);
+		expect(observedMethod).toBe(method.toUpperCase());
+		expect(observedHeader).toBe('mapped');
+	});
+	it('preserves the POST body and request configuration as separate arguments', async () => {
+		const received = new Promise<{ method: string | undefined; body: string }>((resolve) => {
+			server.on('request', (request) => {
+				let body = '';
+				request.on('data', (chunk: Buffer) => { body += chunk.toString('utf8'); });
+				request.on('end', () => resolve({ method: request.method, body }));
+			});
+		});
+		const payload = { release: 'candidate', values: [1, 2] };
+		const result = await new AxiosHttpService('test').post(url, payload, { proxy: false, requestTimeoutMs: 1000 });
+		expect(result.isOk()).toBe(true);
+		const request = await received;
+		expect(request.method).toBe('POST');
+		expect(JSON.parse(request.body)).toEqual(payload);
+	});
 });
