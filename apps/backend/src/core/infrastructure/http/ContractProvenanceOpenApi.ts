@@ -179,7 +179,7 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 	},
 	ContractProvenanceHackathon: {
 		type: 'object',
-		required: ['slug', 'name', 'network', 'award', 'track', 'evidence'],
+		required: ['slug', 'name', 'network', 'award', 'track'],
 		properties: {
 			slug: { type: 'string' },
 			name: { type: 'string' },
@@ -198,12 +198,6 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 				nullable: true,
 				enum: ['genesis', 'scale', null],
 				description: 'Only set when the team states its track itself.'
-			},
-			evidence: {
-				type: 'string',
-				enum: ['verified', 'likely'],
-				description:
-					'verified: the repository references an on-chain account, contract or asset that was active during the event. likely: no on-chain proof.'
 			}
 		}
 	},

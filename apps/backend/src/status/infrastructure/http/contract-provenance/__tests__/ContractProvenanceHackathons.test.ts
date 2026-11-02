@@ -137,8 +137,7 @@ describe('contract provenance hackathons', () => {
 				name: 'HackMeridian 2026',
 				network: 'testnet',
 				award: 'first',
-				track: null,
-				evidence: 'verified'
+				track: null
 			}
 		]);
 	});

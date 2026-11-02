@@ -5,7 +5,6 @@ type ElementOf<T extends readonly unknown[]> = T[number];
 
 const AWARDS = ['first', 'runner-up'] as const;
 const TRACKS = ['genesis', 'scale'] as const;
-const EVIDENCE = ['verified', 'likely'] as const;
 
 export interface HackathonParticipation {
 	readonly slug: string;
@@ -13,7 +12,6 @@ export interface HackathonParticipation {
 	readonly network: string;
 	readonly award: ElementOf<typeof AWARDS> | null;
 	readonly track: ElementOf<typeof TRACKS> | null;
-	readonly evidence: ElementOf<typeof EVIDENCE>;
 }
 
 type Index = ReadonlyMap<string, readonly HackathonParticipation[]>;
@@ -79,8 +77,7 @@ export function readHackathons(raw: unknown): Index {
 					),
 					track: orNull(item.track, `${path}.track`, (value, at) =>
 						oneOf(value, at, TRACKS)
-					),
-					evidence: oneOf(item.evidence, `${path}.evidence`, EVIDENCE)
+					)
 				};
 			})
 		);

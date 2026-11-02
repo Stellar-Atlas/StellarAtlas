@@ -5,9 +5,7 @@ const valid = {
 		'demo-2026': { name: 'Demo 2026', network: 'testnet' }
 	},
 	repositories: {
-		'team/app': [
-			{ event: 'demo-2026', award: 'first', track: null, evidence: 'verified' }
-		]
+		'team/app': [{ event: 'demo-2026', award: 'first', track: null }]
 	}
 };
 
@@ -19,8 +17,7 @@ describe('hackathonsOf', () => {
 				name: 'HackMeridian 2026',
 				network: 'testnet',
 				award: 'first',
-				track: null,
-				evidence: 'verified'
+				track: null
 			}
 		]);
 	});
@@ -52,8 +49,7 @@ describe('readHackathons', () => {
 				name: 'Demo 2026',
 				network: 'testnet',
 				award: 'first',
-				track: null,
-				evidence: 'verified'
+				track: null
 			}
 		]);
 	});
@@ -91,17 +87,6 @@ describe('readHackathons', () => {
 				...valid,
 				repositories: {
 					'team/app': [{ ...valid.repositories['team/app'][0], track: 'x' }]
-				}
-			}
-		],
-		[
-			'an unknown evidence level',
-			{
-				...valid,
-				repositories: {
-					'team/app': [
-						{ ...valid.repositories['team/app'][0], evidence: 'sure' }
-					]
 				}
 			}
 		],
