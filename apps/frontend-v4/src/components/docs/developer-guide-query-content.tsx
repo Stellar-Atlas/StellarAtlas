@@ -1,5 +1,6 @@
 import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
 import { graphqlErrorSection } from './developer-guide-graphql-errors';
+import { transactionRelationsSection } from './transaction-relations-guide';
 
 export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 	{
@@ -149,6 +150,7 @@ curl --fail-with-body '${api}/v1/datasets/history_contract_events/records?ledger
 		description:
 			'Choose the entity or relationship you need, then use its documented filters.',
 		sections: [
+			transactionRelationsSection,
 			{
 				id: 'typed-resources',
 				title: 'Entity lookups and lists',

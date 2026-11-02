@@ -1,0 +1,55 @@
+{
+	"first": {
+		"transaction": {
+			"id": "111669149696004096",
+			"hash": "55c6dc51787f44f137e581e144d28792ae2f8c5081ce412133657b7eced3d29f",
+			"ledgerSequence": 26000000,
+			"sequence": "9007199254740993",
+			"successful": true,
+			"operationCount": 2,
+			"feeChargedRaw": "200"
+		},
+		"operations": {
+			"items": [
+				{
+					"id": "111669149696004097",
+					"amounts": [
+						{
+							"field": "amount",
+							"decimal": "900719925.4740993",
+							"raw": "9007199254740993",
+							"scale": 7,
+							"source": "envelope"
+						}
+					]
+				}
+			],
+			"limit": 1
+		},
+		"effects": {
+			"items": [
+				{
+					"id": "111669149696004096-0",
+					"operationId": "111669149696004097"
+				}
+			],
+			"limit": 1
+		},
+		"events": {
+			"items": [
+				{
+					"id": "26000000:1:00000000-0000-0000-0000-000000000001:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					"contractId": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
+				}
+			],
+			"limit": 1
+		}
+	},
+	"wrongRelation": {
+		"status": 400,
+		"body": {
+			"code": "invalid_hubble_query",
+			"error": "Invalid transaction relation cursor or mismatched transaction/relation"
+		}
+	}
+}

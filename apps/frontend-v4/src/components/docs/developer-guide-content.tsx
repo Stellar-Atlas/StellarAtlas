@@ -145,6 +145,13 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							effects and events.
 						</p>
 						<p>
+							Follow the{' '}
+							<a href="/docs/rest#transaction-relations">
+								typed transaction walkthrough
+							</a>{' '}
+							to inspect the response and continue each relation independently.
+						</p>
+						<p>
 							For the operations list, repeat the same filters with the returned{' '}
 							<code>nextOffset</code>. Stop when it is <code>null</code>. Check
 							coverage before interpreting an empty result as absence.
