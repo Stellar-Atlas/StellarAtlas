@@ -29,6 +29,7 @@ export function ExplorerEntityFilters({
 	identifier,
 	filters,
 	busy,
+	operationDetail = false,
 	onChange,
 	onApply
 }: {
@@ -36,6 +37,7 @@ export function ExplorerEntityFilters({
 	readonly identifier?: string;
 	readonly filters: ExplorerFilters;
 	readonly busy: boolean;
+	readonly operationDetail?: boolean;
 	readonly onChange: (filters: ExplorerFilters) => void;
 	readonly onApply: (filters: ExplorerFilters) => void;
 }): React.JSX.Element {
@@ -111,7 +113,7 @@ export function ExplorerEntityFilters({
 			<div className={styles.filterToolbar}>
 				<div className={styles.actions}>
 					<button type="submit" disabled={busy}>
-						{busy ? 'Loading…' : 'Apply filters'}
+						{busy ? 'Loading…' : operationDetail ? 'Apply range' : 'Apply filters'}
 					</button>
 					<button
 						type="button"
@@ -122,7 +124,7 @@ export function ExplorerEntityFilters({
 							onApply(next);
 						}}
 					>
-						Latest published
+						{operationDetail ? 'Use operation ledger' : 'Latest published'}
 					</button>
 					<button
 						type="button"
@@ -135,7 +137,7 @@ export function ExplorerEntityFilters({
 							onApply(next);
 						}}
 					>
-						Clear filters
+						{operationDetail ? 'Reset request' : 'Clear filters'}
 					</button>
 				</div>
 				{!identifier && (

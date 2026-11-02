@@ -10,6 +10,7 @@ import {
 import { LocalDateTime } from '../local-date-time';
 import { entityColumns } from './explorer-entity-config';
 import { ExplorerOperationCall } from './explorer-operation-call';
+import { OperationResultFields } from './explorer-operation-result';
 import { ExplorerRecordFields } from './explorer-record-fields';
 import { formatDecimal } from './explorer-format-values';
 import styles from './explorer-entity.module.css';
@@ -231,10 +232,13 @@ export function ExplorerEntityDetails({
 	const details = recordValue(row.details);
 	const excluded = entityText(row, 'type') === 'invoke_host_function' ? ['function', 'type', 'contract_id'] : [];
 	const hasDetails = typeof row.details === 'string' ? row.details.length > 0 : Array.isArray(row.details) ? row.details.length > 0 : Object.keys(details).some((key) => !excluded.includes(key));
+	const columns = collection === 'operations' ? [
+		['id','Operation'],['type','Action'],['ledgerSequence','Ledger'],['closedAt','Closed'],['sourceAccount','Source account'],['transactionId','Transaction']
+	] as const : entityColumns[collection];
 	return (
 		<>
 			<dl className={styles.details}>
-				{entityColumns[collection].flatMap(([key, label]) => [
+				{columns.flatMap(([key, label]) => [
 					<dt key={key + 'label'}>{label}</dt>,
 					<dd key={key}>
 						<Field
@@ -243,7 +247,8 @@ export function ExplorerEntityDetails({
 							field={key}
 							filters={filters}
 						/>
-					</dd>
+					</dd>,
+					collection === 'operations' && key === 'type' ? <OperationResultFields key="operation-result" row={row} /> : null
 				])}
 			</dl>
 			{hasDetails && (
