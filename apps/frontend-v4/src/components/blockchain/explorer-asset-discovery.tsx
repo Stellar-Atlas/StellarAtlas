@@ -6,7 +6,7 @@ import { LocalDateTime } from '../local-date-time';
 import { AssetTable, isoDate, localDate } from './explorer-asset-views';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerInvestigationScope } from './explorer-investigation';
-import { assetDiscoveryDraft, assetDiscoveryHref, assetDiscoveryKey, readAssetDiscoverySelection, type AssetDiscoverySelection } from './asset-discovery-page';
+import { assetDiscoveryDraft, assetDiscoveryHref, assetDiscoveryKey, readAssetDiscoverySelection, validateAssetDiscoveryQuery, type AssetDiscoverySelection } from './asset-discovery-page';
 import { useAssetDiscoveryPage } from './use-asset-discovery-page';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
@@ -32,10 +32,15 @@ export function ExplorerAssetDiscovery({ defaultQuery = '' }: { readonly default
 	} catch { /* Invalid bounds/repeated filters must be corrected, never silently widened. */ }
 	const navigate = (next: AssetDiscoverySelection): void => {
 		try {
-			const href = assetDiscoveryHref(window.location.search, next, window.location.hash);
+			const requested = { ...next, query: validateAssetDiscoveryQuery(next.query) };
+			const href = assetDiscoveryHref(window.location.search, requested, window.location.hash);
 			setInputError(null);
 			if (href === window.location.pathname + window.location.search + window.location.hash) state.retry();
-			else { state.cancel(); window.history.pushState(null, '', href); }
+			else {
+				const sameSelection = selection !== null && assetDiscoveryKey(selection) === assetDiscoveryKey(requested);
+				state.cancel(); window.history.pushState(null, '', href);
+				if (sameSelection) state.retry();
+			}
 		} catch (failure) { setInputError(failure instanceof Error ? failure.message : 'Invalid asset search.'); }
 	};
 	return <div className={styles.workspace}>

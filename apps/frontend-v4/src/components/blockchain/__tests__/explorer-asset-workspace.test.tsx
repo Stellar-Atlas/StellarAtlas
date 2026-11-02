@@ -133,6 +133,19 @@ function renderedText(node: unknown): string {
 }
 
 describe('asset discovery workspace', () => {
+	it('restarts exactly once when an explicit unchanged search normalizes only the URL', () => {
+		route = new URL('https://explorer.invalid/explorer/assets?q=A&limit=100&return_to=%2Fexplorer');
+		const render = () => hooks.render(() => renderWorkspace({}));
+		const tree = render();
+		expect(requestMock).toHaveBeenCalledTimes(1);
+		const form = elements(tree, element => element.type === 'form')[0]!;
+		(form.props.onSubmit as (event: unknown) => void)({ preventDefault: () => undefined });
+		render();
+		expect(requestMock).toHaveBeenCalledTimes(2);
+		expect(requestMock.mock.calls.map(call => call[0])).toEqual(['/v1/assets?q=A&limit=25', '/v1/assets?q=A&limit=25']);
+		expect(route.searchParams.has('limit')).toBe(false);
+		expect(route.searchParams.get('return_to')).toBe('/explorer');
+	});
 	it('fetches the initial catalogue once and waits for explicit submit before applying typed filters', () => {
 		const render = () =>
 			hooks.render(() => renderWorkspace({}) as never);
