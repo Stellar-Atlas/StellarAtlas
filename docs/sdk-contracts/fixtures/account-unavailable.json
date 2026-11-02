@@ -1,0 +1,53 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/analytics/accounts/GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H/balances?limit=1"
+    },
+    "response": {
+      "status": 503,
+      "body": {
+        "code": "hubble_warehouse_unavailable",
+        "error": "The Hubble warehouse is temporarily unavailable"
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Account($account:String!,$input:HubbleAccountBalanceInput) {\n  hubbleAccountBalances(account:$account,input:$input) {\n    account balanceScope limit nextCursor elapsedMilliseconds\n    balances { asset assetType assetCode assetIssuer balance balanceRaw amountPrecision buyingLiabilities sellingLiabilities trustLineLimitRaw flags lastModifiedLedger observedLedger }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n  }\n}",
+        "variables": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+          "input": {
+            "limit": 1
+          }
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "errors": [
+        {
+          "message": "The Hubble warehouse is temporarily unavailable",
+          "locations": [
+            {
+              "line": 2,
+              "column": 3
+            }
+          ],
+          "path": [
+            "hubbleAccountBalances"
+          ],
+          "extensions": {
+            "code": "SERVICE_UNAVAILABLE"
+          }
+        }
+      ],
+      "data": null
+    }
+  }
+}

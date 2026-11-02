@@ -15,6 +15,7 @@
 	"dependencies": {
 		"neverthrow": "^8.2.0",
 		"@sentry/node": "^7.119.1",
+		"reflect-metadata": "0.2.2",
 		"shared": "workspace:*",
 		"logger": "workspace:*"
 	},
