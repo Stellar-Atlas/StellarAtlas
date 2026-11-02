@@ -1,119 +1,22 @@
 import { jest } from '@jest/globals';
-
-type EffectCleanup = () => void;
-type HookSlot =
-	| { kind: 'state'; value: unknown }
-	| { kind: 'ref'; value: { current: unknown } }
-	| {
-			kind: 'effect';
-			dependencies: readonly unknown[] | undefined;
-			cleanup?: EffectCleanup;
-	  };
-
-class HookHarness {
-	private slots: HookSlot[] = [];
-	private cursor = 0;
-	private pendingEffects: Array<{
-		index: number;
-		callback: () => void | EffectCleanup;
-	}> = [];
-
-	readonly useState = <T,>(
-		initial: T | (() => T)
-	): [T, (next: T | ((current: T) => T)) => void] => {
-		const index = this.cursor++;
-		let slot = this.slots[index];
-		if (!slot) {
-			this.slots[index] = {
-				kind: 'state',
-				value: typeof initial === 'function' ? (initial as () => T)() : initial
-			};
-			slot = this.slots[index];
-		}
-		if (slot.kind !== 'state') throw new Error('Hook order changed');
-		return [
-			slot.value as T,
-			(next) => {
-				const current = this.slots[index];
-				if (current?.kind !== 'state') throw new Error('State hook missing');
-				current.value =
-					typeof next === 'function'
-						? (next as (value: T) => T)(current.value as T)
-						: next;
-			}
-		];
-	};
-
-	readonly useRef = <T,>(initial: T): { current: T } => {
-		const index = this.cursor++;
-		let slot = this.slots[index];
-		if (!slot) {
-			this.slots[index] = { kind: 'ref', value: { current: initial } };
-			slot = this.slots[index];
-		}
-		if (slot.kind !== 'ref') throw new Error('Hook order changed');
-		return slot.value as { current: T };
-	};
-
-	readonly useEffect = (
-		callback: () => void | EffectCleanup,
-		dependencies?: readonly unknown[]
-	): void => {
-		const index = this.cursor++;
-		const slot = this.slots[index];
-		if (!slot) {
-			this.slots[index] = { kind: 'effect', dependencies };
-			this.pendingEffects.push({ index, callback });
-			return;
-		}
-		if (slot.kind !== 'effect') throw new Error('Hook order changed');
-		const same =
-			dependencies !== undefined &&
-			slot.dependencies !== undefined &&
-			dependencies.length === slot.dependencies.length &&
-			dependencies.every((value, position) =>
-				Object.is(value, slot.dependencies?.[position])
-			);
-		if (!same) {
-			slot.cleanup?.();
-			slot.dependencies = dependencies;
-			this.pendingEffects.push({ index, callback });
-		}
-	};
-
-	reset(): void {
-		for (const slot of this.slots) slot.kind === 'effect' && slot.cleanup?.();
-		this.slots = [];
-		this.cursor = 0;
-		this.pendingEffects = [];
-	}
-
-	render<T>(renderComponent: () => T): T {
-		this.cursor = 0;
-		this.pendingEffects = [];
-		const result = renderComponent();
-		for (const { index, callback } of this.pendingEffects) {
-			const slot = this.slots[index];
-			if (slot?.kind !== 'effect') throw new Error('Effect hook missing');
-			slot.cleanup = callback() || undefined;
-		}
-		return result;
-	}
-}
+import { HookHarness } from './asset-workspace-hook-harness';
 
 type ElementLike = {
 	type: string | ((props: Record<string, unknown>) => unknown) | symbol;
 	props: Record<string, unknown> & { children?: unknown };
 };
 const hooks = new HookHarness();
+let route = new URL('https://explorer.invalid/explorer/assets');
+jest.unstable_mockModule('next/navigation', () => ({ usePathname: () => route.pathname, useSearchParams: () => route.searchParams }));
 const requestMock = jest.fn(
 	async (_path: string, _signal: AbortSignal): Promise<unknown> => ({
 		data: [],
-		nextCursor: null
+		nextCursor: null, generatedAt: '2026-11-02T01:00:00Z', coverage: { catalogueReady: true }
 	})
 );
 const reactMock = {
 	useEffect: hooks.useEffect,
+	useMemo: hooks.useMemo,
 	useRef: hooks.useRef,
 	useState: hooks.useState
 };
@@ -142,7 +45,8 @@ jest.unstable_mockModule('../explorer-asset-tabs', () => ({
 	ExplorerAssetTabs: () => null
 }));
 jest.unstable_mockModule('../explorer-investigation', () => ({
-	ExplorerLink: (props: { children?: unknown }) => props.children
+	ExplorerLink: (props: { children?: unknown }) => props.children,
+	ExplorerInvestigationScope: (props: { children?: unknown }) => props.children
 }));
 jest.unstable_mockModule('../explorer-asset-holders', () => ({
 	ExplorerAssetHolders: () => null
@@ -174,16 +78,23 @@ beforeAll(async () => {
 beforeEach(() => {
 	hooks.reset();
 	requestMock.mockClear();
-	requestMock.mockResolvedValue({ data: [], nextCursor: null });
+	requestMock.mockResolvedValue({ data: [], nextCursor: null, generatedAt: '2026-11-02T01:00:00Z', coverage: { catalogueReady: true } });
+	route = new URL('https://explorer.invalid/explorer/assets');
 	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
-		value: { history: { replaceState: jest.fn() } }
+		value: { get location() { return route; }, history: { pushState: jest.fn((_state: unknown, _title: string, href: string) => { route = new URL(href, route); }), replaceState: jest.fn() } }
 	});
 });
 
 afterEach(() => {
 	Reflect.deleteProperty(globalThis, 'window');
 });
+
+function renderWorkspace(props: Parameters<typeof ExplorerAssetWorkspace>[0]): unknown {
+	const child = ExplorerAssetWorkspace(props) as unknown as ElementLike;
+	if (typeof child.type !== 'function') throw new Error('Expected the selected discovery or record component.');
+	return child.type(child.props);
+}
 
 function elements(
 	node: unknown,
@@ -224,7 +135,7 @@ function renderedText(node: unknown): string {
 describe('asset discovery workspace', () => {
 	it('fetches the initial catalogue once and waits for explicit submit before applying typed filters', () => {
 		const render = () =>
-			hooks.render(() => ExplorerAssetWorkspace({}) as never);
+			hooks.render(() => renderWorkspace({}) as never);
 		let tree = render();
 		expect(requestMock).toHaveBeenCalledTimes(1);
 
@@ -278,10 +189,10 @@ describe('asset detail presentation', () => {
 		});
 		const encodedRef = `${code}%3A${issuer}`;
 		let tree = hooks.render(() =>
-			ExplorerAssetWorkspace({ assetRef: encodedRef })
+			renderWorkspace({ assetRef: encodedRef })
 		);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		tree = hooks.render(() => ExplorerAssetWorkspace({ assetRef: encodedRef }));
+		tree = hooks.render(() => renderWorkspace({ assetRef: encodedRef }));
 
 		expect(requestMock).toHaveBeenCalledTimes(1);
 		expect(requestMock.mock.calls[0]?.[0]).toBe(`/v1/assets/${encodedRef}`);
@@ -304,13 +215,13 @@ describe('asset detail presentation', () => {
 			assets: { data: [], nextCursor: null }
 		});
 		let tree = hooks.render(() =>
-			ExplorerAssetWorkspace({
+			renderWorkspace({
 				issuerId: 'GDW3CNKSP5AOTDQ2YCKNGC6L65CE4JDX3JS5BV427OB54HCF2J4PUEVG'
 			})
 		);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		tree = hooks.render(() =>
-			ExplorerAssetWorkspace({
+			renderWorkspace({
 				issuerId: 'GDW3CNKSP5AOTDQ2YCKNGC6L65CE4JDX3JS5BV427OB54HCF2J4PUEVG'
 			})
 		);
@@ -332,10 +243,10 @@ describe('asset detail presentation', () => {
 			assets: { data: [], nextCursor: null }
 		});
 		let tree = hooks.render(() =>
-			ExplorerAssetWorkspace({ issuerId: 'GISSUER' })
+			renderWorkspace({ issuerId: 'GISSUER' })
 		);
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		tree = hooks.render(() => ExplorerAssetWorkspace({ issuerId: 'GISSUER' }));
+		tree = hooks.render(() => renderWorkspace({ issuerId: 'GISSUER' }));
 		const text = renderedText(tree);
 		expect(text).toContain('TOML retrieval failed');
 		expect(text).not.toContain('Metadata is pending or incomplete');
@@ -369,7 +280,7 @@ describe('asset detail presentation', () => {
 		expect(links).toContain('/explorer/ledgers/64912451');
 		expect(links).toContain('/explorer/ledgers/64912514');
 		expect(ledgerLinks.map((element) => element.props.children)).toEqual([
-			64912451, 64912514
+			'64,912,451', '64,912,514'
 		]);
 	});
 	it('renders structured issuer organization, preserves cached logo paths, and links to explorer routes', () => {
