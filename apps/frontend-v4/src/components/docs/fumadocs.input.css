@@ -123,6 +123,10 @@
 	max-width: 100%;
 	overflow: auto;
 }
+.developer-docs :not(pre) > code {
+	display: inline;
+	overflow-wrap: anywhere;
+}
 .developer-docs table {
 	display: block;
 	max-width: 100%;
