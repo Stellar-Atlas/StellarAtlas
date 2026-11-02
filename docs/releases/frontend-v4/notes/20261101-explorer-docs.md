@@ -56,3 +56,21 @@ Release versions and deployment status are tracked separately.
 - Keep documentation field names inline and add keyboard-accessible copy controls
   for complete guide examples. Show success after a clipboard write succeeds and
   offer manual-copy guidance when copying is unavailable or fails.
+
+## Unreleased asset reports and observed flag evidence
+
+These source changes are tracked separately from deployed release versions.
+
+- Keep asset-report filters and continued pages tied to the selected asset and
+  query. Restore report selections through URLs and browser navigation, and hide
+  outdated rows, coverage and continuation controls when a replacement query fails.
+- Label report date controls explicitly as UTC, preserve untouched timestamps
+  and milliseconds during unrelated filter edits, and reject impossible calendar
+  dates before sending a report request.
+- Show ledger-observed issuer-account and trustline flag evidence in
+  keyboard-accessible details, retaining raw values and explicit missing,
+  invalid, contradictory or unknown metadata. Issuer-account policy on native
+  rows is not an XLM transfer-authorization claim.
+- Keep the existing balance precision and provenance caveats visible. Observed
+  flags do not establish current transfer eligibility, spendability or live
+  balances; ingestion may advance between unpinned pages.
