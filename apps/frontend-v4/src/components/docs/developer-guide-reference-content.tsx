@@ -183,6 +183,56 @@ curl --fail-with-body --connect-timeout 5 --max-time 10 '${api}/v1/history-data/
 							version; published batch coverage does not establish complete
 							chain history or an arbitrary-ledger state witness.
 						</p>
+						<h3 id="offline-parquet-inspection">
+							Inspect one complete local file
+						</h3>
+						<p>
+							Use Python 3.11+ with a maintained PyArrow release already
+							available; the recipe was qualified with PyArrow 26.0.0. Versions
+							below{' '}
+							<a href="https://arrow.apache.org/blog/2023/11/09/14.0.1-release/">
+								14.0.1 are rejected
+							</a>
+							. If the reader is missing, follow the{' '}
+							<a href="https://arrow.apache.org/docs/python/install.html">
+								PyArrow prerequisite instructions
+							</a>{' '}
+							deliberately before rerunning. The command installs nothing.
+						</p>
+						<p>
+							From a repository checkout, run{' '}
+							<a href="https://github.com/Stellar-Atlas/StellarAtlas/blob/main/scripts/inspect_history_parquet.py">
+								the inspection script
+							</a>{' '}
+							with an already-downloaded complete Parquet file and a saved JSON
+							object containing only its selected output descriptor, including{' '}
+							<code>byteCount</code>, <code>sha256</code>,{' '}
+							<code>recordCount</code>, <code>mediaType</code>,{' '}
+							<code>dataset</code> and <code>schemaVersion</code>. Keep the
+							local file unchanged throughout inspection.
+						</p>
+						<Code>{`python3 scripts/inspect_history_parquet.py \\
+  /path/to/complete-ledgers.parquet /path/to/selected-output.json --preview 5`}</Code>
+						<p>
+							The script streams the complete SHA-256 and exact byte count
+							before opening the footer. It compares the footer row count with
+							the descriptor and reports physical/converted/logical types, Arrow
+							schema and footer metadata. The descriptor’s schema-version label
+							is separate from embedded metadata, which may be empty. Readers
+							can normalize legacy converted annotations; inspect the logical
+							types and Arrow schema as well.
+						</p>
+						<p>
+							The ledger preview displays at most 5 rows (hard cap 10),
+							selecting unsigned <code>ledger_sequence</code> and signed{' '}
+							<code>total_coins</code>/ <code>fee_pool</code> as exact decimal
+							strings, including values above <code>2^53</code>. No float,
+							dataframe or JavaScript Number conversion is used. Reader
+							page/column decoding can exceed the displayed rows; this is not a
+							byte-I/O cap. Use <code>--preview 0</code> for metadata-only
+							inspection of another dataset, then choose its columns
+							deliberately.
+						</p>
 					</>
 				)
 			},

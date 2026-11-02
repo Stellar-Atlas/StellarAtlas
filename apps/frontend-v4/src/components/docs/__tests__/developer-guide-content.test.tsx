@@ -1,4 +1,5 @@
 import { createElement, Fragment } from 'react';
+import { describe, expect, it } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -27,6 +28,29 @@ function render(slug: string): string {
 	);
 }
 describe('developer guides', () => {
+	it('adds offline local-file inspection without duplicating history discovery', () => {
+		const section = getDeveloperGuidePage('services')?.sections.find(
+			(value) => value.id === 'history-downloads'
+		);
+		expect(section).toBeDefined();
+		const html = renderToStaticMarkup(
+			createElement(Fragment, null, section!.content)
+		);
+		for (const text of [
+			'offline-parquet-inspection',
+			'scripts/inspect_history_parquet.py',
+			'PyArrow 26.0.0',
+			'/path/to/complete-ledgers.parquet',
+			'/path/to/selected-output.json --preview 5',
+			'exact decimal strings',
+			'2^53',
+			'installs nothing',
+			'separate from embedded metadata'
+		])
+			expect(html).toContain(text);
+		expect((html.match(/curl --fail-with-body/g) ?? []).length).toBe(2);
+		expect(html).toContain('A byte range cannot validate');
+	});
 	it.each([
 		{
 			id: 'inspect-coverage',
