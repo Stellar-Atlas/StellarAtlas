@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
 }));
+jest.unstable_mockModule('../explorer-record-fields.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-contract-event-table.module.css', () => ({
 	default: {}
 }));
