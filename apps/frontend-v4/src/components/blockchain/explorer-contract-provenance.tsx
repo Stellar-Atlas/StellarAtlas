@@ -8,7 +8,8 @@ import {
 	type EntityRecord
 } from '../../api/explorer-analytics';
 import { LocalDateTime } from '../local-date-time';
-import { hackathonLabels } from './explorer-hackathons';
+import { StatusTags } from '../status-tags';
+import { hackathonTags } from './explorer-hackathons';
 import styles from './explorer-contract-provenance.module.css';
 
 const labels: Record<string, string> = {
@@ -65,7 +66,7 @@ export function ExplorerContractProvenance({
 	const workflowUrl = githubLink(source?.workflowUrl);
 	const runUrl = githubLink(source?.runUrl);
 	const repository = text(metadata?.sourceRepository);
-	const hackathons = hackathonLabels(value?.hackathons);
+	const hackathons = hackathonTags(value?.hackathons);
 	return (
 		<section className={styles.panel} aria-label="Contract build provenance">
 			<div className={styles.heading}>
@@ -135,8 +136,10 @@ export function ExplorerContractProvenance({
 							<>
 								<dt>Hackathons</dt>
 								<dd>
-									{hackathons.map((label) => (
-										<div key={label}>{label}</div>
+									{hackathons.map((tags) => (
+										<div className={styles.badges} key={tags[0]?.label}>
+											<StatusTags tags={tags} />
+										</div>
 									))}
 									{status !== 'verified' && (
 										<span className={styles.muted}>

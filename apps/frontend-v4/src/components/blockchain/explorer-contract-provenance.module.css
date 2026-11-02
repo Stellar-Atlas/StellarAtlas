@@ -67,6 +67,10 @@
 	font-size: 0.85rem;
 	margin: 0.75rem 0 0;
 }
+.badges :global(.tags) {
+	justify-content: flex-start;
+	margin-bottom: 0.25rem;
+}
 .links {
 	display: flex;
 	gap: 1rem;
