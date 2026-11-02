@@ -31,10 +31,13 @@ export class Notify {
 		protected notifier: Notifier,
 		@inject('Logger') protected logger: Logger,
 		@inject('ExceptionLogger') protected exceptionLogger: ExceptionLogger,
-		protected notifyHistoryArchiveIntegrityFailures: NotifyHistoryArchiveIntegrityFailures
+		protected notifyHistoryArchiveIntegrityFailures: NotifyHistoryArchiveIntegrityFailures,
+		@inject('NotificationsEnabled')
+		private readonly notificationsEnabled: boolean
 	) {}
 
 	async execute(notifyDTO: NotifyDTO): Promise<Result<void, NotifyError>> {
+		if (this.notificationsEnabled !== true) return ok(undefined);
 		try {
 			await this.notifyArchiveIntegrityFailures();
 			const networksOrError = await this.getLatestNetworks(

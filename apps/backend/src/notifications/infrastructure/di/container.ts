@@ -98,6 +98,9 @@ export function load(container: Container, config: Config) {
 			);
 		});
 	}
+	container
+		.bind<boolean>('NotificationsEnabled')
+		.toConstantValue(config.enableNotifications);
 	container.bind(Notify).toSelf();
 	container
 		.bind(HistoryArchiveIntegrityNotificationRunLock)
