@@ -1,12 +1,28 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { jest } from '@jest/globals';
-import { recordFieldTree, recordTreeLimits, type RecordFieldLevel } from '../record-field-tree';
+import { recordFieldInput, recordFieldTree, recordTreeLimits, type RecordFieldLevel } from '../record-field-tree';
 jest.unstable_mockModule('../explorer-record-fields.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 const { ExplorerRecordFields } = await import('../explorer-record-fields');
 
 describe('bounded readable source fields', () => {
+	it('decodes serialized structured fields without losing exact strings or silently rounding unsafe JSON numbers', () => {
+		const source = '{"limit":"9223372036854775807","claimants":[{"destination":"G' + 'A'.repeat(55) + '"}]}';
+		expect(recordFieldInput(source)).toEqual({ limit: '9223372036854775807', claimants: [{ destination: 'G' + 'A'.repeat(55) }] });
+		const unsafe = '{"limit":9223372036854775807}';
+		expect(recordFieldInput(unsafe)).toBe(unsafe);
+		for (const opaque of ['{invalid', '{"x":1e400}', '{"x":"' + 'a'.repeat(recordTreeLimits.jsonCharacters) + '"}']) expect(recordFieldInput(opaque)).toBe(opaque);
+		for (const literal of ['9007199254740991.1', '1.0000000000000001', '1e-400', '-0', '1.25', '1e2', '9007199254740992']) {
+			const raw = '{"nested":[{"amount":'+literal+'}]}';
+			expect(recordFieldInput(raw)).toBe(raw);
+		}
+		expect(recordFieldInput('{"safe":9007199254740991,"negative":-42,"zero":0,"text":"1e-400 and 1.0000000000000001"}')).toEqual({safe:9007199254740991,negative:-42,zero:0,text:'1e-400 and 1.0000000000000001'});
+		expect(recordFieldInput('{"text":"quoted \\"1e-400\\" literal","limit":"9007199254740991.1"}')).toEqual({text:'quoted "1e-400" literal',limit:'9007199254740991.1'});
+		const html = renderToStaticMarkup(createElement(ExplorerRecordFields, { value: source }));
+		expect(html).toContain('9223372036854775807'); expect(html).toContain('Expand claimants');
+		expect(renderToStaticMarkup(createElement(ExplorerRecordFields, { value: unsafe }))).toContain('Structured fields unavailable');
+	});
 	it('visits only explicitly expanded maps/lists and retains exact integer strings', () => {
 		const value = { signers: [{ address: 'G' + 'A'.repeat(55), weight: '9007199254740993' }], paths: [], missing: null };
 		const closed = recordFieldTree(value, new Set());
