@@ -129,9 +129,16 @@ function parseRadarHistoryArchiveScan(
 		);
 	}
 	const payloadRoot = Url.create(url);
-	if (payloadRoot.isErr() || payloadRoot.value.value !== dto.requestedArchiveUrl) {
-		return err(radarHistoryArchiveScanFailure('invalid_payload',
-			'RADAR history archive scan root does not match the requested archive'));
+	if (
+		payloadRoot.isErr() ||
+		payloadRoot.value.value !== dto.requestedArchiveUrl
+	) {
+		return err(
+			radarHistoryArchiveScanFailure(
+				'invalid_payload',
+				'RADAR history archive scan root does not match the requested archive'
+			)
+		);
 	}
 
 	return ok({
