@@ -5,7 +5,6 @@ import { ExplorerInvestigationScope, useExplorerReturnTo } from './explorer-inve
 import { withExplorerReturnTo } from '../../api/explorer-return-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-	buildEntityApiPath,
 	buildEntityHref,
 	type AnalyticsCollection,
 	type AnalyticsEntityPage,
@@ -14,6 +13,7 @@ import {
 import { entityDescriptions, titleCase } from './explorer-entity-config';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerEntityFilters } from './explorer-entity-filters';
+import { ExplorerEntityContext } from './explorer-entity-context';
 import {
 	ExplorerEntityDetails,
 	ExplorerEntityTable
@@ -150,6 +150,7 @@ function EntityBrowser({
 			}
 		: {};
 	const row = page?.rows[0];
+	const operationDetail = collection === 'operations' && Boolean(identifier);
 	return (
 		<div className={styles.workspace}>
 			<ExplorerEntityNavigation active={collection} />
@@ -160,7 +161,7 @@ function EntityBrowser({
 							? titleCase(collection).replace(/s$/, '') + ' ' + identifier
 							: titleCase(collection)}
 					</h2>
-					<p className={styles.muted}>{entityDescriptions[collection]}</p>
+					{!operationDetail && <p className={styles.muted}>{entityDescriptions[collection]}</p>}
 				</div>
 				{identifier && (
 					<Link href={buildEntityHref(collection)}>← Browse {collection}</Link>
@@ -171,7 +172,7 @@ function EntityBrowser({
 						contractId={identifier}
 					/>
 				)}
-				<ExplorerEntityFilters
+				{!operationDetail && <><ExplorerEntityFilters
 					collection={collection}
 					identifier={identifier}
 					filters={filters}
@@ -182,7 +183,7 @@ function EntityBrowser({
 				<p className={styles.muted}>
 					Latest published activity by default. Date and ledger filters are
 					optional.
-				</p>
+				</p></>}
 				{busy && <p role="status">Loading {collection}…</p>}
 				{error && (
 					<div className={styles.error} role="alert">
@@ -207,34 +208,7 @@ function EntityBrowser({
 								Showing the last successful result; the requested update failed.
 							</p>
 						)}
-						<div className={styles.status}>
-							<span>
-								Ledgers {page.window.minLedger.toLocaleString()}–
-								{page.window.maxLedger.toLocaleString()}
-							</span>
-							<span>
-								{page.coverageStatus === 'complete'
-									? 'Selected window fully published'
-									: 'Selected window has incomplete or unknown coverage'}
-							</span>
-							<span>{elapsed} ms</span>
-							<a
-								href={
-									'https://api.stellaratlas.io' +
-									buildEntityApiPath(
-										collection,
-										identifier,
-										submitted,
-										page.offset
-									)
-								}
-								target="_blank"
-								rel="noreferrer"
-							>
-								View API response ↗
-							</a>
-							<Link href="/docs/rest">API guide</Link>
-						</div>
+						{!operationDetail && <ExplorerEntityContext collection={collection} identifier={identifier} page={page} submitted={submitted} elapsed={elapsed} />}
 						{identifier && row ? (
 							<ExplorerEntityDetails
 								collection={collection}
@@ -309,6 +283,12 @@ function EntityBrowser({
 						)}
 					</ExplorerInvestigationScope>
 				)}
+				{operationDetail && <details className={styles.rangeFilters}>
+					<summary>Request context</summary>
+					{page && <ExplorerEntityContext collection={collection} identifier={identifier} page={page} submitted={submitted} elapsed={elapsed} sourceRecord />}
+					<p className={styles.muted}>Ledger inferred from operation ID unless overridden.</p>
+					<ExplorerEntityFilters collection={collection} identifier={identifier} filters={filters} busy={busy} operationDetail onChange={setFilters} onApply={next=>void load(next)} />
+				</details>}
 			</section>
 			{identifier && collection === 'assets' && (
 				<ExplorerBalanceObservations

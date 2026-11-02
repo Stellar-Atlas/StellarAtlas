@@ -1,0 +1,176 @@
+[
+	{
+		"scenario": "ready",
+		"path": "/v1/public-goods/health",
+		"status": 200,
+		"body": {
+			"generatedAt": "2026-01-02T00:00:00.000Z",
+			"status": "ready",
+			"checks": {
+				"clickhouse": {
+					"status": "ready",
+					"observedAt": "2026-01-02T00:00:00.000Z"
+				},
+				"publication": {
+					"status": "ready",
+					"observedAt": "2026-01-02T00:00:00.000Z",
+					"latestCompletedAt": "2026-01-02T00:00:00.000Z"
+				},
+				"archive": {
+					"status": "ready",
+					"observedAt": "2026-01-02T00:00:00.000Z",
+					"knownRoots": 2,
+					"checkedRoots": 2,
+					"checkedRootWindowHours": 24,
+					"complete": true
+				}
+			}
+		}
+	},
+	{
+		"scenario": "ready",
+		"path": "/v1/public-goods/metrics",
+		"status": 200,
+		"body": {
+			"generatedAt": "2026-01-02T00:00:00.000Z",
+			"publication": {
+				"observedAt": "2026-01-02T00:00:00.000Z",
+				"configuredDatasets": 2,
+				"publishedDatasets": 1,
+				"completedBatches": "2",
+				"failedBatches": "0",
+				"startedBatches": "0",
+				"records": "9007199254740993",
+				"latestCompletedAt": "2026-01-02T00:00:00.000Z",
+				"maximumLedger": "100"
+			},
+			"archives": {
+				"observedAt": "2026-01-02T00:00:00.000Z",
+				"knownRoots": 2,
+				"checkedRoots": 2,
+				"checkedRootWindowHours": 24,
+				"rootObjectsVerified": 1,
+				"rootObjectsFailed": 1,
+				"oldestEvidenceAt": "2026-01-02T00:00:00.000Z",
+				"newestEvidenceAt": "2026-01-02T00:00:00.000Z",
+				"complete": true
+			}
+		}
+	},
+	{
+		"scenario": "stale-incomplete",
+		"path": "/v1/public-goods/health",
+		"status": 503,
+		"body": {
+			"generatedAt": "2026-01-02T00:00:00.000Z",
+			"status": "not_ready",
+			"checks": {
+				"clickhouse": {
+					"status": "ready",
+					"observedAt": "2026-01-02T00:00:00.000Z"
+				},
+				"publication": {
+					"status": "stale",
+					"observedAt": "2026-01-02T00:00:00.000Z",
+					"latestCompletedAt": "2025-12-31T23:00:00.000Z"
+				},
+				"archive": {
+					"status": "incomplete",
+					"observedAt": "2026-01-02T00:00:00.000Z",
+					"knownRoots": 300,
+					"checkedRoots": null,
+					"checkedRootWindowHours": 24,
+					"complete": false
+				}
+			}
+		}
+	},
+	{
+		"scenario": "stale-incomplete",
+		"path": "/v1/public-goods/metrics",
+		"status": 200,
+		"body": {
+			"generatedAt": "2026-01-02T00:00:00.000Z",
+			"publication": {
+				"observedAt": "2026-01-02T00:00:00.000Z",
+				"configuredDatasets": 2,
+				"publishedDatasets": 1,
+				"completedBatches": "2",
+				"failedBatches": "0",
+				"startedBatches": "0",
+				"records": "9007199254740993",
+				"latestCompletedAt": "2025-12-31T23:00:00.000Z",
+				"maximumLedger": "100"
+			},
+			"archives": {
+				"observedAt": "2026-01-02T00:00:00.000Z",
+				"knownRoots": 300,
+				"checkedRoots": null,
+				"checkedRootWindowHours": 24,
+				"rootObjectsVerified": null,
+				"rootObjectsFailed": null,
+				"oldestEvidenceAt": null,
+				"newestEvidenceAt": null,
+				"complete": false
+			}
+		}
+	},
+	{
+		"scenario": "unavailable",
+		"path": "/v1/public-goods/health",
+		"status": 503,
+		"body": {
+			"generatedAt": "2026-01-02T00:00:00.000Z",
+			"status": "not_ready",
+			"checks": {
+				"clickhouse": {
+					"status": "unavailable",
+					"observedAt": null
+				},
+				"publication": {
+					"status": "unavailable",
+					"observedAt": null,
+					"latestCompletedAt": null
+				},
+				"archive": {
+					"status": "unavailable",
+					"observedAt": null,
+					"knownRoots": null,
+					"checkedRoots": null,
+					"checkedRootWindowHours": 24,
+					"complete": false
+				}
+			}
+		}
+	},
+	{
+		"scenario": "unavailable",
+		"path": "/v1/public-goods/metrics",
+		"status": 503,
+		"body": {
+			"generatedAt": "2026-01-02T00:00:00.000Z",
+			"publication": {
+				"observedAt": null,
+				"configuredDatasets": null,
+				"publishedDatasets": null,
+				"completedBatches": null,
+				"failedBatches": null,
+				"startedBatches": null,
+				"records": null,
+				"latestCompletedAt": null,
+				"maximumLedger": null
+			},
+			"archives": {
+				"observedAt": null,
+				"knownRoots": null,
+				"checkedRoots": null,
+				"checkedRootWindowHours": 24,
+				"rootObjectsVerified": null,
+				"rootObjectsFailed": null,
+				"oldestEvidenceAt": null,
+				"newestEvidenceAt": null,
+				"complete": false
+			}
+		}
+	}
+]

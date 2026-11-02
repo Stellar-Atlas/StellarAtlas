@@ -13,6 +13,13 @@ const { ExplorerEntityNavigation } =
 const { ExplorerEntityTable, ExplorerEntityDetails } =
 	await import('../explorer-entity-table');
 describe('parsed explorer presentation', () => {
+	it('puts operation action, explicit result availability and ledger before secondary fields',()=>{
+		const html=renderToStaticMarkup(createElement(ExplorerEntityDetails,{collection:'operations',filters:{min_ledger:'100',max_ledger:'100'},row:{id:'429496729603',type:'change_trust',ledgerSequence:100,sourceAccount:'G'+'A'.repeat(55),details:null}}));
+		expect(html.indexOf('Action')).toBeLessThan(html.indexOf('Operation result'));
+		expect(html.indexOf('Operation result')).toBeLessThan(html.indexOf('Ledger'));
+		expect(html.indexOf('Ledger')).toBeLessThan(html.indexOf('Source account'));
+		expect(html).toContain('Not provided');expect(html).not.toContain('Successful');
+	});
 	it('does not omit serialized operation details supplied by the API mapper', () => {
 		const html = renderToStaticMarkup(createElement(ExplorerEntityDetails, { collection: 'operations', filters: {}, row: {
 			id: '429496729603', type: 'change_trust', details: '{"limit":"9223372036854775807","asset":{"id":"native"}}'

@@ -1,6 +1,5 @@
-import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
-import { contractEventExample } from '../blockchain/contract-event-query';
-import { contractActivityPath } from '../../api/explorer-contract-activity';
+import { Code, type DeveloperGuidePage } from './developer-guide-elements';
+import { liveUpdatesExample } from './live-updates-example';
 
 export const liveUpdatesGuide: DeveloperGuidePage = {
 	slug: 'live-updates',
@@ -58,61 +57,7 @@ export const liveUpdatesGuide: DeveloperGuidePage = {
 						relevant notice. This uses the shared historical example: only
 						publications overlapping that example’s ledger window cause a read.
 					</p>
-					<Code language="javascript">{`const eventUrl = '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}';
-const feed = new WebSocket('wss://api.stellaratlas.io/v1/stream/data');
-const seen = new Set();
-let timer = null, request = null, pending = false, stopped = false;
-
-function queueRefresh() {
-  if (stopped || timer !== null || request !== null) return;
-  timer = setTimeout(async () => {
-    timer = null;
-    if (stopped) return;
-    pending = false;
-    request = new AbortController();
-    const deadline = setTimeout(() => request?.abort(), 10_000);
-    try {
-      const response = await fetch(eventUrl, { signal: request.signal });
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      console.log('Refreshed bounded event page:', await response.json());
-    } catch (error) {
-      console.error('Refresh failed; retain the previous page:', error);
-    } finally {
-      clearTimeout(deadline);
-      request = null;
-      if (pending) queueRefresh();
-    }
-  }, 250);
-}
-
-feed.onmessage = ({ data }) => {
-  if (stopped || typeof data !== 'string' || data.length > 4096) return;
-  let notice;
-  try { notice = JSON.parse(data); } catch { return; }
-  if (notice?.version !== 1 || notice.event !== 'datasets.published' ||
-      typeof notice.batchId !== 'string' || !Array.isArray(notice.datasets) ||
-      !notice.datasets.includes('history_contract_events')) return;
-  if (!Number.isSafeInteger(notice.minLedger) || !Number.isSafeInteger(notice.maxLedger) ||
-      notice.minLedger > notice.maxLedger) return;
-  if (notice.maxLedger < ${contractEventExample.min_ledger} || notice.minLedger > ${contractEventExample.max_ledger}) return;
-  if (seen.has(notice.batchId)) return;
-  seen.add(notice.batchId);
-  while (seen.size > 256) seen.delete(seen.values().next().value);
-  pending = true;
-  queueRefresh();
-};
-feed.onclose = () => console.info('Disconnected; recheck coverage before reconnecting.');
-
-function stopUpdates() {
-  stopped = true;
-  if (timer !== null) clearTimeout(timer);
-  timer = null;
-  pending = false;
-  request?.abort();
-  feed.close();
-  seen.clear();
-}
-// Call stopUpdates() when the view closes.`}</Code>
+					<Code language="javascript">{liveUpdatesExample}</Code>
 					<p>
 						Notices coalesce for 250 milliseconds, with one request in flight
 						and at most 256 remembered batch IDs. Each read has a ten-second

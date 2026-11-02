@@ -27,6 +27,50 @@ function render(slug: string): string {
 	);
 }
 describe('developer guides', () => {
+	it.each([
+		{
+			id: 'inspect-coverage',
+			command:
+				"curl --fail-with-body --connect-timeout 5 --max-time 30 'https://api.stellaratlas.io/v1/analytics/datasets'"
+		},
+		{
+			id: 'fetch-operations',
+			command:
+				"curl --fail-with-body --connect-timeout 5 --max-time 30 'https://api.stellaratlas.io/v1/operations?min_ledger=63490364&max_ledger=63490365&type=payment&limit=10&offset=0' --output operations-page-1.json"
+		},
+		{
+			id: 'follow-results',
+			command: `offset=$(jq -er '.nextOffset // empty' operations-page-1.json) &&
+curl --fail-with-body --connect-timeout 5 --max-time 30 --get 'https://api.stellaratlas.io/v1/operations?min_ledger=63490364&max_ledger=63490365&type=payment&limit=10' \\
+  --data-urlencode "offset=$offset"`
+		}
+	])('renders the exact bounded Quickstart $id command', ({ id, command }) => {
+		const section = getDeveloperGuidePage('quickstart')?.sections.find(
+			(value) => value.id === id
+		);
+		expect(section).toBeDefined();
+		const html = renderToStaticMarkup(
+			createElement(Fragment, null, section!.content)
+		);
+		const expected = renderToStaticMarkup(
+			createElement('code', null, command)
+		).slice('<code>'.length, -'</code>'.length);
+		expect(html.match(/<pre\b[^>]*><code\b[^>]*>([\s\S]*?)<\/code>/)?.[1]).toBe(
+			expected
+		);
+		expect(command).not.toContain('--retry');
+	});
+	it('explains local deadline and incomplete-file boundaries', () => {
+		const html = render('quickstart');
+		for (const text of [
+			'five seconds to connect and thirty seconds for the whole request',
+			'without automatic retries',
+			'not evidence that rows are absent or that server work stopped',
+			'Treat a file saved by a failed request as incomplete',
+			'continue only after a successful response'
+		])
+			expect(html).toContain(text);
+	});
 	it('provides discoverable pages with stable unique section anchors', () => {
 		expect(developerGuidePages.map((page) => page.slug)).toEqual([
 			'quickstart',
