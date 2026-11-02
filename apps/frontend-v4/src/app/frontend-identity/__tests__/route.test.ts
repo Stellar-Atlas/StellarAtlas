@@ -4,7 +4,7 @@ import 'next/dist/server/node-environment';
 import { AppRouteRouteModule } from 'next/dist/server/route-modules/app-route/module';
 import type { RouteKind } from 'next/dist/server/route-kind';
 import { NextRequest } from 'next/server';
-import { GET, HEAD } from '../route';
+import { GET, HEAD, OPTIONS } from '../route';
 
 describe('modern frontend identity contract', () => {
 	it('returns a release-independent no-store identity without fetching', async () => {
@@ -30,9 +30,9 @@ describe('modern frontend identity contract', () => {
 		const route = new AppRouteRouteModule({
 			definition: { kind: 'APP_ROUTE' as RouteKind.APP_ROUTE, page: '/frontend-identity/route', pathname: '/frontend-identity', filename: 'route', bundlePath: 'app/frontend-identity/route' },
 			distDir: '.next-test', relativeProjectDir: '.', resolvedPagePath: '/frontend-identity/route.ts', nextConfigOutput: undefined,
-			userland: () => ({ GET, HEAD, generateStaticParams: undefined })
+			userland: () => ({ GET, HEAD, OPTIONS, generateStaticParams: undefined })
 		});
-		for (const method of ['GET', 'HEAD', 'POST', 'PUT', 'DELETE']) {
+		for (const method of ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']) {
 			const response = await route.handle(new NextRequest('https://stellaratlas.io/frontend-identity', {method}), {
 				params: undefined, previewProps: { previewModeId: '', previewModeSigningKey: '', previewModeEncryptionKey: '' },
 				sharedContext: { buildId: 'identity-test', deploymentId: 'any-legitimate-release' },

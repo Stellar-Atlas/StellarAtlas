@@ -14,3 +14,7 @@ export function GET(): Response {
 export function HEAD(): Response {
 	return new Response(null, { status: 200, headers });
 }
+
+export function OPTIONS(): Response {
+	return new Response(null, { status: 405, headers: { ...headers, Allow: 'GET, HEAD' } });
+}
