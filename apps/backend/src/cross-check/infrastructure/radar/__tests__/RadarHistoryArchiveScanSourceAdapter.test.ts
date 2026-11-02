@@ -4,6 +4,218 @@ import {
 } from '../RadarHistoryArchiveScanSourceAdapter.js';
 
 describe('RadarHistoryArchiveScanSourceAdapter', () => {
+	it('retains deadline classification when expired cleanup rejects', async () => {
+		let signal: AbortSignal | undefined;
+		const response = new Response(new ReadableStream({ cancel() {
+			return new Promise<void>((_resolve, reject) => {
+				signal?.addEventListener('abort', () => reject(new Error('Synthetic cleanup failure')), { once: true });
+			});
+		} }), { status: 404 });
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(async (_url, init) => { signal = init?.signal ?? undefined; return response; });
+		const result = await adapter.fetchHistoryArchiveScan('https://history.example.com', { timeoutMs: 10 });
+		expect(result.isErr()).toBe(true);
+		if (result.isErr()) expect(result.error.kind).toBe('timeout');
+	});
+	it.each([404, 500, 200])(
+		'rechecks the deadline after %s body cleanup settles',
+		async (status) => {
+			let signal: AbortSignal | undefined;
+			let cleanupSettled = false;
+			const body = new ReadableStream<Uint8Array>({
+				start(controller) {
+					if (status === 200) controller.enqueue(new Uint8Array([1, 2]));
+				},
+				cancel() {
+					return new Promise<void>((resolve) => {
+						const finish = (): void => {
+							cleanupSettled = true;
+							resolve();
+						};
+						if (signal?.aborted) finish();
+						else signal?.addEventListener('abort', finish, { once: true });
+					});
+				}
+			});
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(
+				async (_input, init) => {
+					signal = init?.signal ?? undefined;
+					return new Response(body, { status });
+				}
+			);
+			const result = await adapter.fetchHistoryArchiveScan(
+				'https://history.example.com',
+				{ timeoutMs: 10, maxBytes: 1 }
+			);
+			expect(cleanupSettled).toBe(true);
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('timeout');
+		}
+	);
+	it.each([404, 500])(
+		'keeps caller cancellation distinct after %s cleanup',
+		async (status) => {
+			const caller = new AbortController();
+			let cleanupSettled = false;
+			const body = new ReadableStream({
+				cancel() {
+					caller.abort();
+					return Promise.resolve().then(() => {
+						cleanupSettled = true;
+					});
+				}
+			});
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(
+				async () => new Response(body, { status })
+			);
+			const result = await adapter.fetchHistoryArchiveScan(
+				'https://history.example.com',
+				{ signal: caller.signal }
+			);
+			expect(cleanupSettled).toBe(true);
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('cancelled');
+		}
+	);
+	it('rechecks the deadline after bodyless text-read settlement before parsing', async () => {
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(
+			async (_input, init) => {
+				const response = new Response(null);
+				Object.defineProperty(response, 'text', {
+					value: () =>
+						new Promise<string>((resolve) => {
+							init?.signal?.addEventListener(
+								'abort',
+								() => resolve(JSON.stringify(createHistoryArchiveScan())),
+								{ once: true }
+							);
+						})
+				});
+				return response;
+			}
+		);
+		const result = await adapter.fetchHistoryArchiveScan(
+			'https://history.example.com',
+			{ timeoutMs: 10 }
+		);
+		expect(result.isErr()).toBe(true);
+		if (result.isErr()) expect(result.error.kind).toBe('timeout');
+	});
+	it('distinguishes caller cancellation from a deadline and cancels a pending body', async () => {
+		for (const caller of [false, true]) {
+			let cancelled = 0;
+			const controller = new AbortController();
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(
+				async () =>
+					new Response(
+						new ReadableStream({
+							cancel() {
+								cancelled++;
+							}
+						})
+					)
+			);
+			const pending = adapter.fetchHistoryArchiveScan(
+				'https://history.example.com',
+				{ timeoutMs: caller ? 1000 : 10, signal: controller.signal }
+			);
+			if (caller) controller.abort();
+			const result = await pending;
+			expect(result.isErr()).toBe(true);
+			if (result.isErr())
+				expect(result.error.kind).toBe(caller ? 'cancelled' : 'timeout');
+			expect(cancelled).toBe(1);
+		}
+	});
+	it('rejects unsafe requested roots before any outbound request', async () => {
+		let calls = 0;
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(async () => {
+			calls++;
+			throw new Error('Unexpected request');
+		});
+		for (const root of [
+			'https://user:secret@history.example.com',
+			'ftp://history.example.com',
+			'https://history.example.com?token=x',
+			'https://history.example.com#fragment'
+		]) {
+			const result = await adapter.fetchHistoryArchiveScan(root);
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('invalid_archive_url');
+		}
+		expect(calls).toBe(0);
+	});
+	it('canonicalizes safe root aliases and rejects unsafe payload roots', async () => {
+		let requested = '';
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(async (input) => {
+			requested = String(input);
+			return new Response(
+				JSON.stringify({
+					...createHistoryArchiveScan(),
+					url: 'https://HISTORY.EXAMPLE.COM:443/.well-known/stellar-history.json'
+				})
+			);
+		});
+		const result = await adapter.fetchHistoryArchiveScan(
+			'https://HISTORY.EXAMPLE.COM:443/.well-known/stellar-history.json'
+		);
+		expect(result.isOk()).toBe(true);
+		if (result.isOk())
+			expect(result.value?.url).toBe('https://history.example.com');
+		expect(requested).toBe(
+			RadarHistoryArchiveScanSourceAdapter.defaultBaseUrl +
+				encodeURIComponent('https://history.example.com')
+		);
+		for (const url of [
+			'https://user:secret@history.example.com',
+			'ftp://history.example.com',
+			'https://history.example.com?token=x',
+			'https://history.example.com#fragment'
+		]) {
+			const unsafe = new RadarHistoryArchiveScanSourceAdapter(
+				async () =>
+					new Response(JSON.stringify({ ...createHistoryArchiveScan(), url }))
+			);
+			const response = await unsafe.fetchHistoryArchiveScan(
+				'https://history.example.com'
+			);
+			expect(response.isErr()).toBe(true);
+			if (response.isErr()) expect(response.error.kind).toBe('invalid_payload');
+		}
+	});
+	it('rejects a different payload root and preserves case-sensitive root paths', async () => {
+		for (const payloadUrl of [
+			'https://different.example.com/History',
+			'https://history.example.com/history'
+		]) {
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(
+				async () =>
+					new Response(
+						JSON.stringify({ ...createHistoryArchiveScan(), url: payloadUrl })
+					)
+			);
+			const result = await adapter.fetchHistoryArchiveScan(
+				'https://history.example.com/History'
+			);
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('invalid_payload');
+		}
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(
+			async () =>
+				new Response(
+					JSON.stringify({
+						...createHistoryArchiveScan(),
+						url: 'https://history.example.com/History/'
+					})
+				)
+		);
+		expect(
+			(
+				await adapter.fetchHistoryArchiveScan(
+					'https://history.example.com/History'
+				)
+			).isOk()
+		).toBe(true);
+	});
 	it('should fetch and parse a bounded RADAR history archive scan', async () => {
 		let observedRequest:
 			{ input: string | URL; init?: RequestInit } | undefined;
@@ -96,7 +308,10 @@ describe('RadarHistoryArchiveScanSourceAdapter', () => {
 	});
 
 	it('should reject invalid archive URLs before fetching', async () => {
-		const fetchFn = jest.fn<RadarHistoryArchiveScanFetch>();
+		const fetchFn = jest.fn<
+			ReturnType<RadarHistoryArchiveScanFetch>,
+			Parameters<RadarHistoryArchiveScanFetch>
+		>();
 		const adapter = new RadarHistoryArchiveScanSourceAdapter(fetchFn);
 
 		const result = await adapter.fetchHistoryArchiveScan('   ');

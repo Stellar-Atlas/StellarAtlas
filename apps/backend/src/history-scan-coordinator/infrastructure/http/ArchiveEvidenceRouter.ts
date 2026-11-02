@@ -1,4 +1,5 @@
 import * as express from 'express';
+import { archiveRadarObservationRouter } from './ArchiveRadarObservationRouter.js';
 import { param, validationResult } from 'express-validator';
 import type { GetHistoryArchiveEvidence } from '../../use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
 import { ArchiveEvidenceReadModelUnavailableError } from '../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
@@ -16,6 +17,7 @@ import {
 } from './PublicArchiveEvidenceRequest.js';
 
 export interface ArchiveEvidenceRouterConfig {
+	readonly radarObservation?: Parameters<typeof archiveRadarObservationRouter>[0];
 	readonly admission?: PublicArchiveEvidenceAdmission;
 	readonly getHistoryArchiveEvidence: GetHistoryArchiveEvidence;
 }
@@ -24,6 +26,7 @@ export function archiveEvidenceRouter(
 	config: ArchiveEvidenceRouterConfig
 ): express.Router {
 	const router = express.Router();
+	router.use(archiveRadarObservationRouter(config.radarObservation));
 	const admission = config.admission ?? publicArchiveEvidenceAdmission;
 	router.get(
 		'/:encodedUrl/object-evidence',
