@@ -1,4 +1,19 @@
-export const recordTreeLimits = { rows: 20, depth: 4, nodes: 160, expanded: 40 } as const;
+export const recordTreeLimits = { rows: 20, depth: 4, nodes: 160, expanded: 40, jsonCharacters: 262144 } as const;
+
+/** Decode only structured source fields; preserve opaque, oversized or lossy JSON verbatim. */
+export function recordFieldInput(value: unknown): unknown {
+	if (typeof value !== 'string' || value.length > recordTreeLimits.jsonCharacters || !/^[\s]*[\[{]/.test(value)) return value;
+	try {
+		// Inspect original tokens BEFORE JSON.parse can round fractions or underflow.
+		// Quoted text is skipped. Conservatively keep decimal/exponent/negative-zero
+		// literals raw; only canonical safe integers enter the structured renderer.
+		for (const token of value.matchAll(/"(?:\\.|[^"\\])*"|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/g)) {
+			const number = token[1];
+			if (number !== undefined && (!Number.isSafeInteger(Number(number)) || String(Number(number)) !== number)) return value;
+		}
+		return JSON.parse(value) as unknown;
+	} catch { return value; }
+}
 export interface RecordFieldNode {
 	readonly field: string;
 	readonly label: string;

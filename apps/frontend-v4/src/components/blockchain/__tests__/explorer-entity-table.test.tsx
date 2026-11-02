@@ -13,6 +13,12 @@ const { ExplorerEntityNavigation } =
 const { ExplorerEntityTable, ExplorerEntityDetails } =
 	await import('../explorer-entity-table');
 describe('parsed explorer presentation', () => {
+	it('does not omit serialized operation details supplied by the API mapper', () => {
+		const html = renderToStaticMarkup(createElement(ExplorerEntityDetails, { collection: 'operations', filters: {}, row: {
+			id: '429496729603', type: 'change_trust', details: '{"limit":"9223372036854775807","asset":{"id":"native"}}'
+		} }));
+		expect(html).toContain('Operation details'); expect(html).toContain('9223372036854775807'); expect(html).toContain('Expand asset'); expect(html).toContain('Raw details');
+	});
 	it('shows native pool observations, nullable removals and correctly scoped pair-trade links', () => {
 		const html = renderToStaticMarkup(
 			createElement(ExplorerEntityDetails, {

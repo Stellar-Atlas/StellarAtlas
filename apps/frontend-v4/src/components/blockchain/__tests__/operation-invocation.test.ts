@@ -4,6 +4,11 @@ const contract = `C${'A'.repeat(55)}`;
 const alternateContract = `C${'B'.repeat(55)}`;
 
 describe('operationInvocation', () => {
+	it('recognizes supported serialized invocation details without changing exact integer arguments', () => {
+		expect(operationInvocation({ type: 'invoke_host_function', details: JSON.stringify({
+			type: 'invoke_contract', parameters_json_decoded: [{ address: contract }, { symbol: 'transfer' }, { u64: '9223372036854775807' }]
+		}) })).toEqual({ contractId: contract, functionName: 'transfer', arguments: [{ u64: '9223372036854775807' }] });
+	});
 	it('prefers a valid JSON-decoded invocation', () => {
 		expect(
 			operationInvocation({

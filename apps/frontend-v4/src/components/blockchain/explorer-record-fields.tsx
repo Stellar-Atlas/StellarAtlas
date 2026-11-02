@@ -1,9 +1,9 @@
 'use client';
 
-import { Fragment, useId, useState } from 'react';
+import { Fragment, useId, useMemo, useState } from 'react';
 import type { ExplorerFilters } from '../../api/explorer-analytics';
 import { ExplorerRecordValue } from './explorer-record-value';
-import { recordFieldTree, recordTreeLimits, type RecordFieldLevel } from './record-field-tree';
+import { recordFieldInput, recordFieldTree, recordTreeLimits, type RecordFieldLevel } from './record-field-tree';
 import styles from './explorer-record-fields.module.css';
 
 /** Generic source fields, not a contract-specific interpretation or unit conversion. */
@@ -15,6 +15,7 @@ export function ExplorerRecordFields({ value, filters, exclude = [], rawFallback
 }): React.JSX.Element {
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
 	const [rawOpen, setRawOpen] = useState(false);
+	const input = useMemo(() => recordFieldInput(value), [value]);
 	const id = useId();
 	const toggle = (path: string): void => setExpanded((previous) => {
 		if (previous.has(path)) return new Set([...previous].filter((item) => item !== path && !item.startsWith(path + '.')));
@@ -40,7 +41,8 @@ export function ExplorerRecordFields({ value, filters, exclude = [], rawFallback
 		{level.omitted > 0 && <p className={styles.muted}>{level.omitted} more {level.omitted === 1 ? 'entry' : 'entries'} in raw details.</p>}
 	</>;
 	return <div className={styles.record}>
-		{renderLevel(recordFieldTree(value, expanded, exclude))}
+		{typeof input === 'object' && input !== null ? renderLevel(recordFieldTree(input, expanded, exclude))
+			: <p className={styles.muted}>Structured fields unavailable. View the raw details.</p>}
 		{expanded.size >= recordTreeLimits.expanded && <p className={styles.muted}>Collapse a section to expand another.</p>}
 		{rawFallback && <details onToggle={(event) => setRawOpen(event.currentTarget.open)}>
 			<summary>Raw details</summary>
@@ -50,6 +52,7 @@ export function ExplorerRecordFields({ value, filters, exclude = [], rawFallback
 }
 
 function rawDetails(value: unknown): string {
+	if (typeof value === 'string') return value;
 	try { return JSON.stringify(value, (_key, item: unknown) => typeof item === 'bigint' ? String(item) : item, 2) ?? 'Not recorded'; }
 	catch { return 'Raw details could not be rendered.'; }
 }
