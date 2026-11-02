@@ -101,7 +101,8 @@ function EntityBrowser({
 					collection,
 					identifier,
 					pinnedFilters,
-					data.offset
+					data.offset,
+					returnTo
 				);
 				window.history.replaceState(
 					null,

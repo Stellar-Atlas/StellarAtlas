@@ -1,0 +1,80 @@
+'use client';
+import { useCallback, useEffect, useRef } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { buildEntityHref, requestExplorerJson } from '../../api/explorer-analytics';
+import { buildLedgerTransactionsPath, parseLedgerTransactions, validLedgerSequence, type LedgerTransactionPage } from '../../api/explorer-ledger-transactions';
+import { sanitizeExplorerReturnTo, withExplorerReturnTo } from '../../api/explorer-return-context';
+import { ExplorerLink as Link, useExplorerReturnTo } from './explorer-investigation';
+import { adjacentLedgerHref, ledgerActivityHref, readLedgerActivity } from './ledger-activity-route';
+import { ExplorerTransactionTable } from './explorer-transaction-table';
+import { ExplorerRequestNotice } from './explorer-browse-ui';
+import { useExplorerRequest } from './use-explorer-request';
+import styles from './explorer-entity.module.css';
+
+export function ExplorerLedgerActivity({ ledger }: { readonly ledger: string }): React.JSX.Element | null {
+	return validLedgerSequence(ledger) ? <LedgerActivity key={ledger} ledger={ledger} /> : null;
+}
+function LedgerActivity({ ledger }: { readonly ledger: string }): React.JSX.Element {
+	const pathname = usePathname() ?? buildEntityHref('ledgers', ledger);
+	const params = useSearchParams();
+	const query = params?.toString() ?? '';
+	const returnTo = useExplorerReturnTo();
+	const { open, offset } = readLedgerActivity(new URLSearchParams(query), ledger);
+	const filters = { min_ledger: ledger, max_ledger: ledger, return_to: sanitizeExplorerReturnTo(returnTo ?? pathname + (query ? '?' + query : '')) ?? '/explorer' };
+	const previous = adjacentLedgerHref(ledger, -1), next = adjacentLedgerHref(ledger, 1);
+	const navigate = (visible: boolean, page = 0): void => {
+		window.history.pushState(window.history.state, '', ledgerActivityHref(pathname, query, ledger, visible, page, window.location.hash));
+	};
+	return <section className={styles.workspace} aria-label="Ledger activity">
+		<div className={styles.actions}>
+			{previous && <Link href={previous}>← Previous ledger</Link>}
+			{next && <Link href={next}>Next ledger →</Link>}
+		</div>
+		<div className={styles.actions}>
+			<button type="button" aria-expanded={open} aria-controls="ledger-transactions" onClick={() => navigate(!open)}>Transactions</button>
+			{(['operations', 'transfers', 'trades', 'offers', 'liquidity-pools'] as const).map((collection) => <Link key={collection} href={buildEntityHref(collection, undefined, filters)}>
+				{collection === 'liquidity-pools' ? 'Pool changes' : collection.charAt(0).toUpperCase() + collection.slice(1)}
+			</Link>)}
+		</div>
+		{open && <LedgerTransactions key={offset} ledger={ledger} offset={offset} onPage={(page) => navigate(true, page)} />}
+	</section>;
+}
+
+function LedgerTransactions({ ledger, offset, onPage }: {
+	readonly ledger: string;
+	readonly offset: number;
+	readonly onPage: (offset: number) => void;
+}): React.JSX.Element {
+	const request = useExplorerRequest<LedgerTransactionPage | null>(null, 'Transaction records could not be loaded.');
+	const controller = useRef<AbortController | null>(null);
+	const router = useRouter();
+	const pathname = usePathname();
+	const params = useSearchParams();
+	const returnTo = useExplorerReturnTo();
+	const load = useCallback(() => request.run(async () => {
+		controller.current?.abort();
+		const abort = new AbortController();
+		controller.current = abort;
+		try { return parseLedgerTransactions(ledger, offset, await requestExplorerJson(buildLedgerTransactionsPath(ledger, offset), abort.signal)); }
+		finally { if (controller.current === abort) controller.current = null; }
+	}), [ledger, offset, request.run]);
+	useEffect(() => { void load(); return () => controller.current?.abort(); }, [load]);
+	const page = request.result;
+	return <section id="ledger-transactions" aria-label="Ledger transactions" aria-busy={request.loading}>
+		<h3>Transactions in ledger {ledger}</h3>
+		<p className={styles.muted}>Published records only; historical coverage may be incomplete.</p>
+		<ExplorerRequestNotice loading={request.loading} error={request.error} onRetry={() => void load()} />
+		{page && <>
+			{page.records.length ? <ExplorerTransactionTable transactions={page}
+				caption={`Published transaction records for ledger ${ledger}. Dates are shown in your local time.`}
+				onInspect={(hash, sequence) => router.push(withExplorerReturnTo(buildEntityHref('transactions', hash, { ledger_sequence: sequence }), returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')))} />
+				: <p>No transaction records returned for this page.</p>}
+			<div className={styles.actions}>
+				<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
+				<button disabled={request.loading || page.nextOffset === null || page.nextOffset > 10000} onClick={() => { if (page.nextOffset !== null) onPage(page.nextOffset); }}>Next transactions</button>
+				<span>{page.records.length} returned</span>
+			</div>
+			{page.nextOffset !== null && page.nextOffset > 10000 && <p className={styles.muted}>Pagination limit reached.</p>}
+		</>}
+	</section>;
+}
