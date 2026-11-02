@@ -7,7 +7,7 @@ describe('bounded transaction transfers',()=>{
 	it('uses only the resolved transaction and single ledger; preserves exact source amounts',()=>{
 		expect(transactionTransferPath(scope,null)).toBe('/v1/activity/transfers?transaction_hash='+scope.hash+'&min_ledger=100&max_ledger=100&limit=25');
 		expect(transactionTransferPath(scope,'next_page')).toContain('&after=next_page');
-		expect(parseTransactionTransfers(page,scope,null).transfers[0].amountRaw).toBe(row.amountRaw);
+		expect(parseTransactionTransfers(page,scope,null).transfers[0]?.amountRaw).toBe(row.amountRaw);
 		expect(formatTransferAmount(row.amountRaw,7)).toBe('900719925474.0993123');
 		const contract={...row,id:'100:2',asset:{id:'C'+'A'.repeat(55),type:'contract',code:null,issuer:null},amountScale:null};
 		expect(parseTransactionTransfers({...page,transfers:[row,contract]},scope,null).transfers).toHaveLength(2);

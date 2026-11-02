@@ -1,6 +1,7 @@
 import type { TransferActivity } from '../../api/transfer-activity';
 import { formatTransferAmount } from '../../api/transfer-activity';
 import { EntityLink } from './explorer-entity-table';
+import { LocalDateTime } from '../local-date-time';
 import styles from './explorer-entity.module.css';
 
 function Wallet({ address }: { readonly address: string | null }): React.JSX.Element {
@@ -12,7 +13,7 @@ function Wallet({ address }: { readonly address: string | null }): React.JSX.Ele
 export function ExplorerTransferTable({ rows }: { readonly rows: readonly TransferActivity[] }): React.JSX.Element {
 	return <div className={styles.tableWrap}><table className={styles.table}>
 		<caption className={styles.muted}>Indexed transfers · {rows.length} on this page</caption>
-		<thead><tr><th>Asset / amount</th><th>From</th><th>To</th><th>Details</th></tr></thead>
+		<thead><tr><th scope="col">Asset / amount</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Details</th></tr></thead>
 		<tbody>{rows.map(row => <tr key={row.id}>
 			<td data-label="Asset / amount"><div>
 				<EntityLink collection="assets" id={row.asset.id} label={row.asset.id === 'native' ? 'XLM' : row.asset.code || row.asset.id} />
@@ -31,6 +32,7 @@ export function ExplorerTransferTable({ rows }: { readonly rows: readonly Transf
 					<dt>Operation</dt><dd>{row.operationId ? <EntityLink collection="operations" id={row.operationId} filters={{min_ledger:String(row.ledgerSequence),max_ledger:String(row.ledgerSequence)}} /> : 'Not recorded'}</dd>
 					<dt>Transaction</dt><dd><EntityLink collection="transactions" id={row.transactionHash} filters={{ledger_sequence:String(row.ledgerSequence)}} /></dd>
 					<dt>Ledger</dt><dd><EntityLink collection="ledgers" id={String(row.ledgerSequence)} label={row.ledgerSequence.toLocaleString('en-US')} /></dd>
+					<dt>Closed</dt><dd><LocalDateTime dateTime={row.closedAt} /></dd>
 				</dl></details>
 			</div></td>
 		</tr>)}</tbody>

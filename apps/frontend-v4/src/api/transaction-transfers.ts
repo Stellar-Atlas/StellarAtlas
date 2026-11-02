@@ -16,6 +16,8 @@ export function transactionTransferPath(scope: TransactionTransferScope, after: 
 /** Reject results outside the requested transaction; never silently widen the window. */
 export function parseTransactionTransfers(value: unknown, scope: TransactionTransferScope, after: string | null): TransferActivityPage {
 	transactionTransferPath(scope, after);
+	if (value !== null && typeof value === 'object' && 'transfers' in value && Array.isArray(value.transfers) && value.transfers.length > 25)
+		throw new Error('The API exceeded the transaction-transfer page limit.');
 	const page = parseTransferActivityPage(value), watermark = page.watermark, ledger = Number(scope.ledger);
 	const invalid = (): never => { throw new Error('The API returned an invalid transaction-transfer page.'); };
 	if (page.limit !== 25 || page.transfers.length > 25 ||
