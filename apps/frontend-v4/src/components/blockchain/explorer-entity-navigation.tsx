@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useRef } from 'react';
 import {
 	analyticsCollections,
 	buildEntityHref
@@ -10,8 +13,24 @@ export function ExplorerEntityNavigation({
 }: {
 	readonly active?: string;
 }): React.JSX.Element {
+	const ref = useRef<HTMLElement>(null);
+	useEffect(() => {
+		const nav = ref.current;
+		if (!nav) return;
+		const revealActive = (): void => {
+			const current = nav.querySelector<HTMLElement>('[aria-current="page"]');
+			if (!current || nav.scrollWidth <= nav.clientWidth) return;
+			const left = current.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft;
+			if (left < nav.scrollLeft || left + current.offsetWidth > nav.scrollLeft + nav.clientWidth)
+				nav.scrollTo({ left: Math.max(0, left - (nav.clientWidth - current.offsetWidth) / 2) });
+		};
+		revealActive();
+		const observer = new ResizeObserver(revealActive);
+		observer.observe(nav);
+		return () => observer.disconnect();
+	}, [active]);
 	return (
-		<nav className={styles.navigation} aria-label="Explore blockchain">
+		<nav ref={ref} className={styles.navigation} aria-label="Explore blockchain" tabIndex={0}>
 			<Link
 				href="/explorer"
 				aria-current={!active || active === 'transactions' ? 'page' : undefined}

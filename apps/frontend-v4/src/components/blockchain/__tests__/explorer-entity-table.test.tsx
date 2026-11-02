@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
 }));
+jest.unstable_mockModule('../explorer-record-fields.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-contract-event-table.module.css', () => ({
 	default: {}
 }));
@@ -79,6 +80,7 @@ describe('parsed explorer presentation', () => {
 		])
 			expect(html).toContain('/explorer/' + collection);
 		expect(html).toContain('aria-current="page"');
+		expect(html).toContain('tabindex="0"');
 	});
 	it('never links a numeric transaction TOID as though it were a hash', () => {
 		const html = renderToStaticMarkup(

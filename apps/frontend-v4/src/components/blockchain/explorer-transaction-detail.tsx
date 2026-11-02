@@ -19,7 +19,7 @@ import { EntityLink } from './explorer-entity-table';
 import { ExplorerContractEventTable } from './explorer-contract-event-table';
 import { ExplorerOperationCall } from './explorer-operation-call';
 import { OperationResultFields } from './explorer-operation-result';
-import { ExplorerRecordValue } from './explorer-record-value';
+import { ExplorerRecordFields } from './explorer-record-fields';
 import { operationInvocation } from './explorer-operation-invocation';
 import { formatAtomic } from './explorer-format-values';
 import { ExplorerLink as Link } from './explorer-investigation';
@@ -95,22 +95,6 @@ function RelationRecord({
 						<small>({entityText(amount, 'raw')} raw units)</small>
 					</dd>
 				])}
-				{Object.entries(details)
-					.filter(
-						([key, value]) =>
-							!(
-								hasInvocation &&
-								['type', 'function', 'contract_id'].includes(key)
-							) &&
-							(typeof value === 'string' ||
-								typeof value === 'number' ||
-								typeof value === 'boolean')
-					)
-					.slice(0, 30)
-					.flatMap(([key, value]) => [
-						<dt key={key + 'label'}>{key.replaceAll('_', ' ')}</dt>,
-						<dd key={key}><ExplorerRecordValue field={key} value={value} filters={{ min_ledger: ledger, max_ledger: ledger }} /></dd>
-					])}
 				{entityText(row, 'contractId') && (
 					<>
 						<dt>Contract</dt>
@@ -124,6 +108,8 @@ function RelationRecord({
 					</>
 				)}
 			</dl>
+			<ExplorerRecordFields value={details} filters={{ min_ledger: ledger, max_ledger: ledger }}
+				exclude={hasInvocation ? ['type', 'function', 'contract_id'] : []} rawFallback={false} />
 			<details>
 				<summary>
 					{relation === 'operations'

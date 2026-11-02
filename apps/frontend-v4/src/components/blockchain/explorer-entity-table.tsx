@@ -10,7 +10,7 @@ import {
 import { LocalDateTime } from '../local-date-time';
 import { entityColumns } from './explorer-entity-config';
 import { ExplorerOperationCall } from './explorer-operation-call';
-import { ExplorerRecordValue } from './explorer-record-value';
+import { ExplorerRecordFields } from './explorer-record-fields';
 import { formatDecimal } from './explorer-format-values';
 import styles from './explorer-entity.module.css';
 
@@ -229,18 +229,8 @@ export function ExplorerEntityDetails({
 	readonly filters: ExplorerFilters;
 }): React.JSX.Element {
 	const details = recordValue(row.details);
-	const shownFields = Object.entries(details)
-		.filter(
-			([key, value]) =>
-				!(
-					entityText(row, 'type') === 'invoke_host_function' &&
-					['function', 'type', 'contract_id'].includes(key)
-				) &&
-				(typeof value === 'string' ||
-					typeof value === 'number' ||
-					typeof value === 'boolean')
-		)
-		.slice(0, 30);
+	const excluded = entityText(row, 'type') === 'invoke_host_function' ? ['function', 'type', 'contract_id'] : [];
+	const hasDetails = Object.keys(details).some((key) => !excluded.includes(key));
 	return (
 		<>
 			<dl className={styles.details}>
@@ -256,15 +246,10 @@ export function ExplorerEntityDetails({
 					</dd>
 				])}
 			</dl>
-			{shownFields.length > 0 && (
+			{hasDetails && (
 				<section>
 					<h3>{collection === 'operations' ? 'Operation details' : 'Record details'}</h3>
-					<dl className={styles.details}>
-						{shownFields.flatMap(([key, value]) => [
-							<dt key={key + 'label'}>{key.replaceAll('_', ' ')}</dt>,
-							<dd key={key}><ExplorerRecordValue field={key} value={value} filters={filters} /></dd>
-						])}
-					</dl>
+					<ExplorerRecordFields value={details} filters={filters} exclude={excluded} />
 				</section>
 			)}
 			{collection === 'assets' && (

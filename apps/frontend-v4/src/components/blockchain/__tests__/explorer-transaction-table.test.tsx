@@ -45,10 +45,11 @@ describe('ExplorerTransactionTable', () => {
 		);
 		expect(html).toContain('/explorer/accounts/' + transaction.sourceAccount);
 		expect(html).toContain('/explorer/ledgers/12345678');
-		expect(html).toContain('9007199254740993');
+		expect(html).toContain('900,719,925.4740993');
+		expect(html.replaceAll('<!-- -->', '')).toContain('9007199254740993 stroops');
 		expect(html).toContain('Failed');
 		expect(html).toContain('Latest available transaction records');
-		expect(html).toContain('data-label="Fee (stroops)"');
+		expect(html).toContain('data-label="Fee (XLM)"');
 		expect(html).toContain('dateTime="' + transaction.createdAt + '"');
 	});
 	it('caps rows at the returned limit without claiming a full chain inventory', () => {
@@ -74,5 +75,12 @@ describe('ExplorerTransactionTable', () => {
 		);
 		expect(html).toContain('No transactions returned');
 		expect(html).not.toContain('<table');
+	});
+	it('preserves exact seven-place scaling and does not turn missing or invalid fees into zero', () => {
+		for (const [fee, shown] of [['100', '0.00001'], ['1', '0.0000001'], ['0', '0'], ['', '—'], ['unknown', '—']] as const) {
+			const html = renderToStaticMarkup(<ExplorerTransactionTable transactions={{ ...feed, records: [{ ...transaction, feeCharged: fee }] }} onInspect={() => undefined} />);
+			expect(html).toContain(shown);
+			if (!/^\d+$/.test(fee)) expect(html).not.toContain(' stroops');
+		}
 	});
 });

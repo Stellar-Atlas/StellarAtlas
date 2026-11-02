@@ -10,6 +10,7 @@ import {
 	writeClipboardText
 } from './blockchain-explorer-format';
 import styles from './explorer-transaction-table.module.css';
+import { formatAtomic } from './explorer-format-values';
 
 export function ExplorerTransactionTable({
 	transactions,
@@ -61,7 +62,7 @@ export function ExplorerTransactionTable({
 							'Closed',
 							'Ledger',
 							'Operations',
-							'Fee (stroops)',
+							'Fee (XLM)',
 							'Result',
 							'Details'
 						].map((label) => (
@@ -141,8 +142,11 @@ export function ExplorerTransactionTable({
 							<td data-label="Operations" className={styles.numeric}>
 								{tx.operationCount}
 							</td>
-							<td data-label="Fee (stroops)" className={styles.numeric}>
-								{tx.feeCharged}
+							<td data-label="Fee (XLM)" className={styles.numeric}>
+								<div className={styles.fee}>{/^\d+$/.test(tx.feeCharged) ? <>
+									<span>{formatAtomic(tx.feeCharged, 7)}</span>
+									<small>{tx.feeCharged} stroops</small>
+								</> : '—'}</div>
 							</td>
 							<td data-label="Result">
 								<span
