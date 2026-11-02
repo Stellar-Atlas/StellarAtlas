@@ -1,7 +1,8 @@
 import { recordValue, requestExplorerJson } from './explorer-analytics';
+import { parseBalanceFlagEvidence, type BalanceFlagEvidence } from './balance-flag-evidence';
 
 export type BalanceObservationKind = 'balances' | 'holders';
-export interface BalanceObservationRow {
+export interface BalanceObservationRow extends BalanceFlagEvidence {
 	readonly id: string;
 	readonly balance: number;
 	readonly buyingLiabilities: number;
@@ -90,6 +91,7 @@ function parseRow(
 	const limit = balances ? row.trustLineLimitRaw : row.trust_line_limit;
 	return {
 		id,
+		...(balances ? parseBalanceFlagEvidence(id, row.assetType, row.flags) : {}),
 		sponsor: typeof row.sponsor === 'string' ? row.sponsor : null,
 		deleted: row.deleted === true,
 		balance: finiteNumber(row.balance),

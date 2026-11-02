@@ -83,6 +83,13 @@
 .assetTitle p {
 	margin: 0;
 }
+.assetTitle,
+.assetTitle > div {
+	min-width: 0;
+}
+.assetTitle h3 {
+	overflow-wrap: anywhere;
+}
 .details {
 	display: grid;
 	gap: 1rem;

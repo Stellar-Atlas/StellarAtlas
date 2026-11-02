@@ -1,5 +1,5 @@
 import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
-import { graphqlAnalyticsExamples } from './graphql-analytics-examples';
+import { graphqlErrorSection } from './developer-guide-graphql-errors';
 
 export const developerGuideQueryPages: readonly DeveloperGuidePage[] = [
 	{
@@ -139,67 +139,7 @@ curl --fail-with-body '${api}/v1/datasets/history_contract_events/records?ledger
 					</>
 				)
 			},
-			{
-				id: 'handle-errors',
-				title: 'Handle incomplete or unavailable results',
-				content: (
-					<>
-						<p>
-							Correct invalid inputs on HTTP 400. Typed explorer detail routes
-							distinguish a missing record in a completed window (404) from a
-							record not found in an incompletely ingested window (409). Other
-							route families have their own documented error shapes.
-						</p>
-						<p>
-							A timeout or unavailable warehouse can return 503. Narrow the
-							window or retry with backoff; do not turn the failure into an
-							empty successful result. GraphQL callers must inspect the{' '}
-							<code>errors</code> array as well as the HTTP status.
-						</p>
-						<p>
-							Run this JavaScript in a modern browser console or Node ES module.
-							It uses the runner’s payment-operations example and makes exactly
-							one attempt, with a ten-second deadline and no automatic retries.
-							Replace its historical window using your coverage response.
-						</p>
-						<Code language="javascript">{`const request = ${JSON.stringify({ query: graphqlAnalyticsExamples.operations.query, variables: graphqlAnalyticsExamples.operations.variables }, null, 2)};
-const controller = new AbortController();
-const timeout = setTimeout(() => controller.abort(), 10_000);
-try {
-  const response = await fetch('${api}/graphql', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-    signal: controller.signal
-  });
-  const result = await response.json().catch(() => null);
-  if (!response.ok) throw new Error('HTTP ' + response.status);
-  if (!result || typeof result !== 'object') throw new Error('Invalid JSON response');
-  if (result.errors !== undefined && !Array.isArray(result.errors)) {
-    throw new Error('Invalid GraphQL errors response');
-  }
-  if (result.errors?.length) {
-    console.error('GraphQL errors:', result.errors);
-    if (result.data != null) console.warn('Partial data; not a complete result:', result.data);
-  } else {
-    if (!result.data?.hubbleOperations) throw new Error('Missing operation page');
-    console.log(result.data.hubbleOperations);
-  }
-} catch (error) {
-  console.error(controller.signal.aborted ? 'Request timed out' : error);
-} finally {
-  clearTimeout(timeout);
-}`}</Code>
-						<p>
-							Errors with partial data are displayed separately; do not present
-							them as a complete page or advance pagination from this branch.
-							Keep any earlier successful page visible. A timeout or HTTP
-							failure is not an empty result. Retry only after a deliberate
-							bounded backoff policy; correct invalid input first.
-						</p>
-					</>
-				)
-			}
+			graphqlErrorSection
 		]
 	},
 	{
