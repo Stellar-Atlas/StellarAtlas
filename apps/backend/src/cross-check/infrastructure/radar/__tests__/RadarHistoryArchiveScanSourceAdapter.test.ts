@@ -4,6 +4,90 @@ import {
 } from '../RadarHistoryArchiveScanSourceAdapter.js';
 
 describe('RadarHistoryArchiveScanSourceAdapter', () => {
+	it.each([404, 500, 200])(
+		'rechecks the deadline after %s body cleanup settles',
+		async (status) => {
+			let signal: AbortSignal | undefined;
+			let cleanupSettled = false;
+			const body = new ReadableStream<Uint8Array>({
+				start(controller) {
+					if (status === 200) controller.enqueue(new Uint8Array([1, 2]));
+				},
+				cancel() {
+					return new Promise<void>((resolve) => {
+						const finish = (): void => {
+							cleanupSettled = true;
+							resolve();
+						};
+						if (signal?.aborted) finish();
+						else signal?.addEventListener('abort', finish, { once: true });
+					});
+				}
+			});
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(
+				async (_input, init) => {
+					signal = init?.signal ?? undefined;
+					return new Response(body, { status });
+				}
+			);
+			const result = await adapter.fetchHistoryArchiveScan(
+				'https://history.example.com',
+				{ timeoutMs: 10, maxBytes: 1 }
+			);
+			expect(cleanupSettled).toBe(true);
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('timeout');
+		}
+	);
+	it.each([404, 500])(
+		'keeps caller cancellation distinct after %s cleanup',
+		async (status) => {
+			const caller = new AbortController();
+			let cleanupSettled = false;
+			const body = new ReadableStream({
+				cancel() {
+					caller.abort();
+					return Promise.resolve().then(() => {
+						cleanupSettled = true;
+					});
+				}
+			});
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(
+				async () => new Response(body, { status })
+			);
+			const result = await adapter.fetchHistoryArchiveScan(
+				'https://history.example.com',
+				{ signal: caller.signal }
+			);
+			expect(cleanupSettled).toBe(true);
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('cancelled');
+		}
+	);
+	it('rechecks the deadline after bodyless text-read settlement before parsing', async () => {
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(
+			async (_input, init) => {
+				const response = new Response(null);
+				Object.defineProperty(response, 'text', {
+					value: () =>
+						new Promise<string>((resolve) => {
+							init?.signal?.addEventListener(
+								'abort',
+								() => resolve(JSON.stringify(createHistoryArchiveScan())),
+								{ once: true }
+							);
+						})
+				});
+				return response;
+			}
+		);
+		const result = await adapter.fetchHistoryArchiveScan(
+			'https://history.example.com',
+			{ timeoutMs: 10 }
+		);
+		expect(result.isErr()).toBe(true);
+		if (result.isErr()) expect(result.error.kind).toBe('timeout');
+	});
 	it('distinguishes caller cancellation from a deadline and cancels a pending body', async () => {
 		for (const caller of [false, true]) {
 			let cancelled = 0;

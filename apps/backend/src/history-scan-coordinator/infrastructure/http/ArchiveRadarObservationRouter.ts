@@ -65,7 +65,11 @@ export function archiveRadarObservationRouter(
 			typeof raw === 'string' && Buffer.byteLength(raw, 'utf8') <= 2048
 				? publicArchiveRootIdentity(raw)
 				: null;
-		if (root === null || Object.keys(req.query).length !== 0) {
+		if (
+			root === null ||
+			Buffer.byteLength(root, 'utf8') > 2048 ||
+			Object.keys(req.query).length !== 0
+		) {
 			res.status(400).json(make(null, 'invalid_request', 'invalid_request'));
 			return;
 		}
@@ -96,6 +100,9 @@ export function archiveRadarObservationRouter(
 		req.once('aborted', cancel);
 		res.once('close', cancel);
 		try {
+			if (req.aborted || (res.destroyed && !res.writableEnded))
+				controller.abort();
+			if (controller.signal.aborted) return;
 			const result = await adapter.fetchHistoryArchiveScan(root, {
 				signal: controller.signal,
 				timeoutMs: 5000,

@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { isArchiveRadarResponse } from 'shared';
 import { archiveEvidenceRouter } from '../ArchiveEvidenceRouter.js';
+import { archiveRadarObservationRouter } from '../ArchiveRadarObservationRouter.js';
 import { mock } from 'jest-mock-extended';
 import type { GetHistoryArchiveEvidence } from '../../../use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
 import type { RadarHistoryArchiveScanFetch } from '@cross-check/infrastructure/radar/RadarHistoryArchiveScanSourceAdapter.js';
@@ -26,10 +27,15 @@ function app(
 ): express.Express {
 	const value = express();
 	const atlas = mock<GetHistoryArchiveEvidence>();
-	atlas.execute.mockImplementation(async () => { throw new Error('Unexpected Atlas read'); });
+	atlas.execute.mockImplementation(async () => {
+		throw new Error('Unexpected Atlas read');
+	});
 	value.use(
 		'/v2/archive-scans',
-		archiveEvidenceRouter({ getHistoryArchiveEvidence: atlas, radarObservation: { fetchFn, now } })
+		archiveEvidenceRouter({
+			getHistoryArchiveEvidence: atlas,
+			radarObservation: { fetchFn, now }
+		})
 	);
 	return value;
 }
@@ -37,6 +43,57 @@ const tick = (): Promise<void> =>
 	new Promise((resolve) => setImmediate(resolve));
 
 describe('explicit per-root Radar route', () => {
+	it('rejects canonical UTF-8 expansion before cache, admission or upstream work', async () => {
+		let calls = 0;
+		const expanded = root + '/' + '雪'.repeat(500);
+		expect(Buffer.byteLength(expanded, 'utf8')).toBeLessThan(2048);
+		expect(Buffer.byteLength(new URL(expanded).href, 'utf8')).toBeGreaterThan(
+			2048
+		);
+		const result = await request(
+			app(async () => {
+				calls++;
+				return scan();
+			})
+		)
+			.get(path(expanded))
+			.expect(400);
+		expect(calls).toBe(0);
+		expect(result.body.archiveUrl).toBeNull();
+		expect(isArchiveRadarResponse(result.body)).toBe(true);
+	});
+	it.each(['request', 'response'] as const)(
+		'does no upstream work for an already closed %s',
+		async (closed) => {
+			let calls = 0;
+			const router = archiveRadarObservationRouter({
+				fetchFn: async () => {
+					calls++;
+					return scan();
+				}
+			});
+			const req = mock<express.Request>({
+				method: 'GET',
+				url: `/${encodeURIComponent(root)}/radar-observation`,
+				query: {},
+				aborted: closed === 'request'
+			});
+			const res = mock<express.Response>({
+				writableEnded: false,
+				destroyed: closed === 'response'
+			});
+			router(req, res, () => undefined);
+			await tick();
+			expect(calls).toBe(0);
+			expect(res.json).not.toHaveBeenCalled();
+			expect(req.once).toHaveBeenCalledWith('aborted', expect.any(Function));
+			expect(res.once).toHaveBeenCalledWith('close', expect.any(Function));
+			const server = express();
+			server.use('/v2/archive-scans', router);
+			await request(server).get(path()).expect(200);
+			expect(calls).toBe(1);
+		}
+	);
 	it('rejects methods and invalid/oversized/query roots without upstream work', async () => {
 		let calls = 0;
 		const server = app(async () => {

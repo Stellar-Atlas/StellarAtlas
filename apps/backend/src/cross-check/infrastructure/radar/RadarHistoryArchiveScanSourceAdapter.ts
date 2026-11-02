@@ -68,10 +68,12 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 			}
 			if (response.status === 404 && !response.redirected) {
 				await response.body?.cancel();
+				signal.throwIfAborted();
 				return ok(null);
 			}
 			if (!response.ok || response.redirected) {
 				await response.body?.cancel();
+				signal.throwIfAborted();
 				return err(
 					radarHistoryArchiveScanFailure(
 						'http_status',
@@ -87,6 +89,7 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 				'RADAR history archive scan',
 				signal
 			);
+			signal.throwIfAborted();
 			if (bodyOrError.isErr()) {
 				return err(
 					radarHistoryArchiveScanFailure(
