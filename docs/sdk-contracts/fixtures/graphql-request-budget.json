@@ -1,0 +1,59 @@
+{
+  "kind": "synthetic-design-fixture",
+  "accepted": {
+    "request": {
+      "query": "query($account:String!){page0:hubbleAccountBalances(account:$account,input:{limit:1}){account} page1:hubbleAccountBalances(account:$account,input:{limit:1}){account} page2:hubbleAccountBalances(account:$account,input:{limit:1}){account} page3:hubbleAccountBalances(account:$account,input:{limit:1}){account}}",
+      "variables": {
+        "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+      }
+    },
+    "responseBody": {
+      "data": {
+        "page0": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+        },
+        "page1": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+        },
+        "page2": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+        },
+        "page3": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+        }
+      }
+    }
+  },
+  "rejected": {
+    "request": {
+      "query": "query($account:String!){page0:hubbleAccountBalances(account:$account,input:{limit:1}){account} page1:hubbleAccountBalances(account:$account,input:{limit:1}){account} page2:hubbleAccountBalances(account:$account,input:{limit:1}){account} page3:hubbleAccountBalances(account:$account,input:{limit:1}){account} page4:hubbleAccountBalances(account:$account,input:{limit:1}){account}}",
+      "variables": {
+        "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+      }
+    },
+    "responseBody": {
+      "errors": [
+        {
+          "message": "GraphQL query exceeds the request budget; split it into smaller queries.",
+          "locations": [
+            {
+              "line": 1,
+              "column": 1
+            }
+          ],
+          "extensions": {
+            "code": "QUERY_TOO_COMPLEX",
+            "limits": {
+              "maximumDepth": 32,
+              "maximumFields": 4096,
+              "maximumRootFields": 16,
+              "maximumQueryCost": 32
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expectedHttpStatus": 200,
+  "statusNote": "Actual HTTP adapter returns200 for application/json budget errors; inspect errors and split the query."
+}

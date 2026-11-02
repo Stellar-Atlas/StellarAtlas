@@ -1,0 +1,150 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/assets/USD%3AGABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA/holders?limit=1&sort=balance&order=desc"
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "indexedSummary": {
+          "holderCount": "2",
+          "balanceTotal": 12.35
+        },
+        "coverage": {
+          "completedRanges": [
+            {
+              "firstLedger": "2",
+              "lastLedger": "65"
+            },
+            {
+              "firstLedger": "130",
+              "lastLedger": "193"
+            }
+          ],
+          "contiguousFirstLedger": "2",
+          "contiguousLastLedger": "65",
+          "contiguousLedgerCount": "64",
+          "supplementalLedgerCount": "64",
+          "totalLedgerCount": "128",
+          "nextLedger": "66",
+          "minimumLedger": "2",
+          "maximumLedger": "193",
+          "gapCount": 1
+        },
+        "watermark": {
+          "indexStatus": "ready",
+          "mode": "latest-ingested-observations",
+          "catalogGeneratedAt": "2026-11-01T00:00:00.000Z",
+          "catalogMaximumLedger": "193",
+          "snapshotPinned": false,
+          "selectedLedger": null,
+          "coverageStatus": "partial_or_unknown",
+          "balancePrecision": "source-float64"
+        },
+        "asset": "USD:GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+        "elapsedMilliseconds": 0,
+        "holders": [
+          {
+            "account_id": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+            "balance": 12.25,
+            "buying_liabilities": 1e-7,
+            "selling_liabilities": 2e-7,
+            "trust_line_limit": "9223372036854775807",
+            "flags": "0",
+            "ledger_sequence": "193",
+            "last_modified_ledger": "12",
+            "asset_code": "USD",
+            "asset_issuer": "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+            "asset_type": "credit_alphanum4",
+            "sponsor": null,
+            "sponsored": false,
+            "deleted": false,
+            "indexed_holder_count": "2",
+            "indexed_balance_total": 12.35
+          }
+        ],
+        "limit": 1,
+        "nextCursor": "c.eyJhc3NldCI6IlVTRDpHQUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUpYQSIsInNvcnQiOiJiYWxhbmNlIiwib3JkZXIiOiJkZXNjIiwiYXNPZkxlZGdlciI6bnVsbCwiYmFsYW5jZUZpbHRlciI6InBvc2l0aXZlIiwiaW5jbHVkZURlbGV0ZWQiOmZhbHNlLCJ2ZXJzaW9uIjoxLCJhY2NvdW50SWQiOiJHQUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRRFo3SCIsImJhbGFuY2UiOiIxMi4yNSJ9"
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Holders($asset:String!,$input:HubbleAssetHolderInput) {\n  hubbleAssetHolders(asset:$asset,input:$input) {\n    asset limit nextCursor elapsedMilliseconds\n    holders { accountId balance amountPrecision buyingLiabilities sellingLiabilities trustLineLimit ledgerSequence lastModifiedLedger assetCode assetIssuer assetType flags sponsor sponsored deleted }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { indexStatus mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n    indexedSummary { holderCount balanceTotal }\n  }\n}",
+        "variables": {
+          "asset": "USD:GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+          "input": {
+            "limit": 1,
+            "sort": "balance",
+            "order": "desc"
+          }
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "data": {
+        "hubbleAssetHolders": {
+          "asset": "USD:GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+          "limit": 1,
+          "nextCursor": "c.eyJhc3NldCI6IlVTRDpHQUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUpYQSIsInNvcnQiOiJiYWxhbmNlIiwib3JkZXIiOiJkZXNjIiwiYXNPZkxlZGdlciI6bnVsbCwiYmFsYW5jZUZpbHRlciI6InBvc2l0aXZlIiwiaW5jbHVkZURlbGV0ZWQiOmZhbHNlLCJ2ZXJzaW9uIjoxLCJhY2NvdW50SWQiOiJHQUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRRFo3SCIsImJhbGFuY2UiOiIxMi4yNSJ9",
+          "elapsedMilliseconds": 0,
+          "holders": [
+            {
+              "accountId": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+              "balance": 12.25,
+              "amountPrecision": "float64-observation",
+              "buyingLiabilities": 1e-7,
+              "sellingLiabilities": 2e-7,
+              "trustLineLimit": "9223372036854775807",
+              "ledgerSequence": "193",
+              "lastModifiedLedger": "12",
+              "assetCode": "USD",
+              "assetIssuer": "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+              "assetType": "credit_alphanum4",
+              "flags": "0",
+              "sponsor": null,
+              "sponsored": false,
+              "deleted": false
+            }
+          ],
+          "coverage": {
+            "completedRanges": [
+              {
+                "firstLedger": "2",
+                "lastLedger": "65"
+              },
+              {
+                "firstLedger": "130",
+                "lastLedger": "193"
+              }
+            ],
+            "contiguousLastLedger": "65",
+            "maximumLedger": "193",
+            "gapCount": 1
+          },
+          "watermark": {
+            "indexStatus": "ready",
+            "mode": "latest-ingested-observations",
+            "catalogGeneratedAt": "2026-11-01T00:00:00.000Z",
+            "catalogMaximumLedger": "193",
+            "selectedLedger": null,
+            "snapshotPinned": false,
+            "coverageStatus": "partial_or_unknown",
+            "balancePrecision": "source-float64"
+          },
+          "indexedSummary": {
+            "holderCount": "2",
+            "balanceTotal": 12.35
+          }
+        }
+      }
+    }
+  }
+}
