@@ -34,11 +34,12 @@ describe('asset report route identity', () => {
 	it('preserves both UTC instants in a DST fold, including milliseconds and unrelated Apply edits', () => {
 		for (const original of ['2026-11-01T05:30:00.123Z','2026-11-01T06:30:00.123Z','2026-07-01T12:34:56.789Z','2026-01-01T12:34:56Z']) {
 			const input = reportDateInput(original);
+			const end = new Date(Date.parse(original)+3600000).toISOString();
 			expect(input).toBe(new Date(original).toISOString().slice(0,23));
 			expect(utcReportDate(input,original)).toBe(original);
 			for (const changes of [{order:'asc'},{account:'GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE'}]) {
-				const applied = validateReportQuery('rankings',{...query,...changes,start_time:utcReportDate(input,original)});
-				expect(applied.start_time).toBe(original);expect(applied).toMatchObject(changes);
+				const applied = validateReportQuery('rankings',{...query,...changes,start_time:utcReportDate(input,original),end_time:utcReportDate(reportDateInput(end),end)});
+				expect(applied.start_time).toBe(original);expect(applied.end_time).toBe(end);expect(applied).toMatchObject(changes);
 			}
 		}
 		expect(reportDateInput('2026-11-01T05:30:00.123Z')).not.toBe(reportDateInput('2026-11-01T06:30:00.123Z'));
