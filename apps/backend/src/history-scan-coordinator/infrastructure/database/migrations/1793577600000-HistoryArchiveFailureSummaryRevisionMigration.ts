@@ -4,6 +4,10 @@ import {
   archiveEvidenceRootSummaryRevisionTriggerFunctionSql
 } from '../../repositories/database/HistoryArchiveFailureSummaryRevisionRootSql.js';
 import { archiveRetainedRemoteRevisionFunctionsSql } from '../../repositories/database/HistoryArchiveFailureSummaryRevisionRetainedSql.js';
+import {
+  archiveEvidenceRootSummaryRevisionStatementFunctionsSql,
+  archiveEvidenceRootSummaryStatementPreimageSha256
+} from '../../repositories/database/HistoryArchiveFailureSummaryRevisionStatementSql.js';
 
 /** Additive compact metadata only. Never rebuild or scan archive object facts. */
 export class HistoryArchiveFailureSummaryRevision1793577600000 implements MigrationInterface {
@@ -15,6 +19,58 @@ export class HistoryArchiveFailureSummaryRevision1793577600000 implements Migrat
     }
     await runner.query("set local lock_timeout='250ms'");
     await runner.query("set local statement_timeout='5s'");
+    // Inspect metadata before any DDL. The deployed root counters are batched
+    // INSERT/UPDATE statements plus row DELETE; never replace that topology.
+    const layout: { ready: boolean }[] = await runner.query(`
+      with expected(name,signature,kind,old_table,new_table,body_hash) as (values
+        ('trg_history_archive_evidence_root_summary_insert',
+          'public.refresh_history_archive_evidence_root_summary_insert_statement()',4,null::text,'new_rows',$1::text),
+        ('trg_history_archive_evidence_root_summary_update',
+          'public.refresh_history_archive_evidence_root_summary_update_statement()',16,'old_rows','new_rows',$2::text),
+        ('trg_history_archive_evidence_root_summary_delete',
+          'public.refresh_history_archive_evidence_root_summary()',9,null::text,null::text,$3::text)
+      ), checked as (
+        select expected.name, trg.oid is not null and trg.tgtype=expected.kind
+          and trg.tgenabled='O' and trg.tgnargs=0 and trg.tgattr::text=''
+          and trg.tgqual is null and trg.tgfoid=to_regprocedure(expected.signature)
+          and trg.tgoldtable is not distinct from expected.old_table
+          and trg.tgnewtable is not distinct from expected.new_table
+          and proc.prosecdef=false and proc.provolatile='v'
+          and proc.prorettype='trigger'::regtype and lang.lanname='plpgsql'
+          and encode(sha256(convert_to(btrim(replace(proc.prosrc,E'\\r\\n',E'\\n'),E' \\t\\r\\n'),'UTF8')),'hex')=expected.body_hash
+          as compatible
+        from expected left join pg_trigger trg
+          on trg.tgrelid=to_regclass('public.history_archive_object_queue')
+          and trg.tgname=expected.name and not trg.tgisinternal
+        left join pg_proc proc on proc.oid=trg.tgfoid
+        left join pg_language lang on lang.oid=proc.prolang
+      ) select current_schema()='public'
+        and coalesce((select count(*)=3 and bool_and(compatible) from checked),false)
+        and not exists(select 1 from pg_trigger where
+          tgrelid=to_regclass('public.history_archive_object_queue')
+          and tgname='trg_history_archive_evidence_root_summary' and not tgisinternal)
+        and (select count(*)=3 from pg_trigger where
+          tgrelid=to_regclass('public.history_archive_object_queue') and not tgisinternal
+          and tgfoid in (select to_regprocedure(signature) from expected))
+        and not exists(select 1 from pg_trigger where
+          tgrelid=to_regclass('public.history_archive_object_queue') and not tgisinternal
+          and tgname like 'trg_history_archive_evidence_root_summary%'
+          and tgname not in (select name from expected)
+          and not (tgname='trg_history_archive_evidence_root_summary_truncate' and tgtype=32
+            and tgenabled='O' and tgfoid=to_regprocedure('public.reset_history_archive_evidence_root_summary()')))
+        and (select count(*)=1 and bool_and(
+          tgname='history_archive_retain_remote_transition' and tgtype=16
+          and tgenabled in ('O','D') and tgnargs=0 and tgattr::text='' and tgqual is null
+          and tgoldtable='old_objects' and tgnewtable='new_objects')
+          from pg_trigger where tgrelid=to_regclass('public.history_archive_object_queue')
+          and not tgisinternal and tgfoid=to_regprocedure('public.retain_history_archive_remote_findings()'))
+        as ready
+    `, [archiveEvidenceRootSummaryStatementPreimageSha256.insert,
+      archiveEvidenceRootSummaryStatementPreimageSha256.update,
+      archiveEvidenceRootSummaryStatementPreimageSha256.delete]);
+    if (layout[0]?.ready !== true) {
+      throw new Error('Unknown archive root-summary statement/row trigger preimage or retained trigger layout; no DDL applied');
+    }
     const progress: { complete: boolean }[] = await runner.query(
       'select complete from history_archive_evidence_root_summary_progress where id=1'
     );
@@ -92,6 +148,7 @@ export class HistoryArchiveFailureSummaryRevision1793577600000 implements Migrat
     await runner.query(`update history_archive_retained_remote_summary
       set "failureSummaryRevision"=nextval('history_archive_failure_summary_revision_seq')`);
     await runner.query(archiveEvidenceRootSummaryRevisionTriggerFunctionSql);
+    await runner.query(archiveEvidenceRootSummaryRevisionStatementFunctionsSql);
     await runner.query(archiveRetainedRemoteRevisionFunctionsSql);
 
     // Row invalidation does not cover TRUNCATE. A wholesale fact reset must use
@@ -109,16 +166,8 @@ export class HistoryArchiveFailureSummaryRevision1793577600000 implements Migrat
       before truncate on history_archive_retained_remote_finding for each statement
       execute function reject_history_archive_failure_input_truncate()`);
 
-    // The original UPDATE OF list omits error-only and checkpoint-association
-    // changes. Replace its definition atomically; do not enable the separate
-    // retained transition trigger or touch its existing deployment fence.
-    await runner.query('drop trigger "trg_history_archive_evidence_root_summary" on history_archive_object_queue');
-    await runner.query(`create trigger "trg_history_archive_evidence_root_summary"
-      after insert or delete or update of id,"remoteId","archiveUrlIdentity",
-        status,"objectType","failureChannel","errorType","errorMessage",
-        "httpStatus","checkpointLedger"
-      on history_archive_object_queue for each row
-      execute function refresh_history_archive_evidence_root_summary()`);
+    // Existing INSERT/UPDATE statement and DELETE row trigger definitions stay
+    // intact. Retained capture remains in its observed O/D state, unchanged.
   }
 
   async down(): Promise<void> {
