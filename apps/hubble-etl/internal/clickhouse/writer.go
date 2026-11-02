@@ -20,8 +20,15 @@ type BatchIdentity struct {
 }
 
 type WriterLimits struct {
-	MaximumRows  int
-	MaximumBytes int
+	TypedEffects bool
+	TypedEvents  bool
+	// Opt-in candidate only; requires the existing single-copy operations schema.
+	TypedOperations bool
+	MaximumRows     int
+	MaximumBytes    int
+	// Zero preserves serial INSERTs. Two opts into bounded dataset INSERT overlap.
+	MaximumPendingInserts     int
+	MaximumPendingInsertBytes int
 	// Recovery is opt-in; ordinary importer tokens and timestamps stay unchanged.
 	RecoveryNamespace  string
 	RecoveryIngestedAt time.Time
@@ -32,6 +39,7 @@ type BatchWriter struct {
 	identity              BatchIdentity
 	limits                WriterLimits
 	ingestedAt            time.Time
+	metadata              rowMetadata
 	tables                map[string]*tableBuffer
 	totalRows             uint64
 	holderIndexRows       map[string]holderIndexUpdate
@@ -43,13 +51,63 @@ type BatchWriter struct {
 	poolIndexBytes        int
 	poolIndexStagedRows   uint64
 	poolIndexDisabled     bool
+	flushElapsed          time.Duration
+	pendingJoinElapsed    time.Duration
+	insertTimings         insertTimings
+	flushedRows           uint64
+	flushedChunks         uint64
+	flushedJSONBytes      uint64
+	pendingInserts        []*pendingInsert
+	pendingInsertBytes    int
+	pendingInsertError    error
+}
+
+// DatasetWriteStats excludes holder/pool staging and publication queries.
+// In async mode durations sum completed job service times and overlap each
+// other and projection; they must not be added to wall-clock stage durations.
+// Native encoding also includes typed Native blocks pre-encoded by the ordered writer.
+// Permit wait precedes job service; pending join measures ordered-writer blocking.
+// HTTP phases count completed event pairs only and may omit failed/early phases.
+// Pool wait includes connection setup/retries, not just idle-pool contention.
+// Phase sums can overlap and are not additive wall-clock stage durations.
+// Rows/chunks/bytes include acknowledged dataset jobs only.
+type DatasetWriteStats struct {
+	FlushMilliseconds         int64  `json:"flushMilliseconds"`
+	NativeEncodeMilliseconds  int64  `json:"nativeEncodeMilliseconds"`
+	RequestMilliseconds       int64  `json:"requestMilliseconds"`
+	PoolWaitMilliseconds      int64  `json:"poolWaitMilliseconds"`
+	UploadMilliseconds        int64  `json:"uploadMilliseconds"`
+	FirstByteWaitMilliseconds int64  `json:"firstByteWaitMilliseconds"`
+	BodyReadMilliseconds      int64  `json:"bodyReadMilliseconds"`
+	PermitWaitMilliseconds    int64  `json:"permitWaitMilliseconds"`
+	PendingJoinMilliseconds   int64  `json:"pendingJoinMilliseconds"`
+	Rows                      uint64 `json:"rows"`
+	Chunks                    uint64 `json:"chunks"`
+	JSONBytes                 uint64 `json:"jsonBytes"`
+}
+
+func (w *BatchWriter) DatasetWriteStats() DatasetWriteStats {
+	return DatasetWriteStats{
+		FlushMilliseconds:         w.flushElapsed.Milliseconds(),
+		NativeEncodeMilliseconds:  w.insertTimings.nativeEncode.Milliseconds(),
+		RequestMilliseconds:       w.insertTimings.request.Milliseconds(),
+		PoolWaitMilliseconds:      w.insertTimings.poolWait.Milliseconds(),
+		UploadMilliseconds:        w.insertTimings.upload.Milliseconds(),
+		FirstByteWaitMilliseconds: w.insertTimings.firstByteWait.Milliseconds(),
+		BodyReadMilliseconds:      w.insertTimings.bodyRead.Milliseconds(),
+		PermitWaitMilliseconds:    w.insertTimings.permitWait.Milliseconds(),
+		PendingJoinMilliseconds:   w.pendingJoinElapsed.Milliseconds(),
+		Rows:                      w.flushedRows, Chunks: w.flushedChunks, JSONBytes: w.flushedJSONBytes,
+	}
 }
 
 type tableBuffer struct {
-	body       bytes.Buffer
-	chunk      uint64
-	nextRow    uint64
-	bufferRows int
+	nativePrepared *PreparedNativeRow
+	nativeBuffer   *typedNativeBuffer
+	body           bytes.Buffer
+	chunk          uint64
+	nextRow        uint64
+	bufferRows     int
 }
 
 func NewBatchWriter(
@@ -68,12 +126,40 @@ func NewBatchWriter(
 	if limits.MaximumRows < 1 || limits.MaximumBytes < 1024 {
 		return nil, fmt.Errorf("invalid ClickHouse writer limits")
 	}
+	if limits.TypedOperations && !client.singleCopyOperations {
+		return nil, fmt.Errorf("typed operations requires single-copy operations")
+	}
+	if limits.TypedOperations {
+		// A changed official schema stays on the unchanged generic Native path.
+		if _, err := typedOperationsSchema(); err != nil {
+			limits.TypedOperations = false
+		}
+	}
+	if limits.MaximumPendingInserts != 0 && limits.MaximumPendingInserts != 2 {
+		return nil, fmt.Errorf("maximum pending INSERTs must be zero or two")
+	}
+	if limits.MaximumPendingInsertBytes < 0 {
+		return nil, fmt.Errorf("invalid pending INSERT byte budget")
+	}
+	if limits.MaximumPendingInserts > 0 && limits.MaximumPendingInsertBytes == 0 {
+		limits.MaximumPendingInsertBytes = 512 << 20
+	}
 	if limits.RecoveryNamespace != "" && (!tokenPattern.MatchString(limits.RecoveryNamespace) || len(limits.RecoveryNamespace) > 64 || limits.RecoveryIngestedAt.IsZero()) {
 		return nil, fmt.Errorf("recovery requires a bounded namespace and fixed ingestion timestamp")
 	}
 	ingestedAt := time.Now().UTC()
 	if limits.RecoveryNamespace != "" {
 		ingestedAt = limits.RecoveryIngestedAt.UTC()
+	}
+	for _, dataset := range []string{"history_effects", "history_contract_events", "history_operations"} {
+		if typedNativeEnabled(limits, dataset) {
+			if _, _, _, err := typedNativeSchema(dataset); err != nil {
+				return nil, err
+			}
+			if err := typedNativeTime(ingestedAt); err != nil {
+				return nil, err
+			}
+		}
 	}
 	writer := &BatchWriter{
 		client:     client,
@@ -95,33 +181,73 @@ func (w *BatchWriter) Emit(
 	ledgerSequence uint32,
 	row any,
 ) error {
-	if _, ok := schema.Lookup(dataset); !ok {
-		return fmt.Errorf("unknown Hubble dataset %q", dataset)
+	if err := w.validateRowIdentity(dataset, ledgerSequence); err != nil {
+		return err
 	}
-	if ledgerSequence < w.identity.StartLedger ||
-		ledgerSequence > w.identity.EndLedger {
-		return fmt.Errorf(
-			"%s ledger %d is outside immutable batch [%d,%d]",
-			dataset,
-			ledgerSequence,
-			w.identity.StartLedger,
-			w.identity.EndLedger,
-		)
+	nativeRow := row
+	if w.client.singleCopyOperations && dataset == "history_operations" {
+		var err error
+		row, err = singleCopyOperationRow(row)
+		if err != nil {
+			return err
+		}
 	}
 	table := w.tables[dataset]
 	if table == nil {
 		table = &tableBuffer{}
 		w.tables[dataset] = table
 	}
-	encoded, err := encodeRow(
+	if w.VirtualLedgerTransactions() && dataset == "ledger_transactions" {
+		// Preserve the logical output/receipt count without serializing a row or
+		// advancing a physical buffer/chunk. Recovery checks the source table.
+		table.nextRow++
+		w.totalRows++
+		return nil
+	}
+	metadata, err := w.metadataForRows()
+	if err != nil {
+		return err
+	}
+	encoded, err := appendEncodedRow(
+		&table.body,
 		row,
 		w.identity,
 		ledgerSequence,
 		table.nextRow,
 		w.ingestedAt,
+		metadata,
 	)
 	if err != nil {
+		if typedNativeEnabled(w.limits, dataset) {
+			w.failTypedNative(table, err)
+		}
 		return fmt.Errorf("encode %s row: %w", dataset, err)
+	}
+	if typedNativeEnabled(w.limits, dataset) {
+		prepared, err := w.PrepareNativeRow(dataset, nativeRow)
+		if err != nil {
+			w.failTypedNative(table, err)
+			return err
+		}
+		table.nativePrepared = prepared
+	}
+	return w.finishEncodedRow(ctx, dataset, ledgerSequence, table, encoded)
+}
+
+// The writer and index maps are owned by one ordered consumer, including when
+// row projection and PrepareRow run in parallel.
+func (w *BatchWriter) finishEncodedRow(
+	ctx context.Context,
+	dataset string,
+	ledgerSequence uint32,
+	table *tableBuffer,
+	encoded []byte,
+) error {
+	if typedNativeEnabled(w.limits, dataset) {
+		if err := w.appendTypedNative(dataset, table, ledgerSequence, encoded); err != nil {
+			w.failTypedNative(table, err)
+			return err
+		}
 	}
 	if w.client.holderIndexEnabled {
 		if err := w.captureHolderIndexRow(
@@ -142,8 +268,6 @@ func (w *BatchWriter) Emit(
 			}
 		}
 	}
-	table.body.Write(encoded)
-	table.body.WriteByte('\n')
 	table.nextRow++
 	table.bufferRows++
 	w.totalRows++
@@ -158,9 +282,13 @@ func (w *BatchWriter) Flush(ctx context.Context) error {
 	for _, dataset := range schema.Datasets() {
 		if table := w.tables[dataset.Name]; table != nil {
 			if err := w.flushTable(ctx, dataset.Name, table); err != nil {
+				_ = w.WaitPending(ctx)
 				return err
 			}
 		}
+	}
+	if err := w.WaitPending(ctx); err != nil {
+		return err
 	}
 	if w.client.holderIndexEnabled && w.holderIndexFailure == nil {
 		if err := w.flushHolderIndex(ctx); err != nil {
@@ -194,6 +322,9 @@ func (w *BatchWriter) HolderIndexFailure() error {
 }
 
 func (w *BatchWriter) PromoteHolderIndex(ctx context.Context) error {
+	if err := w.WaitPending(ctx); err != nil {
+		return err
+	}
 	if !w.client.holderIndexEnabled {
 		return nil
 	}
@@ -205,6 +336,10 @@ func (w *BatchWriter) PromoteHolderIndex(ctx context.Context) error {
 
 func (w *BatchWriter) TotalRows() uint64 {
 	return w.totalRows
+}
+
+func (w *BatchWriter) VirtualLedgerTransactions() bool {
+	return w.client.virtualLedgerTransactions
 }
 
 func (w *BatchWriter) ExpectedRows() map[string]uint64 {
@@ -235,6 +370,12 @@ func (w *BatchWriter) flushTable(
 	dataset string,
 	table *tableBuffer,
 ) error {
+	if w.pendingInsertError != nil {
+		if table.nativeBuffer != nil {
+			w.failTypedNative(table, w.pendingInsertError)
+		}
+		return w.pendingInsertError
+	}
 	if table.bufferRows == 0 {
 		return nil
 	}
@@ -242,10 +383,42 @@ func (w *BatchWriter) flushTable(
 	if w.limits.RecoveryNamespace != "" {
 		token += ":recovery:" + w.limits.RecoveryNamespace
 	}
-	if err := w.client.Insert(ctx, dataset, token, table.body.Bytes()); err != nil {
+	if table.nativeBuffer != nil {
+		if err := table.nativeBuffer.finishBlock(); err != nil {
+			return w.failTypedNative(table, err)
+		}
+	}
+	if w.limits.MaximumPendingInserts > 0 {
+		err := w.scheduleInsert(ctx, dataset, token, table)
+		if err != nil && table.nativeBuffer != nil {
+			return w.failTypedNative(table, err)
+		}
 		return err
 	}
-	table.body.Reset()
+	started := time.Now()
+	var err error
+	if table.nativeBuffer != nil {
+		job := &pendingInsert{native: detachTypedNative(table)}
+		job.timings.nativeEncode = job.native.preEncode
+		w.runInsert(ctx, dataset, token, nil, job)
+		err = job.err
+		w.insertTimings.add(job.timings)
+		w.rememberInsertError(err)
+	} else {
+		err = w.client.insert(ctx, dataset, token, table.body.Bytes(), &w.insertTimings)
+	}
+	w.flushElapsed += time.Since(started)
+	if err != nil {
+		return err
+	}
+	w.flushedRows += uint64(table.bufferRows)
+	w.flushedChunks++
+	w.flushedJSONBytes += uint64(table.body.Len())
+	if typedNativeEnabled(w.limits, dataset) {
+		table.body = bytes.Buffer{}
+	} else {
+		table.body.Reset()
+	}
 	table.bufferRows = 0
 	table.chunk++
 	return nil

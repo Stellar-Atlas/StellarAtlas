@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/pkg/lcmbatch"
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/catalog"
@@ -14,22 +15,27 @@ import (
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/publication"
 )
 
+const recentBatchAdmissionTimeout = 30 * time.Second
+
 type Config struct {
-	Client             *clickhouse.Client
-	DatabaseURL        string
-	NetworkPassphrase  string
-	StorageRoot        string
-	WorkerCount        int
-	DecodeLimits       lcmbatch.Limits
-	WriterLimits       clickhouse.WriterLimits
-	MaximumBatches     int
-	RecentBatches      int
-	MinimumStartLedger uint32
-	PriorityBatchID    string
-	PressureGuard      *PressureGuard
-	ReadinessGuard     *WarehouseReadinessGuard
-	Publisher          *publication.WarehousePublisher
-	OnProgress         func(Summary)
+	Client                       *clickhouse.Client
+	DatabaseURL                  string
+	NetworkPassphrase            string
+	StorageRoot                  string
+	WorkerCount                  int
+	DecodeLimits                 lcmbatch.Limits
+	WriterLimits                 clickhouse.WriterLimits
+	MaximumBatches               int
+	RecentBatches                int
+	RefreshStaleSelection        bool
+	MinimumStartLedger           uint32
+	PriorityBatchID              string
+	PressureGuard                *PressureGuard
+	BaselineHistoryPressureGuard *PressureGuard
+	ReadinessGuard               *WarehouseReadinessGuard
+	Publisher                    *publication.WarehousePublisher
+	OnProgress                   func(Summary)
+	Drain                        <-chan struct{}
 }
 
 type Failure struct {
@@ -68,10 +74,8 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 	if err := ValidateBatchScheduling(config.MaximumBatches, config.RecentBatches); err != nil {
 		return summary, err
 	}
-	if config.ReadinessGuard != nil {
-		if err := config.ReadinessGuard.Wait(ctx); err != nil {
-			return summary, err
-		}
+	if err := waitBatchAdmission(ctx, config); err != nil {
+		return summary, err
 	}
 	batches, err := catalog.Load(
 		ctx,
@@ -106,6 +110,9 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		return summary, nil
 	}
 
+	selectionStartedAt := time.Now()
+	dispatchCtx, cancelDispatch := context.WithCancel(ctx)
+	defer cancelDispatch()
 	jobs := make(chan catalog.Batch)
 	results := make(chan result)
 	var workers sync.WaitGroup
@@ -114,7 +121,14 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		go func() {
 			defer workers.Done()
 			for batch := range jobs {
-				if err := waitBatchAdmission(ctx, config); err != nil {
+				if err := waitBatchAdmission(dispatchCtx, config); err != nil {
+					return
+				}
+				if dispatchCtx.Err() != nil {
+					return
+				}
+				if shouldRefreshSelection(config, time.Since(selectionStartedAt)) {
+					cancelDispatch()
 					return
 				}
 				path, err := sourcePath(config.StorageRoot, batch.StorageKey)
@@ -148,7 +162,7 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		for _, batch := range pending {
 			select {
 			case jobs <- batch:
-			case <-ctx.Done():
+			case <-dispatchCtx.Done():
 				return
 			}
 		}
@@ -188,6 +202,12 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 		return summary, err
 	}
 	return summary, nil
+}
+
+func shouldRefreshSelection(config Config, selectionAge time.Duration) bool {
+	return config.RefreshStaleSelection &&
+		config.RecentBatches > 0 &&
+		selectionAge >= recentBatchAdmissionTimeout
 }
 
 func sourcePath(root, storageKey string) (string, error) {

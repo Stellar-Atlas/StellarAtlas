@@ -32,6 +32,17 @@ func TestAllOfficialDatasetsProduceTypedClickHouseDDL(t *testing.T) {
 			!strings.Contains(sql, "PARTITION BY intDiv(_ledger_sequence, 1048576)") {
 			t.Fatalf("%s DDL does not have the expected storage layout", dataset.Name)
 		}
+		wantCodecs := 0
+		if dataset.Name == "history_transactions" {
+			wantCodecs = 4
+		}
+		correctCodecs := strings.Count(sql, "CODEC(") == wantCodecs
+		for _, field := range []string{"tx_meta", "tx_envelope", "tx_fee_meta", "tx_result"} {
+			correctCodecs = correctCodecs && (strings.Contains(sql, "`"+field+"` String CODEC(ZSTD(1))") == (wantCodecs == 4))
+		}
+		if !correctCodecs || !strings.HasPrefix(sql, "CREATE TABLE IF NOT EXISTS ") || strings.Contains(sql, "ALTER ") {
+			t.Fatalf("%s must apply exactly four canonical transaction codecs to new tables only: %s", dataset.Name, sql)
+		}
 	}
 }
 
@@ -71,6 +82,11 @@ func TestDatabaseNameIsValidated(t *testing.T) {
 	}
 	if _, err := DatabaseSQL("bad; drop table"); err == nil {
 		t.Fatal("expected invalid database name to fail")
+	}
+	ingestionSQL, err := IngestionTableSQL("stellar_hubble")
+	if err != nil || !strings.Contains(ingestionSQL, "expected_dataset_rows Map(String, UInt64) DEFAULT map()") ||
+		!strings.Contains(ingestionSQL, "projection_contract LowCardinality(String) DEFAULT ''") {
+		t.Fatalf("ingestion projection metadata must be typed and default to undeclared: %s, %v", ingestionSQL, err)
 	}
 }
 

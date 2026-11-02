@@ -17,23 +17,29 @@ import (
 )
 
 type Config struct {
-	Endpoint                 string
-	User                     string
-	Password                 string
-	Database                 string
-	HTTPClient               *http.Client
-	HolderIndexEnabled       bool
-	HolderIndexStoragePolicy string
+	Endpoint                  string
+	User                      string
+	Password                  string
+	Database                  string
+	HTTPClient                *http.Client
+	HolderIndexEnabled        bool
+	HolderIndexStoragePolicy  string
+	SingleCopyOperations      bool
+	VirtualLedgerTransactions bool
+	AutoStorageLayout         bool
 }
 
 type Client struct {
-	endpoint                 *url.URL
-	user                     string
-	password                 string
-	database                 string
-	http                     *http.Client
-	holderIndexEnabled       bool
-	holderIndexStoragePolicy string
+	endpoint                  *url.URL
+	user                      string
+	password                  string
+	database                  string
+	http                      *http.Client
+	holderIndexEnabled        bool
+	holderIndexStoragePolicy  string
+	singleCopyOperations      bool
+	virtualLedgerTransactions bool
+	autoStorageLayout         bool
 }
 
 type BatchStatus struct {
@@ -46,6 +52,9 @@ type BatchStatus struct {
 	Status       string `json:"status"`
 	Error        string `json:"error"`
 	UpdatedAt    string `json:"updated_at"`
+	// Declared projector outputs, not proof of full target readback validation.
+	ExpectedDatasetRows map[string]uint64 `json:"expected_dataset_rows,omitempty"`
+	ProjectionContract  string            `json:"projection_contract,omitempty"`
 }
 
 var (
@@ -76,13 +85,16 @@ func New(config Config) (*Client, error) {
 		httpClient = &http.Client{Timeout: 2 * time.Minute}
 	}
 	return &Client{
-		endpoint:                 endpoint,
-		user:                     config.User,
-		password:                 config.Password,
-		database:                 config.Database,
-		http:                     httpClient,
-		holderIndexEnabled:       config.HolderIndexEnabled,
-		holderIndexStoragePolicy: storagePolicy,
+		endpoint:                  endpoint,
+		user:                      config.User,
+		password:                  config.Password,
+		database:                  config.Database,
+		http:                      httpClient,
+		holderIndexEnabled:        config.HolderIndexEnabled,
+		holderIndexStoragePolicy:  storagePolicy,
+		singleCopyOperations:      config.SingleCopyOperations,
+		virtualLedgerTransactions: config.VirtualLedgerTransactions,
+		autoStorageLayout:         config.AutoStorageLayout,
 	}, nil
 }
 
@@ -95,23 +107,61 @@ func (c *Client) Initialize(ctx context.Context) error {
 	if _, err := c.execute(ctx, databaseSQL, nil, nil); err != nil {
 		return fmt.Errorf("create Hubble database: %w", err)
 	}
+	var installedIndexes installedSkippingIndexes
+	if c.autoStorageLayout {
+		if err := c.detectStorageLayout(ctx); err != nil {
+			return err
+		}
+		var err error
+		installedIndexes, err = c.loadSkippingIndexes(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	ingestionSQL, _ := schema.IngestionTableSQL(c.database)
 	if _, err := c.execute(ctx, ingestionSQL, nil, nil); err != nil {
 		return fmt.Errorf("create ingestion table: %w", err)
 	}
+	// Metadata-only defaults leave historical rows explicitly undeclared.
+	ingestionColumnsSQL := "ALTER TABLE " + quoted(c.database) + "._ingestion_batches" +
+		" ADD COLUMN IF NOT EXISTS expected_dataset_rows Map(String, UInt64) DEFAULT map()," +
+		" ADD COLUMN IF NOT EXISTS projection_contract LowCardinality(String) DEFAULT ''"
+	if _, err := c.execute(ctx, ingestionColumnsSQL, nil, nil); err != nil {
+		return fmt.Errorf("add ingestion projection metadata: %w", err)
+	}
 	for _, dataset := range schema.Datasets() {
-		tableSQL, err := schema.TableSQL(c.database, dataset)
+		if c.virtualLedgerTransactions && dataset.Name == "ledger_transactions" {
+			if err := c.checkVirtualLedgerTransactions(ctx); err != nil {
+				return err
+			}
+			continue
+		}
+		tableSQL, err := c.tableSQL(dataset)
 		if err != nil {
 			return err
 		}
 		if _, err := c.execute(ctx, tableSQL, nil, nil); err != nil {
 			return fmt.Errorf("create %s: %w", dataset.Name, err)
 		}
+		if c.singleCopyOperations && dataset.Name == "history_operations" {
+			if err := c.checkSingleCopyOperations(ctx); err != nil {
+				return err
+			}
+		}
 		indexStatements, err := schema.SkippingIndexSQL(c.database, dataset)
 		if err != nil {
 			return err
 		}
 		for _, statement := range indexStatements {
+			if c.autoStorageLayout {
+				exists, err := installedIndexes.compatible(statement)
+				if err != nil {
+					return err
+				}
+				if exists {
+					continue
+				}
+			}
 			if _, err := c.execute(ctx, statement, nil, nil); err != nil {
 				return fmt.Errorf("add %s query index: %w", dataset.Name, err)
 			}
@@ -126,6 +176,24 @@ func (c *Client) Initialize(ctx context.Context) error {
 }
 
 func (c *Client) Insert(ctx context.Context, table, token string, rows []byte) error {
+	return c.insert(ctx, table, token, rows, nil)
+}
+
+// Timings belong to one serial batch writer, never the shared client.
+type insertTimings struct {
+	nativeEncode  time.Duration
+	request       time.Duration
+	poolWait      time.Duration
+	upload        time.Duration
+	firstByteWait time.Duration
+	bodyRead      time.Duration
+	permitWait    time.Duration
+}
+
+func (c *Client) insert(ctx context.Context, table, token string, rows []byte, timings *insertTimings) error {
+	if c.virtualLedgerTransactions && table == "ledger_transactions" {
+		return fmt.Errorf("virtual ledger_transactions cannot accept physical INSERTs")
+	}
 	dataset, ok := schema.Lookup(table)
 	if !ok {
 		return fmt.Errorf("unknown Hubble table %q", table)
@@ -137,9 +205,23 @@ func (c *Client) Insert(ctx context.Context, table, token string, rows []byte) e
 	if err != nil {
 		return err
 	}
+	columnList := ""
+	if c.singleCopyOperations && table == "history_operations" {
+		columns = operationInsertColumns(columns)
+		names := make([]string, len(columns))
+		for i, column := range columns {
+			names[i] = quoted(column.Name)
+		}
+		columnList = " (" + strings.Join(names, ", ") + ")"
+		token += ":single-copy-v1"
+	}
 	format := "JSONEachRow"
 	if hasDynamicColumns(columns) {
-		rows, err = encodeNativeRows(columns, rows)
+		started := time.Now()
+		rows, err = encodeNativeRowsParallel(columns, rows)
+		if timings != nil {
+			timings.nativeEncode += time.Since(started)
+		}
 		if err != nil {
 			return fmt.Errorf("encode %s: %w", table, err)
 		}
@@ -150,10 +232,16 @@ func (c *Client) Insert(ctx context.Context, table, token string, rows []byte) e
 		}
 	}
 	query := "INSERT INTO " + quoted(c.database) + "." + quoted(table) +
+		columnList +
 		" SETTINGS async_insert=0, insert_deduplication_token={token:String}," +
 		" date_time_input_format='best_effort' FORMAT " + format
 	params := url.Values{"param_token": []string{token}}
-	if _, err := c.execute(ctx, query, params, rows); err != nil {
+	started := time.Now()
+	_, err = c.executeTimed(ctx, query, params, rows, timings)
+	if timings != nil {
+		timings.request += time.Since(started)
+	}
+	if err != nil {
 		return fmt.Errorf("insert %s: %w", table, err)
 	}
 	return nil
@@ -209,6 +297,10 @@ func (c *Client) execute(
 	params url.Values,
 	body []byte,
 ) (result []byte, finalErr error) {
+	return c.executeTimed(ctx, query, params, body, nil)
+}
+
+func (c *Client) executeTimed(ctx context.Context, query string, params url.Values, body []byte, timings *insertTimings) (result []byte, finalErr error) {
 	defer func() {
 		if finalErr != nil {
 			finalErr = &RequestError{Err: finalErr}
@@ -236,12 +328,21 @@ func (c *Client) execute(
 		request.SetBasicAuth(c.user, c.password)
 	}
 	request.Header.Set("Content-Type", "application/octet-stream")
+	if timings != nil {
+		var finish func()
+		request, finish = traceInsertRequest(request, timings)
+		defer finish()
+	}
 	response, err := c.http.Do(request)
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
+	readStarted := time.Now()
 	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, 32<<20))
+	if timings != nil {
+		timings.bodyRead += time.Since(readStarted)
+	}
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -300,32 +401,5 @@ func (c *Client) BatchAdmissionState(ctx context.Context) (BatchAdmissionSnapsho
 	if err != nil {
 		return state, err
 	}
-	scanner := bufio.NewScanner(bytes.NewReader(body))
-	scanner.Buffer(make([]byte, 64*1024), 1<<20)
-	for scanner.Scan() {
-		var row struct {
-			BatchID      string `json:"batch_id"`
-			SourceSHA256 string `json:"source_sha256"`
-			Status       string `json:"status"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
-			return state, fmt.Errorf("decode batch admission manifest: %w", err)
-		}
-		if !uuidPattern.MatchString(row.BatchID) ||
-			!digestPattern.MatchString(row.SourceSHA256) {
-			return state, fmt.Errorf("ClickHouse returned an invalid batch admission manifest")
-		}
-		switch row.Status {
-		case "complete":
-			state.Completed[row.BatchID] = row.SourceSHA256
-		case "started", "failed":
-			state.Incomplete[row.BatchID] = row.SourceSHA256
-		default:
-			return state, fmt.Errorf("ClickHouse returned an invalid batch status")
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return state, err
-	}
-	return state, nil
+	return decodeBatchAdmission(body)
 }

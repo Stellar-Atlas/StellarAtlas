@@ -91,3 +91,43 @@ func TestRecoveryWriterStableAndSeparate(t *testing.T) {
 		t.Fatal("missing fixed timestamp allowed")
 	}
 }
+
+func TestCanonicalPublicationChecksOnlyTwoLedgerIndexedSources(t *testing.T) {
+	var queries []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries = append(queries, r.URL.Query().Get("query"))
+		_, _ = io.WriteString(w, `{"rows":"2","distinct_rows":"2","min_row":"0","max_row":"1","wrong_source":"0"}`)
+	}))
+	defer server.Close()
+	client, err := New(Config{Endpoint: server.URL, Database: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := BatchIdentity{ID: "29cf59e5-0665-4875-b37d-4b7b05bd85f2", SourceSHA256: strings.Repeat("a", 64), StartLedger: 1, EndLedger: 2}
+	if err := client.VerifyCanonicalTransactionRows(context.Background(), identity, map[string]uint64{"history_transactions": 2, "history_ledgers": 2}); err != nil {
+		t.Fatal(err)
+	}
+	if len(queries) != 2 || !strings.Contains(queries[0], ".`history_transactions`") || !strings.Contains(queries[1], ".`history_ledgers`") {
+		t.Fatal("publication verification expanded beyond canonical sources", queries)
+	}
+	for _, query := range queries {
+		if !strings.Contains(query, "_ledger_sequence BETWEEN") || strings.Count(query, "BETWEEN") != 2 {
+			t.Fatal("missing partition/leading-ledger bounds", query)
+		}
+		if !strings.Contains(query, "max_threads=1,max_execution_time=120,max_memory_usage=200000000") {
+			t.Fatal("publication deadline or resource limits changed", query)
+		}
+	}
+	expected := make(map[string]uint64)
+	for _, dataset := range schema.Datasets() {
+		expected[dataset.Name] = 2
+	}
+	if err := client.VerifyBatchRows(context.Background(), identity, expected); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range queries[2:] {
+		if !strings.Contains(query, "max_execution_time=30,") {
+			t.Fatal("wide recovery deadline changed", query)
+		}
+	}
+}

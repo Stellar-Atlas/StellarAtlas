@@ -36,6 +36,32 @@ func TestPressureAdmission(t *testing.T) {
 	}
 }
 
+func TestCurrentPressureGuardSkipsOnlyInflightLimit(t *testing.T) {
+	guard := PressureGuard{MaximumFullBasisPoints: 4000, MaximumSomeBasisPoints: 5000, MaximumInflight: 256}
+	psi, queue := "some avg10=0\nfull avg10=0", "128 129"
+	read := func(path string) ([]byte, error) {
+		if strings.HasSuffix(path, "inflight") {
+			return []byte(queue), nil
+		}
+		return []byte(psi), nil
+	}
+	if guard.reason(read) == "" {
+		t.Fatal("normal guard must block queue pressure")
+	}
+	guard.SkipInflightLimit = true
+	if reason := guard.reason(read); reason != "" {
+		t.Fatalf("current guard must allow queue-only pressure: %s", reason)
+	}
+	psi = "some avg10=50.01\nfull avg10=0"
+	if guard.reason(read) == "" {
+		t.Fatal("current guard must still block PSI pressure")
+	}
+	psi, queue = "some avg10=0\nfull avg10=0", "bad 0"
+	if guard.reason(read) == "" {
+		t.Fatal("current guard must still validate the md0 probe")
+	}
+}
+
 func TestPressureProbeFailureAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	guard := PressureGuard{
