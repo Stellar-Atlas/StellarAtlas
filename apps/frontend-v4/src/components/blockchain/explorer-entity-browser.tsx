@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
-import { useExplorerReturnTo } from './explorer-investigation';
+import { useSearchParams } from 'next/navigation';
+import { ExplorerInvestigationScope, useExplorerReturnTo } from './explorer-investigation';
 import { withExplorerReturnTo } from '../../api/explorer-return-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -23,6 +24,8 @@ import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import {
 	ExplorerEntityRequest,
 	explorerPageHref,
+	explorerSelectionKey,
+	readExplorerPageSelection,
 	previousExplorerOffset
 } from './explorer-entity-request';
 import styles from './explorer-entity.module.css';
@@ -50,6 +53,11 @@ function EntityBrowser({
 	initialOffset = 0
 }: Props): React.JSX.Element {
 	const returnTo = useExplorerReturnTo();
+	const params = useSearchParams();
+	const search = params?.toString() ?? null;
+	const selection = useMemo(() => readExplorerPageSelection(search, initialFilters, initialOffset, !!identifier), [search, initialFilters, initialOffset, identifier]);
+	const selectionKey = explorerSelectionKey(selection.filters, selection.offset);
+	const acceptedSelection = useRef<string | null>(null);
 	const [filters, setFilters] = useState<ExplorerFilters>(initialFilters);
 	const [page, setPage] = useState<AnalyticsEntityPage | null>(null);
 	const [submitted, setSubmitted] = useState<ExplorerFilters>(initialFilters);
@@ -66,7 +74,8 @@ function EntityBrowser({
 		async (
 			nextFilters: ExplorerFilters,
 			offset = 0,
-			direction: 'reset' | 'next' | 'previous' = 'reset'
+			direction: 'reset' | 'next' | 'previous' = 'reset',
+			historyMode: 'push' | 'replace' = 'push'
 		) => {
 			const started = performance.now();
 			setBusy(true);
@@ -89,13 +98,14 @@ function EntityBrowser({
 					max_ledger: String(data.window.maxLedger)
 				};
 				setSubmitted(pinnedFilters);
+				acceptedSelection.current = explorerSelectionKey(pinnedFilters, data.offset);
 				setElapsed(Math.round(performance.now() - started));
 				setHistory((old) =>
 					direction === 'reset'
 						? []
 						: direction === 'previous'
 							? old.slice(0, -1)
-							: [...old, previousOffset]
+								: [...old, previousOffset].slice(-50)
 				);
 				const url = explorerPageHref(
 					collection,
@@ -104,19 +114,21 @@ function EntityBrowser({
 					data.offset,
 					returnTo
 				);
-				window.history.replaceState(
-					null,
-					'',
-					withExplorerReturnTo(url, returnTo)
-				);
+				const href = withExplorerReturnTo(url, returnTo) + window.location.hash;
+				if (href !== window.location.pathname + window.location.search + window.location.hash) {
+					if (historyMode === 'push') window.history.pushState(null, '', href);
+					else window.history.replaceState(null, '', href);
+				}
 			} else setError(outcome.message);
 		},
 		[collection, identifier, requests, returnTo]
 	);
 	useEffect(() => {
-		void load(initialFilters, initialOffset);
+		if (acceptedSelection.current === selectionKey) return;
+		setFilters(selection.filters);
+		void load(selection.filters, selection.offset, 'reset', 'replace');
 		return () => requests.cancel();
-	}, [load, initialFilters, initialOffset, requests]);
+	}, [load, selectionKey, selection.filters, selection.offset, requests]);
 	const chosenWindow: ExplorerFilters = page
 		? {
 				min_ledger: String(page.window.minLedger),
@@ -175,7 +187,7 @@ function EntityBrowser({
 					</div>
 				)}
 				{page && (
-					<>
+					<ExplorerInvestigationScope origin={returnTo ?? explorerPageHref(collection, identifier, submitted, page.offset)}>
 						{error && (
 							<p role="status">
 								Showing the last successful result; the requested update failed.
@@ -247,7 +259,7 @@ function EntityBrowser({
 									returned
 								</span>
 								<button
-									disabled={busy || page.offset === 0}
+									disabled={busy || !!error || page.offset === 0}
 									onClick={() =>
 										void load(
 											submitted,
@@ -259,7 +271,7 @@ function EntityBrowser({
 									Previous
 								</button>
 								<button
-									disabled={busy || page.nextOffset === null}
+									disabled={busy || !!error || page.nextOffset === null}
 									onClick={() =>
 										void load(submitted, page.nextOffset ?? 0, 'next')
 									}
@@ -281,7 +293,7 @@ function EntityBrowser({
 								filters={chosenWindow}
 							/>
 						)}
-					</>
+					</ExplorerInvestigationScope>
 				)}
 			</section>
 			{identifier && collection === 'assets' && (

@@ -2,6 +2,8 @@ import { jest } from '@jest/globals';
 import {
 	ExplorerEntityRequest,
 	explorerPageHref,
+	explorerSelectionKey,
+	readExplorerPageSelection,
 	previousExplorerOffset
 } from '../explorer-entity-request';
 import {
@@ -24,6 +26,13 @@ const request = {
 };
 
 describe('explorer entity request lifecycle', () => {
+	it('restores bounded URL selection without treating return context as API filters or revisiting a pinned accepted query', () => {
+		const restored = readExplorerPageSelection('seller=GA&min_ledger=100&max_ledger=200&limit=10&offset=20&return_to=%2Fexplorer', {}, 0, false);
+		expect(restored).toEqual({ filters: { seller: 'GA', min_ledger: '100', max_ledger: '200', limit: '10' }, offset: 20 });
+		expect(explorerSelectionKey(restored.filters, 20)).toBe(explorerSelectionKey({ limit: '10', max_ledger: '200', min_ledger: '100', seller: 'GA' }, 20));
+		expect(readExplorerPageSelection('offset=20', {}, 0, true).offset).toBe(0);
+		expect(readExplorerPageSelection('seller=GA&seller=GB&offset=10001', {}, 0, false)).toEqual({ filters: {}, offset: 0 });
+	});
 	it('retries the exact failed filters and page rather than the last successful query', async () => {
 		const paths: string[] = [];
 		let unavailable = false;
