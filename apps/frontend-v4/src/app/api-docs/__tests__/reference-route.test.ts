@@ -91,6 +91,9 @@ describe('single documentation UI routing', () => {
 							previewModeEncryptionKey: ''
 						},
 						renderOpts: {
+							waitUntil: undefined,
+							onClose: () => undefined,
+							onAfterTaskError: undefined,
 							cacheLifeProfiles: {
 								default: { stale: 300, revalidate: 900, expire: 4294967294 }
 							},
