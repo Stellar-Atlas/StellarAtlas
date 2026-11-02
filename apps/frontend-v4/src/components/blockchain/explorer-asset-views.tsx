@@ -348,12 +348,22 @@ export function IssuerDetails({
 			<ParsedIssuerMetadata metadata={metadata} />
 			<h3>Indexed assets</h3>
 			{assets ? (
-				<AssetTable assets={assets.data} />
+				<>
+					<p className={styles.muted}>
+						{assets.data.length.toLocaleString('en-US')} shown{assets.nextCursor ? ' · More available' : ''}
+					</p>
+					<AssetTable assets={assets.data} />
+				</>
 			) : (
 				<p className={styles.muted}>
 					No published assets returned for this issuer.
 				</p>
 			)}
+			<div className={styles.actions}>
+				<Link href={'/explorer/assets?issuer=' + encodeURIComponent(issuerId)} collectionContext>
+					Browse issuer assets
+				</Link>
+			</div>
 		</div>
 	);
 }

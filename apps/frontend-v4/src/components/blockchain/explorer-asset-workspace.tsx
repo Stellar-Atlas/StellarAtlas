@@ -198,7 +198,7 @@ function ExplorerAssetRecordWorkspace({
 					<div>
 						<h2>{heading}</h2>
 					</div>
-					{(canonicalAssetRef || issuerId) && (
+					{canonicalAssetRef && (
 						<Link
 							href={
 								'/explorer/assets' +
