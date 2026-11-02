@@ -1,0 +1,103 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/analytics/accounts/GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H/balances?limit=1"
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+        "balanceScope": "native-and-issued",
+        "balances": [
+          {
+            "asset": "native",
+            "assetType": "native",
+            "assetCode": null,
+            "assetIssuer": null,
+            "balance": 0,
+            "balanceRaw": null,
+            "amountPrecision": "float64-observation",
+            "buyingLiabilities": 1.25,
+            "sellingLiabilities": 2.5,
+            "trustLineLimitRaw": null,
+            "flags": 0,
+            "lastModifiedLedger": 12,
+            "observedLedger": 4294967295
+          }
+        ],
+        "limit": 1,
+        "elapsedMilliseconds": 0,
+        "nextCursor": "WzEsIkdBQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFEWjdIIiwwLCIiLCIiXQ",
+        "coverage": {
+          "completedRanges": [
+            {
+              "firstLedger": "2",
+              "lastLedger": "65"
+            },
+            {
+              "firstLedger": "4294967294",
+              "lastLedger": "4294967295"
+            }
+          ],
+          "contiguousFirstLedger": "2",
+          "contiguousLastLedger": "65",
+          "contiguousLedgerCount": "64",
+          "supplementalLedgerCount": "2",
+          "totalLedgerCount": "66",
+          "nextLedger": "66",
+          "minimumLedger": "2",
+          "maximumLedger": "4294967295",
+          "gapCount": 1
+        },
+        "watermark": {
+          "mode": "latest-ingested-observations",
+          "catalogGeneratedAt": "2026-11-01T00:00:00.000Z",
+          "catalogMaximumLedger": "4294967295",
+          "snapshotPinned": false,
+          "selectedLedger": "4294967295",
+          "coverageStatus": "partial_or_unknown",
+          "balancePrecision": "source-float64"
+        }
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Account($account:String!,$input:HubbleAccountBalanceInput) {\n  hubbleAccountBalances(account:$account,input:$input) {\n    account balanceScope limit nextCursor elapsedMilliseconds\n    balances { asset assetType assetCode assetIssuer balance balanceRaw amountPrecision buyingLiabilities sellingLiabilities trustLineLimitRaw flags lastModifiedLedger observedLedger }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n  }\n}",
+        "variables": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+          "input": {
+            "limit": 1
+          }
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "errors": [
+        {
+          "message": "Int cannot represent non 32-bit signed integer value: 4294967295",
+          "locations": [
+            {
+              "line": 4,
+              "column": 169
+            }
+          ],
+          "path": [
+            "hubbleAccountBalances",
+            "balances",
+            0,
+            "observedLedger"
+          ]
+        }
+      ],
+      "data": null
+    }
+  }
+}

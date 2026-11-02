@@ -1,0 +1,56 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/assets/USD%3AGABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA/holders?limit=1&sort=account&order=desc&after=c.eyJhc3NldCI6IlVTRDpHQUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUpYQSIsInNvcnQiOiJiYWxhbmNlIiwib3JkZXIiOiJkZXNjIiwiYXNPZkxlZGdlciI6bnVsbCwiYmFsYW5jZUZpbHRlciI6InBvc2l0aXZlIiwiaW5jbHVkZURlbGV0ZWQiOmZhbHNlLCJ2ZXJzaW9uIjoxLCJhY2NvdW50SWQiOiJHQUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRRFo3SCIsImJhbGFuY2UiOiIxMi4yNSJ9"
+    },
+    "response": {
+      "status": 400,
+      "body": {
+        "code": "invalid_hubble_query",
+        "error": "Invalid or mismatched holder cursor"
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Holders($asset:String!,$input:HubbleAssetHolderInput) {\n  hubbleAssetHolders(asset:$asset,input:$input) {\n    asset limit nextCursor elapsedMilliseconds\n    holders { accountId balance amountPrecision buyingLiabilities sellingLiabilities trustLineLimit ledgerSequence lastModifiedLedger assetCode assetIssuer assetType flags sponsor sponsored deleted }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { indexStatus mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n    indexedSummary { holderCount balanceTotal }\n  }\n}",
+        "variables": {
+          "asset": "USD:GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+          "input": {
+            "limit": 1,
+            "sort": "account",
+            "order": "desc",
+            "after": "c.eyJhc3NldCI6IlVTRDpHQUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUpYQSIsInNvcnQiOiJiYWxhbmNlIiwib3JkZXIiOiJkZXNjIiwiYXNPZkxlZGdlciI6bnVsbCwiYmFsYW5jZUZpbHRlciI6InBvc2l0aXZlIiwiaW5jbHVkZURlbGV0ZWQiOmZhbHNlLCJ2ZXJzaW9uIjoxLCJhY2NvdW50SWQiOiJHQUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRRFo3SCIsImJhbGFuY2UiOiIxMi4yNSJ9"
+          }
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "errors": [
+        {
+          "message": "Invalid or mismatched holder cursor",
+          "locations": [
+            {
+              "line": 2,
+              "column": 3
+            }
+          ],
+          "path": [
+            "hubbleAssetHolders"
+          ],
+          "extensions": {
+            "code": "BAD_USER_INPUT"
+          }
+        }
+      ],
+      "data": null
+    }
+  }
+}

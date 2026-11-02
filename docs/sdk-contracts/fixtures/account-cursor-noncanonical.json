@@ -1,0 +1,54 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/analytics/accounts/GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H/balances?limit=1&after=abc%2B%2F%3D"
+    },
+    "response": {
+      "status": 400,
+      "body": {
+        "code": "invalid_hubble_query",
+        "error": "Invalid account-scoped balance cursor"
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Account($account:String!,$input:HubbleAccountBalanceInput) {\n  hubbleAccountBalances(account:$account,input:$input) {\n    account balanceScope limit nextCursor elapsedMilliseconds\n    balances { asset assetType assetCode assetIssuer balance balanceRaw amountPrecision buyingLiabilities sellingLiabilities trustLineLimitRaw flags lastModifiedLedger observedLedger }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n  }\n}",
+        "variables": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+          "input": {
+            "limit": 1,
+            "after": "abc+/="
+          }
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "errors": [
+        {
+          "message": "Invalid account-scoped balance cursor",
+          "locations": [
+            {
+              "line": 2,
+              "column": 3
+            }
+          ],
+          "path": [
+            "hubbleAccountBalances"
+          ],
+          "extensions": {
+            "code": "BAD_USER_INPUT"
+          }
+        }
+      ],
+      "data": null
+    }
+  }
+}
