@@ -292,6 +292,14 @@ curl --fail-with-body --get '${api}${contractActivityPath(contractEventExample.c
 							Try the provenance endpoint
 						</a>
 					</p>
+					<p>
+						Follow the{' '}
+						<a href="/docs/contract-verification">
+							builder publication and verification workflow
+						</a>{' '}
+						for a copyable lookup, supported evidence and status-specific next
+						steps.
+					</p>
 				</>
 			)
 		}

@@ -10,6 +10,7 @@ import {
 import { LocalDateTime } from '../local-date-time';
 import { entityColumns } from './explorer-entity-config';
 import { ExplorerOperationCall } from './explorer-operation-call';
+import { ExplorerRecordValue } from './explorer-record-value';
 import { formatDecimal } from './explorer-format-values';
 import styles from './explorer-entity.module.css';
 
@@ -257,11 +258,11 @@ export function ExplorerEntityDetails({
 			</dl>
 			{shownFields.length > 0 && (
 				<section>
-					<h3>Operation details</h3>
+					<h3>{collection === 'operations' ? 'Operation details' : 'Record details'}</h3>
 					<dl className={styles.details}>
 						{shownFields.flatMap(([key, value]) => [
 							<dt key={key + 'label'}>{key.replaceAll('_', ' ')}</dt>,
-							<dd key={key}>{String(value)}</dd>
+							<dd key={key}><ExplorerRecordValue field={key} value={value} filters={filters} /></dd>
 						])}
 					</dl>
 				</section>

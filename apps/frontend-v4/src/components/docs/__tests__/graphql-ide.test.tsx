@@ -49,7 +49,7 @@ describe('schema-driven GraphQL documentation integration', () => {
 			'Offer observations',
 			'count operations by type',
 			'Soroban invocation',
-			'Asset holders'
+			'KALE holders by balance, with sponsorship'
 		])
 			expect(html).toContain(name);
 		expect(html).toContain('Load next page');

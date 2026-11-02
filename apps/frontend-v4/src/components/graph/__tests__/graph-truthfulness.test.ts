@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import { jest } from '@jest/globals';
 import * as THREE from 'three';
 import type { NetworkV1, NodeV1 } from 'shared';
 import type { PublicScpGraphStatement } from '../../../api/types';

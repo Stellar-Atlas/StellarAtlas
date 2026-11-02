@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { readWalletCursor, validWalletCursor, walletBalanceHref } from './wallet-balance-route';
 import { ExplorerLink as Link } from './explorer-investigation';
 import { buildEntityHref } from '../../api/explorer-analytics';
 import {
@@ -18,15 +20,54 @@ interface LoadedPage {
 	readonly cursor: string | null;
 	readonly history: readonly (string | null)[];
 }
-export function ExplorerBalanceObservations({
-	autoLoad = false,
-	kind,
-	identifier
-}: {
+interface Props {
 	readonly autoLoad?: boolean;
 	readonly kind: BalanceObservationKind;
 	readonly identifier: string;
-}): React.JSX.Element {
+}
+interface WalletPagination {
+	readonly after: string | null;
+	readonly previousLabel: string;
+	readonly first: () => void;
+	readonly previous: () => void;
+	readonly next: (after: string) => void;
+}
+
+export function ExplorerBalanceObservations(props: Props): React.JSX.Element {
+	return props.kind === 'balances'
+		? <WalletBalances key={props.identifier} {...props} />
+		: <ObservationPanel key={props.identifier} {...props} />;
+}
+
+function WalletBalances(props: Props): React.JSX.Element {
+	const pathname = usePathname() ?? buildEntityHref('accounts', props.identifier);
+	const params = useSearchParams();
+	const query = params?.toString() ?? '';
+	const after = readWalletCursor(new URLSearchParams(query), props.identifier);
+	const previousPages = useRef(new Map<string, string | null>());
+	const navigate = (cursor: string | null): void => {
+		window.history.pushState(null, '', walletBalanceHref(pathname, query, props.identifier, cursor, window.location.hash));
+	};
+	return <ObservationPanel key={after ?? ''} {...props} autoLoad={props.autoLoad || after !== null}
+		pagination={{ after,
+			previousLabel: after && previousPages.current.has(after) ? 'Previous balances' : 'First balances',
+			first: () => navigate(null),
+			previous: () => navigate(after ? previousPages.current.get(after) ?? null : null),
+			next: (cursor) => {
+				previousPages.current.set(cursor, after);
+				const oldest = previousPages.current.keys().next().value;
+				if (previousPages.current.size > 50 && oldest) previousPages.current.delete(oldest);
+				navigate(cursor);
+			}
+		}} />;
+}
+
+function ObservationPanel({
+	autoLoad = false,
+	kind,
+	identifier,
+	pagination
+}: Props & { readonly pagination?: WalletPagination }): React.JSX.Element {
 	const request = useExplorerRequest<LoadedPage | null>(
 		null,
 		`Parsed ${kind} are temporarily unavailable. Try this request again.`
@@ -60,9 +101,10 @@ export function ExplorerBalanceObservations({
 		},
 		[identifier, kind, request.run]
 	);
+	const initialCursor = pagination?.after ?? null;
 	useEffect(() => {
-		if (autoLoad) load(null, []);
-	}, [autoLoad, load]);
+		if (autoLoad) load(initialCursor, []);
+	}, [autoLoad, initialCursor, load]);
 	return (
 		<section
 			className={styles.panel}
@@ -88,7 +130,7 @@ export function ExplorerBalanceObservations({
 				<button
 					type="button"
 					disabled={request.loading}
-					onClick={() => load(null, [])}
+					onClick={() => pagination?.after ? pagination.first() : load(null, [])}
 				>
 					{current || autoLoad ? 'Refresh first page' : `Load ${kind}`}
 				</button>
@@ -104,20 +146,20 @@ export function ExplorerBalanceObservations({
 					<div className={styles.actions}>
 						<button
 							type="button"
-							disabled={request.loading || current.history.length === 0}
-							onClick={() =>
+							disabled={request.loading || (pagination ? pagination.after === null : current.history.length === 0)}
+							onClick={() => pagination ? pagination.previous() :
 								load(
 									current.history.at(-1) ?? null,
 									current.history.slice(0, -1)
 								)
 							}
 						>
-							Previous {kind}
+							{pagination ? pagination.previousLabel : `Previous ${kind}`}
 						</button>
 						<button
 							type="button"
-							disabled={request.loading || current.page.nextCursor === null}
-							onClick={() =>
+							disabled={request.loading || (pagination ? !validWalletCursor(current.page.nextCursor) : current.page.nextCursor === null)}
+							onClick={() => pagination && current.page.nextCursor ? pagination.next(current.page.nextCursor) :
 								load(current.page.nextCursor, [
 									...current.history,
 									current.cursor

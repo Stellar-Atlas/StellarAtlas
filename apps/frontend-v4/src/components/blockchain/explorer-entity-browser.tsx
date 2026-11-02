@@ -39,6 +39,16 @@ export function ExplorerEntityBrowser({
 	initialFilters,
 	initialOffset = 0
 }: Props): React.JSX.Element {
+	return <EntityBrowser key={JSON.stringify([collection, identifier, initialFilters, initialOffset])}
+		collection={collection} identifier={identifier} initialFilters={initialFilters} initialOffset={initialOffset} />;
+}
+
+function EntityBrowser({
+	collection,
+	identifier,
+	initialFilters,
+	initialOffset = 0
+}: Props): React.JSX.Element {
 	const returnTo = useExplorerReturnTo();
 	const [filters, setFilters] = useState<ExplorerFilters>(initialFilters);
 	const [page, setPage] = useState<AnalyticsEntityPage | null>(null);
@@ -91,7 +101,8 @@ export function ExplorerEntityBrowser({
 					collection,
 					identifier,
 					pinnedFilters,
-					data.offset
+					data.offset,
+					returnTo
 				);
 				window.history.replaceState(
 					null,

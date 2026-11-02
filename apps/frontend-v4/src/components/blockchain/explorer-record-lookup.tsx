@@ -15,9 +15,20 @@ import {
 	parseAnalyticsLedgerLookup
 } from '../../api/explorer-record-lookup';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
+import { ExplorerLedgerActivity } from './explorer-ledger-activity';
 import styles from './explorer-entity.module.css';
 
 export function ExplorerRecordLookup({
+	collection,
+	identifier
+}: {
+	readonly collection: 'accounts' | 'ledgers';
+	readonly identifier: string;
+}): React.JSX.Element {
+	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier} />;
+}
+
+function RecordLookup({
 	collection,
 	identifier
 }: {
@@ -63,6 +74,7 @@ export function ExplorerRecordLookup({
 				<h2>
 					{collection === 'accounts' ? 'Account' : 'Ledger'} {identifier}
 				</h2>
+				{collection === 'ledgers' && <ExplorerLedgerActivity ledger={identifier} />}
 				{collection === 'ledgers' ? (
 					<>
 						<ExplorerRequestNotice
@@ -73,7 +85,7 @@ export function ExplorerRecordLookup({
 						<SearchResultView result={search.result} />
 					</>
 				) : null}
-				<div className={styles.actions}>
+				{collection === 'accounts' && <div className={styles.actions}>
 					<Link href={buildEntityHref('operations', undefined, filter)}>
 						Operations
 					</Link>
@@ -109,7 +121,7 @@ export function ExplorerRecordLookup({
 							</Link>
 						</>
 					) : null}
-				</div>
+				</div>}
 			</section>
 			{collection === 'accounts' && (
 				<ExplorerBalanceObservations

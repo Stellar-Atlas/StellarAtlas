@@ -8,6 +8,7 @@ import {
 	type ExplorerFilters
 } from '../../api/explorer-analytics';
 import { normalizeExplorerTimes } from '../../api/explorer-search-route';
+import { sanitizeExplorerReturnTo } from '../../api/explorer-return-context';
 
 export interface ExplorerPageRequest {
 	readonly filters: ExplorerFilters;
@@ -81,13 +82,19 @@ export function explorerPageHref(
 	collection: AnalyticsCollection,
 	identifier: string | undefined,
 	filters: ExplorerFilters,
-	offset: number
+	offset: number,
+	returnTo?: string | null
 ): string {
-	return buildEntityHref(
+	const href = buildEntityHref(
 		collection,
 		identifier,
 		identifier ? filters : { ...filters, offset: String(offset) }
 	);
+	const origin = sanitizeExplorerReturnTo(returnTo);
+	if (identifier || !origin) return href;
+	const url = new URL(href, 'https://explorer.invalid');
+	url.searchParams.set('return_to', origin);
+	return url.pathname + url.search;
 }
 
 export function previousExplorerOffset(

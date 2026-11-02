@@ -13,10 +13,12 @@ import styles from './explorer-transaction-table.module.css';
 
 export function ExplorerTransactionTable({
 	transactions,
-	onInspect
+	onInspect,
+	caption = 'Latest available transaction records. Dates are shown in your local time.'
 }: {
-	readonly transactions: PublicRecentTransactions;
+	readonly transactions: Pick<PublicRecentTransactions, 'records' | 'limit'>;
 	readonly onInspect: (hash: string, ledger: string) => void;
+	readonly caption?: string;
 }): React.JSX.Element {
 	const [expandedHash, setExpandedHash] = useState<string | null>(null);
 	const [copiedHash, setCopiedHash] = useState<string | null>(null);
@@ -50,10 +52,7 @@ export function ExplorerTransactionTable({
 			tabIndex={0}
 		>
 			<table className={styles.table}>
-				<caption>
-					Latest available transaction records. Dates are shown in your local
-					time.
-				</caption>
+				<caption>{caption}</caption>
 				<thead>
 					<tr>
 						{[
@@ -128,7 +127,7 @@ export function ExplorerTransactionTable({
 									href={buildEntityHref('accounts', tx.sourceAccount)}
 									title={tx.sourceAccount}
 								>
-									{formatTransactionHash(tx.sourceAccount)}
+									{tx.sourceAccount}
 								</ExplorerLink>
 							</td>
 							<td data-label="Closed">

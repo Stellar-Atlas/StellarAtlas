@@ -168,6 +168,11 @@ describe('explorer entity request lifecycle', () => {
 });
 
 describe('reloadable explorer pages', () => {
+	it('retains safe investigation context when list results pin their loaded window', () => {
+		const url = new URL(explorerPageHref('operations', undefined, request.filters, 0, '/explorer/ledgers/100?ledger_view=transactions'), 'https://example.invalid');
+		expect(url.searchParams.get('return_to')).toBe('/explorer/ledgers/100?ledger_view=transactions');
+		expect(explorerPageHref('operations', undefined, request.filters, 0, 'https://outside.invalid')).not.toContain('return_to');
+	});
 	it('round-trips the actual offset and pinned coverage window without treating offset as a filter', () => {
 		const href = explorerPageHref('trades', undefined, request.filters, 50);
 		const query = Object.fromEntries(
