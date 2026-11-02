@@ -1,0 +1,53 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/analytics/accounts/GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H/balances?limit=201"
+    },
+    "response": {
+      "status": 400,
+      "body": {
+        "code": "invalid_hubble_query",
+        "error": "limit must be an integer between 1 and 200"
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Account($account:String!,$input:HubbleAccountBalanceInput) {\n  hubbleAccountBalances(account:$account,input:$input) {\n    account balanceScope limit nextCursor elapsedMilliseconds\n    balances { asset assetType assetCode assetIssuer balance balanceRaw amountPrecision buyingLiabilities sellingLiabilities trustLineLimitRaw flags lastModifiedLedger observedLedger }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n  }\n}",
+        "variables": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+          "input": {
+            "limit": 201
+          }
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "errors": [
+        {
+          "message": "limit must be an integer between 1 and 200",
+          "locations": [
+            {
+              "line": 2,
+              "column": 3
+            }
+          ],
+          "path": [
+            "hubbleAccountBalances"
+          ],
+          "extensions": {
+            "code": "BAD_USER_INPUT"
+          }
+        }
+      ],
+      "data": null
+    }
+  }
+}

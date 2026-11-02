@@ -137,11 +137,18 @@ reconnect with capped backoff and recheck coverage after disconnects. See
 | 3. Rust and Go parity          | Implement the same reviewed workflows and language-specific cancellation/error handling               | The same normalized fixture outcomes across all three clients; documented wire mappings and unknown-field behavior                         |
 | 4. Release readiness           | Package review, compatibility policy, docs, changelog and a bounded live acceptance run               | Approved versions/artifact identities and passing CI; independently reviewed publication decision before any registry/release announcement |
 
-Initial conformance cases to implement in the future:
+The [SDK workflow contract fixtures](sdk-contracts/README.md) pin a bounded
+synthetic account, asset and transaction design packet against a specific source
+revision, with offline server-contract checks and proposed language mappings.
+Independent review of that packet supports gate 1; it does not implement or
+release any of the proposed clients.
 
-1. First/second/terminal pages for balances and holders; encoded cursors with
-   `+`, `/` and `=`; unchanged filters; repeated-cursor and cancellation
-   handling.
+Initial conformance cases for future client implementations:
+
+1. First/second/terminal pages for balances and holders; pass returned cursors
+   unchanged through URL encoding with unchanged filters. Noncanonical tokens
+   containing `+`, `/` or `=` are rejection cases where the existing cursor
+   validator disallows them. Add client repeated-cursor and cancellation handling.
 2. KALE identity remains `CODE:ISSUER`; duplicate symbols never select an issuer
    implicitly. Discovery, holder and transaction-relation cursors cannot cross.
 3. IDs and raw amounts above `2^53` and large event integer literals remain
@@ -156,7 +163,8 @@ Initial conformance cases to implement in the future:
 Use local recorded/synthetic fixtures in ordinary CI. Keep any live acceptance
 bounded to reviewed known-result examples; do not scan history or depend on a
 mutable holder count as a permanent expected value. These are planned cases, not
-a statement that a new SDK or conformance suite exists today.
+a statement that a new SDK or client conformance suite exists today. The linked
+design packet tests existing server contracts separately.
 
 ## Future multihop swap pathfinding: data and validation requirements
 

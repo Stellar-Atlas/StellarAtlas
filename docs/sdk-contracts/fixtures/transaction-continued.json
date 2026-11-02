@@ -1,0 +1,217 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/analytics/transactions/55c6dc51787f44f137e581e144d28792ae2f8c5081ce412133657b7eced3d29f?view=typed&ledger_sequence=26000000&limit=1&operations_after=eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6Im9wZXJhdGlvbnMiLCJwb3NpdGlvbiI6eyJrZXkiOiIxMTE2NjkxNDk2OTYwMDQwOTciLCJpbmRleCI6MCwicm93IjoiMSIsImJhdGNoIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZGlnZXN0IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9fQ&effects_after=eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6ImVmZmVjdHMiLCJwb3NpdGlvbiI6eyJrZXkiOiIxMTE2NjkxNDk2OTYwMDQwOTciLCJpbmRleCI6MCwicm93IjoiMSIsImJhdGNoIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZGlnZXN0IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9fQ&events_after=eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6ImV2ZW50cyIsInBvc2l0aW9uIjp7ImtleSI6IjExMTY2OTE0OTY5NjAwNDA5NiIsImluZGV4IjowLCJyb3ciOiIxIiwiYmF0Y2giOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJkaWdlc3QiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIn19"
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "transaction": {
+          "id": "111669149696004096",
+          "hash": "55c6dc51787f44f137e581e144d28792ae2f8c5081ce412133657b7eced3d29f",
+          "ledgerSequence": 26000000,
+          "closedAt": "2026-09-01T00:00:00.000Z",
+          "sourceAccount": "GDVEU3DD4KOFECV66VIHWEZOYX4ZKR3WV27L464SIIPOU2IUI3JCZA57",
+          "sourceAccountMuxed": null,
+          "sequence": "9007199254740993",
+          "successful": true,
+          "operationCount": 2,
+          "memoType": "text",
+          "memo": "typed fixture",
+          "feeChargedRaw": "200",
+          "maxFeeRaw": "200",
+          "feeAccount": null,
+          "resultCode": "tx_success"
+        },
+        "operations": {
+          "items": [
+            {
+              "id": "111669149696004098",
+              "transactionId": "111669149696004096",
+              "index": 1,
+              "ledgerSequence": 26000000,
+              "closedAt": "2026-09-01T00:00:00.000Z",
+              "type": "create_account",
+              "typeCode": 0,
+              "sourceAccount": "GDVEU3DD4KOFECV66VIHWEZOYX4ZKR3WV27L464SIIPOU2IUI3JCZA57",
+              "sourceAccountMuxed": null,
+              "resultCode": "op_inner",
+              "traceCode": "success",
+              "envelopeDecoded": true,
+              "amounts": [
+                {
+                  "field": "startingBalance",
+                  "decimal": "1.0000001",
+                  "raw": "10000001",
+                  "scale": 7,
+                  "source": "envelope"
+                }
+              ],
+              "detailsJson": "{\"amount\":900719925.4740993}"
+            }
+          ],
+          "limit": 1,
+          "nextCursor": null
+        },
+        "effects": {
+          "items": [
+            {
+              "id": "111669149696004096-1",
+              "operationId": "111669149696004097",
+              "index": 1,
+              "ledgerSequence": 26000000,
+              "closedAt": "2026-09-01T00:00:00.000Z",
+              "type": "account_credited",
+              "typeCode": 2,
+              "account": "GAJZR5RMNUNEK7CRXJVEWXZ5XUXWT7FJGILCDDOITF7EC26RPWJ4UVOE",
+              "accountMuxed": null,
+              "amounts": [
+                {
+                  "field": "amount",
+                  "decimal": "900719925.4740993",
+                  "raw": "9007199254740993",
+                  "scale": 7,
+                  "source": "effect"
+                }
+              ],
+              "detailsJson": "{\"amount\":\"900719925.4740993\",\"asset_type\":\"native\"}"
+            }
+          ],
+          "limit": 1,
+          "nextCursor": "eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6ImVmZmVjdHMiLCJwb3NpdGlvbiI6eyJrZXkiOiIxMTE2NjkxNDk2OTYwMDQwOTciLCJpbmRleCI6MSwicm93IjoiMiIsImJhdGNoIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZGlnZXN0IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9fQ"
+        },
+        "events": {
+          "items": [
+            {
+              "id": "26000000:2:00000000-0000-0000-0000-000000000001:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "transactionId": "111669149696004096",
+              "transactionHash": "55c6dc51787f44f137e581e144d28792ae2f8c5081ce412133657b7eced3d29f",
+              "operationId": "111669149696004097",
+              "ledgerSequence": 26000000,
+              "closedAt": "2026-09-01T00:00:00.000Z",
+              "contractId": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+              "type": "contract",
+              "typeCode": 1,
+              "successful": true,
+              "inSuccessfulContractCall": true,
+              "topicsJson": "[{\"symbol\":\"transfer\"}]",
+              "dataJson": "{\"i128\":\"9007199254740993\"}",
+              "decodedBytes": null,
+              "eventXdr": "fixture-xdr",
+              "classification": {
+                "transactionKind": "classic",
+                "eventKind": "operation",
+                "provenance": "complete",
+                "sorobanExecutionEvidence": false
+              }
+            }
+          ],
+          "limit": 1,
+          "nextCursor": null
+        },
+        "coverage": "ingested-only",
+        "observedAt": "2026-11-01T00:00:00.000Z"
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Transaction($hash:String!,$ledger:Int,$limit:Int,$operationsAfter:String,$effectsAfter:String,$eventsAfter:String) {\n  hubbleTransaction(transactionHash:$hash,ledgerSequence:$ledger,limit:$limit,operationsAfter:$operationsAfter,effectsAfter:$effectsAfter,eventsAfter:$eventsAfter) {\n    transaction { id hash ledgerSequence sequence feeChargedRaw maxFeeRaw }\n    operations { limit nextCursor items { id transactionId index resultCode traceCode envelopeDecoded amounts { field decimal raw scale source } detailsJson } }\n    effects { limit nextCursor items { id operationId index amounts { field decimal raw scale source } detailsJson } }\n    events { limit nextCursor items { id topicsJson dataJson eventXdr classification { transactionKind eventKind sorobanExecutionEvidence provenance } } }\n    coverage observedAt\n  }\n}",
+        "variables": {
+          "hash": "55c6dc51787f44f137e581e144d28792ae2f8c5081ce412133657b7eced3d29f",
+          "ledger": 26000000,
+          "limit": 1,
+          "operationsAfter": "eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6Im9wZXJhdGlvbnMiLCJwb3NpdGlvbiI6eyJrZXkiOiIxMTE2NjkxNDk2OTYwMDQwOTciLCJpbmRleCI6MCwicm93IjoiMSIsImJhdGNoIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZGlnZXN0IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9fQ",
+          "effectsAfter": "eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6ImVmZmVjdHMiLCJwb3NpdGlvbiI6eyJrZXkiOiIxMTE2NjkxNDk2OTYwMDQwOTciLCJpbmRleCI6MCwicm93IjoiMSIsImJhdGNoIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZGlnZXN0IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9fQ",
+          "eventsAfter": "eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6ImV2ZW50cyIsInBvc2l0aW9uIjp7ImtleSI6IjExMTY2OTE0OTY5NjAwNDA5NiIsImluZGV4IjowLCJyb3ciOiIxIiwiYmF0Y2giOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJkaWdlc3QiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIn19"
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "data": {
+        "hubbleTransaction": {
+          "transaction": {
+            "id": "111669149696004096",
+            "hash": "55c6dc51787f44f137e581e144d28792ae2f8c5081ce412133657b7eced3d29f",
+            "ledgerSequence": 26000000,
+            "sequence": "9007199254740993",
+            "feeChargedRaw": "200",
+            "maxFeeRaw": "200"
+          },
+          "operations": {
+            "limit": 1,
+            "nextCursor": null,
+            "items": [
+              {
+                "id": "111669149696004098",
+                "transactionId": "111669149696004096",
+                "index": 1,
+                "resultCode": "op_inner",
+                "traceCode": "success",
+                "envelopeDecoded": true,
+                "amounts": [
+                  {
+                    "field": "startingBalance",
+                    "decimal": "1.0000001",
+                    "raw": "10000001",
+                    "scale": 7,
+                    "source": "envelope"
+                  }
+                ],
+                "detailsJson": "{\"amount\":900719925.4740993}"
+              }
+            ]
+          },
+          "effects": {
+            "limit": 1,
+            "nextCursor": "eyJ2ZXJzaW9uIjoxLCJoYXNoIjoiNTVjNmRjNTE3ODdmNDRmMTM3ZTU4MWUxNDRkMjg3OTJhZTJmOGM1MDgxY2U0MTIxMzM2NTdiN2VjZWQzZDI5ZiIsImxlZGdlciI6MjYwMDAwMDAsInRyYW5zYWN0aW9uSWQiOiIxMTE2NjkxNDk2OTYwMDQwOTYiLCJyZWxhdGlvbiI6ImVmZmVjdHMiLCJwb3NpdGlvbiI6eyJrZXkiOiIxMTE2NjkxNDk2OTYwMDQwOTciLCJpbmRleCI6MSwicm93IjoiMiIsImJhdGNoIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZGlnZXN0IjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9fQ",
+            "items": [
+              {
+                "id": "111669149696004096-1",
+                "operationId": "111669149696004097",
+                "index": 1,
+                "amounts": [
+                  {
+                    "field": "amount",
+                    "decimal": "900719925.4740993",
+                    "raw": "9007199254740993",
+                    "scale": 7,
+                    "source": "effect"
+                  }
+                ],
+                "detailsJson": "{\"amount\":\"900719925.4740993\",\"asset_type\":\"native\"}"
+              }
+            ]
+          },
+          "events": {
+            "limit": 1,
+            "nextCursor": null,
+            "items": [
+              {
+                "id": "26000000:2:00000000-0000-0000-0000-000000000001:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "topicsJson": "[{\"symbol\":\"transfer\"}]",
+                "dataJson": "{\"i128\":\"9007199254740993\"}",
+                "eventXdr": "fixture-xdr",
+                "classification": {
+                  "transactionKind": "classic",
+                  "eventKind": "operation",
+                  "sorobanExecutionEvidence": false,
+                  "provenance": "complete"
+                }
+              }
+            ]
+          },
+          "coverage": "ingested-only",
+          "observedAt": "2026-11-01T00:00:00.000Z"
+        }
+      }
+    }
+  }
+}

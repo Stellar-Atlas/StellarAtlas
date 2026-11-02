@@ -1,0 +1,92 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "response": {
+      "status": 200,
+      "body": {
+        "coverage": {
+          "completedRanges": [
+            {
+              "firstLedger": "2",
+              "lastLedger": "65"
+            },
+            {
+              "firstLedger": "4294967294",
+              "lastLedger": "4294967295"
+            }
+          ],
+          "contiguousFirstLedger": "2",
+          "contiguousLastLedger": "65",
+          "contiguousLedgerCount": "64",
+          "supplementalLedgerCount": "2",
+          "totalLedgerCount": "66",
+          "nextLedger": "66",
+          "minimumLedger": "2",
+          "maximumLedger": "4294967295",
+          "gapCount": 1
+        },
+        "watermark": {
+          "indexStatus": "historical-query",
+          "mode": "latest-ingested-observations",
+          "catalogGeneratedAt": "2026-11-01T00:00:00.000Z",
+          "catalogMaximumLedger": "4294967295",
+          "snapshotPinned": false,
+          "selectedLedger": "4294967295",
+          "coverageStatus": "partial_or_unknown",
+          "balancePrecision": "source-float64"
+        },
+        "asset": "USD:GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+        "elapsedMilliseconds": 0,
+        "holders": [
+          {
+            "account_id": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+            "balance": 12.25,
+            "buying_liabilities": 1e-7,
+            "selling_liabilities": 2e-7,
+            "trust_line_limit": "9223372036854775807",
+            "flags": "0",
+            "ledger_sequence": "193",
+            "last_modified_ledger": "12",
+            "asset_code": "USD",
+            "asset_issuer": "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+            "asset_type": "credit_alphanum4",
+            "sponsor": null,
+            "sponsored": false,
+            "deleted": false,
+            "indexed_holder_count": "2",
+            "indexed_balance_total": 12.35
+          }
+        ],
+        "limit": 1,
+        "nextCursor": "c.eyJhc3NldCI6IlVTRDpHQUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUpYQSIsInNvcnQiOiJhY2NvdW50Iiwib3JkZXIiOiJhc2MiLCJhc09mTGVkZ2VyIjo0Mjk0OTY3Mjk1LCJiYWxhbmNlRmlsdGVyIjoicG9zaXRpdmUiLCJpbmNsdWRlRGVsZXRlZCI6ZmFsc2UsInZlcnNpb24iOjEsImFjY291bnRJZCI6IkdBQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFDQUlCQUVBUUNBSUJBRUFRQ0FJQkFFQVFEWjdIIn0"
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "query": "query Holders($asset:String!,$input:HubbleAssetHolderInput) {\n  hubbleAssetHolders(asset:$asset,input:$input) {\n    asset limit nextCursor elapsedMilliseconds\n    holders { accountId balance amountPrecision buyingLiabilities sellingLiabilities trustLineLimit ledgerSequence lastModifiedLedger assetCode assetIssuer assetType flags sponsor sponsored deleted }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { indexStatus mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n    indexedSummary { holderCount balanceTotal }\n  }\n}",
+      "variables": {
+        "asset": "USD:GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+        "input": {
+          "limit": 1,
+          "asOfLedger": 4294967295
+        }
+      }
+    },
+    "responseBody": {
+      "errors": [
+        {
+          "message": "Variable \"$input\" got invalid value 4294967295 at \"input.asOfLedger\"; Int cannot represent non 32-bit signed integer value: 4294967295",
+          "locations": [
+            {
+              "line": 1,
+              "column": 30
+            }
+          ]
+        }
+      ]
+    },
+    "expectedHttpStatus": 200,
+    "statusNote": "Actual HTTP adapter returns200 for this application/json coercion error; inspect errors."
+  }
+}

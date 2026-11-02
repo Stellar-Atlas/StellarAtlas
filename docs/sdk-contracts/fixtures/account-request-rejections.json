@@ -1,0 +1,58 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/analytics/accounts/GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H/balances?as_of_ledger=65&limit=1"
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "code": "invalid_hubble_query",
+          "error": "Unsupported balance parameter: as_of_ledger; current/as-of state is not supported"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/analytics/accounts/GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H/balances?limit=1&limit=2"
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "code": "invalid_hubble_query",
+          "error": "limit must be one non-empty value"
+        }
+      }
+    }
+  ],
+  "graphql": {
+    "request": {
+      "query": "query Account($account:String!,$input:HubbleAccountBalanceInput) {\n  hubbleAccountBalances(account:$account,input:$input) {\n    account balanceScope limit nextCursor elapsedMilliseconds\n    balances { asset assetType assetCode assetIssuer balance balanceRaw amountPrecision buyingLiabilities sellingLiabilities trustLineLimitRaw flags lastModifiedLedger observedLedger }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n  }\n}",
+      "variables": {
+        "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+        "input": {
+          "limit": 1,
+          "asOfLedger": 65
+        }
+      }
+    },
+    "responseBody": {
+      "errors": [
+        {
+          "message": "Variable \"$input\" got invalid value { limit: 1, asOfLedger: 65 }; Field \"asOfLedger\" is not defined by type \"HubbleAccountBalanceInput\".",
+          "locations": [
+            {
+              "line": 1,
+              "column": 32
+            }
+          ]
+        }
+      ]
+    },
+    "expectedHttpStatus": 200,
+    "statusNote": "Actual HTTP adapter returns200 for this application/json coercion error; inspect errors."
+  }
+}

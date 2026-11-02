@@ -1,0 +1,235 @@
+type Query {
+  """
+  Latest ingested native and issued balance observations, not current-chain or as-of state. Missing observations do not prove account absence.
+  """
+  hubbleAccountBalances(account: String!, input: HubbleAccountBalanceInput): HubbleAccountBalancePage!
+  hubbleAssetHolders(asset: String!, input: HubbleAssetHolderInput): HubbleAssetHolderPage!
+  hubbleTransaction(transactionHash: String!, ledgerSequence: Int, limit: Int, operationsAfter: String, effectsAfter: String, eventsAfter: String): HubbleTransactionDetail
+}
+
+type HubbleAccountBalancePage {
+  account: String!
+  balanceScope: String!
+  balances: [HubbleAccountBalance!]!
+  limit: Int!
+  nextCursor: String
+  elapsedMilliseconds: Float!
+  coverage: HubbleLedgerCoverage!
+  watermark: HubbleAssetHolderWatermark!
+}
+
+type HubbleAccountBalance {
+  asset: String!
+  assetType: String!
+  assetCode: String
+  assetIssuer: String
+  balance: Float!
+
+  """
+  Always null: the source Float64 balance cannot establish exact atomic units.
+  """
+  balanceRaw: String
+  amountPrecision: String!
+  buyingLiabilities: Float!
+  sellingLiabilities: Float!
+  trustLineLimitRaw: String
+  flags: String!
+  lastModifiedLedger: Int!
+  observedLedger: Int!
+}
+
+type HubbleLedgerCoverage {
+  completedRanges: [HubbleCompletedLedgerInterval!]
+  contiguousFirstLedger: String
+  contiguousLastLedger: String
+  contiguousLedgerCount: String!
+  supplementalLedgerCount: String!
+  totalLedgerCount: String!
+  nextLedger: String!
+  minimumLedger: String
+  maximumLedger: String
+  gapCount: Int!
+}
+
+type HubbleCompletedLedgerInterval {
+  firstLedger: String!
+  lastLedger: String!
+}
+
+type HubbleAssetHolderWatermark {
+  indexStatus: String
+  mode: String!
+  catalogGeneratedAt: String!
+  catalogMaximumLedger: String
+  snapshotPinned: Boolean!
+  selectedLedger: String
+  coverageStatus: String!
+  balancePrecision: String!
+}
+
+input HubbleAccountBalanceInput {
+  after: String
+  limit: Int
+}
+
+type HubbleAssetHolderPage {
+  asset: String!
+  holders: [HubbleAssetHolder!]!
+  limit: Int!
+  nextCursor: String
+  elapsedMilliseconds: Float!
+  coverage: HubbleLedgerCoverage!
+  watermark: HubbleAssetHolderWatermark!
+  indexedSummary: HubbleAssetHolderSummary
+}
+
+type HubbleAssetHolder {
+  accountId: String!
+  balance: HubbleParsedNumber!
+
+  """
+  Balance and liabilities originate in Float64 ETL observations; no exact stroop reconstruction is claimed.
+  """
+  amountPrecision: String!
+  buyingLiabilities: HubbleParsedNumber
+  sellingLiabilities: HubbleParsedNumber
+  trustLineLimit: HubbleParsedNumber
+  ledgerSequence: String
+  lastModifiedLedger: String
+  assetCode: String
+  assetIssuer: String
+  assetType: String
+  flags: String
+  sponsor: String
+  sponsored: Boolean!
+  deleted: Boolean!
+}
+
+"""
+Parsed ETL number or numeric string, preserved as received. Float64 balances are observations, not reconstructed exact atomic units.
+"""
+scalar HubbleParsedNumber
+
+type HubbleAssetHolderSummary {
+  holderCount: String!
+  balanceTotal: HubbleParsedNumber!
+}
+
+input HubbleAssetHolderInput {
+  after: String
+  limit: Int
+  sort: String
+  order: String
+  asOfLedger: Int
+  includeZero: Boolean
+  includeDeleted: Boolean
+}
+
+type HubbleTransactionDetail {
+  transaction: HubbleTransactionRecord!
+  operations: HubbleTransactionOperationPage!
+  effects: HubbleTransactionEffectPage!
+  events: HubbleTransactionEventPage!
+  observedAt: String!
+  coverage: String!
+}
+
+type HubbleTransactionRecord {
+  id: String!
+  hash: String!
+  ledgerSequence: Int!
+  closedAt: String!
+  sourceAccount: String!
+  sourceAccountMuxed: String
+  sequence: String!
+  successful: Boolean!
+  operationCount: Int!
+  memoType: String!
+  memo: String!
+  feeChargedRaw: String!
+  maxFeeRaw: String!
+  feeAccount: String
+  resultCode: String!
+}
+
+type HubbleTransactionOperationPage {
+  items: [HubbleTransactionOperation!]!
+  limit: Int!
+  nextCursor: String
+}
+
+type HubbleTransactionOperation {
+  id: String!
+  transactionId: String!
+  index: Int!
+  ledgerSequence: Int!
+  closedAt: String!
+  type: String!
+  typeCode: Int!
+  sourceAccount: String!
+  sourceAccountMuxed: String
+  resultCode: String!
+  traceCode: String!
+  envelopeDecoded: Boolean!
+  amounts: [HubbleExactAmount!]!
+  detailsJson: String!
+}
+
+type HubbleExactAmount {
+  field: String!
+  decimal: String!
+  raw: String!
+  scale: Int!
+  source: String!
+}
+
+type HubbleTransactionEffectPage {
+  items: [HubbleTransactionEffect!]!
+  limit: Int!
+  nextCursor: String
+}
+
+type HubbleTransactionEffect {
+  id: String!
+  operationId: String!
+  index: Int!
+  ledgerSequence: Int!
+  closedAt: String!
+  type: String!
+  typeCode: Int!
+  account: String!
+  accountMuxed: String
+  amounts: [HubbleExactAmount!]!
+  detailsJson: String!
+}
+
+type HubbleTransactionEventPage {
+  items: [HubbleTransactionEvent!]!
+  limit: Int!
+  nextCursor: String
+}
+
+type HubbleTransactionEvent {
+  id: String!
+  transactionId: String!
+  transactionHash: String!
+  operationId: String
+  ledgerSequence: Int!
+  closedAt: String!
+  contractId: String!
+  type: String!
+  typeCode: Int!
+  successful: Boolean!
+  inSuccessfulContractCall: Boolean!
+  topicsJson: String!
+  dataJson: String!
+  eventXdr: String!
+  classification: HubbleEventClassification!
+}
+
+type HubbleEventClassification {
+  transactionKind: String!
+  eventKind: String!
+  sorobanExecutionEvidence: Boolean!
+  provenance: String!
+}
