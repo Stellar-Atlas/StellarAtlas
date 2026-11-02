@@ -94,8 +94,11 @@
 .developer-docs .developer-docs-start a:hover {
 	background: var(--color-fd-muted);
 }
-.developer-docs .developer-guide-section {
-	scroll-margin-top: 6rem;
+.developer-docs .developer-guide-section,
+.developer-docs #nd-page :is(h2, h3, h4, h5, h6)[id] {
+	scroll-margin-top: calc(
+		var(--fd-docs-row-3, var(--fd-banner-height, 69px)) + 1rem
+	);
 }
 .developer-docs .developer-docs-cards {
 	display: grid;
