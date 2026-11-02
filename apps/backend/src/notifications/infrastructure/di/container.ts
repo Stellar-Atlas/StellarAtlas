@@ -33,6 +33,8 @@ import { NotifyHistoryArchiveIntegrityFailures } from '../../use-cases/notify-hi
 import { setupLocalSMTPContainer } from '@core/infrastructure/di/LocalSMTPContainer.js';
 import type { SMTPConfig } from '@core/services/LocalSMTPUserService.js';
 import { HistoryArchiveIntegrityNotificationRunLock } from '../database/HistoryArchiveIntegrityNotificationRunLock.js';
+import type { ArchiveFindingStateRepository } from '../../domain/subscription/ArchiveFindingState.js';
+import { PgArchiveFindingStateRepository } from '../database/PgArchiveFindingStateRepository.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -70,7 +72,12 @@ export function load(container: Container, config: Config) {
 			}
 		};
 
-		setupLocalSMTPContainer(container, smtpConfig, config.smtpFromAddress!, true);
+		setupLocalSMTPContainer(
+			container,
+			smtpConfig,
+			config.smtpFromAddress!,
+			true
+		);
 	} else {
 		// Fallback to external user service
 		container.bind<IUserService>('UserService').toDynamicValue(() => {
@@ -94,9 +101,14 @@ export function load(container: Container, config: Config) {
 	container.bind(Notify).toSelf();
 	container
 		.bind(HistoryArchiveIntegrityNotificationRunLock)
-		.toDynamicValue(() => new HistoryArchiveIntegrityNotificationRunLock(dataSource))
+		.toDynamicValue(
+			() => new HistoryArchiveIntegrityNotificationRunLock(dataSource)
+		)
 		.inSingletonScope();
 	container.bind(NotifyHistoryArchiveIntegrityFailures).toSelf();
+	container
+		.bind<ArchiveFindingStateRepository>('ArchiveFindingStateRepository')
+		.toDynamicValue(() => new PgArchiveFindingStateRepository(dataSource));
 	container.bind(UnmuteNotification).toSelf();
 	container.bind(Subscribe).toSelf();
 	container.bind(Unsubscribe).toSelf();

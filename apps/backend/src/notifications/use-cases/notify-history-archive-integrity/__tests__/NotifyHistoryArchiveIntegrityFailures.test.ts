@@ -11,6 +11,8 @@ import type { Subscriber } from '../../../domain/subscription/Subscriber.js';
 import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
 import { HistoryArchiveIntegrityNotificationRunLock } from '../../../infrastructure/database/HistoryArchiveIntegrityNotificationRunLock.js';
 import { NotifyHistoryArchiveIntegrityFailures } from '../NotifyHistoryArchiveIntegrityFailures.js';
+import type { ArchiveFindingStateRepository } from '../../../domain/subscription/ArchiveFindingState.js';
+import { UserId } from '../../../domain/subscription/UserId.js';
 
 const archiveUrl = 'https://history.example.org';
 const publicKey = 'GCGB2S2KGYARPVIA37HYZXVRM2YZUEXA6S33ZU5BUDC6THSB62LZSTYH';
@@ -157,16 +159,14 @@ function createFixture(objects: readonly HistoryArchiveObject[]) {
 		} as unknown as Node
 	]);
 	const events: HistoryArchiveIntegrityFailureDetectedEvent[] = [];
-	const subscriber = mock<Subscriber>();
+	const userId = UserId.create('16420410-4c34-4abe-8a98-3ef47f29b4f5');
+	if (userId.isErr()) throw userId.error;
+	const subscriber = mock<Subscriber>({ userId: userId.value });
 	subscriber.isSubscribedTo.mockReturnValue(true);
-	subscriber.publishNotificationAbout.mockImplementation((candidateEvents) => {
-		events.push(
-			...candidateEvents.filter(
-				(event): event is HistoryArchiveIntegrityFailureDetectedEvent =>
-					event instanceof HistoryArchiveIntegrityFailureDetectedEvent
-			)
-		);
-		return null;
+	const findingState = mock<ArchiveFindingStateRepository>();
+	findingState.prepare.mockImplementation(async (_userId, findings) => {
+		events.push(...findings.map((finding) => finding.event));
+		return [];
 	});
 	const subscriberRepository = mock<SubscriberRepository>();
 	subscriberRepository.find.mockResolvedValue([subscriber]);
@@ -183,7 +183,8 @@ function createFixture(objects: readonly HistoryArchiveObject[]) {
 		notifier,
 		runLock,
 		mock<Logger>(),
-		mock<ExceptionLogger>()
+		mock<ExceptionLogger>(),
+		findingState
 	);
 
 	return {
