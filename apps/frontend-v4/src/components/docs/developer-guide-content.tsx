@@ -92,6 +92,35 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							Operations include their type, source account, decoded details and
 							transaction relationship.
 						</p>
+						<p>After the request succeeds, read these fields together:</p>
+						<ul>
+							<li>
+								<code>window</code> identifies the ledger interval actually
+								queried. Check it against the range you selected.
+							</li>
+							<li>
+								<code>coverageStatus: complete</code> means the selected window
+								is covered; it does not mean all chain history is available.
+								For <code>partial_or_unknown</code>, choose a completed interval
+								from the catalogue before drawing conclusions from missing rows.
+							</li>
+							<li>
+								An empty <code>rows</code> array can be a valid result for your
+								filters. It is different from a failed request. A non-null{' '}
+								<code>nextOffset</code> continues this query; <code>null</code>{' '}
+								ends it.
+							</li>
+						</ul>
+						<p>
+							If the request fails, follow{' '}
+							<a href="/docs/querying#handle-errors">error handling</a> before
+							trying a larger query. For the next workflow, use{' '}
+							<a href="/docs/live-updates#publication-feed">
+								publication notices for refreshing a view
+							</a>{' '}
+							or <a href="/docs/services#history-downloads">history downloads</a>{' '}
+							for offline analysis.
+						</p>
 					</>
 				)
 			},
