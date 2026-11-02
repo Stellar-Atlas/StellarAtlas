@@ -1,5 +1,6 @@
 import { historyArchiveInconclusiveTransportFailureSql } from './HistoryArchiveFailureAttributionSql.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveProofCompletionReserveMemberSql } from './HistoryArchiveProofCompletionReserveSql.js';
 
 export type HistoryArchiveRetryPhase = 'first-pass' | 'recheck';
 
@@ -90,5 +91,10 @@ export function historyArchiveFirstPassAllowedSql(
 	return `(${historyArchiveNeverAttemptedSql(objectAlias)}
 		or ${objectAlias}."objectType" = 'history-archive-state'
 		or ${historyArchiveExplicitManualRetrySql(objectAlias, readyAlias)}
+		or exists (
+			select 1 from history_archive_object_queue reserved_object
+			where reserved_object."remoteId" = ${objectAlias}."remoteId"
+				and ${historyArchiveProofCompletionReserveMemberSql('reserved_object')}
+		)
 		or ${historyArchiveBlockingRecoverySql(objectAlias)})`;
 }

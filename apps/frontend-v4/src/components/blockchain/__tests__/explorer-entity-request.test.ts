@@ -2,6 +2,8 @@ import { jest } from '@jest/globals';
 import {
 	ExplorerEntityRequest,
 	explorerPageHref,
+	explorerSelectionKey,
+	readExplorerPageSelection,
 	previousExplorerOffset
 } from '../explorer-entity-request';
 import {
@@ -24,6 +26,13 @@ const request = {
 };
 
 describe('explorer entity request lifecycle', () => {
+	it('restores bounded URL selection without treating return context as API filters or revisiting a pinned accepted query', () => {
+		const restored = readExplorerPageSelection('seller=GA&min_ledger=100&max_ledger=200&limit=10&offset=20&return_to=%2Fexplorer', {}, 0, false);
+		expect(restored).toEqual({ filters: { seller: 'GA', min_ledger: '100', max_ledger: '200', limit: '10' }, offset: 20 });
+		expect(explorerSelectionKey(restored.filters, 20)).toBe(explorerSelectionKey({ limit: '10', max_ledger: '200', min_ledger: '100', seller: 'GA' }, 20));
+		expect(readExplorerPageSelection('offset=20', {}, 0, true).offset).toBe(0);
+		expect(readExplorerPageSelection('seller=GA&seller=GB&offset=10001', {}, 0, false)).toEqual({ filters: {}, offset: 0 });
+	});
 	it('retries the exact failed filters and page rather than the last successful query', async () => {
 		const paths: string[] = [];
 		let unavailable = false;
@@ -165,9 +174,25 @@ describe('explorer entity request lifecycle', () => {
 			jest.useRealTimers();
 		}
 	});
+	it('invalidates pending Back A when restoring already accepted B without another network request', async () => {
+		let finish!: (value: unknown) => void;
+		let calls = 0;
+		const session = new ExplorerEntityRequest('offers', undefined, () => ++calls === 1 ? Promise.resolve(page(25)) : new Promise((resolve) => { finish = resolve; }));
+		expect(await session.run({...request, offset:25})).toMatchObject({ok:true, page:{offset:25}});
+		const backA = session.run(request);
+		session.cancel(); // URL returned to accepted B: restore B rather than fetch it again.
+		finish(page(0));
+		await expect(backA).resolves.toBeNull();
+		expect(calls).toBe(2);
+	});
 });
 
 describe('reloadable explorer pages', () => {
+	it('retains safe investigation context when list results pin their loaded window', () => {
+		const url = new URL(explorerPageHref('operations', undefined, request.filters, 0, '/explorer/ledgers/100?ledger_view=transactions'), 'https://example.invalid');
+		expect(url.searchParams.get('return_to')).toBe('/explorer/ledgers/100?ledger_view=transactions');
+		expect(explorerPageHref('operations', undefined, request.filters, 0, 'https://outside.invalid')).not.toContain('return_to');
+	});
 	it('round-trips the actual offset and pinned coverage window without treating offset as a filter', () => {
 		const href = explorerPageHref('trades', undefined, request.filters, 50);
 		const query = Object.fromEntries(

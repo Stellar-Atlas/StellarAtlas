@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { readWalletCursor, validWalletCursor, walletBalanceHref } from './wallet-balance-route';
 import { ExplorerLink as Link } from './explorer-investigation';
 import { buildEntityHref } from '../../api/explorer-analytics';
 import {
@@ -10,7 +12,8 @@ import {
 } from '../../api/explorer-balance-observations';
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
-import { LocalDateTime } from '../local-date-time';
+import { BalanceObservationProvenance } from './explorer-balance-provenance';
+import { ObservedBalanceFlags } from './explorer-balance-flags';
 import styles from './explorer-entity.module.css';
 
 interface LoadedPage {
@@ -18,15 +21,54 @@ interface LoadedPage {
 	readonly cursor: string | null;
 	readonly history: readonly (string | null)[];
 }
-export function ExplorerBalanceObservations({
-	autoLoad = false,
-	kind,
-	identifier
-}: {
+interface Props {
 	readonly autoLoad?: boolean;
 	readonly kind: BalanceObservationKind;
 	readonly identifier: string;
-}): React.JSX.Element {
+}
+interface WalletPagination {
+	readonly after: string | null;
+	readonly previousLabel: string;
+	readonly first: () => void;
+	readonly previous: () => void;
+	readonly next: (after: string) => void;
+}
+
+export function ExplorerBalanceObservations(props: Props): React.JSX.Element {
+	return props.kind === 'balances'
+		? <WalletBalances key={props.identifier} {...props} />
+		: <ObservationPanel key={props.identifier} {...props} />;
+}
+
+function WalletBalances(props: Props): React.JSX.Element {
+	const pathname = usePathname() ?? buildEntityHref('accounts', props.identifier);
+	const params = useSearchParams();
+	const query = params?.toString() ?? '';
+	const after = readWalletCursor(new URLSearchParams(query), props.identifier);
+	const previousPages = useRef(new Map<string, string | null>());
+	const navigate = (cursor: string | null): void => {
+		window.history.pushState(null, '', walletBalanceHref(pathname, query, props.identifier, cursor, window.location.hash));
+	};
+	return <ObservationPanel key={after ?? ''} {...props} autoLoad={props.autoLoad || after !== null}
+		pagination={{ after,
+			previousLabel: after && previousPages.current.has(after) ? 'Previous balances' : 'First balances',
+			first: () => navigate(null),
+			previous: () => navigate(after ? previousPages.current.get(after) ?? null : null),
+			next: (cursor) => {
+				previousPages.current.set(cursor, after);
+				const oldest = previousPages.current.keys().next().value;
+				if (previousPages.current.size > 50 && oldest) previousPages.current.delete(oldest);
+				navigate(cursor);
+			}
+		}} />;
+}
+
+function ObservationPanel({
+	autoLoad = false,
+	kind,
+	identifier,
+	pagination
+}: Props & { readonly pagination?: WalletPagination }): React.JSX.Element {
 	const request = useExplorerRequest<LoadedPage | null>(
 		null,
 		`Parsed ${kind} are temporarily unavailable. Try this request again.`
@@ -60,9 +102,10 @@ export function ExplorerBalanceObservations({
 		},
 		[identifier, kind, request.run]
 	);
+	const initialCursor = pagination?.after ?? null;
 	useEffect(() => {
-		if (autoLoad) load(null, []);
-	}, [autoLoad, load]);
+		if (autoLoad) load(initialCursor, []);
+	}, [autoLoad, initialCursor, load]);
 	return (
 		<section
 			className={styles.panel}
@@ -72,23 +115,12 @@ export function ExplorerBalanceObservations({
 			aria-busy={request.loading}
 		>
 			<h2>{kind === 'balances' ? 'Account balances' : 'Asset holders'}</h2>
-			<p className={styles.muted}>
-				Latest ingested observations, not current-chain or historical as-of
-				balances. This view is independent of the selected activity window.
-				Amounts retain source Float64 precision; they are not exact stroop
-				values.
-			</p>
-			{kind === 'holders' && (
-				<p className={styles.muted}>
-					Positive observed balances, ordered by account—not a complete
-					current-chain holder list or balance ranking.
-				</p>
-			)}
+			<BalanceObservationProvenance kind={kind} page={current?.page} />
 			<div className={styles.actions}>
 				<button
 					type="button"
 					disabled={request.loading}
-					onClick={() => load(null, [])}
+					onClick={() => pagination?.after ? pagination.first() : load(null, [])}
 				>
 					{current || autoLoad ? 'Refresh first page' : `Load ${kind}`}
 				</button>
@@ -100,24 +132,24 @@ export function ExplorerBalanceObservations({
 			/>
 			{current && (
 				<>
-					<BalanceObservationResults kind={kind} page={current.page} />
+					<BalanceObservationResults kind={kind} page={current.page} showProvenance={false} />
 					<div className={styles.actions}>
 						<button
 							type="button"
-							disabled={request.loading || current.history.length === 0}
-							onClick={() =>
+							disabled={request.loading || (pagination ? pagination.after === null : current.history.length === 0)}
+							onClick={() => pagination ? pagination.previous() :
 								load(
 									current.history.at(-1) ?? null,
 									current.history.slice(0, -1)
 								)
 							}
 						>
-							Previous {kind}
+							{pagination ? pagination.previousLabel : `Previous ${kind}`}
 						</button>
 						<button
 							type="button"
-							disabled={request.loading || current.page.nextCursor === null}
-							onClick={() =>
+							disabled={request.loading || (pagination ? !validWalletCursor(current.page.nextCursor) : current.page.nextCursor === null)}
+							onClick={() => pagination && current.page.nextCursor ? pagination.next(current.page.nextCursor) :
 								load(current.page.nextCursor, [
 									...current.history,
 									current.cursor
@@ -136,30 +168,17 @@ export function ExplorerBalanceObservations({
 
 export function BalanceObservationResults({
 	kind,
-	page
+	page,
+	showProvenance = true
 }: {
 	readonly kind: BalanceObservationKind;
 	readonly page: BalanceObservationPage;
+	readonly showProvenance?: boolean;
 }): React.JSX.Element {
 	const label = kind === 'balances' ? 'Asset' : 'Account';
 	return (
 		<>
-			<div className={styles.status}>
-				<span>
-					Catalog snapshot <LocalDateTime dateTime={page.catalogGeneratedAt} />
-				</span>
-				<span>
-					{page.totalLedgerCount} completed ledgers · contiguous through{' '}
-					{page.contiguousLastLedger ?? 'unavailable'} · {page.gapCount} gaps
-				</span>
-				<span>
-					Maximum observed catalog ledger {page.maximumLedger ?? 'unavailable'}
-				</span>
-			</div>
-			<p className={styles.muted}>
-				Pages are not a frozen snapshot; incoming ingestion can change
-				observations between requests.
-			</p>
+			{showProvenance && <BalanceObservationProvenance kind={kind} page={page} />}
 			{page.rows.length === 0 ? (
 				<p>
 					No {kind} returned from the ingested observations. This does not
@@ -195,21 +214,27 @@ export function BalanceObservationResults({
 										>
 											{row.id === 'native' ? 'XLM (native)' : row.id}
 										</Link>
+										{kind === 'balances' && <ObservedBalanceFlags evidence={row} />}
 									</td>
 									<td data-label="Observed balance">
+										<div>
 										{String(row.balance)}
 										{row.trustLineLimit !== null && (
 											<div className={styles.muted}>
 												Trustline limit (raw): {row.trustLineLimit}
 											</div>
 										)}
+										</div>
 									</td>
 									<td data-label="Liabilities">
+										<div>
 										Buying: {String(row.buyingLiabilities)}
 										<br />
 										Selling: {String(row.sellingLiabilities)}
+										</div>
 									</td>
 									<td data-label="Ledger evidence">
+										<div>
 										<Link
 											href={buildEntityHref(
 												'ledgers',
@@ -220,6 +245,7 @@ export function BalanceObservationResults({
 										</Link>
 										<div className={styles.muted}>
 											Last modified {row.lastModifiedLedger}
+										</div>
 										</div>
 									</td>
 								</tr>

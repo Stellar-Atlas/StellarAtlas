@@ -1,0 +1,12 @@
+@media (max-width: 768px) {
+	.compact :global(.strip-inner) {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: .35rem .75rem;
+		min-block-size: 0;
+		padding-block: .5rem;
+	}
+	.compact :global(.experience-switcher) { grid-column: 1 / -1; margin: 0; justify-self: start; }
+	.compact :global(.strip-inner) > strong { grid-column: 1 / -1; font-size: .74rem; font-weight: 400; overflow-wrap: anywhere; }
+}

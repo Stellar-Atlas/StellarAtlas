@@ -13,15 +13,20 @@
 	"author": "pieterjan84@github",
 	"license": "MIT",
 	"dependencies": {
+		"@stellar/stellar-sdk": "17.2.1",
 		"async": "^3.2.6",
+		"bignumber.js": "11.1.4",
+		"dotenv": "17.4.2",
+		"lru-cache": "11.5.1",
+		"neverthrow": "8.2.0",
+		"pino": "10.3.1",
 		"sodium-native": "^4.1.1",
 		"workerpool": "^10.0.2",
 		"yn": "^5.1.0"
 	},
 	"devDependencies": {
 		"@types/async": "^3.2.25",
-		"@types/sodium-native": "^2.3.9",
-		"bignumber.js": "11.1.4"
+		"@types/sodium-native": "^2.3.9"
 	},
 	"engines": {
 		"node": "26.x"

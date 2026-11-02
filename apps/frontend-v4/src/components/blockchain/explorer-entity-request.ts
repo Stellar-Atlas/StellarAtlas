@@ -7,12 +7,26 @@ import {
 	type AnalyticsEntityPage,
 	type ExplorerFilters
 } from '../../api/explorer-analytics';
-import { normalizeExplorerTimes } from '../../api/explorer-search-route';
+import { explorerRouteFilters, explorerRouteOffset, normalizeExplorerTimes } from '../../api/explorer-search-route';
+import { sanitizeExplorerReturnTo } from '../../api/explorer-return-context';
 
 export interface ExplorerPageRequest {
 	readonly filters: ExplorerFilters;
 	readonly offset: number;
 	readonly direction: 'reset' | 'next' | 'previous';
+}
+export function readExplorerPageSelection(search: string | null, initialFilters: ExplorerFilters, initialOffset: number, detail: boolean): { filters: ExplorerFilters; offset: number } {
+	if (search === null) return { filters: initialFilters, offset: detail ? 0 : initialOffset };
+	const params = new URLSearchParams(search);
+	const values: Record<string, string | string[]> = {};
+	for (const key of new Set(params.keys())) {
+		const entries = params.getAll(key);
+		values[key] = entries.length === 1 ? entries[0]! : entries;
+	}
+	return { filters: explorerRouteFilters(values), offset: detail ? 0 : explorerRouteOffset(values.offset) ?? 0 };
+}
+export function explorerSelectionKey(filters: ExplorerFilters, offset: number): string {
+	return JSON.stringify([Object.entries(filters).filter(([, value]) => value.trim()).sort(([a], [b]) => a.localeCompare(b)), offset]);
 }
 export type ExplorerPageOutcome =
 	| {
@@ -81,13 +95,19 @@ export function explorerPageHref(
 	collection: AnalyticsCollection,
 	identifier: string | undefined,
 	filters: ExplorerFilters,
-	offset: number
+	offset: number,
+	returnTo?: string | null
 ): string {
-	return buildEntityHref(
+	const href = buildEntityHref(
 		collection,
 		identifier,
 		identifier ? filters : { ...filters, offset: String(offset) }
 	);
+	const origin = sanitizeExplorerReturnTo(returnTo);
+	if (identifier || !origin) return href;
+	const url = new URL(href, 'https://explorer.invalid');
+	url.searchParams.set('return_to', origin);
+	return url.pathname + url.search;
 }
 
 export function previousExplorerOffset(

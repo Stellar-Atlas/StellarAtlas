@@ -1,0 +1,8 @@
+.route { min-width: 0; }
+@media (max-width: 768px) {
+	.route :global(.shell) { inline-size: calc(100% - 24px); max-inline-size: calc(100% - 24px); }
+	.route :global(main.shell) { padding-block: 14px 36px; }
+	.route :global(.page-heading) { margin-block-end: 12px; gap: 8px; }
+	.route :global(.page-heading h1) { font-size: 1.125rem; line-height: 1.3; }
+	.route :global(.page-heading .eyebrow), .route :global(.page-heading .lede) { display: none; }
+}

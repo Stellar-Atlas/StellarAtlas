@@ -1,4 +1,5 @@
 import { queryHubbleAggregate } from './HubbleAggregateQuery.js';
+import { hubbleDatasetRowCount } from './HubbleDatasetRowCount.js';
 import { queryHubbleAccountBalances } from './HubbleAccountBalanceQuery.js';
 import { UnavailableHubbleWarehouse } from './HubbleUnavailableWarehouse.js';
 import type {
@@ -404,7 +405,7 @@ FORMAT JSON`,
 			datasets: [...datasets.entries()].map(([name, columns]) => ({
 				columns,
 				name,
-				rowCount: rowsByTable.get(name) ?? '0'
+				rowCount: hubbleDatasetRowCount(name, rowsByTable)
 			})),
 			generatedAt: new Date().toISOString(),
 			ingestion: {

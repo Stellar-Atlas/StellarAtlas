@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams, usePathname } from 'next/navigation';
+import { readTransactionActivityRoute, transactionActivityHref, transactionActivityKey, validActivityCursor, validLedger, type TransactionActivityRoute } from './transaction-activity-route';
 import {
 	requestExplorerTransaction,
 	transactionRelations as relations,
-	type TransactionRelation as Relation,
-	type TransactionCursors as Cursors
+	type TransactionRelation as Relation
 } from '../../api/explorer-transaction';
 import {
 	buildEntityHref,
@@ -18,18 +19,16 @@ import { EntityLink } from './explorer-entity-table';
 import { ExplorerContractEventTable } from './explorer-contract-event-table';
 import { ExplorerOperationCall } from './explorer-operation-call';
 import { OperationResultFields } from './explorer-operation-result';
+import { ExplorerRecordFields } from './explorer-record-fields';
+import { ExplorerEffectFields } from './explorer-effect-fields';
+import { recordFieldInput } from './record-field-tree';
 import { operationInvocation } from './explorer-operation-invocation';
 import { formatAtomic } from './explorer-format-values';
 import { ExplorerLink as Link } from './explorer-investigation';
 import styles from './explorer-entity.module.css';
 
 function decoded(value: unknown): unknown {
-	if (typeof value !== 'string') return value;
-	try {
-		return JSON.parse(value) as unknown;
-	} catch {
-		return value;
-	}
+	return recordFieldInput(value);
 }
 function JsonValue({ value }: { readonly value: unknown }): React.JSX.Element {
 	const parsed = decoded(value);
@@ -86,6 +85,7 @@ function RelationRecord({
 			)}
 			<dl className={styles.details}>
 				{relation === 'operations' && <OperationResultFields row={row} />}
+				{relation === 'effects' && <ExplorerEffectFields row={row} ledger={ledger} />}
 				{amounts.flatMap((amount, index) => [
 					<dt key={'a' + index}>{entityText(amount, 'field')}</dt>,
 					<dd key={'v' + index}>
@@ -93,22 +93,6 @@ function RelationRecord({
 						<small>({entityText(amount, 'raw')} raw units)</small>
 					</dd>
 				])}
-				{Object.entries(details)
-					.filter(
-						([key, value]) =>
-							!(
-								hasInvocation &&
-								['type', 'function', 'contract_id'].includes(key)
-							) &&
-							(typeof value === 'string' ||
-								typeof value === 'number' ||
-								typeof value === 'boolean')
-					)
-					.slice(0, 30)
-					.flatMap(([key, value]) => [
-						<dt key={key + 'label'}>{key.replaceAll('_', ' ')}</dt>,
-						<dd key={key}>{String(value)}</dd>
-					])}
 				{entityText(row, 'contractId') && (
 					<>
 						<dt>Contract</dt>
@@ -122,6 +106,8 @@ function RelationRecord({
 					</>
 				)}
 			</dl>
+			<ExplorerRecordFields value={row.detailsJson} filters={{ min_ledger: ledger, max_ledger: ledger }}
+				exclude={hasInvocation ? ['type', 'function', 'contract_id'] : []} rawFallback={false} />
 			<details>
 				<summary>
 					{relation === 'operations'
@@ -136,24 +122,36 @@ function RelationRecord({
 	);
 }
 export function ExplorerTransactionDetail({
-	hash,
-	ledgerSequence
+	hash
 }: {
 	readonly hash: string;
-	readonly ledgerSequence?: string;
 }): React.JSX.Element {
-	const [data, setData] = useState<EntityRecord | null>(null);
+	const params = useSearchParams();
+	const query = params.toString();
+	const route = useMemo(() => readTransactionActivityRoute(new URLSearchParams(query), hash), [query, hash]);
+	return <TransactionDetail key={hash} hash={hash} route={route} />;
+}
+
+function TransactionDetail({ hash, route }: {
+	readonly hash: string;
+	readonly route: TransactionActivityRoute;
+}): React.JSX.Element {
+	const pathname = usePathname();
+	const params = useSearchParams();
+	const { ledger, cursors } = route;
+	const requestKey = transactionActivityKey(route);
+	const [loaded, setLoaded] = useState<{ key: string; data: EntityRecord } | null>(null);
+	const data = loaded?.key === requestKey ? loaded.data : null;
 	const activeRequest = useRef<AbortController | null>(null);
 	const resolvedLedger = useRef<{ hash: string; ledger: string } | null>(null);
 	const [busy, setBusy] = useState(false),
 		[error, setError] = useState<string | null>(null);
-	const [ledger, setLedger] = useState(ledgerSequence ?? ''),
-		[input, setInput] = useState(ledgerSequence ?? ''),
-		[cursors, setCursors] = useState<Cursors>({});
-	const [history, setHistory] = useState<
-		Partial<Record<Relation, (string | undefined)[]>>
-	>({});
+	const [input, setInput] = useState(ledger);
+	const previousPages = useRef(new Map<string, TransactionActivityRoute>());
 	const [retry, setRetry] = useState(0);
+	const navigate = (selection: TransactionActivityRoute): void => {
+		window.history.pushState(null, '', transactionActivityHref(pathname, params.toString(), selection, hash, window.location.hash));
+	};
 	useEffect(() => {
 		let disposed = false;
 		const abort = new AbortController();
@@ -179,7 +177,7 @@ export function ExplorerTransactionDetail({
 				);
 				resolvedLedger.current = { hash, ledger: foundLedger };
 				if (foundLedger) setInput(foundLedger);
-				setData(result);
+				setLoaded({ key: requestKey, data: result });
 			}
 		})()
 			.catch((failure) => {
@@ -200,7 +198,8 @@ export function ExplorerTransactionDetail({
 			disposed = true;
 			abort.abort();
 		};
-	}, [hash, ledger, cursors, retry]);
+	}, [hash, ledger, requestKey, retry]);
+	useEffect(() => setInput(ledger), [ledger]);
 	const tx = data ? recordValue(data.transaction) : null;
 	const chosenLedger = tx
 		? entityText(tx, 'ledgerSequence') || entityText(tx, 'ledger')
@@ -215,21 +214,22 @@ export function ExplorerTransactionDetail({
 					className={`${styles.actions} ${styles.lookupForm}`}
 					onSubmit={(event) => {
 						event.preventDefault();
-						setLedger(input);
-						setCursors({});
-						setHistory({});
-						setRetry((value) => value + 1);
+						const selection = { ledger: input.trim(), cursors: {} };
+						if (transactionActivityKey(selection) === requestKey) setRetry((value) => value + 1);
+						else navigate(selection);
 					}}
 				>
 					<label>
 						Ledger number (optional){' '}
 						<input
 							inputMode="numeric"
+							maxLength={10}
+							pattern="[1-9][0-9]{0,9}"
 							value={input}
 							onChange={(event) => setInput(event.currentTarget.value)}
 						/>
 					</label>
-					<button disabled={busy}>Load transaction</button>
+					<button disabled={busy || !validLedger(input.trim())}>Load transaction</button>
 					{busy && (
 						<button
 							type="button"
@@ -243,6 +243,7 @@ export function ExplorerTransactionDetail({
 				{error && (
 					<p role="alert" className={styles.error}>
 						{error}
+						<button type="button" onClick={() => setRetry((value) => value + 1)} disabled={busy}>Try again</button>
 					</p>
 				)}
 				{tx && Object.keys(tx).length > 0 && (
@@ -307,8 +308,8 @@ export function ExplorerTransactionDetail({
 								items = Array.isArray(page.items)
 									? page.items.map(recordValue)
 									: [];
-							const next = entityText(page, 'nextCursor'),
-								previous = history[relation] ?? [];
+							const next = entityText(page, 'nextCursor');
+							const previous = previousPages.current.get(relation + ':' + requestKey);
 							return (
 								<section key={relation} className={styles.panel}>
 									<h3>
@@ -333,28 +334,21 @@ export function ExplorerTransactionDetail({
 									)}
 									<div className={styles.actions}>
 										<button
-											disabled={busy || !previous.length}
+											disabled={busy || !cursors[relation]}
 											onClick={() => {
-												setCursors((value) => ({
-													...value,
-													[relation]: previous.at(-1)
-												}));
-												setHistory((value) => ({
-													...value,
-													[relation]: previous.slice(0, -1)
-												}));
+												navigate(previous ?? { ledger, cursors: { ...cursors, [relation]: undefined } });
 											}}
 										>
-											Previous {relation}
+												{previous ? 'Previous' : 'First'} {relation}
 										</button>
 										<button
-											disabled={busy || !next}
+											disabled={busy || !validActivityCursor(next)}
 											onClick={() => {
-												setHistory((value) => ({
-													...value,
-													[relation]: [...previous, cursors[relation]]
-												}));
-												setCursors((value) => ({ ...value, [relation]: next }));
+												const selection = { ledger, cursors: { ...cursors, [relation]: next } };
+												previousPages.current.set(relation + ':' + transactionActivityKey(selection), route);
+												const oldest = previousPages.current.keys().next().value;
+												if (previousPages.current.size > 50 && oldest) previousPages.current.delete(oldest);
+												navigate(selection);
 											}}
 										>
 											Next {relation}

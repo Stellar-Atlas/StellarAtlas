@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
-import { useExplorerReturnTo } from './explorer-investigation';
+import { useSearchParams } from 'next/navigation';
+import { ExplorerInvestigationScope, useExplorerReturnTo } from './explorer-investigation';
 import { withExplorerReturnTo } from '../../api/explorer-return-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -23,6 +24,8 @@ import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import {
 	ExplorerEntityRequest,
 	explorerPageHref,
+	explorerSelectionKey,
+	readExplorerPageSelection,
 	previousExplorerOffset
 } from './explorer-entity-request';
 import styles from './explorer-entity.module.css';
@@ -39,7 +42,23 @@ export function ExplorerEntityBrowser({
 	initialFilters,
 	initialOffset = 0
 }: Props): React.JSX.Element {
+	return <EntityBrowser key={JSON.stringify([collection, identifier, initialFilters, initialOffset])}
+		collection={collection} identifier={identifier} initialFilters={initialFilters} initialOffset={initialOffset} />;
+}
+
+function EntityBrowser({
+	collection,
+	identifier,
+	initialFilters,
+	initialOffset = 0
+}: Props): React.JSX.Element {
 	const returnTo = useExplorerReturnTo();
+	const params = useSearchParams();
+	const search = params?.toString() ?? null;
+	const selection = useMemo(() => readExplorerPageSelection(search, initialFilters, initialOffset, !!identifier), [search, initialFilters, initialOffset, identifier]);
+	const selectionKey = explorerSelectionKey(selection.filters, selection.offset);
+	const acceptedSelection = useRef<string | null>(null);
+	const loadRevision = useRef(0);
 	const [filters, setFilters] = useState<ExplorerFilters>(initialFilters);
 	const [page, setPage] = useState<AnalyticsEntityPage | null>(null);
 	const [submitted, setSubmitted] = useState<ExplorerFilters>(initialFilters);
@@ -52,12 +71,16 @@ export function ExplorerEntityBrowser({
 		() => new ExplorerEntityRequest(collection, identifier),
 		[collection, identifier]
 	);
+	useEffect(() => () => requests.cancel(), [requests]);
 	const load = useCallback(
 		async (
 			nextFilters: ExplorerFilters,
 			offset = 0,
-			direction: 'reset' | 'next' | 'previous' = 'reset'
+			direction: 'reset' | 'next' | 'previous' = 'reset',
+			historyMode: 'push' | 'replace' = 'push'
 		) => {
+			const revision = ++loadRevision.current;
+			const navigationOrigin = window.location.pathname + window.location.search;
 			const started = performance.now();
 			setBusy(true);
 			setError(null);
@@ -67,7 +90,9 @@ export function ExplorerEntityBrowser({
 				offset,
 				direction
 			});
-			if (!outcome) return;
+			// Back can change the URL before React invalidates this request. Apply
+			// also launches from the current URL, not its eventual target URL.
+			if (!outcome || revision !== loadRevision.current || navigationOrigin !== window.location.pathname + window.location.search) return;
 			setBusy(false);
 			if (outcome.ok) {
 				const data = outcome.page;
@@ -79,33 +104,45 @@ export function ExplorerEntityBrowser({
 					max_ledger: String(data.window.maxLedger)
 				};
 				setSubmitted(pinnedFilters);
+				acceptedSelection.current = explorerSelectionKey(pinnedFilters, data.offset);
 				setElapsed(Math.round(performance.now() - started));
 				setHistory((old) =>
 					direction === 'reset'
 						? []
 						: direction === 'previous'
 							? old.slice(0, -1)
-							: [...old, previousOffset]
+								: [...old, previousOffset].slice(-50)
 				);
 				const url = explorerPageHref(
 					collection,
 					identifier,
 					pinnedFilters,
-					data.offset
+					data.offset,
+					returnTo
 				);
-				window.history.replaceState(
-					null,
-					'',
-					withExplorerReturnTo(url, returnTo)
-				);
+				const href = withExplorerReturnTo(url, returnTo) + window.location.hash;
+				if (href !== window.location.pathname + window.location.search + window.location.hash) {
+					if (historyMode === 'push') window.history.pushState(null, '', href);
+					else window.history.replaceState(null, '', href);
+				}
 			} else setError(outcome.message);
 		},
 		[collection, identifier, requests, returnTo]
 	);
 	useEffect(() => {
-		void load(initialFilters, initialOffset);
-		return () => requests.cancel();
-	}, [load, initialFilters, initialOffset, requests]);
+		if (acceptedSelection.current === selectionKey) {
+			// Back A may still be pending when Forward returns to accepted B.
+			// Restoring B must invalidate A even though no new fetch is needed.
+			loadRevision.current++;
+			requests.cancel();
+			setBusy(false);
+			setError(null);
+			setFilters(selection.filters);
+			return;
+		}
+		setFilters(selection.filters);
+		void load(selection.filters, selection.offset, 'reset', 'replace');
+	}, [load, requests, selectionKey, selection.filters, selection.offset]);
 	const chosenWindow: ExplorerFilters = page
 		? {
 				min_ledger: String(page.window.minLedger),
@@ -164,7 +201,7 @@ export function ExplorerEntityBrowser({
 					</div>
 				)}
 				{page && (
-					<>
+					<ExplorerInvestigationScope origin={returnTo ?? explorerPageHref(collection, identifier, submitted, page.offset)}>
 						{error && (
 							<p role="status">
 								Showing the last successful result; the requested update failed.
@@ -236,7 +273,7 @@ export function ExplorerEntityBrowser({
 									returned
 								</span>
 								<button
-									disabled={busy || page.offset === 0}
+									disabled={busy || !!error || page.offset === 0}
 									onClick={() =>
 										void load(
 											submitted,
@@ -248,7 +285,7 @@ export function ExplorerEntityBrowser({
 									Previous
 								</button>
 								<button
-									disabled={busy || page.nextOffset === null}
+									disabled={busy || !!error || page.nextOffset === null}
 									onClick={() =>
 										void load(submitted, page.nextOffset ?? 0, 'next')
 									}
@@ -270,7 +307,7 @@ export function ExplorerEntityBrowser({
 								filters={chosenWindow}
 							/>
 						)}
-					</>
+					</ExplorerInvestigationScope>
 				)}
 			</section>
 			{identifier && collection === 'assets' && (

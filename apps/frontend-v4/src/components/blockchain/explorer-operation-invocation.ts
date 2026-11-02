@@ -1,3 +1,5 @@
+import { recordFieldInput } from './record-field-tree';
+
 export type OperationInvocation = {
 	contractId: string;
 	functionName: string;
@@ -39,7 +41,7 @@ export function operationInvocation(
 ): OperationInvocation | null {
 	if (row.type !== 'invoke_host_function') return null;
 
-	const details = row.details;
+	const details = recordFieldInput(row.details);
 	if (!isRecord(details) || details.type !== 'invoke_contract') return null;
 
 	const decoded = details.parameters_json_decoded;

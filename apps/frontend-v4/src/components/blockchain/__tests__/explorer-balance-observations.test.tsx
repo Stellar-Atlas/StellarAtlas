@@ -65,9 +65,11 @@ describe('explorer balance observation presentation', () => {
 		expect(html).toContain('9223372036854775807');
 		expect(html).toContain('/explorer/assets/native');
 		expect(html).toContain('/explorer/ledgers/63490364');
-		expect(html).toContain('30000000 completed ledgers');
-		expect(html).toContain('1 gaps');
+		expect(html.replaceAll('<!-- -->', '')).toContain('30,000,000 completed ledgers');
+		expect(html.replaceAll('<!-- -->', '')).toContain('1 gap');
 		expect(html).toContain('not a frozen snapshot');
+		expect(html).toContain('Coverage &amp; precision');
+		expect(html).not.toContain('<details open');
 	});
 	it('links holders to their accounts and keeps empty observations distinct from absence', () => {
 		const html = renderToStaticMarkup(

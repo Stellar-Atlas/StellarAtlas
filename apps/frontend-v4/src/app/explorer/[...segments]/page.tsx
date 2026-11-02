@@ -67,7 +67,6 @@ async function EntityRoute({
 		return (
 			<ExplorerTransactionDetail
 				hash={identifier}
-				ledgerSequence={filters.ledger_sequence}
 			/>
 		);
 	notFound();

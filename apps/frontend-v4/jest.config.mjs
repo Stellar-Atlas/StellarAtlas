@@ -7,6 +7,7 @@ export default {
 		'<rootDir>/src/**/__tests__/**/*.test.tsx'
 	],
 	moduleNameMapper: {
+		'\\.module\\.css$': '<rootDir>/test/style-mock.cjs',
 		'^@(api|app|components|domain|format)/(.*)$': '<rootDir>/src/$1/$2'
 	},
 	transform: {
