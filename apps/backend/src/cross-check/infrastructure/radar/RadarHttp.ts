@@ -41,7 +41,9 @@ export async function readBoundedRadarText(
 	let byteCount = 0;
 	let text = '';
 	let cancellation: Promise<void> | undefined;
-	const onAbort = (): void => { cancellation = reader.cancel(signal?.reason).catch(() => undefined); };
+	const onAbort = (): void => {
+		cancellation = reader.cancel(signal?.reason).catch(() => undefined);
+	};
 	signal?.addEventListener('abort', onAbort, { once: true });
 
 	try {

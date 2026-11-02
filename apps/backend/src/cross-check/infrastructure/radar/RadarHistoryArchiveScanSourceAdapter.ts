@@ -47,8 +47,13 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 		const maxBytes =
 			options.maxBytes ?? RadarHistoryArchiveScanSourceAdapter.defaultMaxBytes;
 		const deadline = new AbortController();
-		const timer = setTimeout(() => deadline.abort(new DOMException('Radar deadline', 'TimeoutError')), timeoutMs);
-		const signal = options.signal ? AbortSignal.any([deadline.signal, options.signal]) : deadline.signal;
+		const timer = setTimeout(
+			() => deadline.abort(new DOMException('Radar deadline', 'TimeoutError')),
+			timeoutMs
+		);
+		const signal = options.signal
+			? AbortSignal.any([deadline.signal, options.signal])
+			: deadline.signal;
 
 		try {
 			signal.throwIfAborted();
@@ -57,8 +62,14 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 				signal,
 				redirect: 'manual'
 			});
-			if (signal.aborted) { await response.body?.cancel().catch(() => undefined); signal.throwIfAborted(); }
-			if (response.status === 404 && !response.redirected) { await response.body?.cancel(); return ok(null); }
+			if (signal.aborted) {
+				await response.body?.cancel().catch(() => undefined);
+				signal.throwIfAborted();
+			}
+			if (response.status === 404 && !response.redirected) {
+				await response.body?.cancel();
+				return ok(null);
+			}
 			if (!response.ok || response.redirected) {
 				await response.body?.cancel();
 				return err(
@@ -93,12 +104,17 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 				requestedArchiveUrl: decodeURIComponent(encodedUrlOrError.value)
 			});
 		} catch (error) {
-			if (options.signal?.aborted) return err(radarHistoryArchiveScanFailure('cancelled', 'RADAR request cancelled'));
+			if (options.signal?.aborted)
+				return err(
+					radarHistoryArchiveScanFailure('cancelled', 'RADAR request cancelled')
+				);
 			const mappedError = mapRadarFetchError(error);
 			return err(
 				radarHistoryArchiveScanFailure(mappedError.kind, mappedError.message)
 			);
-		} finally { clearTimeout(timer); }
+		} finally {
+			clearTimeout(timer);
+		}
 	}
 }
 

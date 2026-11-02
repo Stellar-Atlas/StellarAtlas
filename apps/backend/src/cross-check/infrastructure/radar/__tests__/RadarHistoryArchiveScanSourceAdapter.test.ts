@@ -8,12 +8,25 @@ describe('RadarHistoryArchiveScanSourceAdapter', () => {
 		for (const caller of [false, true]) {
 			let cancelled = 0;
 			const controller = new AbortController();
-			const adapter = new RadarHistoryArchiveScanSourceAdapter(async () => new Response(new ReadableStream({ cancel() { cancelled++; } })));
-			const pending = adapter.fetchHistoryArchiveScan('https://history.example.com', { timeoutMs: caller ? 1000 : 10, signal: controller.signal });
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(
+				async () =>
+					new Response(
+						new ReadableStream({
+							cancel() {
+								cancelled++;
+							}
+						})
+					)
+			);
+			const pending = adapter.fetchHistoryArchiveScan(
+				'https://history.example.com',
+				{ timeoutMs: caller ? 1000 : 10, signal: controller.signal }
+			);
 			if (caller) controller.abort();
 			const result = await pending;
 			expect(result.isErr()).toBe(true);
-			if (result.isErr()) expect(result.error.kind).toBe(caller ? 'cancelled' : 'timeout');
+			if (result.isErr())
+				expect(result.error.kind).toBe(caller ? 'cancelled' : 'timeout');
 			expect(cancelled).toBe(1);
 		}
 	});
