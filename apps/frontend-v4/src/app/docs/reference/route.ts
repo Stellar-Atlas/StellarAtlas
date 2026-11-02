@@ -1,3 +1,3 @@
-export function GET(request: Request): Response {
-	return Response.redirect(new URL('/docs', request.url), 307);
+export function GET(_request: Request): Response {
+	return new Response(null, { status: 307, headers: { Location: '/docs' } });
 }
