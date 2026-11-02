@@ -9,8 +9,8 @@ export function ExplorerAccountRelations({ account }: { readonly account: string
 	return <section aria-label="Account relationships" className={styles.provenance}>
 		<div className={styles.actions}>
 			<Link href={buildEntityHref('issuers', account)}>Issuer details</Link>
-			<Link href={buildEntityHref('assets', undefined, { issuer: account })}>Observed issued assets</Link>
-			<Link href={buildEntityHref('operations', undefined, { source_account: account, type: 'create_account' })}>Funded account creations</Link>
+			<Link collectionContext href={buildEntityHref('assets', undefined, { issuer: account })}>Observed issued assets</Link>
+			<Link collectionContext href={buildEntityHref('operations', undefined, { source_account: account, type: 'create_account' })}>Funded account creations</Link>
 		</div>
 		<p className={styles.muted}>Creation operations use the selected history window.</p>
 	</section>;

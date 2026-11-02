@@ -43,18 +43,19 @@ export function sanitizeExplorerReturnTo(
 
 export function withExplorerReturnTo(
 	destination: string,
-	origin: string | null | undefined
+	origin: string | null | undefined,
+	includeCollection = false
 ): string {
 	const destinationUrl = explorerUrl(destination);
 	if (destinationUrl === null) return destination;
 
 	const pathSegments = destinationUrl.pathname.split('/');
 	if (
-		pathSegments.length !== 4 ||
+		(pathSegments.length !== 4 && !(includeCollection && pathSegments.length === 3)) ||
 		pathSegments[0] !== '' ||
 		pathSegments[1] !== 'explorer' ||
 		!pathSegments[2] ||
-		!pathSegments[3]
+		(pathSegments.length === 4 && !pathSegments[3])
 	) {
 		return destination;
 	}
