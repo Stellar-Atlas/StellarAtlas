@@ -1,4 +1,5 @@
 import { historyArchiveListingGapAnchorSql } from './HistoryArchiveListingGapSql.js';
+import { canonicalFallbackPredecessorSql } from './HistoryArchiveCanonicalFallbackAnchorSql.js';
 import {
 	ledgerFactsJsonSql,
 	resultsFactsJsonSql,
@@ -285,6 +286,17 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 						on predecessor."remoteId" = source_proof."ledgerObjectRemoteId"
 						and predecessor."objectType" = 'ledger' and predecessor.status = 'verified'
 					order by predecessor."remoteId" limit 1
+				)
+				union all
+				(
+					select predecessor.*, 3 as source_priority
+					from lateral (
+						${canonicalFallbackPredecessorSql('range."archiveUrlIdentity"', 'range."checkpointLedger"')}
+					) source_proof
+					join history_archive_object_queue predecessor
+						on predecessor."remoteId" = source_proof."ledgerObjectRemoteId"
+						and predecessor."objectType" = 'ledger' and predecessor.status = 'verified'
+					limit 1
 				)
 			) candidate
 			order by candidate.source_priority, candidate."remoteId"
