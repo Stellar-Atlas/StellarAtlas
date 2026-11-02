@@ -1,96 +1,48 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { recordValue, requestExplorerJson } from '../../api/explorer-analytics';
+import { ExplorerLink as Link } from './explorer-investigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { LocalDateTime } from '../local-date-time';
+import { readIssuerSelection, issuerDirectoryHref, issuerSelectionKey, issuerRecoveryQuery, type IssuerSelection } from './issuer-directory-page';
+import { useIssuerDirectoryPage } from './use-issuer-directory-page';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 
-type Issuer = { id: string; homeDomain: string | null; assetCount: number };
-type Page = {
-	rows: readonly Issuer[];
-	next: string | null;
-	domainsReady: boolean;
-};
-function parse(value: unknown): Page {
-	const data = recordValue(value);
-	if (!Array.isArray(data.data) || data.data.length > 100)
-		throw new Error('Invalid issuer response.');
-	return {
-		rows: data.data.map((value) => {
-			const row = recordValue(value);
-			if (
-				typeof row.id !== 'string' ||
-				!/^G[A-Z2-7]{55}$/.test(row.id) ||
-				typeof row.assetCount !== 'number' ||
-				!Number.isSafeInteger(row.assetCount)
-			)
-				throw new Error('Invalid issuer row.');
-			return {
-				id: row.id,
-				homeDomain: typeof row.homeDomain === 'string' ? row.homeDomain : null,
-				assetCount: row.assetCount
-			};
-		}),
-		next: typeof data.nextCursor === 'string' ? data.nextCursor : null,
-		domainsReady: data.domainsReady === true
-	};
-}
 export function ExplorerIssuerDirectory(): React.JSX.Element {
-	const [query, setQuery] = useState('');
-	const [selection, setSelection] = useState({
-		q: '',
-		cursor: null as string | null,
-		revision: 0
-	});
-	const [page, setPage] = useState<Page | null>(null);
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	useEffect(() => {
-		const abort = new AbortController();
-		const params = new URLSearchParams({ q: selection.q, limit: '25' });
-		if (selection.cursor) params.set('cursor', selection.cursor);
-		setBusy(true);
-		setError(null);
-		void requestExplorerJson('/v1/issuers?' + params, abort.signal)
-			.then((value) => {
-				if (abort.signal.aborted) return;
-				const next = parse(value);
-				setPage((current) =>
-					selection.cursor && current
-						? { ...next, rows: [...current.rows, ...next.rows] }
-						: next
-				);
-			})
-			.catch((cause) => {
-				if (!abort.signal.aborted)
-					setError(
-						cause instanceof Error ? cause.message : 'Issuer search failed.'
-					);
-			})
-			.finally(() => {
-				if (!abort.signal.aborted) setBusy(false);
-			});
-		return () => abort.abort();
-	}, [selection]);
+	const pathname=usePathname(),params=useSearchParams(),search=params.toString();
+	const route=useMemo(()=>{try{return {selection:readIssuerSelection(new URLSearchParams(search)),error:null};}catch(failure){return {selection:null,error:failure instanceof Error?failure.message:'Invalid issuer search.'};}},[search]);
+	const selection=route.selection, state=useIssuerDirectoryPage(selection), {page,busy}=state;
+	const [inputError,setInputError]=useState<string|null>(null);
+	const error=route.error||state.error||inputError;
+	const restoredQuery=selection?.q??issuerRecoveryQuery(search);
+	const [query,setQuery]=useState(restoredQuery);
+	useEffect(()=>setQuery(restoredQuery),[restoredQuery]);
+	const previousPages=useRef(new Map<string,IssuerSelection>());
+	const previous=selection?previousPages.current.get(issuerSelectionKey(selection)):undefined;
+	const navigate=(next:IssuerSelection):void=>{
+		try {
+			const href=issuerDirectoryHref(pathname,window.location.search,next,window.location.hash);
+			setInputError(null);
+			if(href===window.location.pathname+window.location.search+window.location.hash) state.retry();
+			else { state.cancel();window.history.pushState(null,'',href); }
+		} catch(failure) {setInputError(failure instanceof Error?failure.message:'Invalid issuer search.');}
+	};
 	return (
 		<div className={styles.workspace}>
 			<ExplorerEntityNavigation active="issuers" />
-			<section className={styles.panel}>
+			<section className={styles.panel} aria-label="Issuer directory" aria-busy={busy}>
 				<form
 					className={ui.search}
 					onSubmit={(event) => {
 						event.preventDefault();
-						setSelection((current) => ({
-							q: query.trim(),
-							cursor: null,
-							revision: current.revision + 1
-						}));
+						navigate({q:query.trim(),cursor:null});
 					}}
 				>
 					<input
 						aria-label="Search issuers"
+						maxLength={2048}
 						placeholder="Issuer G-address or home domain"
 						value={query}
 						onChange={(event) => setQuery(event.currentTarget.value)}
@@ -98,69 +50,75 @@ export function ExplorerIssuerDirectory(): React.JSX.Element {
 					<button type="submit" disabled={busy}>
 						{busy ? 'Searching…' : 'Search issuers'}
 					</button>
+					{busy && <button type="button" onClick={state.cancel}>Cancel issuer search</button>}
 				</form>
+				{busy && <p role="status">Loading issuers…</p>}
 				{error && (
 					<p className={styles.error} role="alert">
 						{error}
+						{selection && <button type="button" disabled={busy} onClick={state.retry}>Retry issuers</button>}
 					</p>
 				)}
 				{page && (
 					<>
+						<p className={styles.muted}>{page.rows.length} issuers on this page{page.generatedAt && <> · catalog <LocalDateTime dateTime={page.generatedAt} /></>}</p>
 						<div className={styles.tableWrap}>
 							<table className={styles.table}>
 								<thead>
 									<tr>
-										<th>Home domain</th>
-										<th>Issuer</th>
-										<th className={ui.numeric}>Indexed assets</th>
+										<th scope="col">Home domain</th>
+										<th scope="col">Issuer</th>
+										<th scope="col" className={ui.numeric}>Indexed assets</th>
 									</tr>
 								</thead>
 								<tbody>
 									{page.rows.map((row) => (
 										<tr key={row.id}>
-											<td>
+											<td data-label="Home domain"><div>
 												<Link href={'/explorer/issuers/' + row.id}>
 													{row.homeDomain || 'Not published / not indexed'}
 												</Link>
-											</td>
-											<td>
+											</div></td>
+											<td data-label="Issuer"><div>
 												<Link
 													className={ui.plainHash}
 													href={'/explorer/issuers/' + row.id}
 												>
 													{row.id}
 												</Link>
-											</td>
-											<td className={ui.numeric}>
+											</div></td>
+											<td data-label="Indexed assets" className={ui.numeric}><div>
 												<Link href={'/explorer/issuers/' + row.id}>
 													{row.assetCount.toLocaleString()}
 												</Link>
-											</td>
+											</div></td>
 										</tr>
 									))}
 								</tbody>
 							</table>
 						</div>
 						{!page.rows.length && (
-							<p className={styles.muted}>No matching indexed issuers.</p>
+							<p className={styles.muted}>{page.generatedAt === null ? 'Issuer catalog is not available yet.' : 'No matching indexed issuers.'}</p>
 						)}
-						<div className={styles.actions}>
-							<button
-								disabled={busy || !page.next}
-								onClick={() =>
-									setSelection((current) => ({ ...current, cursor: page.next }))
-								}
-							>
-								Load more
-							</button>
 							{!page.domainsReady && (
 								<span className={ui.observationLabel}>
-									Cached home domains are loading.
+									Home domain coverage is incomplete.
 								</span>
 							)}
-						</div>
 					</>
 				)}
+				<div className={styles.actions}>
+					<button type="button" disabled={busy||!previous} onClick={()=>previous&&navigate(previous)}>Previous page</button>
+					<button type="button" disabled={busy||!page?.next||!selection} onClick={()=>{
+						if(!selection||!page?.next)return;
+						const next={...selection,cursor:page.next};
+						previousPages.current.set(issuerSelectionKey(next),selection);
+						const oldest=previousPages.current.keys().next().value;
+						if(previousPages.current.size>50&&oldest)previousPages.current.delete(oldest);
+						navigate(next);
+					}}>Next page</button>
+					<button type="button" disabled={busy||(!selection?.cursor&&!route.error)} onClick={()=>navigate({q:selection?.q??query.trim(),cursor:null})}>First page</button>
+				</div>
 			</section>
 		</div>
 	);
