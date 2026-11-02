@@ -1,7 +1,7 @@
 {
   "status": "synthetic design fixtures; no SDK release",
-  "sourceRevision": "2a59b5d292a7aad6466a2cae24006d8382567079",
-  "sourceUrl": "https://github.com/Stellar-Atlas/StellarAtlas/tree/2a59b5d292a7aad6466a2cae24006d8382567079",
+  "sourceRevision": "a3f537b03945bacf8a573c21131a2ac64c9d7e34",
+  "sourceUrl": "https://github.com/Stellar-Atlas/StellarAtlas/tree/a3f537b03945bacf8a573c21131a2ac64c9d7e34",
   "schemaProjection": "Selected OpenAPI operations and three reachable GraphQL workflow fields; full GraphQL digest retained.",
   "sourceFiles": [
     {
@@ -174,11 +174,11 @@
     },
     {
       "path": "apps/backend/package.json",
-      "sha256": "090ac0d3d26a059d63bce37e5d9f6f2c53fc01d3d28a347dd0e29297d7ef3aa9"
+      "sha256": "cab37e90c90368116cc5e1f3e99949bc2b65fecedf9cbe53508c34ae4713e447"
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "ce2c86e590b24fc8053176fb9d3a5655e2ca8e5bfb4d637267be5ffa27ad9876"
+      "sha256": "2bab261da129c7ec3ed0db5a8ea90c497adc06072089d2766f545660c439822b"
     }
   ],
   "fixtures": [

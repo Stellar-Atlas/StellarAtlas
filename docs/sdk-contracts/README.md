@@ -1,7 +1,7 @@
 # SDK workflow contract fixtures
 
 Status: **design fixtures for review**, pinned to
-[source 2a59b5d2](https://github.com/Stellar-Atlas/StellarAtlas/tree/2a59b5d292a7aad6466a2cae24006d8382567079).
+[source a3f537b0](https://github.com/Stellar-Atlas/StellarAtlas/tree/a3f537b03945bacf8a573c21131a2ac64c9d7e34).
 This packet supports the first gate in the [builders SDK plan](../builders-sdk-plan.md).
 It supplies synthetic request/response examples and language design constraints.
 There is no generated client, installable SDK or package release.
