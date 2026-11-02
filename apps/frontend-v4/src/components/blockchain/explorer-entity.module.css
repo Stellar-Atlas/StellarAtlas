@@ -82,7 +82,7 @@
 }
 .provenance { display: grid; gap: .4rem; min-width: 0; }
 .provenance p { margin: 0; }
-.flagEvidence { margin-top: .4rem; color: var(--muted); font-size: .78rem; }
+.flagEvidence { grid-column: 2; min-width: 0; margin-top: .4rem; color: var(--muted); font-size: .78rem; }
 .flagEvidence summary { cursor: pointer; width: fit-content; max-width: 100%; }
 .flagEvidence summary span { display: block; padding-left: .9rem; }
 .flagEvidence summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
