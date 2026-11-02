@@ -111,7 +111,9 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 				return err(
 					radarHistoryArchiveScanFailure('cancelled', 'RADAR request cancelled')
 				);
-			const mappedError = mapRadarFetchError(error);
+			const mappedError = mapRadarFetchError(
+				deadline.signal.aborted ? deadline.signal.reason : error
+			);
 			return err(
 				radarHistoryArchiveScanFailure(mappedError.kind, mappedError.message)
 			);

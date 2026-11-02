@@ -4,6 +4,18 @@ import {
 } from '../RadarHistoryArchiveScanSourceAdapter.js';
 
 describe('RadarHistoryArchiveScanSourceAdapter', () => {
+	it('retains deadline classification when expired cleanup rejects', async () => {
+		let signal: AbortSignal | undefined;
+		const response = new Response(new ReadableStream({ cancel() {
+			return new Promise<void>((_resolve, reject) => {
+				signal?.addEventListener('abort', () => reject(new Error('Synthetic cleanup failure')), { once: true });
+			});
+		} }), { status: 404 });
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(async (_url, init) => { signal = init?.signal ?? undefined; return response; });
+		const result = await adapter.fetchHistoryArchiveScan('https://history.example.com', { timeoutMs: 10 });
+		expect(result.isErr()).toBe(true);
+		if (result.isErr()) expect(result.error.kind).toBe('timeout');
+	});
 	it.each([404, 500, 200])(
 		'rechecks the deadline after %s body cleanup settles',
 		async (status) => {
