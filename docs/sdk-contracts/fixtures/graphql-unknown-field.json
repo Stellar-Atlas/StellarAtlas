@@ -1,0 +1,24 @@
+{
+  "kind": "synthetic-design-fixture",
+  "request": {
+    "query": "query($account:String!){hubbleAccountBalances(account:$account){currentBalance}}",
+    "variables": {
+      "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+    }
+  },
+  "responseBody": {
+    "errors": [
+      {
+        "message": "Cannot query field \"currentBalance\" on type \"HubbleAccountBalancePage\".",
+        "locations": [
+          {
+            "line": 1,
+            "column": 65
+          }
+        ]
+      }
+    ]
+  },
+  "expectedHttpStatus": null,
+  "statusNote": "Registered schema validation checked; HTTP adapter excluded."
+}

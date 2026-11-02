@@ -179,6 +179,10 @@
       "sha256": "6097bff9bcce6cdda3e0efe5d649c66894695a1d789e57c19cde7098dd04db1d"
     },
     {
+      "path": "fixtures/account-request-rejections.json",
+      "sha256": "9e5b807a10a3b47e0b611b2003ef65bfe6ebf825e30584a26f00312add091d1b"
+    },
+    {
       "path": "fixtures/account-terminal.json",
       "sha256": "68e5d839c06641cf973b7704ece2f7aab42097e310ae0acc8f45372c418dc16d"
     },
@@ -189,6 +193,14 @@
     {
       "path": "fixtures/account-unavailable.json",
       "sha256": "138f4df321b6e9b0444529265b3b4b91546067c332d5853b191d0c88e6837aa6"
+    },
+    {
+      "path": "fixtures/graphql-request-budget.json",
+      "sha256": "721025b2b1be795a3da3a58b1dffb87b59d8bbd3a25c9add457826bc21272a1a"
+    },
+    {
+      "path": "fixtures/graphql-unknown-field.json",
+      "sha256": "85a18c981762157393bba6f1ba68bc8f6a23e1b82737fcc03eabffa3393090a7"
     },
     {
       "path": "fixtures/holder-cursor-changed-sort.json",

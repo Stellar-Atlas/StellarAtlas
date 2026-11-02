@@ -2,7 +2,7 @@ import { jest, test, expect } from '@jest/globals';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { graphql, printSchema, GraphQLSchema, GraphQLObjectType } from 'graphql';
+import { parse, validate, execute, specifiedRules, printSchema, GraphQLSchema, GraphQLObjectType } from 'graphql';
 import { account, issuer, asset, accountQuery, holderQuery, transactionHash, transactionQuery, designWarehouse } from './design-data.mjs';
 import { rest } from './in-memory-rest.mjs';
 import { normalizeTransactionInput } from '../../apps/backend/src/status/infrastructure/http/HubbleTransactionCursor.js';
@@ -32,8 +32,14 @@ function pinned(name, value) {
 }
 async function graph(warehouse, query, variables) {
   hubbleWarehouseGraphqlHandler(warehouse);
-  return JSON.parse(JSON.stringify(await graphql({ schema: registration.schema, rootValue: registration.rootValue,
-    source: query, variableValues: variables })));
+  let document;
+  try { document = parse(query); }
+  catch (error) { return JSON.parse(JSON.stringify({ errors: [error] })); }
+  const args = { schema: registration.schema, rootValue: registration.rootValue, document, variableValues: variables };
+  const rules = registration.validationRules({}, args, specifiedRules);
+  const errors = validate(registration.schema, document, rules);
+  if (errors.length) return JSON.parse(JSON.stringify({ errors }));
+  return JSON.parse(JSON.stringify(await execute(args)));
 }
 async function pair(name, path, query, variables, warehouse = designWarehouse(), expectedStatus = 200) {
   const response = await rest(warehouse, path);
@@ -223,4 +229,51 @@ test('unavailable warehouse is a failure rather than an empty successful page', 
     expect(result.graphql.errors[0].extensions.code).toBe('SERVICE_UNAVAILABLE');
     expect(result.graphql.data).toBeNull();
   } finally { errors.mockRestore(); }
+});
+
+test('unsupported account state selection and duplicate REST keys fail without warehouse work', async () => {
+  const warehouse = designWarehouse();
+  const path = `/v1/analytics/accounts/${account}/balances?as_of_ledger=65&limit=1`;
+  const response = await rest(warehouse, path);
+  expect(response.status).toBe(400);
+  expect(response.body.error).toContain('Unsupported balance parameter: as_of_ledger');
+  const variables = { account, input: { limit: 1, asOfLedger: 65 } };
+  const result = await graph(warehouse, accountQuery, variables);
+  expect(result.errors[0].message).toContain('Field "asOfLedger" is not defined by type "HubbleAccountBalanceInput"');
+  const duplicatePath = `/v1/analytics/accounts/${account}/balances?limit=1&limit=2`;
+  const duplicate = await rest(warehouse, duplicatePath);
+  expect(duplicate.status).toBe(400);
+  expect(duplicate.body.error).toBe('limit must be one non-empty value');
+  expect(warehouse.calls).toHaveLength(0);
+  pinned('account-request-rejections.json', { kind: 'synthetic-design-fixture', rest: [
+    { request: { method: 'GET', path }, response }, { request: { method: 'GET', path: duplicatePath }, response: duplicate }
+  ], graphql: { request: { query: accountQuery, variables }, responseBody: result, expectedHttpStatus: null,
+    statusNote: 'Variable coercion checked; adapter HTTP status is not asserted by this socket-free test.' } });
+});
+
+test('unknown GraphQL response fields fail schema validation before warehouse work', async () => {
+  const warehouse = designWarehouse();
+  const query = 'query($account:String!){hubbleAccountBalances(account:$account){currentBalance}}';
+  const variables = { account };
+  const result = await graph(warehouse, query, variables);
+  expect(result.errors[0].message).toContain('Cannot query field "currentBalance"');
+  expect(warehouse.calls).toHaveLength(0);
+  pinned('graphql-unknown-field.json', { kind: 'synthetic-design-fixture', request: { query, variables },
+    responseBody: result, expectedHttpStatus: null, statusNote: 'Registered schema validation checked; HTTP adapter excluded.' });
+});
+
+test('registered GraphQL work budget accepts cost32 and rejects cost40 before warehouse work', async () => {
+  const query = count => 'query($account:String!){' + Array.from({ length: count }, (_, i) =>
+    `page${i}:hubbleAccountBalances(account:$account,input:{limit:1}){account}`).join(' ') + '}';
+  const boundaryWarehouse = designWarehouse();
+  const accepted = await graph(boundaryWarehouse, query(4), { account });
+  expect(accepted.errors).toBeUndefined();
+  expect(boundaryWarehouse.calls).toHaveLength(4);
+  const warehouse = designWarehouse();
+  const rejected = await graph(warehouse, query(5), { account });
+  expect(rejected.errors[0].extensions).toMatchObject({ code: 'QUERY_TOO_COMPLEX', limits: { maximumQueryCost: 32 } });
+  expect(warehouse.calls).toHaveLength(0);
+  pinned('graphql-request-budget.json', { kind: 'synthetic-design-fixture', accepted: { request: { query: query(4), variables: { account } }, responseBody: accepted },
+    rejected: { request: { query: query(5), variables: { account } }, responseBody: rejected }, expectedHttpStatus: null,
+    statusNote: 'Actual registered validation rule checked; HTTP adapter excluded. Split the query rather than retrying unchanged.' });
 });

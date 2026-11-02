@@ -26,7 +26,7 @@ the manifest with `node docs/sdk-contracts/refresh-manifest.mjs <reviewed-source
 Never regenerate solely to silence a failing comparison.
 
 The tests invoke actual registered REST handlers directly and execute the actual
-registered GraphQL schema and root resolvers. An in-memory warehouse adapter
+registered GraphQL schema, validation rules and root resolvers. An in-memory warehouse adapter
 feeds synthetic rows through the existing balance, holder and transaction query
 parsers and cursor validation. No listener, socket, warehouse or RPC is used.
 Elapsed time is normalized to zero and the observation clock is fixed for stable
@@ -90,6 +90,9 @@ amounts. Event `topicsJson`/`dataJson` remain strings for a future lossless deco
 | Empty account observations | REST200 and GraphQL empty balances with terminal cursor | Preserve valid emptiness and coverage; do not manufacture an account404 |
 | Typed transaction absent from ingested data | REST404 `hubble_not_found`; nullable GraphQL result without errors | Preserve absence within ingested coverage, not proof of never existing on chain |
 | Warehouse unavailable | REST503 and GraphQL `SERVICE_UNAVAILABLE` in the HTTP200 contract | Return an error; preserve a previous successful page separately |
+| Unsupported account as-of selection or duplicate REST query keys | REST400; unknown GraphQL input fields fail variable coercion | Only expose fields supported by the chosen workflow; do not silently discard unsupported selections |
+| Unknown GraphQL response field | Registered schema validation rejects the selection before warehouse work | Check schema compatibility before sending a query |
+| GraphQL request work budget | Four balance roots cost32 and execute; five cost40 and produce `QUERY_TOO_COMPLEX` before warehouse work | Split the query; do not retry it unchanged. HTTP adapter status remains outside this suite |
 
 Native and issued balances are latest-ingested observations. Holder selection at
 a ledger is an upper bound over available observations, not a frozen snapshot.
