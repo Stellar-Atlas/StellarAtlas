@@ -34,7 +34,7 @@ it('carries flattened ScVal type into actual operation arguments without changin
 });
 
 it('retains explicit field-date interpretation, full references and escaped text', () => {
-	expect(render('"1767225600000"', 'package_timestamp')).toContain('datetime="2026-01-01T00:00:00.000Z"');
+	expect(render('"1767225600000"', 'package_timestamp')).toContain('dateTime="2026-01-01T00:00:00.000Z"');
 	expect(render(JSON.stringify({ address: ga }))).toContain('href="/explorer/accounts/' + ga + '"');
 	expect(render('{"string":"<script>0001</script>"}')).toContain('&lt;script&gt;0001&lt;/script&gt;');
 });
