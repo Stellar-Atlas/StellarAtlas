@@ -105,9 +105,10 @@ it.each(['https://frontend.invalid', 'http://frontend.invalid/'])(
 
 it.each([
 	['HTTPS://HISTORY.INVALID/archive///', 'https://history.invalid/archive'],
+	['https://history.invalid/hist/雪', 'https://history.invalid/hist/%E9%9B%AA'],
 	[
-		'https://history.invalid/hist/%E2%98%83?q=one&next=two',
-		'https://history.invalid/hist/%E2%98%83?q=one&next=two'
+		'https://history.invalid/path%3Fname',
+		'https://history.invalid/path%3Fname'
 	],
 	['http://history.bd-trust.org/galou/', 'http://history.bd-trust.org/GALOU']
 ])(
@@ -137,20 +138,48 @@ it('escapes rich evidence and ignores raw diagnostics and supplied links', async
 	const { html } = await render(
 		'https://frontend.invalid',
 		integrityEvent({
-			archiveUrl: 'https://history.invalid/archive?a=1&b=2',
+			archiveUrl: 'https://history.invalid/a&b',
 			objectKey: '<img src=x onerror="alert(1)">',
 			failureCode: 'mismatch<&"\'',
 			errorMessage: 'RAW_DIAGNOSTIC_MUST_NOT_RENDER',
 			repairPlanPath: 'javascript:UNTRUSTED_LINK_MUST_NOT_RENDER'
 		})
 	);
-	expect(html).toContain('https://history.invalid/archive?a=1&amp;b=2');
+	expect(html).toContain('https://history.invalid/a&amp;b');
 	expect(html).toContain('&lt;img src=x onerror=&#34;alert(1)&#34;&gt;');
 	expect(html).toContain('mismatch&lt;&amp;&#34;&#39;');
 	expect(html).not.toContain('<img src=x');
 	expect(html).not.toContain('RAW_DIAGNOSTIC_MUST_NOT_RENDER');
 	expect(html).not.toContain('UNTRUSTED_LINK_MUST_NOT_RENDER');
 });
+
+it.each([
+	'https://history.invalid/archive?access_token=synthetic_token_marker',
+	'https://history.invalid/archive?a=1&b=2',
+	'https://history.invalid/archive?'
+])(
+	'omits query-bearing rich evidence without changing its identity: %s',
+	async (archiveUrl) => {
+		const { html, subscriber } = await render(
+			'https://frontend.invalid',
+			integrityEvent({ archiveUrl })
+		);
+		expect(html).not.toContain('Archive verification details');
+		expect(html).not.toContain('Archive:');
+		expect(html).not.toContain('synthetic_token_marker');
+		expect(html).not.toContain(
+			Buffer.from(archiveUrl, 'utf8').toString('base64url')
+		);
+		expect(html).not.toContain(getArchiveScanDetailPath(root));
+		expect(html).toContain('Error in history archive detected');
+		expect(html).toContain(
+			`href="https://frontend.invalid/nodes/${node.value}"`
+		);
+		expect(html).toContain(
+			`https://frontend.invalid/notify/${subscriber.subscriberReference.value}/unsubscribe`
+		);
+	}
+);
 
 it('preserves a trusted frontend path prefix without doubling its slash', async () => {
 	const { html } = await render(

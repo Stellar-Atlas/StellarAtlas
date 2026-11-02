@@ -35,6 +35,9 @@ export function archiveIntegrityEmailDetails(
 		!safeText(frontendBaseUrl, 2048)
 	)
 		return null;
+	// A query may contain credentials; neither display nor reversibly encode it.
+	// Do not strip it and accidentally link to a different archive identity.
+	if (archiveUrl.includes('?')) return null;
 	const archiveRoot = normalizeHistoryArchiveRootUrl(archiveUrl);
 	if (archiveRoot === null) return null;
 	const observation = new Date(evidenceObservedAt);
