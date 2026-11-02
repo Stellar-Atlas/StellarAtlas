@@ -4,12 +4,16 @@ import type { Asset } from './explorer-asset-types';
 
 export interface AssetDiscoverySelection { readonly query: ExplorerFilters; readonly cursor: string | null }
 export interface AssetDiscoveryPage { readonly data: readonly Asset[]; readonly next: string | null; readonly generatedAt: string | null; readonly catalogueReady: boolean }
-type Query = Pick<URLSearchParams, 'get' | 'getAll'>;
+type Query = Pick<URLSearchParams, 'get' | 'getAll' | 'keys'>;
 const fields = ['q', 'symbol', 'issuer', 'min_ledger', 'max_ledger', 'start_time', 'end_time'] as const;
+const serverKeys = new Set<string>(fields);
+const pageKeys = new Set(['tab', 'return_to', 'view', 'limit']);
+const pageOwned = (key: string): boolean => pageKeys.has(key) || ['holder_', 'rank_', 'history_', 'pool_', 'similar_', 'market_'].some(prefix => key.startsWith(prefix));
 const cursorValid = (value: string): boolean => /^[A-Za-z0-9_-]{1,2048}$/.test(value);
 
 /** Page-owned state never becomes an asset API filter. The API checks address checksums. */
 export function validateAssetDiscoveryQuery(input: ExplorerFilters): ExplorerFilters {
+	for (const key of Object.keys(input)) if (!serverKeys.has(key) && !pageOwned(key)) throw new Error('Unsupported asset search parameter: ' + key + '. Reapply the search.');
 	const query: Record<string, string> = {};
 	for (const key of fields) {
 		const value = input[key]?.trim();
@@ -45,14 +49,16 @@ export function assetDiscoveryDraft(params: Query, defaultQuery = ''): ExplorerF
 export const assetDiscoveryQueryKey = (query: ExplorerFilters): string => JSON.stringify(fields.map(key => query[key] ?? ''));
 export const assetDiscoveryKey = (selection: AssetDiscoverySelection): string => JSON.stringify([assetDiscoveryQueryKey(selection.query), selection.cursor]);
 export function readAssetDiscoverySelection(params: Query, defaultQuery = ''): AssetDiscoverySelection {
+	for (const key of params.keys()) if (!serverKeys.has(key) && !pageOwned(key) && key !== 'cursor' && key !== 'cursor_for') throw new Error('Unsupported asset search parameter: ' + key + '. Reapply the search.');
 	if ([...fields, 'cursor', 'cursor_for'].some(key => params.getAll(key).length > 1)) throw new Error('Asset search parameters must not repeat.');
 	const query = validateAssetDiscoveryQuery(assetDiscoveryDraft(params, defaultQuery)), cursor = params.get('cursor');
 	if (cursor !== null ? !cursorValid(cursor) || params.get('cursor_for') !== assetDiscoveryQueryKey(query) : params.get('cursor_for') !== null) throw new Error('This page does not match the asset search. Return to the first page.');
 	return { query, cursor };
 }
 export function assetDiscoveryHref(search: string, selection: AssetDiscoverySelection, hash = ''): string {
-	const params = new URLSearchParams(search), query = validateAssetDiscoveryQuery(selection.query);
-	for (const key of [...fields, 'cursor', 'cursor_for', 'limit']) params.delete(key);
+	// An explicit submission replaces old search fields, including rejected ones; it retains known page context only.
+	const params = new URLSearchParams([...new URLSearchParams(search)].filter(([key]) => pageOwned(key) && key !== 'limit'));
+	const query = validateAssetDiscoveryQuery(selection.query);
 	for (const [key, value] of Object.entries(query)) params.set(key, value);
 	if (selection.cursor !== null) {
 		if (!cursorValid(selection.cursor)) throw new Error('Invalid asset continuation.');

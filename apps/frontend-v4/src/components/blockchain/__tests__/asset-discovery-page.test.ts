@@ -21,6 +21,11 @@ it('binds opaque cursors to the complete selection, and preserves bare-symbol/na
 	expect(() => readAssetDiscoverySelection(new URLSearchParams('q=A&q=B'))).toThrow('repeat');
 	expect(() => readAssetDiscoverySelection(new URLSearchParams('cursor=bad!'))).toThrow();
 	expect(readAssetDiscoverySelection(new URLSearchParams(), 'KALE').query.q).toBe('KALE');
+	expect(() => readAssetDiscoverySelection(new URLSearchParams('q=KALE&asset_code=USD'))).toThrow('Unsupported asset search parameter');
+	expect(() => assetDiscoveryPath({ query: { q: 'KALE', typo: 'USD' }, cursor: null })).toThrow('Unsupported asset search parameter');
+	const reapplied = new URL(assetDiscoveryHref('?asset_code=USD&tab=markets&holder_sort=balance&return_to=%2Fexplorer', { query: { q: 'KALE' }, cursor: null }), 'https://explorer.invalid');
+	expect(reapplied.searchParams.has('asset_code')).toBe(false); expect(reapplied.searchParams.get('holder_sort')).toBe('balance');
+	expect(readAssetDiscoverySelection(reapplied.searchParams).query.q).toBe('KALE');
 	for (const q of ['native', contract, 'KALE:' + issuer]) expect(new URL(assetDiscoveryPath({ query: { q }, cursor: null }), 'https://explorer.invalid').searchParams.get('q')).toBe(q);
 	expect(assetDiscoveryKey({ query, cursor: null })).not.toBe(assetDiscoveryKey({ query, cursor: 'next_page' }));
 });
