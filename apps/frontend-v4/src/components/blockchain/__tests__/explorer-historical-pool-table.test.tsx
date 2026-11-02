@@ -47,5 +47,6 @@ it('keeps partial-history and pagination context in the actual historical report
 	const html = renderToStaticMarkup(createElement(PairReportSection, { lane: 'pool-a-b', selection: { assetA: a, assetB: b, minLedger: '64877680', maxLedger: '64877698', limit: '25' }, initialPage: page }));
 	expect(html).toContain('Partial history'); expect(html).toContain('More available'); expect(html).toContain('Removed');
 	expect(html).toContain('Historical native pool changes'); expect(html).toContain('JSON'); expect(html).toContain('Next');
+	expect(html.replaceAll('<!-- -->', '')).toContain('1 distinct pool on this page');
 	expect(render([])).toContain('No matching pool observations in the published range.');
 });

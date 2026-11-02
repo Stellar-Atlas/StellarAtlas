@@ -32,7 +32,7 @@ export function ExplorerHistoricalPoolTable({ rows, assetA, assetB }: {
 						<td data-label={'Reserve A (' + symbol(assetA) + ')'} className={ui.numeric}>{amount('reserveA')}</td>
 						<td data-label={'Reserve B (' + symbol(assetB) + ')'} className={ui.numeric}>{amount('reserveB')}</td>
 						<td data-label="Share trustlines" className={ui.numeric}>{amount('trustlineCount')}</td>
-						<td data-label="Ledger / time"><Link href={buildEntityHref('ledgers', ledger)}>{formatDecimal(ledger, 0)}</Link><div className={styles.muted}><LocalDateTime dateTime={entityText(row, 'closedAt')} /></div></td>
+						<td data-label="Ledger / time"><div><Link href={buildEntityHref('ledgers', ledger)}>{formatDecimal(ledger, 0)}</Link><div className={styles.muted}><LocalDateTime dateTime={entityText(row, 'closedAt')} /></div></div></td>
 					</tr>;
 				})}</tbody>
 			</table>

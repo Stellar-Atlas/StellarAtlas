@@ -34,6 +34,7 @@ export function PairReportSection({
 	const abort = useRef<AbortController | null>(null);
 	useEffect(() => () => abort.current?.abort(), []);
 	const pool = lane.startsWith('pool');
+	const distinctPools = pool ? new Set(page.rows.map((row) => entityText(row, 'id'))).size : 0;
 	const reversed = lane === 'b-to-a' || lane === 'pool-b-a';
 	const a = reversed ? selection.assetB : selection.assetA,
 		b = reversed ? selection.assetA : selection.assetB;
@@ -99,8 +100,7 @@ export function PairReportSection({
 				</span>
 				{pool && (
 					<span>
-						{new Set(page.rows.map((row) => entityText(row, 'id'))).size}{' '}
-						distinct pools on this page
+						{distinctPools} distinct {distinctPools === 1 ? 'pool' : 'pools'} on this page
 					</span>
 				)}
 				<span>
