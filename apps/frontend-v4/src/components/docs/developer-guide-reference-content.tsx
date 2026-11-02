@@ -117,7 +117,7 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 		title: 'API families',
 		group: 'Reference',
 		description:
-			'Analytics, Horizon and Stellar RPC serve different jobs and different data boundaries.',
+			'Analytics, immutable history downloads, Horizon and Stellar RPC serve different jobs and data boundaries.',
 		sections: [
 			{
 				id: 'analytics',
@@ -135,6 +135,45 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 							catalog does not promise full Hubble feature parity or complete
 							chain history. Follow the published coverage and each response’s
 							semantics.
+						</p>
+					</>
+				)
+			},
+			{
+				id: 'history-downloads',
+				title: 'Immutable history downloads',
+				content: (
+					<>
+						<p>
+							For offline analysis, start with the{' '}
+							<a href="/docs/api/getHistoryDataCatalog">history catalogue</a>{' '}
+							for published coverage, then{' '}
+							<a href="/docs/api/listHistoryDataBatches">list batches</a> for
+							one dataset. These requests read metadata without downloading
+							artifacts.
+						</p>
+						<Code>{`curl --fail-with-body --connect-timeout 5 --max-time 10 '${api}/v1/history-data/catalog'
+curl --fail-with-body --connect-timeout 5 --max-time 10 '${api}/v1/history-data/batches?dataset=ledgers&limit=1'`}</Code>
+						<p>
+							Use the returned <code>nextBeforeLedger</code> as{' '}
+							<code>beforeLedger</code> with the same dataset and limit to
+							continue; stop when it is null. Check each output’s{' '}
+							<code>byteCount</code>, <code>mediaType</code> and{' '}
+							<code>schemaVersion</code> before choosing its returned{' '}
+							<code>downloadPath</code>. The{' '}
+							<a href="/docs/api/headHistoryDataBatchArtifact">HEAD endpoint</a>{' '}
+							inspects headers without an artifact body.
+						</p>
+						<p>
+							When you{' '}
+							<a href="/docs/api/downloadHistoryDataBatchArtifact">
+								download an artifact
+							</a>
+							, compare the complete file’s SHA-256 with <code>sha256</code> or{' '}
+							<code>X-Content-SHA256</code>. A byte range cannot validate that
+							complete-file digest. Use the embedded Parquet schema with its
+							version; published batch coverage does not establish complete
+							chain history or an arbitrary-ledger state witness.
 						</p>
 					</>
 				)
