@@ -10,6 +10,7 @@ import {
 import { LocalDateTime } from '../local-date-time';
 import { StatusTags } from '../status-tags';
 import { hackathonTags } from './explorer-hackathons';
+import { scfTags } from './explorer-scf';
 import styles from './explorer-contract-provenance.module.css';
 
 const labels: Record<string, string> = {
@@ -66,7 +67,10 @@ export function ExplorerContractProvenance({
 	const workflowUrl = githubLink(source?.workflowUrl);
 	const runUrl = githubLink(source?.runUrl);
 	const repository = text(metadata?.sourceRepository);
-	const hackathons = hackathonTags(value?.hackathons);
+	const ecosystem = [
+		...hackathonTags(value?.hackathons),
+		...scfTags(value?.scfProjects)
+	];
 	return (
 		<section className={styles.panel} aria-label="Contract build provenance">
 			<div className={styles.heading}>
@@ -132,12 +136,12 @@ export function ExplorerContractProvenance({
 								</dd>
 							</>
 						)}
-						{hackathons.length > 0 && (
+						{ecosystem.length > 0 && (
 							<>
-								<dt>Hackathons</dt>
+								<dt>Ecosystem</dt>
 								<dd>
 									<div className={styles.badges}>
-										<StatusTags tags={[...hackathons]} />
+										<StatusTags tags={ecosystem} />
 									</div>
 									{status !== 'verified' && (
 										<span className={styles.muted}>
