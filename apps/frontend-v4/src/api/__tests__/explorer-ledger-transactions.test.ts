@@ -6,7 +6,7 @@ describe('ledger transaction navigation', () => {
 		const url = new URL(buildLedgerTransactionsPath('100', 25), 'http://fixture.invalid');
 		expect(url.pathname).toBe('/v1/datasets/history_transactions/records');
 		expect(url.searchParams.get('ledger_sequence')).toBe('100');
-		expect(url.searchParams.get('_ledger_sequence')).toBe('100');
+		expect(url.searchParams.has('_ledger_sequence')).toBe(false);
 		expect(url.searchParams.get('limit')).toBe('25');
 		expect(url.searchParams.get('offset')).toBe('25');
 		expect(url.searchParams.get('select')).not.toMatch(/tx_meta|tx_envelope|tx_result/);

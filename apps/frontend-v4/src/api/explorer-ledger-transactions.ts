@@ -12,7 +12,7 @@ export function validLedgerSequence(value: string): boolean {
 }
 export function buildLedgerTransactionsPath(ledger: string, offset: number): string {
 	if (!validLedgerSequence(ledger) || !Number.isSafeInteger(offset) || offset < 0 || offset > 10000) throw new Error('Invalid ledger transaction selection.');
-	const query = new URLSearchParams({ ledger_sequence: ledger, _ledger_sequence: ledger, select: 'transaction_hash,ledger_sequence,account,fee_charged,operation_count,successful,closed_at', order: 'id', limit: '25', offset: String(offset) });
+	const query = new URLSearchParams({ ledger_sequence: ledger, select: 'transaction_hash,ledger_sequence,account,fee_charged,operation_count,successful,closed_at', order: 'id', limit: '25', offset: String(offset) });
 	return '/v1/datasets/history_transactions/records?' + query;
 }
 function invalid(): never { throw new Error('The data service returned invalid ledger transaction records.'); }
