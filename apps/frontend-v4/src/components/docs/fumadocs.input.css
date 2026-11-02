@@ -127,6 +127,44 @@
 	display: inline;
 	overflow-wrap: anywhere;
 }
+.developer-docs .developer-guide-code {
+	min-width: 0;
+	margin-block: 1.25rem;
+}
+.developer-docs .developer-guide-code-tools {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	font-size: 0.8rem;
+	color: var(--color-fd-muted-foreground);
+}
+.developer-docs .developer-guide-code-tools button {
+	min-height: 44px;
+	padding: 0.4rem 0.75rem;
+	border: 1px solid var(--color-fd-border);
+	border-radius: 0.4rem;
+	background: var(--color-fd-muted);
+	color: var(--color-fd-foreground);
+	font: inherit;
+	cursor: pointer;
+}
+.developer-docs .developer-guide-code-tools button:disabled {
+	cursor: wait;
+}
+.developer-docs .developer-guide-code-tools button:focus-visible,
+.developer-docs .developer-guide-code pre:focus-visible {
+	outline: 2px solid var(--color-fd-ring);
+	outline-offset: 2px;
+}
+.developer-docs .developer-guide-code-feedback {
+	margin: 0;
+	font-size: 0.8rem;
+	overflow-wrap: anywhere;
+}
+.developer-docs .developer-guide-code pre {
+	margin-top: 0.4rem;
+}
 .developer-docs table {
 	display: block;
 	max-width: 100%;
