@@ -1,11 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { ExplorerLink as Link } from './explorer-investigation';
 import { ExplorerEntityTable } from './explorer-entity-table';
-import { LocalDateTime } from '../local-date-time';
-import { formatDecimal } from './explorer-format-values';
+import { ExplorerHistoricalPoolTable } from './explorer-historical-pool-table';
 import {
-	buildEntityHref,
 	entityText,
 	parseEntityPage,
 	requestExplorerJson,
@@ -124,85 +121,7 @@ export function PairReportSection({
 					filters={filters}
 				/>
 			) : (
-				<div className={styles.tableWrap}>
-					<table className={styles.table}>
-						<thead>
-							<tr>
-								{[
-									'Pool',
-									'Reserve ' + symbol(a),
-									'Reserve ' + symbol(b),
-									'Share trustlines',
-									'Ledger / time'
-								].map((label) => (
-									<th scope="col" key={label}>
-										{label}
-									</th>
-								))}
-							</tr>
-						</thead>
-						<tbody>
-							{page.rows.map((row, index) => (
-								<tr key={entityText(row, 'id') + ':' + index}>
-									<td data-label="Pool">
-										<Link
-											className={styles.hash}
-											href={buildEntityHref(
-												'liquidity-pools',
-												entityText(row, 'id'),
-												{
-													min_ledger: entityText(row, 'ledgerSequence'),
-													max_ledger: entityText(row, 'ledgerSequence')
-												}
-											)}
-										>
-											{entityText(row, 'id')}
-										</Link>
-									</td>
-									<td
-										data-label={'Reserve ' + symbol(a)}
-										className={ui.numeric}
-									>
-										{row.reserveA == null
-											? '—'
-											: formatDecimal(entityText(row, 'reserveA'))}
-									</td>
-									<td
-										data-label={'Reserve ' + symbol(b)}
-										className={ui.numeric}
-									>
-										{row.reserveB == null
-											? '—'
-											: formatDecimal(entityText(row, 'reserveB'))}
-									</td>
-									<td data-label="Share trustlines" className={ui.numeric}>
-										{row.trustlineCount == null
-											? '—'
-											: formatDecimal(entityText(row, 'trustlineCount'), 0)}
-									</td>
-									<td data-label="Ledger / time">
-										<Link
-											href={buildEntityHref(
-												'ledgers',
-												entityText(row, 'ledgerSequence')
-											)}
-										>
-											{Number(row.ledgerSequence).toLocaleString('en-US')}
-										</Link>
-										<div className={styles.muted}>
-											<LocalDateTime dateTime={entityText(row, 'closedAt')} />
-										</div>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-					{page.rows.length === 0 && (
-						<p className={styles.empty}>
-							No matching pool observations in the published range.
-						</p>
-					)}
-				</div>
+				<ExplorerHistoricalPoolTable rows={page.rows} assetA={a} assetB={b} />
 			)}
 			<div className={styles.actions}>
 				<span>Page {Math.floor(page.offset / page.limit) + 1}</span>
