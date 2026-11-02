@@ -1,12 +1,14 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { readFile } = require('node:fs/promises');
+const { lstat, readFile } = require('node:fs/promises');
 const path = require('node:path');
 const { Readable, Transform } = require('node:stream');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const modulePath = process.env.ATLAS_VERIFIER_MODULE_PATH ?? path.resolve(__dirname, '../lib/use-cases/verify-archive-objects/VerifyArchiveObjects.js');
+// Test only this checkout's emitted verifier. Never select evaluated code from
+// environment variables, command-line arguments, or caller-provided paths.
+const modulePath = path.resolve(__dirname, '../lib/use-cases/verify-archive-objects/VerifyArchiveObjects.js');
 
 const ok = (value) => ({ value, isErr: () => false });
 const err = (error) => ({ error, isErr: () => true });
@@ -84,6 +86,9 @@ async function loadCandidate({ httpService = {}, bucketCache = {}, verifyBucketH
       scannerIssueFailure: (value) => value
     }
   };
+  const moduleInfo = await lstat(modulePath);
+  assert.ok(moduleInfo.isFile() && !moduleInfo.isSymbolicLink(),
+    'Expected the regular emitted verifier file in this checkout');
   // Evaluate the candidate file unchanged: only its imported dependencies are replaced.
   const candidate = new vm.SourceTextModule(
     await readFile(modulePath, 'utf8'),
