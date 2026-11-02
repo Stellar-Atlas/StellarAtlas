@@ -70,7 +70,7 @@ export function ExplorerEntityFilters({
 			) : (
 				<input
 					type={type ?? 'text'}
-					placeholder={placeholder}
+					placeholder={operationDetail && key === 'min_ledger' ? 'Ledger encoded in operation ID' : placeholder}
 					value={
 						type === 'datetime-local'
 							? mounted
