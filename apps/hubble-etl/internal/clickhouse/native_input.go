@@ -30,9 +30,10 @@ func encodeNativeRows(columns []schema.Column, rows []byte) ([]byte, error) {
 	}
 	values := make([]any, len(columns))
 	defer clear(values)
+	var row map[string]json.RawMessage
 	decoder := json.NewDecoder(bytes.NewReader(rows))
 	for rowIndex := 0; ; rowIndex++ {
-		var row map[string]json.RawMessage
+		clear(row)
 		if err := decoder.Decode(&row); err == io.EOF {
 			break
 		} else if err != nil {
