@@ -36,23 +36,29 @@ export function ExplorerContractProvenance({
 }: {
 	readonly contractId: string;
 }): React.JSX.Element {
-	const [value, setValue] = useState<EntityRecord | null>(null);
-	const [error, setError] = useState(false);
+	const [result, setValue] = useState<{
+		contractId: string;
+		value: EntityRecord | null;
+	} | null>(null);
+	const [failedContract, setError] = useState<string | null>(null);
 	const [attempt, setAttempt] = useState(0);
+	const value = result?.contractId === contractId ? result.value : null;
+	const error = failedContract === contractId;
 	useEffect(() => {
 		if (attempt === 0) return;
 		const controller = new AbortController();
 		setValue(null);
-		setError(false);
+		setError(null);
 		void requestExplorerJson(
 			'/v1/contracts/' + encodeURIComponent(contractId) + '/provenance',
 			controller.signal
 		)
 			.then((response) => {
-				if (!controller.signal.aborted) setValue(recordValue(response));
+				if (!controller.signal.aborted)
+					setValue({ contractId, value: recordValue(response) });
 			})
 			.catch(() => {
-				if (!controller.signal.aborted) setError(true);
+				if (!controller.signal.aborted) setError(contractId);
 			});
 		return () => controller.abort();
 	}, [contractId, attempt]);
