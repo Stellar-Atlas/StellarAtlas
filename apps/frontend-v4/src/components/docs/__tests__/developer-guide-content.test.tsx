@@ -34,6 +34,7 @@ describe('developer guides', () => {
 			'querying',
 			'rest',
 			'contract-events',
+			'contract-verification',
 			'assets-and-issuers',
 			'live-updates',
 			'graphql-guide',
