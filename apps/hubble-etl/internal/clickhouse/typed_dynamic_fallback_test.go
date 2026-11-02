@@ -30,7 +30,7 @@ func typedFallbackFixture(field string, custom *typedFallbackStatefulMarshaler, 
 		return transform.EffectOutput{
 			OperationID:    math.MaxInt64 - int64(index),
 			LedgerSequence: 1,
-			ClosedAt:       effectsTestAt,
+			LedgerClosed:   effectsTestAt,
 			Details:        map[string]any{"custom": custom},
 		}
 	}
