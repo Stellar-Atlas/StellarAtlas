@@ -11,7 +11,7 @@ import type {
 	Metadata
 } from './explorer-asset-types';
 import { useEffect, useState } from 'react';
-import { parseAsset } from './asset-data';
+import { isAssetDiscoveryReference, normalizeAssetRef, parseAsset } from './asset-data';
 import { ExplorerAssetDiscovery } from './explorer-asset-discovery';
 import {
 	entityText,
@@ -92,18 +92,9 @@ function needsIssuerMetadataRefresh(metadata?: Metadata) {
 	return metadata?.status === 'pending' || !metadata?.fetchedAt;
 }
 
-function normalizeAssetRef(value?: string): string | undefined {
-	if (!value?.includes('%')) return value;
-	try {
-		return decodeURIComponent(value);
-	} catch {
-		return value;
-	}
-}
-
 export function ExplorerAssetWorkspace(props: Props): React.JSX.Element {
 	const reference = normalizeAssetRef(props.assetRef);
-	const browse = !props.issuerId && (!reference || reference !== 'native' && !reference.includes(':') && !/^C[A-Z2-7]{55}$/.test(reference));
+	const browse = !props.issuerId && isAssetDiscoveryReference(reference);
 	return browse
 		? <ExplorerAssetDiscovery defaultQuery={reference} />
 		: <ExplorerAssetRecordWorkspace key={reference ?? props.issuerId} {...props} />;

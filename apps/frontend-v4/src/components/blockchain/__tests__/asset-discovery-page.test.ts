@@ -1,5 +1,6 @@
 import { assetDiscoveryHref, assetDiscoveryKey, assetDiscoveryPath, assetDiscoveryQueryKey, parseAssetDiscoveryPage, readAssetDiscoverySelection, validateAssetDiscoveryQuery } from '../asset-discovery-page';
 import type { ExplorerFilters } from '../../../api/explorer-analytics';
+import { isAssetDiscoveryReference, normalizeAssetRef } from '../asset-data';
 const issuer = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', contract = 'C' + 'A'.repeat(55);
 const query = { q: 'KALE', symbol: 'KALE', issuer, min_ledger: '99', max_ledger: '101', start_time: '2026-11-01T01:00:00.000Z', end_time: '2026-11-02T01:00:00.000Z' };
 const page = { data: [{ id: 'native', kind: 'native', code: 'XLM', issuer: null }, { id: 'KALE:' + issuer, kind: 'classic', code: 'KALE', issuer, contractId: contract, logoUrl: '/v1/asset-logos/test.png' }, { id: contract, kind: 'contract', contractId: contract }], nextCursor: 'next_page', generatedAt: '2026-11-02T01:00:00Z', coverage: { catalogueReady: true } };
@@ -43,4 +44,9 @@ it('retains native, classic and contract identities/logos and distinguishes unav
 	expect(parseAssetDiscoveryPage({ ...page, data: [], nextCursor: null, generatedAt: null, coverage: { catalogueReady: false } }, null).catalogueReady).toBe(false);
 	for (const malformed of [{ ...page, data: Array(26).fill(page.data[0]) }, { ...page, data: [page.data[0], page.data[0]] }, { ...page, nextCursor: 'bad!' }, { ...page, coverage: {} }]) expect(() => parseAssetDiscoveryPage(malformed, null)).toThrow();
 	expect(() => parseAssetDiscoveryPage(page, 'next_page')).toThrow();
+});
+it('shares server/client classification without losing encoded issued assets or direct native/contract identities', () => {
+	expect(normalizeAssetRef('USD%3A' + issuer)).toBe('USD:' + issuer);
+	for (const reference of ['native', contract, 'USD:' + issuer, 'USD%3A' + issuer]) expect(isAssetDiscoveryReference(normalizeAssetRef(reference))).toBe(false);
+	for (const reference of [undefined, 'A', issuer]) expect(isAssetDiscoveryReference(normalizeAssetRef(reference))).toBe(true);
 });

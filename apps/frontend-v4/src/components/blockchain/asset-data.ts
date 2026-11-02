@@ -1,6 +1,20 @@
 import { entityText, recordValue } from '../../api/explorer-analytics';
 import type { Asset } from './explorer-asset-types';
 
+export function normalizeAssetRef(value?: string): string | undefined {
+	if (!value?.includes('%')) return value;
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
+/** Classify presentation only; the API remains authoritative for identity/checksum resolution. */
+export function isAssetDiscoveryReference(reference: string | undefined): boolean {
+	return !reference || reference !== 'native' && !reference.includes(':') && !/^C[A-Z2-7]{55}$/.test(reference);
+}
+
 export function parseAsset(value: unknown): Asset {
 	const data = recordValue(value);
 	const kind = entityText(data, 'kind');
