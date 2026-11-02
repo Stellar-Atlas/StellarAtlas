@@ -1,7 +1,9 @@
 import express from 'express';
 import request from 'supertest';
 import { isArchiveRadarResponse } from 'shared';
-import { archiveRadarObservationRouter } from '../ArchiveRadarObservationRouter.js';
+import { archiveEvidenceRouter } from '../ArchiveEvidenceRouter.js';
+import { mock } from 'jest-mock-extended';
+import type { GetHistoryArchiveEvidence } from '../../../use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
 import type { RadarHistoryArchiveScanFetch } from '@cross-check/infrastructure/radar/RadarHistoryArchiveScanSourceAdapter.js';
 
 const root = 'https://history.example.com/History';
@@ -23,9 +25,11 @@ function app(
 	now?: () => Date
 ): express.Express {
 	const value = express();
+	const atlas = mock<GetHistoryArchiveEvidence>();
+	atlas.execute.mockImplementation(async () => { throw new Error('Unexpected Atlas read'); });
 	value.use(
 		'/v2/archive-scans',
-		archiveRadarObservationRouter({ fetchFn, now })
+		archiveEvidenceRouter({ getHistoryArchiveEvidence: atlas, radarObservation: { fetchFn, now } })
 	);
 	return value;
 }
