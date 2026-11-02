@@ -39,6 +39,7 @@
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.1077.0",
 		"@sentry/node": "^7.119.1",
+		"@stellar/stellar-sdk": "17.2.1",
 		"@stellaratlas/stellar-analysis-nodejs": "workspace:*",
 		"ajv": "^8.20.0",
 		"async": "^3.2.6",

@@ -13,8 +13,12 @@
 	"author": "pieterjan84@github",
 	"license": "MIT",
 	"dependencies": {
+		"@stellar/stellar-sdk": "17.2.1",
 		"async": "^3.2.6",
+		"lru-cache": "11.5.1",
+		"neverthrow": "8.2.0",
 		"node-connector": "workspace:*",
+		"pino": "10.3.1",
 		"shared": "workspace:*"
 	},
 	"devDependencies": {
