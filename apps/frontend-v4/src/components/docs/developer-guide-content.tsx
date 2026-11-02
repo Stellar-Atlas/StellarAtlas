@@ -7,6 +7,7 @@ import { contractEventsGuide } from './developer-guide-contract-events';
 import { assetsAndIssuersGuide } from './developer-guide-assets-and-issuers';
 import { liveUpdatesGuide } from './developer-guide-live-updates';
 import { sdkPlanGuide } from './developer-guide-sdk-plan';
+import { contractVerificationGuide } from './developer-guide-contract-verification';
 export type {
 	DeveloperGuidePage,
 	DeveloperGuideSection
@@ -303,6 +304,7 @@ curl --fail-with-body --get '${operationUrl}' \\
 	},
 	...developerGuideQueryPages,
 	contractEventsGuide,
+	contractVerificationGuide,
 	assetsAndIssuersGuide,
 	liveUpdatesGuide,
 	...developerGuideReferencePages,
