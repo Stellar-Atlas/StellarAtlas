@@ -1,4 +1,5 @@
 import { assetDiscoveryHref, assetDiscoveryKey, assetDiscoveryPath, assetDiscoveryQueryKey, parseAssetDiscoveryPage, readAssetDiscoverySelection, validateAssetDiscoveryQuery } from '../asset-discovery-page';
+import type { ExplorerFilters } from '../../../api/explorer-analytics';
 const issuer = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', contract = 'C' + 'A'.repeat(55);
 const query = { q: 'KALE', symbol: 'KALE', issuer, min_ledger: '99', max_ledger: '101', start_time: '2026-11-01T01:00:00.000Z', end_time: '2026-11-02T01:00:00.000Z' };
 const page = { data: [{ id: 'native', kind: 'native', code: 'XLM', issuer: null }, { id: 'KALE:' + issuer, kind: 'classic', code: 'KALE', issuer, contractId: contract, logoUrl: '/v1/asset-logos/test.png' }, { id: contract, kind: 'contract', contractId: contract }], nextCursor: 'next_page', generatedAt: '2026-11-02T01:00:00Z', coverage: { catalogueReady: true } };
@@ -24,7 +25,9 @@ it('binds opaque cursors to the complete selection, and preserves bare-symbol/na
 	expect(assetDiscoveryKey({ query, cursor: null })).not.toBe(assetDiscoveryKey({ query, cursor: 'next_page' }));
 });
 it('rejects invalid ranges rather than widening them or normalizing impossible calendar dates', () => {
-	for (const input of [{ min_ledger: '10', max_ledger: '9' }, { min_ledger: '0' }, { max_ledger: '4294967296' }, { issuer: 'not-an-issuer' }, { start_time: '2026-02-30T00:00:00Z' }, { start_time: '2026-11-02T01:00:00Z', end_time: '2026-11-02T01:00:00Z' }]) expect(() => validateAssetDiscoveryQuery(input)).toThrow();
+	const invalidInputs: ExplorerFilters[] = [{ min_ledger: '10', max_ledger: '9' }, { min_ledger: '0' }, { max_ledger: '4294967296' }, { issuer: 'not-an-issuer' }, { start_time: '2026-02-30T00:00:00Z' }, { start_time: '2026-11-02T01:00:00Z', end_time: '2026-11-02T01:00:00Z' }];
+	for (const input of invalidInputs) expect(() => validateAssetDiscoveryQuery(input)).toThrow();
+	expect(validateAssetDiscoveryQuery({ min_ledger: '00099', max_ledger: '00101' })).toEqual({ min_ledger: '99', max_ledger: '101' });
 	expect(validateAssetDiscoveryQuery({ start_time: '2026-11-01T01:30:00-05:00' }).start_time).toBe('2026-11-01T06:30:00.000Z');
 });
 it('retains native, classic and contract identities/logos and distinguishes unavailable from validempty', () => {

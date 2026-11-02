@@ -21,7 +21,7 @@ export function validateAssetDiscoveryQuery(input: ExplorerFilters): ExplorerFil
 	for (const key of ['min_ledger', 'max_ledger'] as const) {
 		const value = query[key];
 		if (!value) continue;
-		if (!/^[1-9]\d{0,9}$/.test(value) || Number(value) > 4294967295) throw new Error('Enter a valid observed ledger range.');
+		if (!/^\d{1,10}$/.test(value) || Number(value) < 1 || Number(value) > 4294967295) throw new Error('Enter a valid observed ledger range.');
 		query[key] = String(Number(value));
 	}
 	if (query.min_ledger && query.max_ledger && Number(query.min_ledger) > Number(query.max_ledger)) throw new Error('From ledger must not exceed To ledger.');

@@ -2,7 +2,6 @@
 
 import { ExplorerLink as Link } from './explorer-investigation';
 import {
-	AssetTable,
 	AssetDetails,
 	IssuerDetails
 } from './explorer-asset-views';
