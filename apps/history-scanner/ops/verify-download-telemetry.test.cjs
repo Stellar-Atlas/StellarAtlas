@@ -4,7 +4,8 @@ const { Readable, Transform } = require('node:stream');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
-// Run with --experimental-test-module-mocks. Import the emitted verifier normally;
+// node --experimental-test-module-mocks --test apps/history-scanner/ops/verify-download-telemetry.test.cjs
+// Import the emitted verifier normally;
 // no source text, filesystem precheck, environment selector, or custom evaluator.
 const verifierUrl = new URL('../lib/use-cases/verify-archive-objects/VerifyArchiveObjects.js', pathToFileURL(__filename));
 
