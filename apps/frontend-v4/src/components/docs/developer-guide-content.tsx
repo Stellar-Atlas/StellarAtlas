@@ -53,6 +53,13 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							for these reads.
 						</p>
 						<p>
+							Each command below allows five seconds to connect and thirty
+							seconds for the whole request, without automatic retries. A client
+							timeout is a failed read, not evidence that rows are absent or that
+							server work stopped. Treat a file saved by a failed request as
+							incomplete; continue only after a successful response.
+						</p>
+						<p>
 							For a wallet or token project, follow the{' '}
 							<a href="/docs/assets-and-issuers#wallet-and-holders">
 								KALE, wallet balances and asset holders quickstart
@@ -67,7 +74,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 				title: '1. Check the available ledger ranges',
 				content: (
 					<>
-						<Code>{`curl --fail-with-body '${api}/v1/analytics/datasets'`}</Code>
+						<Code>{`curl --fail-with-body --connect-timeout 5 --max-time 30 '${api}/v1/analytics/datasets'`}</Code>
 						<p>
 							The <a href="/docs/api/listHubbleDatasets">dataset catalog</a>{' '}
 							includes table names, column types and coverage. Choose a small
@@ -84,7 +91,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 				title: '2. Read payment operations',
 				content: (
 					<>
-						<Code>{`curl --fail-with-body '${operationUrl}&offset=${operationInput.offset}' --output operations-page-1.json`}</Code>
+						<Code>{`curl --fail-with-body --connect-timeout 5 --max-time 30 '${operationUrl}&offset=${operationInput.offset}' --output operations-page-1.json`}</Code>
 						<p>
 							This two-ledger window is an example, not a promise of current
 							coverage. Replace it with a range from your catalog response. The
@@ -138,6 +145,13 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							effects and events.
 						</p>
 						<p>
+							Follow the{' '}
+							<a href="/docs/rest#transaction-relations">
+								typed transaction walkthrough
+							</a>{' '}
+							to inspect the response and continue each relation independently.
+						</p>
+						<p>
 							For the operations list, repeat the same filters with the returned{' '}
 							<code>nextOffset</code>. Stop when it is <code>null</code>. Check
 							coverage before interpreting an empty result as absence.
@@ -147,7 +161,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							when it supplies a <code>nextOffset</code>:
 						</p>
 						<Code>{`offset=$(jq -er '.nextOffset // empty' operations-page-1.json) &&
-curl --fail-with-body --get '${operationUrl}' \\
+curl --fail-with-body --connect-timeout 5 --max-time 30 --get '${operationUrl}' \\
   --data-urlencode "offset=$offset"`}</Code>
 						<p>
 							Keep the first request’s window, filters and limit in the second

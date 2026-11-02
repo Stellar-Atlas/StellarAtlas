@@ -4,6 +4,7 @@ import {
 	GraphqlExample,
 	type DeveloperGuidePage
 } from './developer-guide-elements';
+import { publicHealthMetricsSection } from './public-health-metrics-guide';
 
 export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 	{
@@ -125,6 +126,7 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 		description:
 			'Analytics, immutable history downloads, Horizon and Stellar RPC serve different jobs and data boundaries.',
 		sections: [
+			publicHealthMetricsSection,
 			{
 				id: 'analytics',
 				title: 'Parsed analytics: REST and GraphQL',
