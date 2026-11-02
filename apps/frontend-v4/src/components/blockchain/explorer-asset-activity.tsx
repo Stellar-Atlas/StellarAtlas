@@ -1,20 +1,18 @@
 'use client';
 
 import { ExplorerLink as Link } from './explorer-investigation';
-import { useEffect, useState } from 'react';
-import { requestExplorerJson } from '../../api/explorer-analytics';
 import {
-	formatTransferAmount,
-	parseTransferActivityPage,
-	type TransferActivityPage
+	formatTransferAmount
 } from '../../api/transfer-activity';
 import type { Asset } from './explorer-asset-types';
 import { LocalDateTime } from '../local-date-time';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
+import { useAssetTransferActivity } from './use-asset-transfer-activity';
 
 function Wallet({ address }: { address: string | null }): React.JSX.Element {
 	if (!address) return <>—</>;
+	if (!/^[GC][A-Z2-7]{55}$/.test(address)) return <span className={ui.plainHash}>{address}</span>;
 	return (
 		<Link
 			className={ui.plainHash}
@@ -35,49 +33,14 @@ export function ExplorerAssetActivity({
 }: {
 	asset: Asset;
 }): React.JSX.Element {
+	return <AssetActivity key={JSON.stringify([asset.id,asset.kind,asset.contractId])} asset={asset} />;
+}
+function AssetActivity({asset}:{readonly asset:Asset}): React.JSX.Element {
 	const latest = asset.lastObservedLedger;
-	const [before, setBefore] = useState<number | undefined>(latest);
-	const [after, setAfter] = useState<string | null>(null);
-	const [history, setHistory] = useState<readonly (string | null)[]>([]);
-	const [page, setPage] = useState<TransferActivityPage | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [busy, setBusy] = useState(false);
-	useEffect(() => {
-		const abort = new AbortController();
-		const params = new URLSearchParams({ limit: '25' });
-		if (asset.kind === 'contract')
-			params.set('contract_id', asset.contractId || asset.id);
-		else params.set('asset', asset.id);
-		if (before !== undefined) {
-			params.set('min_ledger', String(Math.max(2, before - 2047)));
-			params.set('max_ledger', String(before));
-		}
-		if (after) params.set('after', after);
-		setBusy(true);
-		setError(null);
-		void requestExplorerJson('/v1/activity/transfers?' + params, abort.signal)
-			.then((value) => {
-				if (!abort.signal.aborted) setPage(parseTransferActivityPage(value));
-			})
-			.catch((cause) => {
-				if (!abort.signal.aborted)
-					setError(
-						cause instanceof Error ? cause.message : 'Activity unavailable.'
-					);
-			})
-			.finally(() => {
-				if (!abort.signal.aborted) setBusy(false);
-			});
-		return () => abort.abort();
-	}, [asset.id, asset.kind, asset.contractId, before, after]);
-	const window = (value: number | undefined) => {
-		setBefore(value);
-		setAfter(null);
-		setHistory([]);
-		setPage(null);
-	};
+	const activity = useAssetTransferActivity(asset);
+	const {before,page,busy,error}=activity;
 	return (
-		<section className={ui.holderSection} aria-busy={busy}>
+		<section className={ui.holderSection} aria-label="Asset transfer activity" aria-busy={busy}>
 			<div className={ui.sectionHeading}>
 				<h3>Transfers &amp; transactions</h3>
 				<span className={ui.observationLabel}>Published activity</span>
@@ -86,21 +49,23 @@ export function ExplorerAssetActivity({
 				<button
 					disabled={busy || before === undefined || before <= 2}
 					onClick={() =>
-						window(
+						activity.window(
 							before === undefined ? undefined : Math.max(2, before - 2048)
 						)
 					}
 				>
 					Earlier activity
 				</button>
-				<button disabled={busy} onClick={() => window(latest)}>
+				<button disabled={busy} onClick={() => activity.window(latest)}>
 					Latest indexed activity
 				</button>
+				{busy && <button type="button" onClick={activity.cancel}>Cancel activity</button>}
 			</div>
 			{busy && <p role="status">Loading transfers…</p>}
 			{error && (
 				<p className={styles.error} role="alert">
 					{error}
+					<button type="button" disabled={busy} onClick={activity.retry}>Retry activity</button>
 				</p>
 			)}
 			{page && (
@@ -109,51 +74,53 @@ export function ExplorerAssetActivity({
 						<table className={styles.table}>
 							<thead>
 								<tr>
-									<th>Time</th>
-									<th>From</th>
-									<th>To</th>
-									<th className={ui.numeric}>Amount</th>
-									<th>Transaction</th>
-									<th>Ledger</th>
+									<th scope="col">Time</th>
+									<th scope="col">From</th>
+									<th scope="col">To</th>
+									<th scope="col" className={ui.numeric}>Amount</th>
+									<th scope="col">Transaction</th>
+									<th scope="col">Ledger</th>
 								</tr>
 							</thead>
 							<tbody>
 								{page.transfers.map((row) => (
 									<tr key={row.id}>
-										<td>
+										<td data-label="Time"><div>
 											<LocalDateTime dateTime={row.closedAt} />
-										</td>
-										<td>
+										</div></td>
+										<td data-label="From"><div>
 											<Wallet address={row.from} />
-										</td>
-										<td>
+										</div></td>
+										<td data-label="To"><div>
 											<Wallet address={row.to} />
-										</td>
-										<td className={ui.numeric}>
+											{row.toMuxed && <small className={ui.plainHash}>{row.toMuxed}</small>}
+										</div></td>
+										<td data-label="Amount" className={ui.numeric}><div>
 											{formatTransferAmount(row.amountRaw, row.amountScale)}
-										</td>
-										<td>
+											{row.amountScale === null && <small>Decimals not recorded</small>}
+										</div></td>
+										<td data-label="Transaction"><div>
 											<Link
 												className={ui.plainHash}
-												href={'/explorer/transactions/' + row.transactionHash}
+												href={'/explorer/transactions/' + row.transactionHash + '?ledger_sequence=' + row.ledgerSequence}
 											>
 												{row.transactionHash}
 											</Link>
 											{row.operationId && (
 												<small>
 													<Link
-														href={'/explorer/operations/' + row.operationId}
+														href={'/explorer/operations/' + row.operationId + '?min_ledger=' + row.ledgerSequence + '&max_ledger=' + row.ledgerSequence}
 													>
 														Operation {row.operationId}
 													</Link>
 												</small>
 											)}
-										</td>
-										<td>
+										</div></td>
+										<td data-label="Ledger"><div>
 											<Link href={'/explorer/ledgers/' + row.ledgerSequence}>
 												{row.ledgerSequence.toLocaleString()}
 											</Link>
-										</td>
+										</div></td>
 									</tr>
 								))}
 							</tbody>
@@ -164,33 +131,24 @@ export function ExplorerAssetActivity({
 							No transfers in this indexed window. Earlier activity may exist.
 						</p>
 					)}
+					<span className={ui.observationLabel}>Partial indexed history</span>
+				</>
+			)}
 					<div className={styles.actions}>
 						<button
-							disabled={busy || !history.length}
-							onClick={() => {
-								setAfter(history.at(-1) ?? null);
-								setHistory((current) => current.slice(0, -1));
-							}}
+							disabled={busy || !activity.previous}
+							onClick={activity.previous ?? undefined}
 						>
 							Previous
 						</button>
 						<button
-							disabled={busy || !page.nextCursor}
-							onClick={() => {
-								setHistory((current) => [...current, after]);
-								setAfter(page.nextCursor);
-							}}
+							disabled={busy || !activity.next}
+							onClick={activity.next ?? undefined}
 						>
 							Next
 						</button>
-						<span className={ui.observationLabel}>
-							{page.watermark.coverage === 'complete'
-								? 'Selected window indexed'
-								: 'Partial indexed history'}
-						</span>
+						<button type="button" disabled={busy} onClick={activity.first}>First page</button>
 					</div>
-				</>
-			)}
 		</section>
 	);
 }

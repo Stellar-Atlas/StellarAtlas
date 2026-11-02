@@ -56,3 +56,36 @@ Release versions and deployment status are tracked separately.
 - Keep documentation field names inline and add keyboard-accessible copy controls
   for complete guide examples. Show success after a clipboard write succeeds and
   offer manual-copy guidance when copying is unavailable or fails.
+
+## Unreleased asset reports and observed flag evidence
+
+These source changes are tracked separately from deployed release versions.
+
+- Keep asset-report filters and continued pages tied to the selected asset and
+  query. Restore report selections through URLs and browser navigation, and hide
+  outdated rows, coverage and continuation controls when a replacement query fails.
+- Label report date controls explicitly as UTC, preserve untouched timestamps
+  and milliseconds during unrelated filter edits, and reject impossible calendar
+  dates before sending a report request.
+- Show ledger-observed issuer-account and trustline flag evidence in
+  keyboard-accessible details, retaining raw values and explicit missing,
+  invalid, contradictory or unknown metadata. Issuer-account policy on native
+  rows is not an XLM transfer-authorization claim.
+- Keep the existing balance precision and provenance caveats visible. Observed
+  flags do not establish current transfer eligibility, spendability or live
+  balances; ingestion may advance between unpinned pages.
+
+## Unreleased transfer inspection and request guidance
+
+These source changes do not establish deployment or complete chain coverage.
+
+- Load indexed transaction transfers only on request, scoped to the resolved
+  transaction and ledger, with bounded pages and explicit retry/cancellation.
+  Preserve exact raw amounts and known scales; unknown contract scales remain
+  raw units. Indexed transfers are not net balance changes or spendability.
+- Clear stale asset activity rows and coverage when a replacement request fails.
+  Keep the failed page cursor available for an explicit retry and retain the
+  previous-page path without accepting late responses from a different context.
+- Read GraphQL error bodies before classifying HTTP status. Document negotiated
+  JSON response types, optional error codes, partial data and one bounded request
+  with a deadline. Keep original response text for exact numeric inspection.

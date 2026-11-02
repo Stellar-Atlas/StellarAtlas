@@ -13,6 +13,7 @@ import {
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { BalanceObservationProvenance } from './explorer-balance-provenance';
+import { ObservedBalanceFlags } from './explorer-balance-flags';
 import styles from './explorer-entity.module.css';
 
 interface LoadedPage {
@@ -213,21 +214,27 @@ export function BalanceObservationResults({
 										>
 											{row.id === 'native' ? 'XLM (native)' : row.id}
 										</Link>
+										{kind === 'balances' && <ObservedBalanceFlags evidence={row} />}
 									</td>
 									<td data-label="Observed balance">
+										<div>
 										{String(row.balance)}
 										{row.trustLineLimit !== null && (
 											<div className={styles.muted}>
 												Trustline limit (raw): {row.trustLineLimit}
 											</div>
 										)}
+										</div>
 									</td>
 									<td data-label="Liabilities">
+										<div>
 										Buying: {String(row.buyingLiabilities)}
 										<br />
 										Selling: {String(row.sellingLiabilities)}
+										</div>
 									</td>
 									<td data-label="Ledger evidence">
+										<div>
 										<Link
 											href={buildEntityHref(
 												'ledgers',
@@ -238,6 +245,7 @@ export function BalanceObservationResults({
 										</Link>
 										<div className={styles.muted}>
 											Last modified {row.lastModifiedLedger}
+										</div>
 										</div>
 									</td>
 								</tr>
