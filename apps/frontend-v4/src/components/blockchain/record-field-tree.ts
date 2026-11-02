@@ -1,4 +1,16 @@
-export const recordTreeLimits = { rows: 20, depth: 4, nodes: 160, expanded: 40 } as const;
+export const recordTreeLimits = { rows: 20, depth: 4, nodes: 160, expanded: 40, jsonCharacters: 262144 } as const;
+
+/** Decode only structured source fields; preserve opaque, oversized or lossy JSON verbatim. */
+export function recordFieldInput(value: unknown): unknown {
+	if (typeof value !== 'string' || value.length > recordTreeLimits.jsonCharacters || !/^[\s]*[\[{]/.test(value)) return value;
+	try {
+		return JSON.parse(value, (_key, item: unknown) => {
+			if (typeof item === 'number' && (!Number.isFinite(item) || Number.isInteger(item) && !Number.isSafeInteger(item)))
+				throw new Error('Source integer cannot be represented safely.');
+			return item;
+		}) as unknown;
+	} catch { return value; }
+}
 export interface RecordFieldNode {
 	readonly field: string;
 	readonly label: string;
