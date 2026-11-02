@@ -12,13 +12,24 @@ const ajv = new Ajv();
 ajv.addFormat('date-time', { type: 'string', validate: validator.isRFC3339 });
 const validate = ajv.compile(KnownArchiveFailureSummaryV1Schema);
 
+export const knownArchiveFailureSummaryTimeoutMs = {
+	request: 3_000,
+	refresh: 30_000
+} as const;
+type KnownArchiveFailureSummaryTimeoutMs =
+	(typeof knownArchiveFailureSummaryTimeoutMs)[keyof typeof knownArchiveFailureSummaryTimeoutMs];
+
 export async function queryKnownArchiveFailureSummary(
 	dataSource: DataSource,
-	archiveUrlIdentity: string
+	archiveUrlIdentity: string,
+	statementTimeoutMs: KnownArchiveFailureSummaryTimeoutMs =
+		knownArchiveFailureSummaryTimeoutMs.request
 ): Promise<KnownArchiveFailureSummaryV1> {
 	return dataSource.transaction('REPEATABLE READ', async (manager) => {
 		await manager.query('set transaction read only');
-		await manager.query("set local statement_timeout = '3s'");
+		await manager.query(
+			`set local statement_timeout = '${statementTimeoutMs}ms'`
+		);
 		await manager.query("set local lock_timeout = '250ms'");
 		const rows: unknown = await manager.query(knownArchiveFailureSummarySql, [
 			archiveUrlIdentity
