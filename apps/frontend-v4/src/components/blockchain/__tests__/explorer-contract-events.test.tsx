@@ -2,6 +2,10 @@ import { jest } from '@jest/globals';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { contractEventExample } from '../contract-event-query';
+jest.unstable_mockModule('next/navigation', () => ({
+	usePathname: () => '/explorer/contract-events',
+	useSearchParams: () => new URLSearchParams()
+}));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
 }));

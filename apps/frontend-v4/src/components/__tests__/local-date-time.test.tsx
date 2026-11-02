@@ -1,4 +1,5 @@
 /// <reference types="jest" />
+import { jest } from '@jest/globals';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {

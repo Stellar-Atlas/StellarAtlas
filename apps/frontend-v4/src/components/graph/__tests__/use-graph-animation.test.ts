@@ -46,7 +46,28 @@ afterEach(() => {
 });
 
 describe('graph ledger playback pause and resume', () => {
-	it('freezes the active ledger and retains queued work across feed updates', () => {
+	it('cold-starts at the newest playable completed ledger without replaying history', () => {
+		const playbackSlots: Array<string | null> = [];
+		const options = createOptions({
+			boundarySlotIndex: '105',
+			ledgers: [
+				createLedger('105'),
+				createLedger('99'),
+				createLedger('104', 0),
+				createLedger('103'),
+				createLedger('102')
+			],
+			playbackSlots
+		});
+		hookHarness.render(() => useGraphAnimation(options));
+		expect(playbackSlots).toEqual(['103']);
+		expect(clock.pendingTimeoutCount()).toBe(1);
+		clock.advanceBy(5_000);
+		expect(playbackSlots).toEqual(['103', null]);
+		expect(clock.pendingTimeoutCount()).toBe(0);
+	});
+
+	it('freezes the active ledger and retains new arrivals within the tolerated live lag', () => {
 		const firstLedger = createLedger('101');
 		const secondLedger = createLedger('102');
 		const playbackSlots: Array<string | null> = [];
@@ -60,24 +81,25 @@ describe('graph ledger playback pause and resume', () => {
 		};
 
 		render();
-		expect(playbackSlots).toEqual(['101']);
+		expect(playbackSlots).toEqual(['102']);
+		expect(playbackSlots).not.toContain('101');
 		expect(clock.pendingTimeoutCount()).toBe(1);
 		clock.advanceBy(1_000);
 
 		options = { ...options, animationsEnabled: false };
 		render();
-		expect(playbackSlots.at(-1)).toBe('101');
+		expect(playbackSlots.at(-1)).toBe('102');
 		expect(playbackSlots).not.toContain(null);
 		expect(clock.pendingTimeoutCount()).toBe(0);
 
 		options = {
 			...options,
-			playbackBoundarySlotIndex: '105',
-			playbackLedgers: [createLedger('103'), createLedger('104')]
+			playbackBoundarySlotIndex: '104',
+			playbackLedgers: [secondLedger, createLedger('103')]
 		};
 		render();
 		clock.advanceBy(10_000);
-		expect(playbackSlots).toEqual(['101']);
+		expect(playbackSlots).toEqual(['102']);
 
 		options = { ...options, animationsEnabled: true };
 		render();
@@ -90,7 +112,7 @@ describe('graph ledger playback pause and resume', () => {
 		expect(clock.pendingTimeoutCount()).toBe(1);
 
 		clock.advanceBy(3_999);
-		expect(playbackSlots.at(-1)).toBe('101');
+		expect(playbackSlots.at(-1)).toBe('102');
 		clock.advanceBy(1);
 		expect(playbackSlots.at(-1)).toBe('103');
 	});
@@ -126,7 +148,7 @@ describe('graph ledger playback pause and resume', () => {
 		expect(activeHashSnapshots.at(-1)).toEqual([]);
 	});
 
-	it('replaces stale queued ledgers with the newest live window while playing', () => {
+	it('fast-forwards to the newest completed ledger when the live window exceeds tolerated lag', () => {
 		const playbackSlots: Array<string | null> = [];
 		let options = createOptions({
 			boundarySlotIndex: '103',
@@ -138,7 +160,7 @@ describe('graph ledger playback pause and resume', () => {
 		};
 
 		render();
-		expect(playbackSlots).toEqual(['101']);
+		expect(playbackSlots).toEqual(['102']);
 
 		options = {
 			...options,
@@ -148,10 +170,19 @@ describe('graph ledger playback pause and resume', () => {
 			)
 		};
 		render();
+		expect(playbackSlots).toEqual(['102', null, '113']);
+		expect(clock.pendingTimeoutCount()).toBe(1);
+		for (const stale of ['101', '110', '111', '112'])
+			expect(playbackSlots).not.toContain(stale);
+		options = {
+			...options,
+			playbackBoundarySlotIndex: '115',
+			playbackLedgers: [createLedger('113'), createLedger('114')]
+		};
+		render();
 		clock.advanceBy(5_000);
-
-		expect(playbackSlots.at(-1)).toBe('110');
-		expect(playbackSlots).not.toContain('102');
+		expect(playbackSlots.at(-1)).toBe('114');
+		expect(playbackSlots.filter((slot) => slot === '102')).toHaveLength(1);
 	});
 
 	it('never rewinds when a later feed update contains older or changed slots', () => {
@@ -166,7 +197,7 @@ describe('graph ledger playback pause and resume', () => {
 		};
 
 		render();
-		expect(playbackSlots).toEqual(['110']);
+		expect(playbackSlots).toEqual(['112']);
 
 		options = {
 			...options,
@@ -183,10 +214,10 @@ describe('graph ledger playback pause and resume', () => {
 		render();
 		clock.advanceBy(5_000);
 
-		expect(playbackSlots.at(-1)).toBe('111');
-		expect(playbackSlots).not.toContain('97');
-		expect(playbackSlots).not.toContain('109');
-		expect(playbackSlots.filter((slot) => slot === '110')).toHaveLength(1);
+		expect(playbackSlots.at(-1)).toBe('113');
+		for (const older of ['97', '109', '110', '111'])
+			expect(playbackSlots).not.toContain(older);
+		expect(playbackSlots.filter((slot) => slot === '112')).toHaveLength(1);
 	});
 
 	it('clears a queued window when pausing before the renderer can start it', () => {
@@ -215,28 +246,47 @@ describe('graph ledger playback pause and resume', () => {
 		};
 		render();
 
-		expect(playbackSlots).toEqual(['103']);
+		expect(playbackSlots).toEqual(['104']);
 		expect(playbackSlots).not.toContain('101');
 		expect(playbackSlots).not.toContain('102');
+		expect(playbackSlots).not.toContain('103');
 	});
 
-	it('refills the bounded queue until more than one hundred ledgers play', () => {
+	it('refills in order for more than one hundred arriving ledgers after cold start', () => {
 		const playbackSlots: Array<string | null> = [];
 		const slotIndexes = Array.from({ length: 105 }, (_, index) =>
 			(1_000 + index).toString()
 		);
-		const options = createOptions({
-			boundarySlotIndex: '1105',
-			ledgers: slotIndexes.map((slotIndex) => createLedger(slotIndex)),
+		let options = createOptions({
+			boundarySlotIndex: '1001',
+			ledgers: [createLedger('1000')],
 			playbackSlots
 		});
 
 		hookHarness.render(() => useGraphAnimation(options));
-		clock.advanceBy(slotIndexes.length * 5_000);
+		expect(playbackSlots).toEqual(['1000']);
+		for (let index = 1; index < slotIndexes.length; index += 1) {
+			const nextSlot = slotIndexes[index]!;
+			options = {
+				...options,
+				playbackBoundarySlotIndex: String(BigInt(nextSlot) + 1n),
+				playbackLedgers: slotIndexes
+					.slice(Math.max(0, index - 5), index + 1)
+					.map((slot) => createLedger(slot))
+			};
+			hookHarness.render(() => useGraphAnimation(options));
+			expect(playbackSlots.at(-1)).toBe(slotIndexes[index - 1]);
+			clock.advanceBy(5_000);
+			expect(playbackSlots.at(-1)).toBe(nextSlot);
+			expect(clock.pendingTimeoutCount()).toBe(1);
+		}
+		clock.advanceBy(5_000);
 
 		expect(
 			playbackSlots.filter((slot): slot is string => slot !== null)
 		).toEqual(slotIndexes);
+		expect(playbackSlots.at(-1)).toBeNull();
+		expect(clock.pendingTimeoutCount()).toBe(0);
 	});
 });
 
