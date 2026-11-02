@@ -48,5 +48,6 @@ it('keeps partial-history and pagination context in the actual historical report
 	expect(html).toContain('Partial history'); expect(html).toContain('More available'); expect(html).toContain('Removed');
 	expect(html).toContain('Historical native pool changes'); expect(html).toContain('JSON'); expect(html).toContain('Next');
 	expect(html.replaceAll('<!-- -->', '')).toContain('1 distinct pool on this page');
+	expect(html.replaceAll('<!-- -->', '')).toContain('1 observation shown');
 	expect(render([])).toContain('No matching pool observations in the published range.');
 });

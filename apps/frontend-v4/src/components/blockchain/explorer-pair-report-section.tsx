@@ -95,7 +95,7 @@ export function PairReportSection({
 			</div>
 			<div className={styles.status}>
 				<span>
-					{page.rows.length} {pool ? 'observations' : 'trades'} shown
+					{page.rows.length} {pool ? 'observation' : 'trade'}{page.rows.length === 1 ? '' : 's'} shown
 					{page.nextOffset !== null ? ' · More available' : ''}
 				</span>
 				{pool && (
