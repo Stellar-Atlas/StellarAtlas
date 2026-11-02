@@ -41,6 +41,16 @@ const holder = {
 };
 
 describe('explorer observed balances and holders', () => {
+	it('preserves typed flag evidence without inferring missing or malformed metadata', () => {
+		const row = (metadata: object) => parseBalanceObservationPage('balances','GA',{...evidence,account:'GA',balances:[{...balance,...metadata}]}).rows[0];
+		expect(row({assetType:'native',flags:4})).toMatchObject({assetType:'native',flags:4,flagStatus:'recorded'});
+		expect(row({asset:'USD:GA',assetType:'credit_alphanum4',flags:2})).toMatchObject({assetType:'credit_alphanum4',flags:2,flagStatus:'recorded'});
+		expect(row({})).toMatchObject({flagStatus:'missing'});
+		expect(row({assetType:'native',flags:'1'})).toMatchObject({flagStatus:'invalid'});
+		expect(row({assetType:'credit_alphanum4',flags:1})).toMatchObject({flagStatus:'invalid'});
+		const holderRow = parseBalanceObservationPage('holders','USD:GA',{...evidence,asset:'USD:GA',holders:[{...holder,assetType:'native',flags:1}]}).rows[0];
+		expect(holderRow?.assetType).toBeUndefined();expect(holderRow?.flags).toBeUndefined();
+	});
 	it('uses the object route for holder ordering and historical cutoffs', () => {
 		const path = balanceObservationPath('holders', 'USD:GA', 'c.page', {
 			sort: 'balance',
