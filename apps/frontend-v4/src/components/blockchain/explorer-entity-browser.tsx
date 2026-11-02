@@ -80,6 +80,7 @@ function EntityBrowser({
 			historyMode: 'push' | 'replace' = 'push'
 		) => {
 			const revision = ++loadRevision.current;
+			const requestedSelection = explorerSelectionKey(nextFilters, offset);
 			const started = performance.now();
 			setBusy(true);
 			setError(null);
@@ -90,6 +91,12 @@ function EntityBrowser({
 				direction
 			});
 			if (!outcome || revision !== loadRevision.current) return;
+			// Native history can change before React runs its selection effect.
+			// A history-driven response must still belong to the actual URL now.
+			if (historyMode === 'replace') {
+				const current = readExplorerPageSelection(window.location.search, nextFilters, offset, !!identifier);
+				if (explorerSelectionKey(current.filters, current.offset) !== requestedSelection) return;
+			}
 			setBusy(false);
 			if (outcome.ok) {
 				const data = outcome.page;
