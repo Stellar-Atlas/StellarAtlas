@@ -4,6 +4,16 @@ import {
 } from '../RadarHistoryArchiveScanSourceAdapter.js';
 
 describe('RadarHistoryArchiveScanSourceAdapter', () => {
+	it('rejects a different payload root and preserves case-sensitive root paths', async () => {
+		for (const payloadUrl of ['https://different.example.com/History', 'https://history.example.com/history']) {
+			const adapter = new RadarHistoryArchiveScanSourceAdapter(async () => new Response(JSON.stringify({ ...createHistoryArchiveScan(), url: payloadUrl })));
+			const result = await adapter.fetchHistoryArchiveScan('https://history.example.com/History');
+			expect(result.isErr()).toBe(true);
+			if (result.isErr()) expect(result.error.kind).toBe('invalid_payload');
+		}
+		const adapter = new RadarHistoryArchiveScanSourceAdapter(async () => new Response(JSON.stringify({ ...createHistoryArchiveScan(), url: 'https://history.example.com/History/' })));
+		expect((await adapter.fetchHistoryArchiveScan('https://history.example.com/History')).isOk()).toBe(true);
+	});
 	it('should fetch and parse a bounded RADAR history archive scan', async () => {
 		let observedRequest:
 			{ input: string | URL; init?: RequestInit } | undefined;

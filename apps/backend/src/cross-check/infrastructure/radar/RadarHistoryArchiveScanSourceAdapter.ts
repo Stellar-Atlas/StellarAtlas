@@ -81,7 +81,8 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 			return parseRadarHistoryArchiveScan({
 				body: bodyOrError.value,
 				endpointUrl: url,
-				fetchedAt: this.now().toISOString()
+				fetchedAt: this.now().toISOString(),
+				requestedArchiveUrl: decodeURIComponent(encodedUrlOrError.value)
 			});
 		} catch (error) {
 			const mappedError = mapRadarFetchError(error);
@@ -96,6 +97,7 @@ interface ParseRadarHistoryArchiveScanDTO {
 	readonly body: string;
 	readonly endpointUrl: string;
 	readonly fetchedAt: string;
+	readonly requestedArchiveUrl: string;
 }
 
 function parseRadarHistoryArchiveScan(
@@ -125,6 +127,11 @@ function parseRadarHistoryArchiveScan(
 				'RADAR history archive scan is missing required fields'
 			)
 		);
+	}
+	const payloadRoot = Url.create(url);
+	if (payloadRoot.isErr() || payloadRoot.value.value !== dto.requestedArchiveUrl) {
+		return err(radarHistoryArchiveScanFailure('invalid_payload',
+			'RADAR history archive scan root does not match the requested archive'));
 	}
 
 	return ok({
