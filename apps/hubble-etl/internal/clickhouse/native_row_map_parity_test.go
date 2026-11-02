@@ -2,7 +2,9 @@ package clickhouse
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -71,6 +73,7 @@ func TestNativeRowMapParity(t *testing.T) {
 		{"duplicate last null", ordinary, `{"s":"first","s":null,"u":7,"u":null,"d":{"only":1},"d":null}`, false},
 		{"duplicate null then value", ordinary, `{"s":null,"s":"last","u":null,"u":8,"d":null,"d":{"only":2}}`, false},
 		{"adjacent objects", ordinary, `{"s":"first"} {"s":"second"}`, false},
+		{"valid negative-case prefix", ordinary, `{"s":"first"}`, false},
 		{"missing required array rejected", arrays, `{}`, true},
 		{"null required array rejected", arrays, `{"a":null}`, true},
 		{"array becomes missing rejected", arrays, "{\"a\":[\"first\"]}\n{}", true},
@@ -104,7 +107,31 @@ func TestNativeRowMapParity(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			compareNativeRowMap(t, test.columns, []byte(test.rows), test.wantErr)
+			err := compareNativeRowMap(t, test.columns, []byte(test.rows), test.wantErr)
+			switch test.name {
+			case "one unknown key":
+				if !strings.Contains(err.Error(), "row 1 has unknown column unexpected") {
+					t.Fatal("did not reach the intended second-row unknown key", err)
+				}
+			case "present then null object":
+				if !strings.Contains(err.Error(), "row 1 is not a JSON object") {
+					t.Fatal("did not reach the intended second-row null object", err)
+				}
+			case "malformed next row", "trailing incomplete object":
+				if !errors.Is(err, io.ErrUnexpectedEOF) {
+					t.Fatal("expected the intended incomplete-JSON error after the valid prefix", err)
+				}
+			case "trailing garbage":
+				var syntax *json.SyntaxError
+				if !errors.As(err, &syntax) {
+					t.Fatal("expected the intended trailing-JSON syntax error", err)
+				}
+			case "trailing scalar":
+				var conversion *json.UnmarshalTypeError
+				if !errors.As(err, &conversion) || conversion.Value != "bool" {
+					t.Fatal("expected the intended trailing scalar conversion error", err)
+				}
+			}
 		})
 	}
 }
