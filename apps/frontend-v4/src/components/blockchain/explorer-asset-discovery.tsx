@@ -8,6 +8,7 @@ import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { assetDiscoveryDraft, assetDiscoveryHref, assetDiscoveryKey, readAssetDiscoverySelection, validateAssetDiscoveryQuery, type AssetDiscoverySelection } from './asset-discovery-page';
 import { useAssetDiscoveryPage } from './use-asset-discovery-page';
+import { AssetIdentityFilters } from './explorer-asset-identity-filters';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 
@@ -52,6 +53,7 @@ export function ExplorerAssetDiscovery({ defaultQuery = '' }: { readonly default
 				<button disabled={busy} type="submit">Search assets</button>
 				{busy && <button type="button" onClick={state.cancel}>Cancel asset search</button>}
 			</form>
+			{selection && <AssetIdentityFilters query={selection.query} busy={busy} onRemove={key => navigate({ query: { ...selection.query, [key]: '' }, cursor: null })} />}
 			<details className={ui.filters}><summary>Observed range filters<span>Optional ledger and time bounds</span></summary>
 				<div className={styles.form}>
 					{(['min_ledger', 'max_ledger'] as const).map((key, index) => <label key={key}>{index === 0 ? 'From ledger' : 'To ledger'}<input type="number" min="1" max="4294967295" value={draft[key] ?? ''} onChange={event => setDraft({ ...draft, [key]: event.currentTarget.value })} /></label>)}

@@ -81,6 +81,14 @@
 	line-height: 1.5;
 }
 .provenance { display: grid; gap: .4rem; min-width: 0; }
+.identityFilter { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; min-width: 0; }
+.identityFilter > span { min-width: 0; overflow-wrap: anywhere; }
+.identityFilter button { flex: none; }
+.amountSource { margin-top: .4rem; font-size: .78rem; color: var(--muted); min-width: 0; }
+.amountSource summary { cursor: pointer; }
+.amountSource summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.amountSource dl { display: grid; gap: .25rem; margin: .5rem 0; }
+.amountSource dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 .provenance p { margin: 0; }
 .flagEvidence { grid-column: 2; min-width: 0; margin-top: .4rem; color: var(--muted); font-size: .78rem; }
 .flagEvidence summary { cursor: pointer; width: fit-content; max-width: 100%; }

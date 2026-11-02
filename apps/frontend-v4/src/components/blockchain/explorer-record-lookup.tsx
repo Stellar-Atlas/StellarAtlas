@@ -16,6 +16,7 @@ import {
 } from '../../api/explorer-record-lookup';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import { ExplorerLedgerActivity } from './explorer-ledger-activity';
+import { ExplorerAccountRelations } from './explorer-account-relations';
 import styles from './explorer-entity.module.css';
 
 export function ExplorerRecordLookup({
@@ -122,6 +123,7 @@ function RecordLookup({
 						</>
 					) : null}
 				</div>}
+				{collection === 'accounts' && <ExplorerAccountRelations account={identifier} />}
 			</section>
 			{collection === 'accounts' && (
 				<ExplorerBalanceObservations
