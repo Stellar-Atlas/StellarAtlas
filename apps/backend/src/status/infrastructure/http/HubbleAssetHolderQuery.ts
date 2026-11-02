@@ -365,7 +365,7 @@ function issuedHolderSql(
 	return `
 SELECT account_id, _latest_asset_code AS asset_code,
 	_latest_asset_issuer AS asset_issuer, _latest_asset_type AS asset_type,
-	_latest_balance AS balance, _latest_trust_line_limit AS trust_line_limit,
+	_latest_balance AS balance, toString(_latest_trust_line_limit) AS trust_line_limit,
 	nullIf(_latest_sponsor,'') AS sponsor, _latest_sponsor!='' AS sponsored,
 	_latest_deleted AS deleted,
 	_latest_buying_liabilities AS buying_liabilities,
