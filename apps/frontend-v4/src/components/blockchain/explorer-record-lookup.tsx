@@ -24,6 +24,16 @@ export function ExplorerRecordLookup({
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
 }): React.JSX.Element {
+	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier} />;
+}
+
+function RecordLookup({
+	collection,
+	identifier
+}: {
+	readonly collection: 'accounts' | 'ledgers';
+	readonly identifier: string;
+}): React.JSX.Element {
 	const search = useExplorerRequest(
 		initialExplorerSearch,
 		'The requested record could not be loaded.'
