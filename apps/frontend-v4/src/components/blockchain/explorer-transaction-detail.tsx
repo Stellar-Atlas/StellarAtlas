@@ -21,6 +21,8 @@ import { ExplorerOperationCall } from './explorer-operation-call';
 import { OperationResultFields } from './explorer-operation-result';
 import { ExplorerRecordFields } from './explorer-record-fields';
 import { ExplorerEffectFields } from './explorer-effect-fields';
+import { ExplorerTransactionTransfers } from './explorer-transaction-transfers';
+import { validTransactionTransferScope } from '../../api/transaction-transfers';
 import { recordFieldInput } from './record-field-tree';
 import { operationInvocation } from './explorer-operation-invocation';
 import { formatAtomic } from './explorer-format-values';
@@ -364,6 +366,8 @@ function TransactionDetail({ hash, route }: {
 						events have not been returned.
 					</p>
 				) : null}
+				{tx && validTransactionTransferScope({ hash, ledger: chosenLedger }) &&
+					<ExplorerTransactionTransfers key={hash + ':' + chosenLedger} hash={hash} ledger={chosenLedger} />}
 				<Link
 					href={buildEntityHref('transfers', undefined, {
 						transaction_hash: hash,
