@@ -174,6 +174,17 @@ describe('explorer entity request lifecycle', () => {
 			jest.useRealTimers();
 		}
 	});
+	it('invalidates pending Back A when restoring already accepted B without another network request', async () => {
+		let finish!: (value: unknown) => void;
+		let calls = 0;
+		const session = new ExplorerEntityRequest('offers', undefined, () => ++calls === 1 ? Promise.resolve(page(25)) : new Promise((resolve) => { finish = resolve; }));
+		expect(await session.run({...request, offset:25})).toMatchObject({ok:true, page:{offset:25}});
+		const backA = session.run(request);
+		session.cancel(); // URL returned to accepted B: restore B rather than fetch it again.
+		finish(page(0));
+		await expect(backA).resolves.toBeNull();
+		expect(calls).toBe(2);
+	});
 });
 
 describe('reloadable explorer pages', () => {

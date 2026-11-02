@@ -58,6 +58,7 @@ function EntityBrowser({
 	const selection = useMemo(() => readExplorerPageSelection(search, initialFilters, initialOffset, !!identifier), [search, initialFilters, initialOffset, identifier]);
 	const selectionKey = explorerSelectionKey(selection.filters, selection.offset);
 	const acceptedSelection = useRef<string | null>(null);
+	const loadRevision = useRef(0);
 	const [filters, setFilters] = useState<ExplorerFilters>(initialFilters);
 	const [page, setPage] = useState<AnalyticsEntityPage | null>(null);
 	const [submitted, setSubmitted] = useState<ExplorerFilters>(initialFilters);
@@ -78,6 +79,7 @@ function EntityBrowser({
 			direction: 'reset' | 'next' | 'previous' = 'reset',
 			historyMode: 'push' | 'replace' = 'push'
 		) => {
+			const revision = ++loadRevision.current;
 			const started = performance.now();
 			setBusy(true);
 			setError(null);
@@ -87,7 +89,7 @@ function EntityBrowser({
 				offset,
 				direction
 			});
-			if (!outcome) return;
+			if (!outcome || revision !== loadRevision.current) return;
 			setBusy(false);
 			if (outcome.ok) {
 				const data = outcome.page;
@@ -125,10 +127,19 @@ function EntityBrowser({
 		[collection, identifier, requests, returnTo]
 	);
 	useEffect(() => {
-		if (acceptedSelection.current === selectionKey) return;
+		if (acceptedSelection.current === selectionKey) {
+			// Back A may still be pending when Forward returns to accepted B.
+			// Restoring B must invalidate A even though no new fetch is needed.
+			loadRevision.current++;
+			requests.cancel();
+			setBusy(false);
+			setError(null);
+			setFilters(selection.filters);
+			return;
+		}
 		setFilters(selection.filters);
 		void load(selection.filters, selection.offset, 'reset', 'replace');
-	}, [load, selectionKey, selection.filters, selection.offset]);
+	}, [load, requests, selectionKey, selection.filters, selection.offset]);
 	const chosenWindow: ExplorerFilters = page
 		? {
 				min_ledger: String(page.window.minLedger),

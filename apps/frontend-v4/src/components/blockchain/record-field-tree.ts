@@ -4,11 +4,14 @@ export const recordTreeLimits = { rows: 20, depth: 4, nodes: 160, expanded: 40, 
 export function recordFieldInput(value: unknown): unknown {
 	if (typeof value !== 'string' || value.length > recordTreeLimits.jsonCharacters || !/^[\s]*[\[{]/.test(value)) return value;
 	try {
-		return JSON.parse(value, (_key, item: unknown) => {
-			if (typeof item === 'number' && (!Number.isFinite(item) || Number.isInteger(item) && !Number.isSafeInteger(item)))
-				throw new Error('Source integer cannot be represented safely.');
-			return item;
-		}) as unknown;
+		// Inspect original tokens BEFORE JSON.parse can round fractions or underflow.
+		// Quoted text is skipped. Conservatively keep decimal/exponent/negative-zero
+		// literals raw; only canonical safe integers enter the structured renderer.
+		for (const token of value.matchAll(/"(?:\\.|[^"\\])*"|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/g)) {
+			const number = token[1];
+			if (number !== undefined && (!Number.isSafeInteger(Number(number)) || String(Number(number)) !== number)) return value;
+		}
+		return JSON.parse(value) as unknown;
 	} catch { return value; }
 }
 export interface RecordFieldNode {
