@@ -11,6 +11,7 @@ import (
 var datasetInsertPermits = make(chan struct{}, 4)
 
 type pendingInsert struct {
+	dataset   string
 	native    *typedNativeChunk
 	done      chan struct{}
 	cancel    context.CancelFunc
@@ -56,7 +57,7 @@ func (w *BatchWriter) joinFirstInsert(ctx context.Context) {
 	w.pendingInserts = w.pendingInserts[1:]
 	w.pendingInsertBytes -= job.bytes
 	w.flushElapsed += job.elapsed
-	w.insertTimings.add(job.timings)
+	w.mergeInsertTimings(job.dataset, job.timings)
 	w.rememberInsertError(job.err)
 	if job.err == nil {
 		w.flushedRows += uint64(job.rows)
@@ -99,7 +100,7 @@ admission:
 		if err := w.WaitPending(ctx); err != nil {
 			return err
 		}
-		job := &pendingInsert{rows: table.bufferRows, jsonBytes: table.body.Len(), native: detachTypedNative(table)}
+		job := &pendingInsert{dataset: dataset, rows: table.bufferRows, jsonBytes: table.body.Len(), native: detachTypedNative(table)}
 		if job.native != nil {
 			job.timings.nativeEncode = job.native.preEncode
 		}
@@ -110,7 +111,7 @@ admission:
 		}
 		w.runInsert(ctx, dataset, token, body, job)
 		w.flushElapsed += job.elapsed
-		w.insertTimings.add(job.timings)
+		w.mergeInsertTimings(dataset, job.timings)
 		w.rememberInsertError(job.err)
 		if job.err != nil {
 			return job.err
@@ -132,7 +133,8 @@ admission:
 	}
 	jobCtx, cancel := context.WithCancel(ctx)
 	job := &pendingInsert{
-		done: make(chan struct{}), cancel: cancel, bytes: reserved,
+		dataset: dataset,
+		done:    make(chan struct{}), cancel: cancel, bytes: reserved,
 		rows: table.bufferRows, jsonBytes: table.body.Len(),
 		native: detachTypedNative(table),
 	}

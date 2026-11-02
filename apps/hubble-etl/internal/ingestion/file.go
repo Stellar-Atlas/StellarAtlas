@@ -112,6 +112,15 @@ func File(
 		status.RowCount = writer.TotalRows()
 		status.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		_ = client.RecordBatch(failureContext, status)
+		// The existing join defer has finished. Emit one bounded numeric
+		// summary for a failed batch, never a raw error, response or row.
+		timingJSON, _ := json.Marshal(struct {
+			Event         string                       `json:"event"`
+			BatchID       string                       `json:"batchId"`
+			Outcome       string                       `json:"outcome"`
+			DatasetWrites clickhouse.DatasetWriteStats `json:"datasetWrites"`
+		}{"batch-insert-response-timing", request.BatchID, "failed", writer.DatasetWriteStats()})
+		log.Print(string(timingJSON))
 	}()
 
 	// Join scheduled writes before the earlier failure-recording defer runs.

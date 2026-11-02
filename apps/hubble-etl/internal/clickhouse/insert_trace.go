@@ -8,6 +8,7 @@ import (
 )
 
 func (t *insertTimings) add(other insertTimings) {
+	t.responses.add(other.responses)
 	t.nativeEncode += other.nativeEncode
 	t.request += other.request
 	t.poolWait += other.poolWait

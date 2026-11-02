@@ -181,6 +181,7 @@ func (c *Client) Insert(ctx context.Context, table, token string, rows []byte) e
 
 // Timings belong to one serial batch writer, never the shared client.
 type insertTimings struct {
+	responses     insertResponseTotals
 	nativeEncode  time.Duration
 	request       time.Duration
 	poolWait      time.Duration
@@ -333,7 +334,19 @@ func (c *Client) executeTimed(ctx context.Context, query string, params url.Valu
 		request, finish = traceInsertRequest(request, timings)
 		defer finish()
 	}
-	response, err := c.http.Do(request)
+	var response *http.Response
+	if timings != nil {
+		// One logical HTTP call, not a count of internal transport retries.
+		// Observations never affect the existing request/result path.
+		defer func() {
+			var metadata insertResponseMetadata
+			if response != nil {
+				metadata = parseInsertResponseMetadata(response.Header)
+			}
+			timings.responses.observe(metadata, finalErr != nil)
+		}()
+	}
+	response, err = c.http.Do(request)
 	if err != nil {
 		return nil, err
 	}

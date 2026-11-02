@@ -54,6 +54,7 @@ type BatchWriter struct {
 	flushElapsed          time.Duration
 	pendingJoinElapsed    time.Duration
 	insertTimings         insertTimings
+	insertByDataset       map[string]insertTimings
 	flushedRows           uint64
 	flushedChunks         uint64
 	flushedJSONBytes      uint64
@@ -72,22 +73,24 @@ type BatchWriter struct {
 // Phase sums can overlap and are not additive wall-clock stage durations.
 // Rows/chunks/bytes include acknowledged dataset jobs only.
 type DatasetWriteStats struct {
-	FlushMilliseconds         int64  `json:"flushMilliseconds"`
-	NativeEncodeMilliseconds  int64  `json:"nativeEncodeMilliseconds"`
-	RequestMilliseconds       int64  `json:"requestMilliseconds"`
-	PoolWaitMilliseconds      int64  `json:"poolWaitMilliseconds"`
-	UploadMilliseconds        int64  `json:"uploadMilliseconds"`
-	FirstByteWaitMilliseconds int64  `json:"firstByteWaitMilliseconds"`
-	BodyReadMilliseconds      int64  `json:"bodyReadMilliseconds"`
-	PermitWaitMilliseconds    int64  `json:"permitWaitMilliseconds"`
-	PendingJoinMilliseconds   int64  `json:"pendingJoinMilliseconds"`
-	Rows                      uint64 `json:"rows"`
-	Chunks                    uint64 `json:"chunks"`
-	JSONBytes                 uint64 `json:"jsonBytes"`
+	InsertResponses           []DatasetInsertResponseStats `json:"insertResponses"`
+	FlushMilliseconds         int64                        `json:"flushMilliseconds"`
+	NativeEncodeMilliseconds  int64                        `json:"nativeEncodeMilliseconds"`
+	RequestMilliseconds       int64                        `json:"requestMilliseconds"`
+	PoolWaitMilliseconds      int64                        `json:"poolWaitMilliseconds"`
+	UploadMilliseconds        int64                        `json:"uploadMilliseconds"`
+	FirstByteWaitMilliseconds int64                        `json:"firstByteWaitMilliseconds"`
+	BodyReadMilliseconds      int64                        `json:"bodyReadMilliseconds"`
+	PermitWaitMilliseconds    int64                        `json:"permitWaitMilliseconds"`
+	PendingJoinMilliseconds   int64                        `json:"pendingJoinMilliseconds"`
+	Rows                      uint64                       `json:"rows"`
+	Chunks                    uint64                       `json:"chunks"`
+	JSONBytes                 uint64                       `json:"jsonBytes"`
 }
 
 func (w *BatchWriter) DatasetWriteStats() DatasetWriteStats {
 	return DatasetWriteStats{
+		InsertResponses:           w.datasetInsertResponseStats(),
 		FlushMilliseconds:         w.flushElapsed.Milliseconds(),
 		NativeEncodeMilliseconds:  w.insertTimings.nativeEncode.Milliseconds(),
 		RequestMilliseconds:       w.insertTimings.request.Milliseconds(),
@@ -402,10 +405,12 @@ func (w *BatchWriter) flushTable(
 		job.timings.nativeEncode = job.native.preEncode
 		w.runInsert(ctx, dataset, token, nil, job)
 		err = job.err
-		w.insertTimings.add(job.timings)
+		w.mergeInsertTimings(dataset, job.timings)
 		w.rememberInsertError(err)
 	} else {
-		err = w.client.insert(ctx, dataset, token, table.body.Bytes(), &w.insertTimings)
+		var timings insertTimings
+		err = w.client.insert(ctx, dataset, token, table.body.Bytes(), &timings)
+		w.mergeInsertTimings(dataset, timings)
 	}
 	w.flushElapsed += time.Since(started)
 	if err != nil {
