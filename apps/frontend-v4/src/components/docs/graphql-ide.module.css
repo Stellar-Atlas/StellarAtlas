@@ -38,6 +38,21 @@
 	font-size: 0.85rem;
 	overflow-wrap: anywhere;
 }
+.copyQuery {
+	min-height: 44px;
+	max-width: 44px;
+	padding: 0.25rem;
+	border: 0;
+	border-radius: 0.25rem;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+.copyQuery:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: -2px;
+}
 .ide {
 	height: min(78vh, 850px);
 	min-height: 550px;
