@@ -1,0 +1,103 @@
+{
+  "kind": "synthetic-design-fixture",
+  "rest": {
+    "request": {
+      "method": "GET",
+      "path": "/v1/analytics/accounts/GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H/balances?limit=1"
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+        "balanceScope": "native-and-issued",
+        "balances": [],
+        "limit": 1,
+        "elapsedMilliseconds": 0,
+        "nextCursor": null,
+        "coverage": {
+          "completedRanges": [
+            {
+              "firstLedger": "2",
+              "lastLedger": "65"
+            },
+            {
+              "firstLedger": "130",
+              "lastLedger": "193"
+            }
+          ],
+          "contiguousFirstLedger": "2",
+          "contiguousLastLedger": "65",
+          "contiguousLedgerCount": "64",
+          "supplementalLedgerCount": "64",
+          "totalLedgerCount": "128",
+          "nextLedger": "66",
+          "minimumLedger": "2",
+          "maximumLedger": "193",
+          "gapCount": 1
+        },
+        "watermark": {
+          "mode": "latest-ingested-observations",
+          "catalogGeneratedAt": "2026-11-01T00:00:00.000Z",
+          "catalogMaximumLedger": "193",
+          "snapshotPinned": false,
+          "selectedLedger": "193",
+          "coverageStatus": "partial_or_unknown",
+          "balancePrecision": "source-float64"
+        }
+      }
+    }
+  },
+  "graphql": {
+    "request": {
+      "method": "POST",
+      "path": "/graphql",
+      "accept": "application/json",
+      "body": {
+        "query": "query Account($account:String!,$input:HubbleAccountBalanceInput) {\n  hubbleAccountBalances(account:$account,input:$input) {\n    account balanceScope limit nextCursor elapsedMilliseconds\n    balances { asset assetType assetCode assetIssuer balance balanceRaw amountPrecision buyingLiabilities sellingLiabilities trustLineLimitRaw flags lastModifiedLedger observedLedger }\n    coverage { completedRanges { firstLedger lastLedger } contiguousLastLedger maximumLedger gapCount }\n    watermark { mode catalogGeneratedAt catalogMaximumLedger selectedLedger snapshotPinned coverageStatus balancePrecision }\n  }\n}",
+        "variables": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+          "input": {
+            "limit": 1
+          }
+        }
+      }
+    },
+    "expectedHttpStatus": 200,
+    "responseBody": {
+      "data": {
+        "hubbleAccountBalances": {
+          "account": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+          "balanceScope": "native-and-issued",
+          "limit": 1,
+          "nextCursor": null,
+          "elapsedMilliseconds": 0,
+          "balances": [],
+          "coverage": {
+            "completedRanges": [
+              {
+                "firstLedger": "2",
+                "lastLedger": "65"
+              },
+              {
+                "firstLedger": "130",
+                "lastLedger": "193"
+              }
+            ],
+            "contiguousLastLedger": "65",
+            "maximumLedger": "193",
+            "gapCount": 1
+          },
+          "watermark": {
+            "mode": "latest-ingested-observations",
+            "catalogGeneratedAt": "2026-11-01T00:00:00.000Z",
+            "catalogMaximumLedger": "193",
+            "selectedLedger": "193",
+            "snapshotPinned": false,
+            "coverageStatus": "partial_or_unknown",
+            "balancePrecision": "source-float64"
+          }
+        }
+      }
+    }
+  }
+}

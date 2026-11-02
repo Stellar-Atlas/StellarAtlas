@@ -1,0 +1,17 @@
+{
+  "kind": "synthetic-design-fixture",
+  "validator": "normalizeTransactionInput",
+  "accepted": {
+    "transactionHash": "55c6dc51787f44f137e581e144d28792ae2f8c5081ce412133657b7eced3d29f",
+    "ledgerSequence": 2147483647,
+    "limit": 1
+  },
+  "rejectedLedgerSequences": [
+    0,
+    -1,
+    2147483648,
+    4294967295,
+    1.5
+  ],
+  "expectedError": "ledgerSequence must be an integer between 1 and 2147483647"
+}

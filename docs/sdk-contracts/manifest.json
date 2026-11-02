@@ -1,0 +1,290 @@
+{
+  "status": "synthetic design fixtures; no SDK release",
+  "sourceRevision": "2a59b5d292a7aad6466a2cae24006d8382567079",
+  "sourceUrl": "https://github.com/Stellar-Atlas/StellarAtlas/tree/2a59b5d292a7aad6466a2cae24006d8382567079",
+  "schemaProjection": "Selected OpenAPI operations and three reachable GraphQL workflow fields; full GraphQL digest retained.",
+  "sourceFiles": [
+    {
+      "path": "apps/backend/src/core/infrastructure/http/api.ts",
+      "sha256": "24d8a3fadb48a6265ab3b107a2fc0c9d0b4a198db277845fdb3136064c45b0ae"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/PublicOpenApiDocument.ts",
+      "sha256": "335ad671682d9e23fecdaf800cf0b8b062b90201d632a0aa9c595b2524913e7a"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/HubbleOpenApiDocument.ts",
+      "sha256": "b5c9d80f52b7386ca21f2f047559f178bb52b3567fec4efed763559a291b4cce"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/AssetResourceOpenApi.ts",
+      "sha256": "b8a803a456b5d1d212552235743d62a38c1eb2d6bdfa35a2c215916540722921"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/OpenApiDocumentProjection.ts",
+      "sha256": "f43cbe6f0f0963c1e5641de995cc12f65156abe6790f0f963112a5f9c35cde11"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/HubbleAccountBalanceOpenApi.ts",
+      "sha256": "a250394b1e0e0d581d19705f334142570f5af0709a066fe644944de0b5787adb"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/HubbleTransactionOpenApi.ts",
+      "sha256": "2e1e6cf23d91e8fb641ac8d5c0e2d972a22370dcc824035a7553ba31d7860c59"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/HubbleSemanticOpenApiPaths.ts",
+      "sha256": "83396218a5d226fe3f4f32a0c31af71031810930936a3bed7cbc0f22326ef327"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/HubbleSemanticOpenApiSchemas.ts",
+      "sha256": "1f9b3a5876f057b6e9a948eabaf4af2884d6da23871102e6359c3d54d1b4c3a8"
+    },
+    {
+      "path": "apps/backend/src/core/infrastructure/http/HubbleSemanticOpenApiParameters.ts",
+      "sha256": "7ca12a91467c52785a03732a3e81bd71b5a0d9d059c8b7b81f7627b20bd0206e"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleWarehouseGraphql.ts",
+      "sha256": "3536eedc3edc3b0fb1da711c888c311334493a2ba25316b05137da0bb2ec8423"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAccountBalanceGraphql.ts",
+      "sha256": "36765d80feedf0dbed08d1d783c9f1adcbf7d690a221c7bc35a7365b96601a3a"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAssetHolderGraphql.ts",
+      "sha256": "4c5d77cc6b00dc7a34010cae5a0c181bee65258e5e4f6d75b3ff295732a4af4f"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransactionGraphql.ts",
+      "sha256": "9b5b63ab9967599aff6a811cb2ed9316bc6f4281003b00a9c0b62f0a0db15e4f"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransferGraphql.ts",
+      "sha256": "4d33ac9f26e7c48d5f24e1757e63252b99fed24021259062beb4ea68c77b9e5d"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleContractEventGraphql.ts",
+      "sha256": "a643297db2a732620720af7dc4b2a82d5a1f267f9dbd260b89adf654857690e5"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAssetReportGraphql.ts",
+      "sha256": "ae5c16e1202599419696bf712dcc7c30fbce89ed3009ee3b38d58c98758d4802"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleExplorerGraphql.ts",
+      "sha256": "07d01016e77ad5852f18a55ee07e9bf61981f6082856ad60371661ad36e46699"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleGraphqlBudget.ts",
+      "sha256": "886207fcf3f6284b6e8540e01dfd4333610fce655583250b7b51d8f1eed2938a"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAccountBalanceContracts.ts",
+      "sha256": "df7afc97932e37d9c034cbdf0aad7e4c19793f6197fb7c276f5fe5bd25b20e14"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransactionContracts.ts",
+      "sha256": "b88cf1ef377742a1d584a47d2544d3d821b6a125a356a818c69920ff02547807"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleSemanticWarehouse.ts",
+      "sha256": "a622e2e6fa82e1538df844d40b6479620483806477476183a64d3d3f7b0a4fcf"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAccountBalanceRoutes.ts",
+      "sha256": "b6b77135c6658bc10d12901d3c20bf77b23608901dddb23a783455386e0e7bbd"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransactionRoutes.ts",
+      "sha256": "b623c1b51b0e24bf9281f0fbf49bc4425aabc2dda8966ec897de416159c6bad9"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleSemanticRoutes.ts",
+      "sha256": "abcd427cb77a1586db1708d4adb95bec5e2d05cb6aa012ba08162adb674ff221"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleSemanticRouteHelpers.ts",
+      "sha256": "67be80dce28a298c169cdc921a153e3d5e0bd1d674f7c4507cc5d6f08233f0fd"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAccountBalanceQuery.ts",
+      "sha256": "c2b73234e91cd077654d1da769f16fdeca4ee09ac322d605a2f9024474955ad3"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAssetHolderQuery.ts",
+      "sha256": "7eff41e09de4fd53312f9ea098731fb74fa794388d6a5ecf51966a0a5028e3a3"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransactionQuery.ts",
+      "sha256": "5c8ded69e888c1dd849f838a891789a3e3b5bae8cd97075b3ab20fffdb0423c3"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransactionMapper.ts",
+      "sha256": "eeeb913d4fc63894ccccbbd433f976379780c6630b1941833fe1be4bb6b055fe"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransactionEnvelope.ts",
+      "sha256": "223296618dcfeb4c1da6a8578f4dc89bceab9599dc2f6a5f4573bced046c8966"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleAccountBalanceCursor.ts",
+      "sha256": "0bc2ccb484b21f05c253319a8e35e38f719efc8dc99ed570014ed10696edc61b"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleTransactionCursor.ts",
+      "sha256": "5ae6a6102f852dd30899b629bbd30703570c71f8643b3c6bc874f65594ccbfa9"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleLedgerCoverage.ts",
+      "sha256": "dd5ae26f9e008a74544b21ff0e2ec857c25a8d2596d7edd70562312f5ddf862a"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/HubbleWarehouseErrors.ts",
+      "sha256": "46853c3dfe27e5f40fb3908eed4e3458ede109cb83eb9ebf4fb1ee4432df9b10"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/asset-catalogue/AssetResourceRouter.ts",
+      "sha256": "6a3e321f6bb09c8e7ee5760b562bb6f814c2e0ec591883ebe0836fb5f2e876f6"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/PublicDataRoutes.ts",
+      "sha256": "769105ed90fcc86bc114102c7d306888222e5474c4f79bf9d08c5bd99d37ac82"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/PublicGoodsRouter.ts",
+      "sha256": "fb3692d0db437c1a0860e7099ef6cd5765dff107b79b44662fca2e5aab79dc72"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/PublicGoodsReadinessReader.ts",
+      "sha256": "8225ae4f013435281832a7c83994f2e59944228edf0e16e9b55d1fd8e9199cce"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/__tests__/HubbleAccountBalanceGraphql.test.ts",
+      "sha256": "2bf683c5b6e8ea0975793ced192954aa905cf2015810ed692f7be96cecef4a70"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/__tests__/HubbleTransactionApi.integration.test.ts",
+      "sha256": "859764adadbcdd708cdada445c0093e33a84829eb0c76902d83af57e96918f30"
+    },
+    {
+      "path": "apps/backend/src/status/infrastructure/http/__tests__/HubbleTransactionFixture.ts",
+      "sha256": "39e9c6c0eaba7a4054dffca5391c1dd01595e749b3d17fcd1744251e555f5701"
+    },
+    {
+      "path": "apps/backend/package.json",
+      "sha256": "090ac0d3d26a059d63bce37e5d9f6f2c53fc01d3d28a347dd0e29297d7ef3aa9"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "ce2c86e590b24fc8053176fb9d3a5655e2ca8e5bfb4d637267be5ffa27ad9876"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "fixtures/account-cursor-noncanonical.json",
+      "sha256": "a25185c82b5dc4902062b320b92a61207cd9efe817ee2c5fe7204cb7320e8f35"
+    },
+    {
+      "path": "fixtures/account-cursor-wrong-account.json",
+      "sha256": "d7687460ab8260c18171ecdab07ca0a0570c096a77b30ed554006c8ef132a80f"
+    },
+    {
+      "path": "fixtures/account-empty.json",
+      "sha256": "bf0c76dba58dd4f5d4a43cfc15b45168c9ab04af659f4cb1f2b22e3b0c4e660b"
+    },
+    {
+      "path": "fixtures/account-first.json",
+      "sha256": "6097bff9bcce6cdda3e0efe5d649c66894695a1d789e57c19cde7098dd04db1d"
+    },
+    {
+      "path": "fixtures/account-request-rejections.json",
+      "sha256": "e64c6ab2e6ead921f23456864acfb331fff2253122d99c029f988631ef864401"
+    },
+    {
+      "path": "fixtures/account-terminal.json",
+      "sha256": "68e5d839c06641cf973b7704ece2f7aab42097e310ae0acc8f45372c418dc16d"
+    },
+    {
+      "path": "fixtures/account-uint32-observation.json",
+      "sha256": "8b92791f0091f4006231f7e4752acb85b135cd504b911ea90dc25d10591ffd6c"
+    },
+    {
+      "path": "fixtures/account-unavailable.json",
+      "sha256": "138f4df321b6e9b0444529265b3b4b91546067c332d5853b191d0c88e6837aa6"
+    },
+    {
+      "path": "fixtures/graphql-request-budget.json",
+      "sha256": "fabd2cceb734163015e27ea201e08db91c9963d317c0f71cb6ba071724cbaee1"
+    },
+    {
+      "path": "fixtures/graphql-unknown-field.json",
+      "sha256": "5fb27ecaa44fc60033b86647c38d9fe5b0f27c3487d967a4e0b4f4a8c752e470"
+    },
+    {
+      "path": "fixtures/holder-cursor-changed-sort.json",
+      "sha256": "14c75adc7a1beb9fa24104849590997be239d4dcd553f30f0cba44e8dcc3f751"
+    },
+    {
+      "path": "fixtures/holder-first.json",
+      "sha256": "aecd3cd8a7c56460216950c7ececa5ae11943123f99968ccd3b357e9febfc7c1"
+    },
+    {
+      "path": "fixtures/holder-terminal.json",
+      "sha256": "37c4ff04cb71bf4e85289a09658212457b29fc1aee542007a9ff4b6a1a6c3f2a"
+    },
+    {
+      "path": "fixtures/holder-uint32-input.json",
+      "sha256": "0e055ef3065ff144b6d4d0f5b2b4c9fb82acfb91bef99577166fe9f1abcfa411"
+    },
+    {
+      "path": "fixtures/http-negotiation.json",
+      "sha256": "38323bc82814c8bc884aad130543400d9489c2bdb71cd071bc8d9a2dabd3912b"
+    },
+    {
+      "path": "fixtures/invalid-limit.json",
+      "sha256": "3805f8b9e36835f316cd0bcb9a3ac4a703020f2604533b5a673c35c52004a5cd"
+    },
+    {
+      "path": "fixtures/openapi-selected.json",
+      "sha256": "162ca8d7fe4de244e2fcee29c89717787426a02f735fdc6005df25e63015fd13"
+    },
+    {
+      "path": "fixtures/rest-mount.json",
+      "sha256": "59fd02a9a6db59c67a732746a8894bc9340d25481dcf2f46a4b0a34b4798f22e"
+    },
+    {
+      "path": "fixtures/schema-digests.json",
+      "sha256": "f98f95b3da95426dd151ca014d17a4278454a27ec692fbbf441575450838c73a"
+    },
+    {
+      "path": "fixtures/schema.graphql",
+      "sha256": "c9971127d690092ed92249ac62f389c722920194a611adac6a48f1590eafdfd5"
+    },
+    {
+      "path": "fixtures/transaction-continued.json",
+      "sha256": "666662734f70e860801db9eb291d94a5a442a937783a0a816c24933a46a91894"
+    },
+    {
+      "path": "fixtures/transaction-cursor-wrong-relation.json",
+      "sha256": "77170afa31df73c719e300e2c99c2e9034d30cf04ce69524ee05da66d9d08cde"
+    },
+    {
+      "path": "fixtures/transaction-first.json",
+      "sha256": "945539f49ac3627705881db36d9d70fd9866999d9c9d916f0f61303118901ebe"
+    },
+    {
+      "path": "fixtures/transaction-ledger-boundary.json",
+      "sha256": "89c0bb70ee27dd096806a98d4f8b53cd3cf6e89b103d64fed8e8fd42cad03a01"
+    },
+    {
+      "path": "fixtures/transaction-not-found.json",
+      "sha256": "6fe61cb3f943a8dcd94fb01177e03ad508e44f4191372c58a8ab7e789c24b155"
+    },
+    {
+      "path": "fixtures/transaction-terminal.json",
+      "sha256": "03daa8c517f4236283ba1d8c67e534615bd3342ead36bebc2e2c7fa4ea93f994"
+    }
+  ]
+}
