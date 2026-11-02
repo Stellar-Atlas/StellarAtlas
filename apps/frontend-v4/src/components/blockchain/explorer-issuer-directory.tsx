@@ -24,9 +24,18 @@ export function ExplorerIssuerDirectory(): React.JSX.Element {
 	const navigate=(next:IssuerSelection):void=>{
 		try {
 			const href=issuerDirectoryHref(pathname,window.location.search,next,window.location.hash);
+			const sameSelection=selection!==null&&issuerSelectionKey(selection)===issuerSelectionKey(next);
+			const sameHref=href===window.location.pathname+window.location.search+window.location.hash;
 			setInputError(null);
-			if(href===window.location.pathname+window.location.search+window.location.hash) state.retry();
-			else { state.cancel();window.history.pushState(null,'',href); }
+			if(sameSelection&&page){
+				if(!sameHref) window.history.pushState(null,'',href);
+				return;
+			}
+			if(sameHref) state.retry();
+			else {
+				state.cancel();window.history.pushState(null,'',href);
+				if(sameSelection) state.retry();
+			}
 		} catch(failure) {setInputError(failure instanceof Error?failure.message:'Invalid issuer search.');}
 	};
 	return (
