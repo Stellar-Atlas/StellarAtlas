@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { describe, expect, it, jest } from '@jest/globals';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GraphiQLProps } from 'graphiql';
@@ -13,7 +13,7 @@ jest.unstable_mockModule('graphiql', () => ({
 			received = props;
 			return createElement('div', { 'data-testid': 'real-graphiql-slot' });
 		},
-		{ Logo: () => null }
+		{ Logo: () => null, Toolbar: () => null }
 	)
 }));
 const { default: GraphqlIde } = await import('../graphql-ide');

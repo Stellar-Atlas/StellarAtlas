@@ -15,6 +15,7 @@ import {
 	type TransactionRelation
 } from './graphql-transaction-request';
 import styles from './graphql-ide.module.css';
+import { copyGraphqlQuery } from './graphql-query-copy';
 
 type ExampleKey = keyof typeof graphqlExamples;
 interface EditorDraft {
@@ -36,6 +37,7 @@ export default function GraphqlIde(): React.JSX.Element {
 	});
 	const [example, setExample] = useState<ExampleKey>('transfers');
 	const [busy, setBusy] = useState(false);
+	const [copyStatus, setCopyStatus] = useState<string | null>(null);
 	const [status, setStatus] = useState(
 		'Loading the API schema. Data queries run only when you press Execute (▶).'
 	);
@@ -123,6 +125,7 @@ export default function GraphqlIde(): React.JSX.Element {
 	}, [transport]);
 
 	function load(link: PageLink, direction: 'next' | 'previous' | null): void {
+		setCopyStatus(null);
 		editor.current = link;
 		navigation.current = direction;
 		setDraft((old) => ({ ...link, revision: old.revision + 1 }));
@@ -149,11 +152,18 @@ export default function GraphqlIde(): React.JSX.Element {
 	function edit(field: 'query' | 'variables', value: string): void {
 		if (editor.current[field] === value) return;
 		editor.current = { ...editor.current, [field]: value };
+		setCopyStatus(null);
 		// Never apply an old response's cursor to a newly edited query.
 		setNext(null);
 		setPrevious(null);
 		setRelated({});
 		navigation.current = null;
+	}
+	async function copyQuery(): Promise<void> {
+		const query = editor.current.query;
+		const message = await copyGraphqlQuery(query);
+		if (mounted.current && editor.current.query === query)
+			setCopyStatus(message);
 	}
 
 	return (
@@ -161,6 +171,17 @@ export default function GraphqlIde(): React.JSX.Element {
 			className={styles.playground}
 			id="graphql"
 			aria-labelledby="graphql-heading"
+			onKeyDownCapture={(event) => {
+				if (
+					(event.ctrlKey || event.metaKey) &&
+					event.shiftKey &&
+					event.key.toLowerCase() === 'c'
+				) {
+					event.preventDefault();
+					event.stopPropagation();
+					void copyQuery();
+				}
+			}}
 		>
 			<header>
 				<h2 id="graphql-heading">GraphQL explorer</h2>
@@ -188,6 +209,16 @@ export default function GraphqlIde(): React.JSX.Element {
 			<p role="status" aria-live="polite" className={styles.status}>
 				{status}
 			</p>
+			{copyStatus && (
+				<p
+					role="status"
+					aria-label="Query clipboard"
+					aria-live="polite"
+					className={styles.status}
+				>
+					{copyStatus}
+				</p>
+			)}
 			<div className={styles.ide}>
 				<GraphiQL
 					key={draft.revision}
@@ -206,6 +237,25 @@ export default function GraphqlIde(): React.JSX.Element {
 					}}
 				>
 					<GraphiQL.Logo>StellarAtlas</GraphiQL.Logo>
+					<GraphiQL.Toolbar>
+						{({ prettify, merge }) => (
+							<>
+								{prettify}
+								{merge}
+								<button
+									type="button"
+									className={styles.copyQuery}
+									aria-label="Copy query (Shift-Ctrl-C)"
+									title="Copy query (Shift-Ctrl-C)"
+									onClick={() => {
+										void copyQuery();
+									}}
+								>
+									Copy
+								</button>
+							</>
+						)}
+					</GraphiQL.Toolbar>
 				</GraphiQL>
 			</div>
 			<div className={styles.actions} aria-label="Response pagination">
