@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { publishLatestLedger } from '../../api/latest-ledger-events';
 import {
 	subscribeToLiveNetworkStream,
@@ -8,6 +9,7 @@ import {
 } from '../../api/live-network-stream';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { LocalDateTime } from '../local-date-time';
+import styles from './network-strip.module.css';
 
 const networkStripSubscription: LiveNetworkSubscriptionOptions = {
 	// Older servers emit network snapshots and do not negotiate summary channels.
@@ -15,6 +17,8 @@ const networkStripSubscription: LiveNetworkSubscriptionOptions = {
 };
 
 export function NetworkStrip(): React.JSX.Element {
+	const pathname = usePathname();
+	const compact = pathname === '/explorer' || pathname?.startsWith('/explorer/');
 	const [networkName, setNetworkName] = useState<string | null>(null);
 	const [networkTime, setNetworkTime] = useState<string | null>(null);
 	const [latestLedger, setLatestLedger] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export function NetworkStrip(): React.JSX.Element {
 	const displayedLedger = latestLedger;
 
 	return (
-		<div className="network-strip">
+		<div className={'network-strip' + (compact ? ' ' + styles.compact : '')}>
 			<div className="site-header-inner strip-inner">
 				<div className="experience-switcher" aria-label="Site experience">
 					<span>Modern update</span>

@@ -5,6 +5,7 @@
 }
 .returnBar {
 	padding-top: 1rem;
+	padding-bottom: 0;
 	font-size: 0.85rem;
 }
 .returnBar a {
@@ -28,6 +29,29 @@
 .navigation a[aria-current='page'] {
 	background: var(--blue);
 	color: var(--accent-ink);
+}
+.navigation a:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: -2px;
+}
+@media (max-width: 768px) {
+	.navigation {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		overflow-y: hidden;
+		max-width: 100%;
+		gap: .2rem;
+		padding-block: .2rem .5rem;
+		scrollbar-width: thin;
+		overscroll-behavior-inline: contain;
+	}
+	.navigation a {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		white-space: nowrap;
+	}
 }
 .panel {
 	background: var(--panel);

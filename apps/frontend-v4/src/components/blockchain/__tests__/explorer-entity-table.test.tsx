@@ -80,6 +80,7 @@ describe('parsed explorer presentation', () => {
 		])
 			expect(html).toContain('/explorer/' + collection);
 		expect(html).toContain('aria-current="page"');
+		expect(html).toContain('tabindex="0"');
 	});
 	it('never links a numeric transaction TOID as though it were a hash', () => {
 		const html = renderToStaticMarkup(
