@@ -42,7 +42,7 @@ func TestNativeRowMapParity(t *testing.T) {
 		{Name: "u", Type: "UInt64"},
 		{Name: "s", Type: "String"},
 		{Name: "n", Type: "Nullable(String)"},
-		{Name: "a", Type: "Array(String)"},
+		{Name: "a", Type: "Dynamic"},
 		{Name: "d", Type: "Dynamic"},
 	}
 	numeric := []schema.Column{
@@ -53,6 +53,7 @@ func TestNativeRowMapParity(t *testing.T) {
 		{Name: "d", Type: "Dynamic"},
 	}
 	timestamps := []schema.Column{{Name: "t", Type: "DateTime64(9, 'UTC')"}}
+	arrays := []schema.Column{{Name: "a", Type: "Array(String)"}}
 	cases := []struct {
 		name    string
 		columns []schema.Column
@@ -70,6 +71,11 @@ func TestNativeRowMapParity(t *testing.T) {
 		{"duplicate last null", ordinary, `{"s":"first","s":null,"u":7,"u":null,"d":{"only":1},"d":null}`, false},
 		{"duplicate null then value", ordinary, `{"s":null,"s":"last","u":null,"u":8,"d":null,"d":{"only":2}}`, false},
 		{"adjacent objects", ordinary, `{"s":"first"} {"s":"second"}`, false},
+		{"missing required array rejected", arrays, `{}`, true},
+		{"null required array rejected", arrays, `{"a":null}`, true},
+		{"array becomes missing rejected", arrays, "{\"a\":[\"first\"]}\n{}", true},
+		{"array becomes null rejected", arrays, "{\"a\":[\"first\"]}\n{\"a\":null}", true},
+		{"array becomes empty", arrays, "{\"a\":[\"first\"]}\n{\"a\":[]}", false},
 		{"one unknown key", ordinary, `{"s":"first"}` + "\n" + `{"unexpected":true}`, true},
 		{"null object", ordinary, `null`, true},
 		{"present then null object", ordinary, `{"s":"first"}` + "\nnull", true},
