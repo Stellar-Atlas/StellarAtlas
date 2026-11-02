@@ -80,18 +80,44 @@ export class PgArchiveFindingStateRepository implements ArchiveFindingStateRepos
 							return [state.key, state];
 						})
 					);
-					const flags = await queryRows(
+					const sourceStates = await queryRows(
 						runner,
-						`SELECT id, "latestSendTime" FROM subscription_event_notification_state WHERE "eventSubscriptionId" = $1 AND "eventType" = $2 AND "ignoreCoolOffPeriod" = true FOR UPDATE`,
+						`SELECT id, "latestSendTime", "ignoreCoolOffPeriod" FROM subscription_event_notification_state WHERE "eventSubscriptionId" = $1 AND "eventType" = $2 FOR UPDATE`,
 						[subscriptionId, EventType.HistoryArchiveErrorDetected]
 					);
-					const unmute = flags.map((row) => ({
-						id: integer(row.id),
-						latestSendTime: date(row.latestSendTime)
-					}));
+					const unmute = sourceStates
+						.filter((row) => row.ignoreCoolOffPeriod === true)
+						.map((row) => ({
+							id: integer(row.id),
+							latestSendTime: date(row.latestSendTime)
+						}));
+					// A coarse legacy timestamp is only a temporary source-level gate.
+					// Never turn it into a successful per-finding delivery record.
+					let legacyLatest: number | null = null;
+					if (sourceStates.length > 0 && unmute.length === 0) {
+						const delivered = await queryRows(
+							runner,
+							`SELECT EXISTS (SELECT 1 FROM archive_integrity_notification_state WHERE "subscriptionId" = $1 AND "deliveredFingerprint" IS NOT NULL AND "deliveredObservationAt" IS NOT NULL) AS acknowledged`,
+							[subscriptionId]
+						);
+						if (
+							delivered.length !== 1 ||
+							typeof delivered[0]?.acknowledged !== 'boolean'
+						)
+							throw new Error('Archive delivery history state missing');
+						if (!delivered[0].acknowledged)
+							legacyLatest = Math.max(
+								...sourceStates.map((row) => date(row.latestSendTime).getTime())
+							);
+					}
 					const eligible = current.flatMap(({ finding }) => {
 						const state = states.get(finding.key);
 						if (!state) throw new Error('Archive observation state missing');
+						if (
+							legacyLatest !== null &&
+							finding.observedAt.getTime() <= legacyLatest + 24 * 60 * 60 * 1000
+						)
+							return [];
 						return archiveFindingEligible(finding, state, unmute.length > 0)
 							? [finding]
 							: [];
