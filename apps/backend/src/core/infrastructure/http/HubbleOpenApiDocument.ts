@@ -454,11 +454,11 @@ export function withHubbleOpenApiPaths(document: unknown): OpenApiRecord {
 		...source,
 		components: { ...components, schemas: { ...existingSchemas, ...schemas } },
 		paths: {
-			...marketCandlePaths,
 			...paths,
 			...hubblePaths,
 			...datasetResourceOpenApiPaths(hubblePaths, columnSchema),
-			...contractProvenancePaths
+			...contractProvenancePaths,
+			...marketCandlePaths
 		}
 	};
 }

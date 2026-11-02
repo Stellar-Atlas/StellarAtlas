@@ -1,4 +1,5 @@
 import { mapCheckpointProofRefreshFailure } from './HistoryArchiveCheckpointProofRefreshFailure.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { historyArchiveConsumerCount } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type { DataSource, EntityManager } from 'typeorm';
 import type {
@@ -34,6 +35,16 @@ import {
 } from './HistoryArchiveRootTransitionLock.js';
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
 import { historyArchiveStaleBucketProofRecoverySql } from './HistoryArchiveStaleBucketProofRecoverySql.js';
+import { getCanonicalFrontierAlternateTargets } from './HistoryArchiveCanonicalFallbackTargets.js';
+import {
+	canonicalVerifiedBoundarySql,
+	getCanonicalFallbackRoot
+} from './HistoryArchiveCanonicalFallbackAnchorSql.js';
+import { remoteCheckpointFailureExistsSql } from './HistoryArchiveCheckpointRemoteFailureSql.js';
+import {
+	claimCompletedProofReserveRefreshSql,
+	historyArchiveCompletedProofReserveRefreshMemberSql
+} from './HistoryArchiveCompletedProofReserveRefreshSql.js';
 
 export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 	readonly archiveUrlIdentity: string;
@@ -61,6 +72,88 @@ interface ProofRefreshWriteResult {
 	readonly upsertedCount?: number | string;
 	readonly upsertedcount?: number | string;
 }
+
+interface ProofRefreshAcknowledgedKey {
+	readonly archiveUrlIdentity: string;
+	readonly checkpointLedger: number;
+}
+
+async function acknowledgeFreshVerifiedProofRefreshes(
+	manager: EntityManager,
+	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
+): Promise<readonly ClaimedHistoryArchiveCheckpointProofRefresh[]> {
+	if (targets.length === 0) return [];
+	const rows = (await manager.query(acknowledgeFreshVerifiedProofRefreshSql, [
+		JSON.stringify(targets)
+	])) as readonly ProofRefreshAcknowledgedKey[];
+	const acknowledgedKeys = new Set(
+		rows.map((row) =>
+			JSON.stringify([row.archiveUrlIdentity, row.checkpointLedger])
+		)
+	);
+	return targets.filter((target) =>
+		acknowledgedKeys.has(
+			JSON.stringify([target.archiveUrlIdentity, target.checkpointLedger])
+		)
+	);
+}
+
+/** Delete only a leased request already covered by an exact current verified
+ * proof and its matching verified checkpoint-state object. No proof evidence
+ * is updated and no checkpoint derivation is performed by this fast path. */
+export const acknowledgeFreshVerifiedProofRefreshSql = `
+with targets as materialized (
+	select target."archiveUrlIdentity", target."checkpointLedger",
+		target.generation, target."leaseToken", target."evidenceUpdatedAt"
+	from jsonb_to_recordset($1::jsonb) as target(
+		"archiveUrlIdentity" text,
+		"checkpointLedger" integer,
+		"evidenceUpdatedAt" timestamptz,
+		generation bigint,
+		"leaseToken" uuid
+	)
+), satisfied as materialized (
+	select queue."archiveUrlIdentity", queue."checkpointLedger",
+		queue.generation, queue."leaseToken", queue."evidenceUpdatedAt"
+	from targets target
+	join history_archive_checkpoint_proof_refresh_queue queue
+		on queue."archiveUrlIdentity" = target."archiveUrlIdentity"
+		and queue."checkpointLedger" = target."checkpointLedger"
+		and queue.generation = target.generation
+		and queue."leaseToken" = target."leaseToken"
+		and queue."evidenceUpdatedAt" = target."evidenceUpdatedAt"
+		and queue."leaseUntil" > now()
+	join "history_archive_checkpoint_proof" proof
+		on proof."archiveUrlIdentity" = queue."archiveUrlIdentity"
+		and proof."checkpointLedger" = queue."checkpointLedger"
+		and proof.status = 'verified'
+		and proof."proofVersion" = ${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+		and proof."requiredObjectsComplete" is true
+		and proof."proofFactsComplete" is true
+		and proof."bucketsVerified" is true
+	join "history_archive_object_queue" checkpoint
+		on checkpoint."archiveUrlIdentity" = proof."archiveUrlIdentity"
+		and checkpoint."checkpointLedger" = proof."checkpointLedger"
+		and checkpoint."objectType" = 'checkpoint-state'
+		and checkpoint.status = 'verified'
+		and checkpoint."remoteId" = proof."checkpointStateObjectRemoteId"
+	where target."evidenceUpdatedAt" <= greatest(
+		proof."evaluatedAt",
+		coalesce(checkpoint."proofReconciledAt", '-infinity'::timestamptz)
+	)
+), deleted as (
+	delete from history_archive_checkpoint_proof_refresh_queue queue
+	using satisfied target
+	where queue."archiveUrlIdentity" = target."archiveUrlIdentity"
+		and queue."checkpointLedger" = target."checkpointLedger"
+		and queue.generation = target.generation
+		and queue."leaseToken" = target."leaseToken"
+		and queue."evidenceUpdatedAt" = target."evidenceUpdatedAt"
+		and queue."leaseUntil" > now()
+	returning queue."archiveUrlIdentity", queue."checkpointLedger"
+)
+select "archiveUrlIdentity", "checkpointLedger" from deleted
+`;
 
 export const defaultTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
 export const maximumTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
@@ -129,7 +222,8 @@ export async function enqueueHistoryArchiveCheckpointProofRefreshes(
 ): Promise<number> {
 	if (remoteIds.length === 0) return 0;
 	const [row] = (await manager.query(enqueueProofRefreshesSql, [
-		[...remoteIds]
+		[...remoteIds],
+		getCanonicalFallbackRoot()
 	])) as readonly { readonly count: number | string }[];
 	return Number(row?.count ?? 0);
 }
@@ -141,7 +235,16 @@ export async function enqueueCurrentTerminalReadyCheckpointProofRefreshes(
 		enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
 		[null, Math.max(1, Math.min(Math.floor(limit), 4_096))]
 	)) as readonly { readonly count: number | string }[];
-	return Number(row?.count ?? 0);
+	const queued = Number(row?.count ?? 0);
+	const alternateTargets = await getCanonicalFrontierAlternateTargets(manager);
+	if (alternateTargets.length === 0) return queued;
+	return (
+		queued +
+		(await enqueueHistoryArchiveCheckpointProofRefreshes(
+			manager,
+			alternateTargets.map((target) => target.remoteId)
+		))
+	);
 }
 
 export async function enqueueTargetedTerminalReadyCheckpointProofRefreshes(
@@ -156,7 +259,19 @@ export async function enqueueTargetedTerminalReadyCheckpointProofRefreshes(
 		enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
 		[uniqueIdentities, uniqueIdentities.length]
 	)) as readonly { readonly count: number | string }[];
-	return Number(row?.count ?? 0);
+	const queued = Number(row?.count ?? 0);
+	const alternateTargets = await getCanonicalFrontierAlternateTargets(manager);
+	const selected = alternateTargets.filter((target) =>
+		uniqueIdentities.includes(target.archiveUrlIdentity)
+	);
+	if (selected.length === 0) return queued;
+	return (
+		queued +
+		(await enqueueHistoryArchiveCheckpointProofRefreshes(
+			manager,
+			selected.map((target) => target.remoteId)
+		))
+	);
 }
 
 export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
@@ -361,27 +476,62 @@ export async function claimHistoryArchiveCheckpointProofRefreshes(
 		await manager.query(`set local lock_timeout = '250ms'`);
 		await manager.query(`set local statement_timeout = '2s'`);
 		const canonicalFirstRoot = getHistoryArchiveCanonicalFirstRoot();
+		const canonicalFallbackRoot = getCanonicalFallbackRoot();
+		let rows: readonly (Omit<
+			ClaimedHistoryArchiveCheckpointProofRefresh,
+			'generation'
+		> & { readonly generation: number | string })[] = [];
+		// Reserve the first slot for the one admitted canonical-frontier alternate
+		// before draining the ordinary sequential queue. Keep the same batch cap;
+		// remaining slots continue through the existing queue order below.
+		if (maximumPriority === 1 && canonicalFallbackRoot !== null) {
+			const [alternate] = await getCanonicalFrontierAlternateTargets(manager);
+			if (alternate !== undefined) {
+				rows = (await manager.query(
+					claimCanonicalFrontierAlternateProofRefreshSql,
+					[
+						alternate.archiveUrlIdentity,
+						alternate.checkpointLedger,
+						canonicalFallbackRoot
+					]
+				)) as typeof rows;
+			}
+		}
+		if (maximumPriority === 1 && rows.length < safeLimit) {
+			const reserveRows = (await manager.query(
+				claimCompletedProofReserveRefreshSql
+			)) as typeof rows;
+			rows = [...rows, ...reserveRows];
+		}
 		const claimSql =
 			maximumPriority === 1
 				? claimSequentialProofRefreshSql
 				: claimProofRefreshSql;
-		const parameters =
-			maximumPriority === 1
-				? [canonicalFirstRoot, safeLimit]
-				: [maximumPriority, safeLimit];
-		let rows = (await manager.query(claimSql, parameters)) as readonly (Omit<
-			ClaimedHistoryArchiveCheckpointProofRefresh,
-			'generation'
-		> & { readonly generation: number | string })[];
-		if (
-			maximumPriority === 1 &&
-			canonicalFirstRoot !== null &&
-			rows.length === 0
-		) {
-			rows = (await manager.query(claimSequentialProofRefreshSql, [
-				null,
+		if (maximumPriority !== 1) {
+			rows = (await manager.query(claimSql, [
+				maximumPriority,
 				safeLimit
 			])) as typeof rows;
+		} else if (rows.length < safeLimit) {
+			const remaining = safeLimit - rows.length;
+			let sequentialRows = (await manager.query(
+				claimSequentialProofRefreshSql,
+				[canonicalFirstRoot, remaining]
+			)) as typeof rows;
+			if (sequentialRows.length === 0 && canonicalFirstRoot !== null) {
+				sequentialRows = (await manager.query(claimSequentialProofRefreshSql, [
+					null,
+					remaining
+				])) as typeof rows;
+			}
+			rows = [...rows, ...sequentialRows];
+		}
+		if (maximumPriority === 1 && rows.length < safeLimit) {
+			const staleRows = (await manager.query(
+				claimStaleVerifiedProofRefreshSql,
+				[safeLimit - rows.length]
+			)) as typeof rows;
+			rows = [...rows, ...staleRows];
 		}
 		return rows.map((row) => ({
 			...row,
@@ -417,6 +567,11 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 			target.generation
 		])) as readonly { readonly leaseToken: string }[];
 		if (lease.length === 0) return false;
+		const fastAcknowledged = await acknowledgeFreshVerifiedProofRefreshes(
+			manager,
+			[target]
+		);
+		if (fastAcknowledged.length === 1) return true;
 
 		const [write] = (await manager.query(
 			historyArchiveCheckpointProofQueuedRefreshSql,
@@ -518,7 +673,23 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 	manager: EntityManager,
 	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
 ): Promise<readonly ClaimedHistoryArchiveCheckpointProofRefresh[]> {
-	const payload = JSON.stringify(targets);
+	const fastAcknowledged = await acknowledgeFreshVerifiedProofRefreshes(
+		manager,
+		targets
+	);
+	const acknowledgedKeys = new Set(
+		fastAcknowledged.map((target) =>
+			JSON.stringify([target.archiveUrlIdentity, target.checkpointLedger])
+		)
+	);
+	const remainingTargets = targets.filter(
+		(target) =>
+			!acknowledgedKeys.has(
+				JSON.stringify([target.archiveUrlIdentity, target.checkpointLedger])
+			)
+	);
+	if (remainingTargets.length === 0) return fastAcknowledged;
+	const payload = JSON.stringify(remainingTargets);
 	const [write] = (await manager.query(
 		historyArchiveCheckpointProofBatchQueuedRefreshSql,
 		[payload]
@@ -543,7 +714,7 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 		lockedTargets.length !== completedTargets.length ||
 		lockedTargets.length !== targetCount ||
 		!proofRefreshBatchHandledEveryValidTarget(
-			targets.length,
+			remainingTargets.length,
 			targetCount,
 			handledCount
 		)
@@ -554,11 +725,11 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 				'/' +
 				targetCount +
 				' valid targets for ' +
-				targets.length +
+				remainingTargets.length +
 				' claims'
 		);
 	}
-	if (completedTargets.length === 0) return [];
+	if (completedTargets.length === 0) return fastAcknowledged;
 	const completedPayload = JSON.stringify(completedTargets);
 	await manager.query(
 		historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
@@ -581,7 +752,7 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 				' active claims'
 		);
 	}
-	return completedTargets;
+	return [...fastAcknowledged, ...completedTargets];
 }
 
 async function claimLockedContiguousProofRefreshes(
@@ -756,7 +927,7 @@ function extractQueryRows<T>(result: unknown): readonly T[] {
 
 export const enqueueProofRefreshesSql = `
 	with source_objects as materialized (
-		select object."archiveUrlIdentity", object."checkpointLedger",
+		select object."remoteId", object."archiveUrlIdentity", object."checkpointLedger",
 			object."objectType", object."bucketHash",
 			case
 				when object.status = 'verified' then greatest(
@@ -797,6 +968,49 @@ export const enqueueProofRefreshesSql = `
 			)}
 		) dependency
 		where dependency."bucketHash" = source."bucketHash"
+        union all
+        select source."archiveUrlIdentity",
+                canonical_cursor."nextHistoricalCheckpointLedger" - 64,
+                source.evidence_updated_at
+        from source_objects source
+        join "history_archive_checkpoint_scan_cursor" canonical_cursor
+                on canonical_cursor."archiveUrlIdentity" = $2::text
+                and canonical_cursor."nextHistoricalCheckpointLedger" is not null
+        join "history_archive_state_snapshot" canonical_state
+                on canonical_state."archiveUrlIdentity" = canonical_cursor."archiveUrlIdentity"
+                and canonical_state.status = 'available'
+        join "history_archive_state_snapshot" alternate_state
+                on alternate_state."archiveUrlIdentity" = source."archiveUrlIdentity"
+                and alternate_state.status = 'available'
+                and alternate_state."networkPassphrase" = canonical_state."networkPassphrase"
+        join "history_archive_checkpoint_proof" failed_frontier
+                on failed_frontier."archiveUrlIdentity" = canonical_cursor."archiveUrlIdentity"
+                and failed_frontier."checkpointLedger" =
+                        canonical_cursor."nextHistoricalCheckpointLedger" - 64
+                and failed_frontier.status = 'not-evaluable'
+                and failed_frontier."failureKind" = 'object-failed'
+        join "history_archive_object_queue" alternate_checkpoint
+                on alternate_checkpoint."archiveUrlIdentity" = source."archiveUrlIdentity"
+                and alternate_checkpoint."objectType" = 'checkpoint-state'
+                and alternate_checkpoint."objectKey" = 'checkpoint-state:' ||
+                        lpad(to_hex(canonical_cursor."nextHistoricalCheckpointLedger" - 64), 8, '0')
+                and alternate_checkpoint."executionReason" =
+                        'canonical-frontier-alternate'
+                and alternate_checkpoint.status = 'verified'
+        left join lateral (
+                ${historyArchiveCheckpointBucketDependenciesSql(
+									'source."archiveUrlIdentity"',
+									'canonical_cursor."nextHistoricalCheckpointLedger" - 64'
+								)}
+        ) alternate_dependency on true
+        where (
+                (source."objectType" = 'checkpoint-state'
+                        and source."remoteId" = alternate_checkpoint."remoteId")
+                or (source."objectType" = 'bucket'
+                        and source."bucketHash" = alternate_dependency."bucketHash"
+                        and alternate_dependency."archiveUrlIdentity" = source."archiveUrlIdentity")
+        )
+                and ${remoteCheckpointFailureExistsSql('failed_frontier')}
         ), candidate_targets as materialized (
                 select affected."archiveUrlIdentity", affected."checkpointLedger",
                         max(affected.evidence_updated_at) as evidence_updated_at
@@ -835,8 +1049,25 @@ export const enqueueProofRefreshesSql = `
                 join "history_archive_checkpoint_scan_cursor" chain_cursor
                         on chain_cursor."archiveUrlIdentity" =
                                 candidate."archiveUrlIdentity"
-                        and candidate."checkpointLedger" =
-                                chain_cursor."nextHistoricalCheckpointLedger" - 64
+                        and (
+                                candidate."checkpointLedger" =
+                                        chain_cursor."nextHistoricalCheckpointLedger" - 64
+                                or ${historyArchiveCompletedProofReserveRefreshMemberSql('candidate')}
+                                or exists (
+                                        select 1
+                                        from "history_archive_object_queue" alternate_checkpoint
+                                        where alternate_checkpoint."archiveUrlIdentity" =
+                                                candidate."archiveUrlIdentity"
+                                        and alternate_checkpoint."objectType" = 'checkpoint-state'
+                                        and alternate_checkpoint."objectKey" =
+                                                'checkpoint-state:' || lpad(
+                                                        to_hex(candidate."checkpointLedger"), 8, '0'
+                                                )
+                                        and alternate_checkpoint."executionReason" =
+                                                'canonical-frontier-alternate'
+                                        and alternate_checkpoint.status = 'verified'
+                                )
+                        )
                 where ${historyArchiveCheckpointProofTerminalReadySql('candidate')}
                         and not exists (
                                 select 1
@@ -863,11 +1094,13 @@ export const enqueueProofRefreshesSql = `
         ), enqueued as (
 		insert into history_archive_checkpoint_proof_refresh_queue (
 			"archiveUrlIdentity", "checkpointLedger", "evidenceUpdatedAt", generation,
-			"requestedAt", "nextAttemptAt", "updatedAt"
+			"requestedAt", "nextAttemptAt", "updatedAt", "refreshKind"
 		)
 		select "archiveUrlIdentity", "checkpointLedger", evidence_updated_at, 1,
-			now(), now(), now()
-		from targets
+			now(), now(), now(),
+			case when ${historyArchiveCompletedProofReserveRefreshMemberSql('candidate')}
+				then 'header-proof-repair' else null end
+		from targets candidate
 order by "archiveUrlIdentity", "checkpointLedger"
                 on conflict ("archiveUrlIdentity", "checkpointLedger") do update set
                         "evidenceUpdatedAt" = greatest(
@@ -876,6 +1109,7 @@ order by "archiveUrlIdentity", "checkpointLedger"
                         ),
                         generation =
                                 history_archive_checkpoint_proof_refresh_queue.generation + 1,
+                        "refreshKind" = excluded."refreshKind",
                         "nextAttemptAt" = now(),
                         attempts = 0,
                         "lastError" = null,
@@ -1027,6 +1261,98 @@ export const claimSequentialProofRefreshSql = `
 			queue."archiveUrlIdentity", queue."checkpointLedger"
 		for update of queue skip locked
 		limit $2::integer
+	), claimed as (
+		update history_archive_checkpoint_proof_refresh_queue queue
+		set "leaseToken" = gen_random_uuid(),
+			"leaseUntil" = now() + interval '2 minutes',
+			"lastAttemptAt" = now(),
+			"updatedAt" = now()
+		from candidate
+		where queue."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+			and queue."checkpointLedger" = candidate."checkpointLedger"
+		returning queue.*
+	)
+	select "archiveUrlIdentity", "checkpointLedger",
+		"evidenceUpdatedAt"::text as "evidenceUpdatedAt", generation, "leaseToken"
+	from claimed
+`;
+
+export const claimStaleVerifiedProofRefreshSql = `
+	with oldest_due as materialized (
+		select queue."archiveUrlIdentity", queue."checkpointLedger"
+		from history_archive_checkpoint_proof_refresh_queue queue
+		where queue."nextAttemptAt" <= now()
+			and (queue."leaseUntil" is null or queue."leaseUntil" <= now())
+		order by queue."nextAttemptAt", queue."requestedAt",
+			queue."archiveUrlIdentity", queue."checkpointLedger"
+		for update of queue skip locked
+		limit 256
+	), stale_verified as materialized (
+		select queue."archiveUrlIdentity", queue."checkpointLedger"
+		from oldest_due due
+		join history_archive_checkpoint_proof_refresh_queue queue
+			on queue."archiveUrlIdentity" = due."archiveUrlIdentity"
+			and queue."checkpointLedger" = due."checkpointLedger"
+		join "history_archive_checkpoint_proof" proof
+			on proof."archiveUrlIdentity" = queue."archiveUrlIdentity"
+			and proof."checkpointLedger" = queue."checkpointLedger"
+			and proof.status = 'verified'
+		left join "history_archive_checkpoint_scan_cursor" chain_cursor
+			on chain_cursor."archiveUrlIdentity" = queue."archiveUrlIdentity"
+		where (
+				chain_cursor."nextHistoricalCheckpointLedger" is null
+				or queue."checkpointLedger" <>
+					chain_cursor."nextHistoricalCheckpointLedger" - 64
+			)
+			and ${historyArchiveCheckpointProofTerminalReadySql('queue')}
+		order by queue."nextAttemptAt", queue."requestedAt",
+			queue."archiveUrlIdentity", queue."checkpointLedger"
+		for update of queue skip locked
+		limit $1::integer
+	), claimed as (
+		update history_archive_checkpoint_proof_refresh_queue queue
+		set "leaseToken" = gen_random_uuid(),
+			"leaseUntil" = now() + interval '2 minutes',
+			"lastAttemptAt" = now(),
+			"updatedAt" = now()
+		from stale_verified candidate
+		where queue."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+			and queue."checkpointLedger" = candidate."checkpointLedger"
+		returning queue.*
+	)
+	select "archiveUrlIdentity", "checkpointLedger",
+		"evidenceUpdatedAt"::text as "evidenceUpdatedAt", generation, "leaseToken"
+	from claimed
+`;
+
+/** Claim only the admitted alternate for the live canonical frontier. Its
+ * predecessor must remain an authenticated canonical boundary (or recorded
+ * substitution), as checked by terminal readiness and the boundary helper. */
+export const claimCanonicalFrontierAlternateProofRefreshSql = `
+	with canonical as materialized (
+		select cursor."archiveUrlIdentity",
+			cursor."nextHistoricalCheckpointLedger" - 64 as "checkpointLedger"
+		from "history_archive_checkpoint_scan_cursor" cursor
+		where cursor."archiveUrlIdentity" = $3::text
+	), candidate as materialized (
+		select queue."archiveUrlIdentity", queue."checkpointLedger"
+		from history_archive_checkpoint_proof_refresh_queue queue
+		join canonical on canonical."checkpointLedger" = queue."checkpointLedger"
+		join "history_archive_object_queue" alternate
+			on alternate."archiveUrlIdentity" = queue."archiveUrlIdentity"
+			and alternate."checkpointLedger" = queue."checkpointLedger"
+			and alternate."objectType" = 'checkpoint-state'
+			and alternate."executionReason" = 'canonical-frontier-alternate'
+			and alternate.status = 'verified'
+		where queue."archiveUrlIdentity" = $1::text
+			and queue."checkpointLedger" = $2::integer
+			and queue."nextAttemptAt" <= now()
+			and (queue."leaseUntil" is null or queue."leaseUntil" <= now())
+			and exists (
+				${canonicalVerifiedBoundarySql('$3::text', 'queue."checkpointLedger" - 64')}
+			)
+			and ${historyArchiveCheckpointProofTerminalReadySql('queue', false)}
+		for update of queue skip locked
 	), claimed as (
 		update history_archive_checkpoint_proof_refresh_queue queue
 		set "leaseToken" = gen_random_uuid(),

@@ -2,6 +2,7 @@ import type { IncomingMessage, Server } from 'http';
 import type { Socket } from 'net';
 import type { Logger } from '@core/services/Logger.js';
 import { WebSocket, WebSocketServer } from 'ws';
+import type { NetworkV1, ScpStatementObservationV1 } from 'shared';
 import type { GetNetwork } from '../../use-cases/get-network/GetNetwork.js';
 import type {
 	GetScpStatements,
@@ -29,7 +30,7 @@ interface NetworkLiveWebSocketConfig {
 }
 
 type LiveMessage =
-	| { payload: unknown; type: 'network' | 'latestLedger' }
+	| { payload: unknown; type: 'network' | 'summary' | 'latestLedger' }
 	| {
 			cursor: ScpStatementLiveCursor | null;
 			freshness: ScpStatementReadFreshness;
@@ -38,9 +39,10 @@ type LiveMessage =
 			payload: unknown;
 			source: ScpStatementReadSource;
 			truncated: boolean;
-			type: 'scp';
+			type: 'scp' | 'scpGraph';
 	  }
-	| { payload: { message: string }; type: 'error' };
+	| { payload: { message: string }; type: 'error' }
+	| { payload: { observedAt: string }; type: 'heartbeat' };
 
 type LiveLatestLedgerDTO =
 	| LatestObservedLedgerDTO
@@ -54,7 +56,15 @@ type LiveLatestLedgerDTO =
 			readonly source: 'horizon_fallback';
 	  };
 
+interface LiveChannels {
+	readonly network: boolean;
+	readonly summary: boolean;
+	readonly scp: boolean;
+	readonly scpMode: 'full' | 'graph';
+}
+
 interface LiveClient {
+	channels: LiveChannels;
 	scpUnsubscribe: () => void;
 	sender: BoundedWebSocketSender;
 }
@@ -64,6 +74,7 @@ const latestLedgerIntervalMs = 2_000;
 const latestLedgerFailureInitialRetryMs = 5_000;
 const latestLedgerFailureMaximumRetryMs = 60_000;
 const networkIntervalMs = 5_000;
+const heartbeatIntervalMs = 5_000;
 
 const isWebSocketPath = (request: IncomingMessage, path: string): boolean => {
 	if (!request.url) return false;
@@ -98,6 +109,49 @@ export function parseNetworkLiveResumeCursor(
 		return { valid: false };
 	}
 	return { cursor: { observedAtMs, statementHash }, valid: true };
+}
+
+export type NetworkLiveChannelsParseResult =
+	| { readonly channels: LiveChannels; readonly valid: true }
+	| { readonly valid: false };
+
+export function parseNetworkLiveChannels(
+	requestUrl: string | undefined
+): NetworkLiveChannelsParseResult {
+	const parameters = new URL(requestUrl ?? '/', 'http://127.0.0.1').searchParams;
+	const values = parameters.getAll('channels');
+	const modes = parameters.getAll('scpMode');
+	if (values.length === 0) {
+		if (modes.length > 0) return { valid: false };
+		return {
+			channels: { network: true, scp: true, scpMode: 'full', summary: false },
+			valid: true
+		};
+	}
+	if (values.length !== 1 || modes.length > 1) return { valid: false };
+	const requested = values[0]!.split(',');
+	const allowed = new Set(['summary', 'network', 'scp']);
+	if (
+		requested.some((value) => !allowed.has(value)) ||
+		new Set(requested).size !== requested.length ||
+		requested.some((value) => value.length === 0)
+	) {
+		return { valid: false };
+	}
+	const scp = requested.includes('scp');
+	const mode = modes[0];
+	if (mode !== undefined && (mode !== 'graph' || !scp)) {
+		return { valid: false };
+	}
+	return {
+		channels: {
+			network: requested.includes('network'),
+			summary: requested.includes('summary'),
+			scp,
+			scpMode: mode === 'graph' ? 'graph' : 'full'
+		},
+		valid: true
+	};
 }
 
 const errorMessage = (error: unknown): string =>
@@ -135,37 +189,102 @@ async function getLatestLedger(
 	};
 }
 
+const ledgerSemanticKey = (ledger: LiveLatestLedgerDTO): string =>
+	JSON.stringify([
+		ledger.sequence,
+		ledger.closedAt,
+		ledger.protocolVersion,
+		ledger.source,
+		ledger.freshness
+	]);
+
+const summaryPayload = (network: NetworkV1) => ({
+	name: network.name,
+	time: network.time,
+	latestLedger: network.latestLedger
+});
+
+const graphStatement = (statement: ScpStatementObservationV1) => ({
+	nodeId: statement.nodeId,
+	observedAt: statement.observedAt,
+	observedFromPeer: statement.observedFromPeer,
+	quorumSetHash: statement.pledges.quorumSetHash,
+	slotIndex: statement.slotIndex,
+	statementHash: statement.statementHash,
+	statementType: statement.statementType,
+	values: statement.values.map((value) => ({
+		closeTime: value.closeTime,
+		txSetHash: value.txSetHash,
+		upgradeCount: value.upgradeCount,
+		value: value.value
+	}))
+});
+
+function rejectInvalidUpgrade(socket: Socket): void {
+	socket.end(
+		'HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+	);
+}
+
 export function attachNetworkLiveWebSocket(
 	server: Server,
 	config: NetworkLiveWebSocketConfig
 ): void {
 	const path = config.path ?? defaultPath;
 	const clients = new Map<WebSocket, LiveClient>();
-	const webSocketServer = new WebSocketServer({ noServer: true });
+	const webSocketServer = new WebSocketServer({ maxPayload: 16_384, noServer: true });
 	const scpLiveHub = getSharedScpStatementLiveHub(
 		config.getScpStatements,
 		config.logger
 	);
 	let latestLedgerTimer: ReturnType<typeof setInterval> | undefined;
 	let networkTimer: ReturnType<typeof setInterval> | undefined;
+	let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 	let latestLedgerFailureCount = 0;
 	let latestLedgerRetryAtMs = 0;
 	let latestLedgerWriting = false;
 	let networkWriting = false;
+	let networkMessageSerialized: string | null = null;
+	let summaryMessageSerialized: string | null = null;
+	let ledgerMessageSerialized: string | null = null;
+	let ledgerCacheSemanticKey: string | null = null;
 
-	const broadcast = (message: LiveMessage): void => {
-		const payload = JSON.stringify(message);
-		for (const client of clients.values()) client.sender.send(payload);
+	const send = (client: LiveClient, message: LiveMessage): boolean =>
+		client.sender.send(JSON.stringify(message));
+
+	const broadcastError = (message: string): void => {
+		for (const client of clients.values()) {
+			send(client, { payload: { message }, type: 'error' });
+		}
 	};
 
+	const hasNetworkSubscribers = (): boolean =>
+		[...clients.values()].some(
+			({ channels }) => channels.network || channels.summary
+		);
+
 	const writeLatestLedger = (): void => {
-		if (latestLedgerWriting || Date.now() < latestLedgerRetryAtMs) return;
+		if (
+			latestLedgerWriting ||
+			Date.now() < latestLedgerRetryAtMs ||
+			!hasNetworkSubscribers()
+		) return;
 		latestLedgerWriting = true;
 		void getLatestLedger(config)
 			.then((payload) => {
 				latestLedgerFailureCount = 0;
 				latestLedgerRetryAtMs = 0;
-				broadcast({ payload, type: 'latestLedger' });
+				const semanticKey = ledgerSemanticKey(payload);
+				const changed = ledgerCacheSemanticKey !== semanticKey;
+				ledgerCacheSemanticKey = semanticKey;
+				const message = JSON.stringify({ payload, type: 'latestLedger' });
+				ledgerMessageSerialized = message;
+				if (!changed) return;
+				for (const client of clients.values()) {
+					if (client.channels.network || client.channels.summary) {
+						client.sender.send(message);
+					}
+				}
 			})
 			.catch((error) => {
 				latestLedgerFailureCount++;
@@ -178,10 +297,7 @@ export function attachNetworkLiveWebSocket(
 				config.logger?.error('Live WebSocket latest ledger unavailable', {
 					error: errorMessage(error)
 				});
-				broadcast({
-					payload: { message: 'Latest ledger unavailable' },
-					type: 'error'
-				});
+				broadcastError('Latest ledger unavailable');
 			})
 			.finally(() => {
 				latestLedgerWriting = false;
@@ -189,28 +305,38 @@ export function attachNetworkLiveWebSocket(
 	};
 
 	const writeNetwork = (): void => {
-		if (networkWriting) return;
+		if (networkWriting || !hasNetworkSubscribers()) return;
 		networkWriting = true;
 		void config.getNetwork
 			.execute({})
 			.then((networkOrError) => {
 				if (networkOrError.isErr() || networkOrError.value === null) {
-					broadcast({
-						payload: { message: 'Network snapshot unavailable' },
-						type: 'error'
-					});
+					broadcastError('Network snapshot unavailable');
 					return;
 				}
-				broadcast({ payload: networkOrError.value, type: 'network' });
+				const network = networkOrError.value;
+				const summary = summaryPayload(network);
+				const nextNetworkMessage = JSON.stringify({ payload: network, type: 'network' });
+				const nextSummaryMessage = JSON.stringify({ payload: summary, type: 'summary' });
+				const topologyChanged = networkMessageSerialized !== nextNetworkMessage;
+				const summaryChanged = summaryMessageSerialized !== nextSummaryMessage;
+				networkMessageSerialized = nextNetworkMessage;
+				summaryMessageSerialized = nextSummaryMessage;
+				if (!topologyChanged && !summaryChanged) return;
+				for (const client of clients.values()) {
+					if (client.channels.network && topologyChanged) {
+						if (networkMessageSerialized !== null) client.sender.send(networkMessageSerialized);
+					}
+					if (client.channels.summary && summaryChanged) {
+						if (summaryMessageSerialized !== null) client.sender.send(summaryMessageSerialized);
+					}
+				}
 			})
 			.catch((error) => {
 				config.logger?.error('Live WebSocket network unavailable', {
 					error: errorMessage(error)
 				});
-				broadcast({
-					payload: { message: 'Network snapshot unavailable' },
-					type: 'error'
-				});
+				broadcastError('Network snapshot unavailable');
 			})
 			.finally(() => {
 				networkWriting = false;
@@ -218,19 +344,38 @@ export function attachNetworkLiveWebSocket(
 	};
 
 	const start = (): void => {
-		if (networkTimer || latestLedgerTimer) return;
-		writeNetwork();
-		writeLatestLedger();
-		networkTimer = setInterval(writeNetwork, networkIntervalMs);
-		latestLedgerTimer = setInterval(writeLatestLedger, latestLedgerIntervalMs);
+		if (hasNetworkSubscribers()) {
+			if (!networkTimer) {
+				writeNetwork();
+				networkTimer = setInterval(writeNetwork, networkIntervalMs);
+			}
+			if (!latestLedgerTimer) {
+				writeLatestLedger();
+				latestLedgerTimer = setInterval(writeLatestLedger, latestLedgerIntervalMs);
+			}
+		}
+		if (!heartbeatTimer) heartbeatTimer = setInterval(() => {
+			const message = JSON.stringify({
+				payload: { observedAt: new Date().toISOString() },
+				type: 'heartbeat'
+			});
+			for (const client of clients.values()) {
+				client.sender.send(message);
+			}
+		}, heartbeatIntervalMs);
 	};
 
 	const stop = (): void => {
-		if (clients.size > 0) return;
-		if (networkTimer) clearInterval(networkTimer);
-		if (latestLedgerTimer) clearInterval(latestLedgerTimer);
-		networkTimer = undefined;
-		latestLedgerTimer = undefined;
+		if (!hasNetworkSubscribers()) {
+			if (networkTimer) clearInterval(networkTimer);
+			if (latestLedgerTimer) clearInterval(latestLedgerTimer);
+			networkTimer = undefined;
+			latestLedgerTimer = undefined;
+		}
+		if (clients.size === 0) {
+			if (heartbeatTimer) clearInterval(heartbeatTimer);
+			heartbeatTimer = undefined;
+		}
 	};
 
 	const removeClient = (socket: WebSocket): void => {
@@ -243,11 +388,13 @@ export function attachNetworkLiveWebSocket(
 
 	webSocketServer.on('connection', (socket, request) => {
 		const resume = parseNetworkLiveResumeCursor(request.url);
-		if (!resume.valid) {
-			socket.close(1008, 'invalid SCP cursor');
+		const subscription = parseNetworkLiveChannels(request.url);
+		if (!resume.valid || !subscription.valid) {
+			socket.close(1008, 'invalid subscription');
 			return;
 		}
 		const client: LiveClient = {
+			channels: subscription.channels,
 			scpUnsubscribe: () => undefined,
 			sender: new BoundedWebSocketSender(
 				socket,
@@ -263,37 +410,52 @@ export function attachNetworkLiveWebSocket(
 			});
 			client.sender.close(1011, 'client error');
 		});
-		const unsubscribe = scpLiveHub.subscribe(
-			{
-				onError: (message) =>
-					client.sender.send(
-						JSON.stringify({
-							payload: { message },
-							type: 'error'
-						} satisfies LiveMessage)
-					),
-				onUpdate: ({ cursor, metadata, statements, truncated }) => {
-					const message = JSON.stringify({
-						...metadata,
-						cursor,
-						payload: statements,
-						truncated,
-						type: 'scp'
-					} satisfies LiveMessage);
-					if (!isWithinScpStatementTransportCeiling(message)) {
-						config.logger?.warn('SCP WebSocket frame exceeds transport limit');
-						return false;
+
+		if (client.channels.scp) {
+			const unsubscribe = scpLiveHub.subscribe(
+				{
+					onError: (message) =>
+						send(client, { payload: { message }, type: 'error' }),
+					onUpdate: ({ cursor, metadata, statements, truncated }) => {
+						const payload =
+							client.channels.scpMode === 'graph'
+								? statements.map(graphStatement)
+								: statements;
+						const message = JSON.stringify({
+							...metadata,
+							cursor,
+							payload,
+							truncated,
+							type:
+								client.channels.scpMode === 'graph' ? 'scpGraph' : 'scp'
+						} satisfies LiveMessage);
+						if (!isWithinScpStatementTransportCeiling(message)) {
+							config.logger?.warn('SCP WebSocket frame exceeds transport limit');
+							return false;
+						}
+						return client.sender.send(message);
 					}
-					return client.sender.send(message);
-				}
-			},
-			resume.cursor
-		);
-		if (unsubscribe === null) {
-			client.sender.close(1013, 'SCP live capacity');
-			return;
+				},
+				resume.cursor
+			);
+			if (unsubscribe === null) {
+				client.sender.close(1013, 'SCP live capacity');
+				return;
+			}
+			client.scpUnsubscribe = unsubscribe;
 		}
-		client.scpUnsubscribe = unsubscribe;
+
+		if (client.channels.network || client.channels.summary) {
+			if (client.channels.network && networkMessageSerialized !== null) {
+				client.sender.send(networkMessageSerialized);
+			}
+			if (client.channels.summary && summaryMessageSerialized !== null) {
+				client.sender.send(summaryMessageSerialized);
+			}
+			if (ledgerMessageSerialized !== null) {
+				client.sender.send(ledgerMessageSerialized);
+			}
+		}
 		start();
 	});
 
@@ -301,7 +463,10 @@ export function attachNetworkLiveWebSocket(
 		'upgrade',
 		(request: IncomingMessage, socket: Socket, head: Buffer) => {
 			if (!isWebSocketPath(request, path)) return;
-			if (!parseNetworkLiveResumeCursor(request.url).valid) {
+			if (
+				!parseNetworkLiveResumeCursor(request.url).valid ||
+				!parseNetworkLiveChannels(request.url).valid
+			) {
 				rejectInvalidUpgrade(socket);
 				return;
 			}
@@ -316,10 +481,4 @@ export function attachNetworkLiveWebSocket(
 		stop();
 		webSocketServer.close();
 	});
-}
-
-function rejectInvalidUpgrade(socket: Socket): void {
-	socket.end(
-		'HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
-	);
 }

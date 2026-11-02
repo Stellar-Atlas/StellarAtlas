@@ -1,4 +1,5 @@
 import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveProofCompletionReserveMemberSql } from './HistoryArchiveProofCompletionReserveSql.js';
 
 /** A necessary subset only. Final eligibility, manual intent, source recovery,
  * controls, host capacity, and reservation fences remain in the normal selector. */
@@ -21,6 +22,11 @@ recovery_identities as materialized (
 	union
 	select object."remoteId" from recovery_candidates object
 	where object."objectType"='history-archive-state'
+	union
+	select object."remoteId" from recovery_candidates object
+	join history_archive_object_queue reserved_object
+		on reserved_object."remoteId"=object."remoteId"
+	where ${historyArchiveProofCompletionReserveMemberSql('reserved_object')}
 	union
 	select object."remoteId" from history_archive_checkpoint_scan_cursor cursor
 	join (select distinct "archiveUrlIdentity" from recovery_candidates

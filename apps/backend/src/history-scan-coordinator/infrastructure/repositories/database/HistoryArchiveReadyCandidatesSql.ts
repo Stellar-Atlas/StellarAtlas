@@ -1,5 +1,6 @@
 import { historyArchiveSequentialPrefetchLedgerSpan } from './HistoryArchiveSequentialChainSql.js';
 import { historyArchiveCheckpointBucketDependencyRangeSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveProofCompletionReserveMemberSql } from './HistoryArchiveProofCompletionReserveSql.js';
 
 export function historyArchiveReadyMutableEligibilitySql(
 	alias: string
@@ -88,6 +89,23 @@ export function historyArchiveReadyCohortCandidatesSql(
 				and candidate."checkpointLedger" is not null
 				and ${eligible}
 			offset 0
+		) candidate
+		union all
+		select ${candidateColumns}
+		from lateral (
+			select ${candidateColumns}
+			from "history_archive_object_queue" candidate
+			where candidate."archiveUrlIdentity" = ${archiveUrlIdentitySql}
+				and ${eligible}
+				and ${historyArchiveProofCompletionReserveMemberSql('candidate')}
+				and not exists (
+					select 1
+					from chain_cursor
+					where candidate."checkpointLedger" between
+						chain_cursor.first_checkpoint and chain_cursor.last_checkpoint
+				)
+			order by candidate."checkpointLedger" asc
+			limit 1
 		) candidate
 	`;
 }
