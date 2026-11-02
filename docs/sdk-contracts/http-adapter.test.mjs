@@ -8,7 +8,6 @@ import { HubbleWarehouseUnavailableError } from '../../apps/backend/src/status/i
 const folder = fileURLToPath(new URL('./fixtures/', import.meta.url));
 function pinned(name, values) {
   const text = '[\n' + values.map(value => '  ' + JSON.stringify(value)).join(',\n') + '\n]\n';
-  if (process.env.UPDATE_SDK_FIXTURES === '1') fs.writeFileSync(folder + name, text);
   expect(fs.readFileSync(folder + name, 'utf8')).toBe(text);
 }
 

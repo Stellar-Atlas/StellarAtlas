@@ -20,10 +20,13 @@ With the repository's locked development dependencies installed, run from its ro
 NODE_OPTIONS=--experimental-vm-modules pnpm exec jest --config docs/sdk-contracts/jest.config.mjs --runInBand
 ```
 
-For a deliberate contract refresh, review the source change first, run the same
-command with `UPDATE_SDK_FIXTURES=1`, inspect all fixture differences and refresh
-the manifest with `node docs/sdk-contracts/refresh-manifest.mjs <reviewed-source-revision>`.
-Never regenerate solely to silence a failing comparison.
+Contract tests are read-only: they never save HTTP responses or update fixtures,
+including when an environment variable requests fixture updates. For a deliberate
+contract refresh, review the source change and expected wire behavior first,
+then edit the intended committed fixture files explicitly and review every diff.
+Refresh their digest manifest with
+`node docs/sdk-contracts/refresh-manifest.mjs <reviewed-source-revision>` and rerun
+the unchanged comparisons. Never replace fixtures solely to silence a failure.
 
 The tests invoke registered REST handlers directly and rerun GraphQL through the
 actual public route mount, Express and locked `graphql-http` adapter. Separate

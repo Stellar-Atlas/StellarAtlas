@@ -12,7 +12,6 @@ import { fixtureHttp } from './http-fixture.mjs';
 const { withHubbleOpenApiPaths } = await import('../../apps/backend/src/core/infrastructure/http/HubbleOpenApiDocument.js');
 const { withAssetResourceOpenApiPaths } = await import('../../apps/backend/src/core/infrastructure/http/AssetResourceOpenApi.js');
 const folder = fileURLToPath(new URL('./fixtures/', import.meta.url));
-const updating = process.env.UPDATE_SDK_FIXTURES === '1';
 function pinned(name, value) {
   let text = typeof value === 'string' ? value : JSON.stringify(value, null, 2) + '\n';
   if (name === 'openapi-selected.json') {
@@ -21,7 +20,6 @@ function pinned(name, value) {
       Object.entries(value.components.schemas).map(([key, schema]) => '    ' + JSON.stringify(key) + ': ' + JSON.stringify(schema)).join(',\n') + '\n  } }\n}\n';
   }
   const file = folder + name;
-  if (updating) { fs.mkdirSync(folder, { recursive: true }); fs.writeFileSync(file, text); }
   expect(fs.readFileSync(file, 'utf8')).toBe(text);
 }
 async function graph(warehouse, query, variables) {

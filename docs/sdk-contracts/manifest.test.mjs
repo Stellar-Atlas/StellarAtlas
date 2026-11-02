@@ -13,11 +13,9 @@ test('pinned contract source and fixture digests match reviewed artifacts', () =
     const bytes = fs.readFileSync(root + '/' + entry.path);
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(entry.sha256);
   }
-  if (process.env.UPDATE_SDK_FIXTURES !== '1') {
-    for (const entry of manifest.fixtures) {
-      const bytes = fs.readFileSync(here + entry.path);
-      expect(createHash('sha256').update(bytes).digest('hex')).toBe(entry.sha256);
-    }
-    expect(fs.readdirSync(here + 'fixtures').length).toBe(manifest.fixtures.length);
+  for (const entry of manifest.fixtures) {
+    const bytes = fs.readFileSync(here + entry.path);
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(entry.sha256);
   }
+  expect(fs.readdirSync(here + 'fixtures').length).toBe(manifest.fixtures.length);
 });
