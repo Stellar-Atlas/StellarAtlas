@@ -56,14 +56,17 @@ export function assetReportHref(pathname: string, search: string, asset: string,
 	}
 	return pathname + (params.size ? '?' + params.toString() : '') + fragment;
 }
-export function localReportDate(value: string): string {
+/** datetime-local is only the input shape; report controls explicitly use UTC. */
+export function reportDateInput(value: string): string {
 	if (!value) return '';
 	const date = new Date(value);
-	return Number.isFinite(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 23) : '';
+	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 23) : '';
 }
-export function utcReportDate(value: string): string {
+export function utcReportDate(value: string, original = ''): string {
+	if (original && Number.isFinite(Date.parse(original)) && value === reportDateInput(original)) return original;
 	if (!value) return '';
-	const date = new Date(value);
+	if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d{1,3})?)?$/.test(value)) throw new Error('Enter a valid UTC report date.');
+	const date = new Date(value + 'Z');
 	if (!Number.isFinite(date.getTime())) throw new Error('Enter a valid report date.');
 	return date.toISOString();
 }

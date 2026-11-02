@@ -8,7 +8,7 @@ import {
 	normalizeWarehouseTimestamp
 } from '../../api/explorer-analytics';
 import { parseAssetReportPage, type AssetReportPage } from '../../api/explorer-asset-reports';
-import { assetReportHref, readAssetReportRoute, reportSelectionKey, validateReportQuery, localReportDate, utcReportDate, type AssetReportKind, type AssetReportQuery } from './asset-report-route';
+import { assetReportHref, readAssetReportRoute, reportSelectionKey, validateReportQuery, reportDateInput, utcReportDate, type AssetReportKind, type AssetReportQuery } from './asset-report-route';
 import { LocalDateTime } from '../local-date-time';
 import { formatDecimal } from './explorer-format-values';
 import styles from './explorer-entity.module.css';
@@ -48,7 +48,7 @@ function ReportPage({asset, kind, query, after, routeError, previous, navigate, 
 	readonly navigate: (query: AssetReportQuery, after?: string, remember?: boolean) => void; readonly origin: string;
 }): React.JSX.Element {
 	const [metric, setMetric] = useState(query.metric ?? 'volume'), [counter, setCounter] = useState(query.counter_asset ?? ''), [account, setAccount] = useState(query.account ?? '');
-	const [from, setFrom] = useState(localReportDate(query.start_time ?? '')), [to, setTo] = useState(localReportDate(query.end_time ?? ''));
+	const [from, setFrom] = useState(reportDateInput(query.start_time ?? '')), [to, setTo] = useState(reportDateInput(query.end_time ?? ''));
 	const [order, setOrder] = useState(query.order ?? 'desc');
 	const [page, setPage] = useState<AssetReportPage | null>(null), [busy, setBusy] = useState(!routeError), [error, setError] = useState(routeError), [reload, setReload] = useState(0);
 	// This component is keyed by asset, report kind, validated selection and cursor.
@@ -88,7 +88,7 @@ function ReportPage({asset, kind, query, after, routeError, previous, navigate, 
 				onSubmit={(event) => {
 					event.preventDefault();
 					try {
-						const selected = validateReportQuery(kind, {...query, order, ...(ranks ? {metric, counter_asset: counter.trim()} : {}), account: account.trim(), start_time: utcReportDate(from), end_time: utcReportDate(to)});
+						const selected = validateReportQuery(kind, {...query, order, ...(ranks ? {metric, counter_asset: counter.trim()} : {}), account: account.trim(), start_time: utcReportDate(from, query.start_time), end_time: utcReportDate(to, query.end_time)});
 						navigate(selected);
 						if (!after && !routeError && reportSelectionKey(asset, kind, query) === reportSelectionKey(asset, kind, selected)) setReload((value) => value + 1);
 					} catch (cause) { setError(cause instanceof Error ? cause.message : 'Invalid report selection.'); }
@@ -128,9 +128,9 @@ function ReportPage({asset, kind, query, after, routeError, previous, navigate, 
 				</label>
 				<label>Order<select value={order} onChange={(event) => setOrder(event.target.value)}><option value="desc">{ranks ? 'Highest first' : 'Newest first'}</option><option value="asc">{ranks ? 'Lowest first' : 'Oldest first'}</option></select></label>
 				<details>
-					<summary>Date range</summary>
+					<summary>Date range (UTC)</summary>
 					<label>
-						From
+						From (UTC)
 						<input
 							type="datetime-local"
 							step="0.001"
@@ -139,7 +139,7 @@ function ReportPage({asset, kind, query, after, routeError, previous, navigate, 
 						/>
 					</label>
 					<label>
-						To
+						To (UTC)
 						<input
 							type="datetime-local"
 							step="0.001"
