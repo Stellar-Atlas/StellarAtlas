@@ -15,6 +15,7 @@ import {
 	type ContractEventValue
 } from '../../domain/contract-event-value';
 import { flattenContractEventValue } from '../../domain/contract-event-fields';
+import { formatContractEventNumber } from '../../domain/contract-event-number';
 import {
 	contractEventText as valueText,
 	contractEventOutcome,
@@ -231,22 +232,26 @@ function PayloadPreview({
 							{field.path.replaceAll('_', ' ')}:{' '}
 						</span>
 					)}
-					<ScalarValue value={field.value} field={field.path} />
+					<ScalarValue value={field.value} field={field.path} valueType={field.type} />
 				</div>
 			))}
 		</div>
 	);
 }
 
+const numericScValTypes = new Set(['u32', 'i32', 'u64', 'i64', 'u128', 'i128', 'u256', 'i256', 'timepoint', 'duration']);
+
 export function ScalarValue({
 	value,
-	field = ''
+	field = '',
+	valueType = ''
 }: {
 	readonly value: ContractEventValue;
 	readonly field?: string;
+	readonly valueType?: string;
 }): React.JSX.Element {
 	if (value.kind === 'typed')
-		return <ScalarValue value={value.value} field={field} />;
+		return <ScalarValue value={value.value} field={field} valueType={value.typeName} />;
 	if (value.kind === 'void' || value.kind === 'null')
 		return (
 			<span className={styles.muted}>
@@ -286,8 +291,8 @@ export function ScalarValue({
 	if (date) return <LocalDateTime dateTime={date} />;
 	return (
 		<code>
-			{value.kind === 'number' || /^-?\d+(?:\.\d+)?$/.test(text)
-				? formatDecimal(text, 18)
+			{!['string', 'symbol'].includes(valueType) && (value.kind === 'number' || numericScValTypes.has(valueType))
+				? formatContractEventNumber(text)
 				: text}
 		</code>
 	);
@@ -380,7 +385,7 @@ function EventDialog({
 					<div className={styles.field} key={index}>
 						<dt>{field.path.replaceAll('_', ' ')}</dt>
 						<dd>
-							<ScalarValue value={field.value} field={field.path} />
+							<ScalarValue value={field.value} field={field.path} valueType={field.type} />
 						</dd>
 					</div>
 				))}

@@ -51,7 +51,7 @@ export function ExplorerOperationCall({
 											{fields.length > 1 && (
 												<span className={styles.muted}>{field.path}: </span>
 											)}
-											<ScalarValue value={field.value} field={field.path} />
+											<ScalarValue value={field.value} field={field.path} valueType={field.type} />
 										</div>
 									))}
 									{truncated && (
