@@ -181,14 +181,17 @@ func (c *Client) Insert(ctx context.Context, table, token string, rows []byte) e
 
 // Timings belong to one serial batch writer, never the shared client.
 type insertTimings struct {
-	responses     insertResponseTotals
-	nativeEncode  time.Duration
-	request       time.Duration
-	poolWait      time.Duration
-	upload        time.Duration
-	firstByteWait time.Duration
-	bodyRead      time.Duration
-	permitWait    time.Duration
+	// Only the existing encode/send path sets this; it does not assert that
+	// every row decoded or any request was acknowledged.
+	encoderAttempted bool
+	responses        insertResponseTotals
+	nativeEncode     time.Duration
+	request          time.Duration
+	poolWait         time.Duration
+	upload           time.Duration
+	firstByteWait    time.Duration
+	bodyRead         time.Duration
+	permitWait       time.Duration
 }
 
 func (c *Client) insert(ctx context.Context, table, token string, rows []byte, timings *insertTimings) error {
@@ -217,6 +220,9 @@ func (c *Client) insert(ctx context.Context, table, token string, rows []byte, t
 		token += ":single-copy-v1"
 	}
 	format := "JSONEachRow"
+	if timings != nil {
+		timings.encoderAttempted = true
+	}
 	if hasDynamicColumns(columns) {
 		started := time.Now()
 		rows, err = encodeNativeRowsParallel(columns, rows)

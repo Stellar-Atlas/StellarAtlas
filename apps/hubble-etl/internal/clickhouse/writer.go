@@ -71,9 +71,12 @@ type BatchWriter struct {
 // HTTP phases count completed event pairs only and may omit failed/early phases.
 // Pool wait includes connection setup/retries, not just idle-pool contention.
 // Phase sums can overlap and are not additive wall-clock stage durations.
-// Rows/chunks/bytes include acknowledged dataset jobs only.
+// Top-level rows/chunks/bytes include acknowledged dataset jobs only.
+// EncoderRoutes separately report offered and chunk-outcome membership.
 type DatasetWriteStats struct {
 	InsertResponses           []DatasetInsertResponseStats `json:"insertResponses"`
+	EncoderRoutes             []DatasetEncoderRouteStats   `json:"encoderRoutes"`
+	OmittedDatasetRows        []OmittedDatasetRows         `json:"omittedDatasetRows"`
 	FlushMilliseconds         int64                        `json:"flushMilliseconds"`
 	NativeEncodeMilliseconds  int64                        `json:"nativeEncodeMilliseconds"`
 	RequestMilliseconds       int64                        `json:"requestMilliseconds"`
@@ -91,6 +94,8 @@ type DatasetWriteStats struct {
 func (w *BatchWriter) DatasetWriteStats() DatasetWriteStats {
 	return DatasetWriteStats{
 		InsertResponses:           w.datasetInsertResponseStats(),
+		EncoderRoutes:             w.encoderRouteStats(),
+		OmittedDatasetRows:        w.omittedDatasetRows(),
 		FlushMilliseconds:         w.flushElapsed.Milliseconds(),
 		NativeEncodeMilliseconds:  w.insertTimings.nativeEncode.Milliseconds(),
 		RequestMilliseconds:       w.insertTimings.request.Milliseconds(),
@@ -105,6 +110,7 @@ func (w *BatchWriter) DatasetWriteStats() DatasetWriteStats {
 }
 
 type tableBuffer struct {
+	routeStats     encoderTableStats
 	nativePrepared *PreparedNativeRow
 	nativeBuffer   *typedNativeBuffer
 	body           bytes.Buffer
@@ -204,6 +210,7 @@ func (w *BatchWriter) Emit(
 		// Preserve the logical output/receipt count without serializing a row or
 		// advancing a physical buffer/chunk. Recovery checks the source table.
 		table.nextRow++
+		table.routeStats.virtualRows++
 		w.totalRows++
 		return nil
 	}
@@ -246,12 +253,15 @@ func (w *BatchWriter) finishEncodedRow(
 	table *tableBuffer,
 	encoded []byte,
 ) error {
+	route := w.offerEncoderRoute(dataset, table, encoded)
 	if typedNativeEnabled(w.limits, dataset) {
 		if err := w.appendTypedNative(dataset, table, ledgerSequence, encoded); err != nil {
+			table.routeStats.reject(route, uint64(len(encoded))+1)
 			w.failTypedNative(table, err)
 			return err
 		}
 	}
+	table.routeStats.accept(route, uint64(len(encoded))+1)
 	if w.client.holderIndexEnabled {
 		if err := w.captureHolderIndexRow(
 			ctx,
@@ -406,11 +416,13 @@ func (w *BatchWriter) flushTable(
 		w.runInsert(ctx, dataset, token, nil, job)
 		err = job.err
 		w.mergeInsertTimings(dataset, job.timings)
+		w.mergeEncoderChunk(dataset, table.routeStats.chunk, job.timings.encoderAttempted, err)
 		w.rememberInsertError(err)
 	} else {
 		var timings insertTimings
 		err = w.client.insert(ctx, dataset, token, table.body.Bytes(), &timings)
 		w.mergeInsertTimings(dataset, timings)
+		w.mergeEncoderChunk(dataset, table.routeStats.chunk, timings.encoderAttempted, err)
 	}
 	w.flushElapsed += time.Since(started)
 	if err != nil {
@@ -425,6 +437,7 @@ func (w *BatchWriter) flushTable(
 		table.body.Reset()
 	}
 	table.bufferRows = 0
+	table.routeStats.chunk = encoderRouteCounts{}
 	table.chunk++
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 var datasetInsertPermits = make(chan struct{}, 4)
 
 type pendingInsert struct {
+	routes    encoderRouteCounts
 	dataset   string
 	native    *typedNativeChunk
 	done      chan struct{}
@@ -58,6 +59,7 @@ func (w *BatchWriter) joinFirstInsert(ctx context.Context) {
 	w.pendingInsertBytes -= job.bytes
 	w.flushElapsed += job.elapsed
 	w.mergeInsertTimings(job.dataset, job.timings)
+	w.mergeEncoderChunk(job.dataset, job.routes, job.timings.encoderAttempted, job.err)
 	w.rememberInsertError(job.err)
 	if job.err == nil {
 		w.flushedRows += uint64(job.rows)
@@ -101,6 +103,7 @@ admission:
 			return err
 		}
 		job := &pendingInsert{dataset: dataset, rows: table.bufferRows, jsonBytes: table.body.Len(), native: detachTypedNative(table)}
+		job.routes = table.routeStats.chunk
 		if job.native != nil {
 			job.timings.nativeEncode = job.native.preEncode
 		}
@@ -112,6 +115,7 @@ admission:
 		w.runInsert(ctx, dataset, token, body, job)
 		w.flushElapsed += job.elapsed
 		w.mergeInsertTimings(dataset, job.timings)
+		w.mergeEncoderChunk(dataset, job.routes, job.timings.encoderAttempted, job.err)
 		w.rememberInsertError(job.err)
 		if job.err != nil {
 			return job.err
@@ -121,6 +125,7 @@ admission:
 		w.flushedJSONBytes += uint64(job.jsonBytes)
 		table.body.Reset()
 		table.bufferRows = 0
+		table.routeStats.chunk = encoderRouteCounts{}
 		table.chunk++
 		return nil
 	}
@@ -133,6 +138,7 @@ admission:
 	}
 	jobCtx, cancel := context.WithCancel(ctx)
 	job := &pendingInsert{
+		routes:  table.routeStats.chunk,
 		dataset: dataset,
 		done:    make(chan struct{}), cancel: cancel, bytes: reserved,
 		rows: table.bufferRows, jsonBytes: table.body.Len(),
@@ -148,6 +154,7 @@ admission:
 	// Detach rather than Reset: workers own immutable storage until joined.
 	table.body = bytes.Buffer{}
 	table.bufferRows = 0
+	table.routeStats.chunk = encoderRouteCounts{}
 	table.chunk++
 	w.pendingInserts = append(w.pendingInserts, job)
 	w.pendingInsertBytes += reserved

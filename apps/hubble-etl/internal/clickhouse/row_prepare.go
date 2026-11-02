@@ -62,6 +62,7 @@ func (w *BatchWriter) emitPrepared(ctx context.Context, dataset string, ledgerSe
 	}
 	if w.VirtualLedgerTransactions() && dataset == "ledger_transactions" {
 		table.nextRow++
+		table.routeStats.virtualRows++
 		w.totalRows++
 		return nil
 	}

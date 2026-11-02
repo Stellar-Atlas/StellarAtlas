@@ -172,6 +172,9 @@ func (c *Client) insertEncodedNative(ctx context.Context, table, token string, c
 	if !tokenPattern.MatchString(token) {
 		return fmt.Errorf("versioned insertion token too long")
 	}
+	if timings != nil {
+		timings.encoderAttempted = true
+	}
 	started := time.Now()
 	rows, err := chunk.payload(ctx)
 	if timings != nil {
