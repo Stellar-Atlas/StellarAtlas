@@ -72,7 +72,7 @@ export interface PublicLedgerTransaction {
 
 export interface PublicTransactionLookup extends PublicLedgerTransaction {
 	readonly ledger: string;
-	readonly source: 'horizon' | 'postgres_canonical';
+	readonly source: 'horizon' | 'postgres_canonical' | 'analytics_warehouse';
 }
 
 export type PublicRecentTransactions = ExplorerRecentTransactionsV1;
@@ -96,6 +96,7 @@ export interface PublicLatestLedger {
 export type PublicExplorerSource =
 	| 'horizon'
 	| 'postgres_canonical'
+	| 'analytics_warehouse'
 	| 'postgres_proof_gated_lcm_account_changes'
 	| 'rpc';
 export type PublicExplorerSearchType =
@@ -107,7 +108,7 @@ export interface PublicExplorerLedger {
 	readonly operationCount: number;
 	readonly protocolVersion: number;
 	readonly sequence: string;
-	readonly source: 'horizon' | 'postgres_canonical';
+	readonly source: 'horizon' | 'postgres_canonical' | 'analytics_warehouse';
 	readonly transactionCount: number | null;
 }
 

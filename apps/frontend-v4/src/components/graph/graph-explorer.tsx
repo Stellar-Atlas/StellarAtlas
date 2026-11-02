@@ -71,6 +71,8 @@ export function GraphExplorer({
 		latestLedgerClosedAt,
 		latestObservedScpSlotIndex,
 		liveStreamState,
+		liveEnabled,
+		setLiveEnabled,
 		network,
 		scpReadMetadata,
 		scpStatements
@@ -344,6 +346,14 @@ export function GraphExplorer({
 				showAllConnectable={showAllConnectable}
 			/>
 			<section className="graph-overlay scp-observation-orbit">
+				<button
+					aria-pressed={liveEnabled}
+					className={liveEnabled ? 'graph-toggle active' : 'graph-toggle'}
+					onClick={() => setLiveEnabled(!liveEnabled)}
+					type="button"
+				>
+					{liveEnabled ? 'Pause live updates' : 'Resume live updates'}
+				</button>
 				<ScpLiveFeed
 					activeSlotIndex={activePlaybackSlotIndex}
 					activeStatements={activeStatements}

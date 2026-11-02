@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import type { ExplorerFilters } from '../../api/explorer-analytics';
 import {
 	contractActivityPath,
@@ -26,6 +27,7 @@ import {
 } from './contract-event-controls';
 import { contractEventWorkspaceHref } from './contract-event-query';
 import { ExplorerInvestigationScope } from './explorer-investigation';
+import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
 export function ExplorerContractActivity({
 	contractId,
 	filters,
@@ -35,7 +37,16 @@ export function ExplorerContractActivity({
 	readonly filters: ExplorerFilters;
 	readonly token?: EventTokenContext;
 }): React.JSX.Element {
-	const [tab, setTab] = useState<ContractActivityTab>('events');
+	const pathname = usePathname();
+	const params = useSearchParams();
+	const tab = readContractActivityTab(params.get('activity'));
+	const setTab = (next: ContractActivityTab) => {
+		const href = contractActivityTabHref(
+			pathname, window.location.search, next, window.location.hash
+		);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+	};
 	const [controls, setControls] = useState(() => createEventControls(filters));
 	const [search, setSearch] = useState(controls.q);
 	const [summary, setSummary] = useState<ContractActivityPage['summary']>();
@@ -351,7 +362,7 @@ export function ContractActivityView({
 			<div className={ui.pagination}>
 				<span>
 					{page
-						? `${page.rows.length} ${tab === 'events' ? 'events' : 'changes'}${state.positions[0] ? ' · Continued query' : ` · Page ${state.pageIndex + 1}`}`
+						? `${page.rows.length} ${tab === 'events' ? page.rows.length === 1 ? 'event' : 'events' : page.rows.length === 1 ? 'change' : 'changes'}${state.positions[0] ? ' · Continued query' : ` · Page ${state.pageIndex + 1}`}`
 						: ''}
 				</span>
 				<div>

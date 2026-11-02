@@ -11,6 +11,7 @@ import {
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerPoolTable } from './explorer-pool-table';
 import styles from './explorer-entity.module.css';
+import { hasPoolHistory, poolContextFromRequest, poolContextQuery, poolListHref } from './pool-history-links';
 
 export function ExplorerPoolDetail({
 	id,
@@ -19,21 +20,13 @@ export function ExplorerPoolDetail({
 	readonly id: string;
 	readonly filters: ExplorerFilters;
 }): React.JSX.Element {
-	const [row, setRow] = useState<EntityRecord | null>(null),
+	const [record, setRecord] = useState<{ id: string; query: string; row: EntityRecord } | null>(null),
 		[error, setError] = useState<string | null>(null),
 		[busy, setBusy] = useState(true),
 		[version, setVersion] = useState(0);
-	const query = new URLSearchParams(
-		Object.entries(filters).filter(([key]) =>
-			[
-				'min_ledger',
-				'max_ledger',
-				'start_time',
-				'end_time',
-				'deleted'
-			].includes(key)
-		)
-	).toString();
+	const query = poolContextQuery(filters).toString();
+	const loaded = record?.id === id ? record : null;
+	const row = loaded?.row;
 	useEffect(() => {
 		const abort = new AbortController();
 		setBusy(true);
@@ -47,7 +40,7 @@ export function ExplorerPoolDetail({
 			.then((raw) => {
 				if (abort.signal.aborted) return;
 				const value = recordValue(raw);
-				setRow(value.record ? recordValue(value.record) : null);
+				setRecord(value.record ? { id, query, row: recordValue(value.record) } : null);
 			})
 			.catch((cause: unknown) => {
 				if (!abort.signal.aborted)
@@ -66,7 +59,7 @@ export function ExplorerPoolDetail({
 			<section className={styles.panel} aria-busy={busy}>
 				<div className={styles.actions}>
 					<h2>Native liquidity pool</h2>
-					<Link href="/explorer/liquidity-pools">All pools →</Link>
+					<Link href={poolListHref(filters)}>All pools →</Link>
 				</div>
 				<code className={styles.hash}>{id}</code>
 				{busy && <p role="status">Loading…</p>}
@@ -81,10 +74,11 @@ export function ExplorerPoolDetail({
 				{row && (
 					<>
 						<p className={styles.muted}>
-							{query ? 'Historical observation' : 'Latest indexed state'} ·{' '}
+							{loaded?.query !== query ? 'Previous observation · ' : ''}
+							{hasPoolHistory(poolContextFromRequest('?' + (loaded?.query ?? ''))) ? 'Historical observation' : 'Latest indexed state'} ·{' '}
 							{entityText(row, 'type').replaceAll('_', ' ')}
 						</p>
-						<ExplorerPoolTable rows={[row]} />
+						<ExplorerPoolTable rows={[row]} context={poolContextFromRequest('?' + (loaded?.query ?? ''))} />
 					</>
 				)}
 				{!row && !busy && !error && (

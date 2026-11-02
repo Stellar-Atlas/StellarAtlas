@@ -102,6 +102,46 @@ describe('parseLiveNetworkMessage', () => {
 			parseLiveNetworkMessage({ payload: network, type: 'network' })
 		).toEqual({ payload: network, type: 'network' });
 	});
+	it('parses the compact summary channel payload', () => {
+		expect(parseLiveNetworkMessage({
+			type: 'summary',
+			payload: { name: 'Public Stellar Network', time: '2026-07-05T00:00:00.000Z', latestLedger: '63326550' }
+		})).toEqual({
+			type: 'summary',
+			payload: { name: 'Public Stellar Network', time: '2026-07-05T00:00:00.000Z', latestLedger: '63326550' }
+		});
+		expect(parseLiveNetworkMessage({ type: 'summary', payload: { name: 'network', time: 'bad', latestLedger: '1' } })).toBeNull();
+	});
+
+	it('strictly parses graph-only SCP statements without fabricating evidence fields', () => {
+		const statement = {
+			nodeId: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+			observedAt: '2026-07-05T00:00:00.000Z',
+			observedFromPeer: '127.0.0.1:11625',
+			quorumSetHash: 'quorum-a',
+			slotIndex: '63326550',
+			statementHash: 'statement-a',
+			statementType: 'nominate',
+			values: [{ closeTime: '2026-07-05T00:00:00.000Z', txSetHash: 'tx-a' }],
+			signature: 'must-not-be-forwarded'
+		};
+		const parsed = parseLiveNetworkMessage({
+			type: 'scpGraph',
+			freshness: 'fresh',
+			freshnessMs: 10,
+			observedAt: '2026-07-05T00:00:00.000Z',
+			source: 'postgres_canonical',
+			payload: [statement]
+		});
+		expect(parsed).toMatchObject({ type: 'scpGraph', payload: [{ quorumSetHash: 'quorum-a' }] });
+		if (parsed?.type !== 'scpGraph') throw new Error('graph payload not parsed');
+		expect(parsed.payload[0]).not.toHaveProperty('signature');
+		expect(parseLiveNetworkMessage({
+			type: 'scpGraph', freshness: 'fresh', freshnessMs: 10,
+			observedAt: '2026-07-05T00:00:00.000Z', source: 'postgres_canonical',
+			payload: [{ ...statement, values: [{ closeTime: 1, txSetHash: 'tx-a' }] }]
+		})).toBeNull();
+	});
 
 	it.each([
 		{ freshness: 'unknown' },

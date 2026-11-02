@@ -138,6 +138,12 @@ jest.unstable_mockModule('../explorer-asset-workspace.module.css', () => ({
 jest.unstable_mockModule('../explorer-entity-navigation', () => ({
 	ExplorerEntityNavigation: () => null
 }));
+jest.unstable_mockModule('../explorer-asset-tabs', () => ({
+	ExplorerAssetTabs: () => null
+}));
+jest.unstable_mockModule('../explorer-investigation', () => ({
+	ExplorerLink: (props: { children?: unknown }) => props.children
+}));
 jest.unstable_mockModule('../explorer-asset-holders', () => ({
 	ExplorerAssetHolders: () => null
 }));
@@ -156,11 +162,13 @@ let AssetDetails: typeof import('../explorer-asset-views').AssetDetails;
 let AssetTable: typeof import('../explorer-asset-views').AssetTable;
 let Logo: typeof import('../explorer-asset-views').Logo;
 let IssuerDetails: typeof import('../explorer-asset-views').IssuerDetails;
+let ParsedIssuerMetadata: typeof import('../explorer-issuer-metadata').ParsedIssuerMetadata;
 
 beforeAll(async () => {
 	({ ExplorerAssetWorkspace } = await import('../explorer-asset-workspace'));
 	({ AssetDetails, AssetTable, IssuerDetails, Logo } =
 		await import('../explorer-asset-views'));
+	({ ParsedIssuerMetadata } = await import('../explorer-issuer-metadata'));
 });
 
 beforeEach(() => {
@@ -277,7 +285,7 @@ describe('asset detail presentation', () => {
 
 		expect(requestMock).toHaveBeenCalledTimes(1);
 		expect(requestMock.mock.calls[0]?.[0]).toBe(`/v1/assets/${encodedRef}`);
-		expect(renderedText(tree)).toContain('Beer Company');
+		expect(renderedText(tree)).toContain('BEER');
 		expect(renderedText(tree)).not.toContain(`Matches for ${encodedRef}`);
 	});
 
@@ -307,7 +315,7 @@ describe('asset detail presentation', () => {
 			})
 		);
 		const text = renderedText(tree);
-		expect(text).toContain('Issuer metadata');
+		expect(text).toContain('Issuer-published metadata');
 		expect(text).not.toContain('Metadata is pending or incomplete');
 	});
 
@@ -384,7 +392,7 @@ describe('asset detail presentation', () => {
 			AssetDetails({ record, onRefresh: () => undefined, pending: false })
 		);
 		const logo = Logo({ asset, metadata: record.metadata });
-		const text = renderedText(tree);
+		const text = renderedText(ParsedIssuerMetadata({ metadata: record.metadata }));
 		const links = elements(tree, (element) => 'href' in element.props).map(
 			(element) => element.props.href
 		);
@@ -419,6 +427,11 @@ describe('asset detail presentation', () => {
 		).toBe(false);
 	});
 	it('keeps issuer claims out of asset headings and explicitly attributes parsed TOML', () => {
+		const metadata = {
+			name: 'Commodity shares', description: 'A can of beer',
+			fields: { redemption_instructions: '<script>do not execute</script>' },
+			tomlUrl: 'https://issuer.example/.well-known/stellar.toml'
+		};
 		const tree = hooks.render(() =>
 			AssetDetails({
 				record: {
@@ -429,14 +442,7 @@ describe('asset detail presentation', () => {
 						issuer: 'GISSUER',
 						name: 'Commodity shares'
 					},
-					metadata: {
-						name: 'Commodity shares',
-						description: 'A can of beer',
-						fields: {
-							redemption_instructions: '<script>do not execute</script>'
-						},
-						tomlUrl: 'https://issuer.example/.well-known/stellar.toml'
-					}
+					metadata
 				},
 				onRefresh: () => undefined,
 				pending: false
@@ -447,12 +453,13 @@ describe('asset detail presentation', () => {
 		);
 		expect(headings).toEqual(['BEER']);
 		expect(renderedText(tree)).toContain('Classic asset');
-		expect(renderedText(tree)).toContain(
+		expect(renderedText(tree)).not.toContain('Commodity shares');
+		expect(renderedText(ParsedIssuerMetadata({ metadata }))).toContain(
 			'Not verified or endorsed by StellarAtlas.'
 		);
-		expect(renderedText(tree)).toContain('<script>do not execute</script>');
+		expect(renderedText(ParsedIssuerMetadata({ metadata }))).toContain('<script>do not execute</script>');
 		expect(
-			elements(tree, (element) => 'dangerouslySetInnerHTML' in element.props)
+			elements(ParsedIssuerMetadata({ metadata }), (element) => 'dangerouslySetInnerHTML' in element.props)
 		).toHaveLength(0);
 	});
 	it('uses asset codes rather than issuer-supplied names in discovery', () => {

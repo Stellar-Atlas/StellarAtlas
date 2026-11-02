@@ -18,40 +18,6 @@ export const contractEventsGuide: DeveloperGuidePage = {
 		'Query decoded events, inspect their transaction context, and paginate with REST or GraphQL.',
 	sections: [
 		{
-			id: 'build-provenance',
-			title: 'Contract source and build provenance',
-			content: (
-				<>
-					<p>
-						<code>GET /v1/contracts/{'{contractId}'}/provenance</code> reads the
-						deployed executable from our RPC. The response includes its observed
-						ledger, Wasm SHA-256, embedded source repository, and available
-						signed build record.
-					</p>
-					<p>
-						<code>build.status=verified</code> requires the artifact digest,
-						repository, source commit, GitHub workflow identity, certificate and
-						transparency evidence to match. <code>build.record</code> then links
-						to the exact source commit, workflow and build run. This is build
-						provenance, not a security audit or an independent reproducible
-						build.
-					</p>
-					<p>
-						Other statuses distinguish missing metadata, unpublished builds,
-						unsupported metadata, verification failures and unavailable
-						evidence. A missing contract at the reported ledger is not a claim
-						that it was never deployed. Contract upgrades can change the Wasm
-						hash.
-					</p>
-					<p>
-						<a href="/docs/api/getContractBuildProvenance">
-							Try the provenance endpoint
-						</a>
-					</p>
-				</>
-			)
-		},
-		{
 			id: 'try-events',
 			title: 'Explore an event before writing code',
 			content: (
@@ -86,10 +52,10 @@ export const contractEventsGuide: DeveloperGuidePage = {
 		},
 		{
 			id: 'request-events',
-			title: 'Read decoded events with REST',
+			title: '1. Request the first event page',
 			content: (
 				<>
-					<Code>{`curl --fail-with-body '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}'`}</Code>
+					<Code>{`curl --fail-with-body '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}' --output page-1.json`}</Code>
 					<p>
 						The dynamic route is{' '}
 						<code>GET /v1/analytics/contracts/{'{contractId}'}/events</code>.
@@ -147,7 +113,14 @@ export const contractEventsGuide: DeveloperGuidePage = {
 						<dt>
 							<code>min_ledger / max_ledger</code>
 						</dt>
-						<dd>Inclusive bounds, up to 1,000,000 ledgers per typed query.</dd>
+						<dd>
+							Inclusive bounds. The Explorer limits its window to 1,000,000
+							ledgers. Keep API requests narrow and consult the{' '}
+							<a href="/docs/api/listAnalyticsContractEvents">
+								endpoint reference
+							</a>{' '}
+							for API bounds.
+						</dd>
 						<dt>
 							<code>start_time / end_time</code>
 						</dt>
@@ -162,9 +135,19 @@ export const contractEventsGuide: DeveloperGuidePage = {
 		},
 		{
 			id: 'read-event',
-			title: 'Understand an event record',
+			title: '2. Interpret the response',
 			content: (
 				<>
+					<p>
+						Read <code>items</code> as this page’s event records and{' '}
+						<code>summary.total</code> as the indexed count for the query, when
+						requested. Check <code>coverage</code> and the{' '}
+						<code>watermark</code> before drawing conclusions about missing
+						events; see{' '}
+						<a href="/docs/querying">coverage and pagination rules</a>. A
+						non-null <code>nextCursor</code> is the continuation token for step
+						3, not an event ID or a ledger number.
+					</p>
 					<dl>
 						<dt>
 							<code>
@@ -182,7 +165,8 @@ export const contractEventsGuide: DeveloperGuidePage = {
 							Decoded topics and payloads retained as strings. Payloads may be
 							JSON or the literal <code>void</code> for a return with no value;
 							check for that sentinel before JSON parsing. Preserve large
-							integer tokens; JavaScript Number may round them.
+							integer tokens; JavaScript Number may round them. Do not assume
+							asset decimals from an event payload.
 						</dd>
 						<dt>
 							<code>classification</code>
@@ -213,9 +197,18 @@ export const contractEventsGuide: DeveloperGuidePage = {
 		},
 		{
 			id: 'paginate-events',
-			title: 'Continue without skipping or repeating a page',
+			title: '3. Request the second page',
 			content: (
 				<>
+					<p>
+						Save the successful first response as <code>page-1.json</code>. With{' '}
+						<code>jq</code> installed, this command reads its opaque cursor and
+						requests the next page of the same example. If the cursor is null,
+						there is no second page to request.
+					</p>
+					<Code>{`after=$(jq -er '.nextCursor // empty' page-1.json) &&
+curl --fail-with-body --get '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}' \\
+  --data-urlencode "after=$after"`}</Code>
 					<p>
 						Copy <code>nextCursor</code> into <code>after</code> and preserve
 						the contract and all filters. Do not send <code>offset</code> with
@@ -228,11 +221,13 @@ export const contractEventsGuide: DeveloperGuidePage = {
 						to restart the result set.
 					</p>
 					<p>
-						Pages are ordered by descending ledger and stable source-row
-						identifiers. The watermark identifies the queried interval; it does
-						not freeze the warehouse. Later ingestion can add events inside
-						previously queried history, so a complete historical export also
-						needs coverage checks and a later reconciliation pass.
+						Pages follow the requested order (descending by default), with
+						stable source-row identifiers as tie-breakers. The watermark
+						identifies the queried interval; it does not freeze the warehouse.
+						Later ingestion can add events inside previously queried history, so
+						a complete historical export also needs coverage checks and a later
+						reconciliation pass. For freshness hints, see{' '}
+						<a href="/docs/live-updates">WebSocket updates</a>.
 					</p>
 					<p>
 						HTTP 400 indicates invalid parameters or cursor. HTTP 503 indicates
@@ -258,8 +253,44 @@ export const contractEventsGuide: DeveloperGuidePage = {
 					<GraphqlExample example="events" />
 					<p>
 						Use the returned cursor as <code>input.after</code>, keeping the
-						other input fields unchanged. REST and GraphQL read the same parsed
-						dataset; they do not perform separate ingestion.
+						other input fields unchanged. The preset has its own topic and
+						page-size filters; preserve those when continuing it. REST and
+						GraphQL read the same parsed dataset; they do not perform separate
+						ingestion.
+					</p>
+				</>
+			)
+		},
+		{
+			id: 'build-provenance',
+			title: 'Contract source and build provenance',
+			content: (
+				<>
+					<p>
+						<code>GET /v1/contracts/{'{contractId}'}/provenance</code> reads the
+						deployed executable from our RPC. The response includes its observed
+						ledger, Wasm SHA-256, embedded source repository, and available
+						signed build record.
+					</p>
+					<p>
+						<code>build.status=verified</code> requires the artifact digest,
+						repository, source commit, GitHub workflow identity, certificate and
+						transparency evidence to match. <code>build.record</code> then links
+						to the exact source commit, workflow and build run. This is build
+						provenance, not a security audit or an independent reproducible
+						build.
+					</p>
+					<p>
+						Other statuses distinguish missing metadata, unpublished builds,
+						unsupported metadata, verification failures and unavailable
+						evidence. A missing contract at the reported ledger is not a claim
+						that it was never deployed. Contract upgrades can change the Wasm
+						hash.
+					</p>
+					<p>
+						<a href="/docs/api/getContractBuildProvenance">
+							Try the provenance endpoint
+						</a>
 					</p>
 				</>
 			)

@@ -1,17 +1,28 @@
-import {
-	api,
-	sampleWindow,
-	Code,
-	type DeveloperGuidePage
-} from './developer-guide-elements';
+import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
+import { graphqlAnalyticsExamples } from './graphql-analytics-examples';
+import { buildEntityApiPath } from '../../api/explorer-analytics';
 import { developerGuideQueryPages } from './developer-guide-query-content';
 import { developerGuideReferencePages } from './developer-guide-reference-content';
 import { contractEventsGuide } from './developer-guide-contract-events';
 import { assetsAndIssuersGuide } from './developer-guide-assets-and-issuers';
+import { liveUpdatesGuide } from './developer-guide-live-updates';
+import { sdkPlanGuide } from './developer-guide-sdk-plan';
 export type {
 	DeveloperGuidePage,
 	DeveloperGuideSection
 } from './developer-guide-elements';
+
+const operationInput = graphqlAnalyticsExamples.operations.variables.input;
+const operationUrl = new URL(
+	buildEntityApiPath('operations', undefined, {
+		min_ledger: String(operationInput.minLedger),
+		max_ledger: String(operationInput.maxLedger),
+		type: operationInput.type,
+		limit: String(operationInput.limit)
+	}),
+	api
+);
+operationUrl.searchParams.delete('offset');
 
 export const developerGuidePages: readonly DeveloperGuidePage[] = [
 	{
@@ -40,6 +51,13 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							to execute a request. No wallet signature or private key is needed
 							for these reads.
 						</p>
+						<p>
+							For a wallet or token project, follow the{' '}
+							<a href="/docs/assets-and-issuers#wallet-and-holders">
+								KALE, wallet balances and asset holders quickstart
+							</a>
+							.
+						</p>
 					</>
 				)
 			},
@@ -65,7 +83,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 				title: '2. Read payment operations',
 				content: (
 					<>
-						<Code>{`curl --fail-with-body '${api}/v1/analytics/operations?${sampleWindow}&type=payment&limit=10&offset=0'`}</Code>
+						<Code>{`curl --fail-with-body '${operationUrl}&offset=${operationInput.offset}' --output operations-page-1.json`}</Code>
 						<p>
 							This two-ledger window is an example, not a promise of current
 							coverage. Replace it with a range from your catalog response. The
@@ -93,6 +111,20 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							For the operations list, repeat the same filters with the returned{' '}
 							<code>nextOffset</code>. Stop when it is <code>null</code>. Check
 							coverage before interpreting an empty result as absence.
+						</p>
+						<p>
+							With <code>jq</code> installed, continue the saved response only
+							when it supplies a <code>nextOffset</code>:
+						</p>
+						<Code>{`offset=$(jq -er '.nextOffset // empty' operations-page-1.json) &&
+curl --fail-with-body --get '${operationUrl}' \\
+  --data-urlencode "offset=$offset"`}</Code>
+						<p>
+							Keep the first request’s window, filters and limit in the second
+							URL. Use the returned offset rather than calculating it from row
+							count. These offset pages can change during backfill; for long
+							results, narrow the window instead of exceeding the route’s offset
+							limit. See <a href="/docs/querying">pagination rules</a>.
 						</p>
 						<p>
 							Next: <a href="/docs/querying">Filtering and pagination</a> ·{' '}
@@ -127,7 +159,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							Examples include <code>history_transactions</code>,{' '}
 							<code>history_operations</code>,{' '}
 							<code>history_contract_events</code>, <code>history_trades</code>,{' '}
-							<code>accounts</code>, <code>trust_lines</code> and{' '}
+							<code>accounts</code>, <code>trustlines</code> and{' '}
 							<code>offers</code>. The catalog, rather than a hard-coded table
 							list, is the contract for your deployment.
 						</p>
@@ -197,8 +229,16 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							Account balances and asset holders use the latest ingested
 							observations. Their watermarks expose the catalog position and{' '}
 							<code>snapshotPinned: false</code>; they are not current-chain or
-							arbitrary-height balance proofs. These routes do not accept
-							current/as-of state parameters.
+							arbitrary-height balance proofs. Account balances accept only{' '}
+							<code>after</code> and <code>limit</code>, not as-of filters.
+							Asset holder lists accept <code>as_of_ledger</code> (GraphQL:{' '}
+							<code>asOfLedger</code>) as an upper bound on ingested
+							observations, up to the catalog’s maximum observed ledger. This
+							does not pin a snapshot or prove complete state at that height;
+							inspect{' '}
+							<code>watermark.selectedLedger</code> and{' '}
+							<code>watermark.coverageStatus</code> and retain the same bound
+							while paging.
 						</p>
 						<p>
 							Offer queries return historical changes, not a live order book.
@@ -235,7 +275,9 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 	...developerGuideQueryPages,
 	contractEventsGuide,
 	assetsAndIssuersGuide,
-	...developerGuideReferencePages
+	liveUpdatesGuide,
+	...developerGuideReferencePages,
+	sdkPlanGuide
 ];
 
 export function getDeveloperGuidePage(

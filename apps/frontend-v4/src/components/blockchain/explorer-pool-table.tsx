@@ -1,11 +1,12 @@
 'use client';
 
 import { ExplorerLink as Link } from './explorer-investigation';
-import { entityText, type EntityRecord } from '../../api/explorer-analytics';
+import { entityText, type EntityRecord, type ExplorerFilters } from '../../api/explorer-analytics';
 import { LocalDateTime } from '../local-date-time';
 import { formatDecimal } from './explorer-format-values';
 import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
 import styles from './explorer-pool-table.module.css';
+import { poolDetailHref } from './pool-history-links';
 
 export type PoolSort =
 	| 'pool'
@@ -34,12 +35,14 @@ export function ExplorerPoolTable({
 	rows,
 	sort = 'trustlines',
 	order = 'desc',
-	onSort
+	onSort,
+	context = {}
 }: {
 	readonly rows: readonly EntityRecord[];
 	readonly sort?: PoolSort;
 	readonly order?: 'asc' | 'desc';
 	readonly onSort?: (key: PoolSort) => void;
+	readonly context?: ExplorerFilters;
 }): React.JSX.Element {
 	const metadata = usePairMetadata(rows);
 	return (
@@ -117,7 +120,7 @@ export function ExplorerPoolTable({
 								<td>
 									<Link
 										className={styles.identifier}
-										href={'/explorer/liquidity-pools/' + encodeURIComponent(id)}
+										href={poolDetailHref(id, context)}
 									>
 										<code>{id}</code>
 									</Link>

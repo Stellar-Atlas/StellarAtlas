@@ -13,11 +13,18 @@ import { ExplorerPoolTable, type PoolSort } from './explorer-pool-table';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-pool-table.module.css';
 import { subscribeWarehousePublication } from '../../api/warehouse-publication-stream';
+import { poolContextFromRequest } from './pool-history-links';
 
 type Page = {
 	rows: readonly EntityRecord[];
 	next: string | null;
 	window: EntityRecord;
+};
+type DisplayedPage = Page & {
+	requestPath: string;
+	sort: PoolSort;
+	order: 'asc' | 'desc';
+	historical: boolean;
 };
 function parsePage(raw: unknown, historical: boolean): Page {
 	const value = recordValue(raw);
@@ -54,7 +61,7 @@ export function ExplorerPoolBrowser({
 	const [limit, setLimit] = useState('25'),
 		[position, setPosition] = useState(String(initialOffset || ''));
 	const [history, setHistory] = useState<string[]>([]),
-		[page, setPage] = useState<Page | null>(null);
+		[page, setPage] = useState<DisplayedPage | null>(null);
 	const [error, setError] = useState<string | null>(null),
 		[busy, setBusy] = useState(false),
 		[version, setVersion] = useState(0);
@@ -94,7 +101,8 @@ export function ExplorerPoolBrowser({
 		setHasUpdates(false);
 		void requestExplorerJson(path, abort.signal)
 			.then((value) => {
-				if (!abort.signal.aborted) setPage(parsePage(value, historical));
+				if (!abort.signal.aborted)
+					setPage({ ...parsePage(value, historical), requestPath: path, sort, order, historical });
 			})
 			.catch((cause: unknown) => {
 				if (!abort.signal.aborted)
@@ -106,7 +114,8 @@ export function ExplorerPoolBrowser({
 				if (!abort.signal.aborted) setBusy(false);
 			});
 		return () => abort.abort();
-	}, [path, historical, version]);
+	}, [path, historical, version, sort, order]);
+	const matchesQuery = page?.requestPath === path;
 	const reset = () => {
 		setPosition('');
 		setHistory([]);
@@ -183,11 +192,12 @@ export function ExplorerPoolBrowser({
 				</div>
 				<div className={ui.summary}>
 					<span>
-						{historical
+						{(page?.historical ?? historical)
 							? 'Historical pool observations'
 							: 'Latest indexed native pools'}
 					</span>
 					{page && <span>{page.rows.length} on this page</span>}
+					{page && !matchesQuery && <span>Showing previous results.</span>}
 					{busy && <span role="status">Loading…</span>}
 				</div>
 				{error && (
@@ -201,8 +211,9 @@ export function ExplorerPoolBrowser({
 				{page && (
 					<ExplorerPoolTable
 						rows={page.rows}
-						sort={sort}
-						order={order}
+						sort={page.sort}
+						order={page.order}
+						context={page.historical ? poolContextFromRequest(page.requestPath, page.window) : undefined}
 						onSort={(key) => {
 							reset();
 							setSort(key);
@@ -211,10 +222,10 @@ export function ExplorerPoolBrowser({
 					/>
 				)}
 				<div className={ui.pagination}>
-					<span>Page {history.length + 1}</span>
+					<span>{page && !matchesQuery ? 'Previous results' : `Page ${history.length + 1}`}</span>
 					<div>
 						<button
-							disabled={busy || history.length === 0}
+							disabled={busy || !matchesQuery || history.length === 0}
 							onClick={() => {
 								setPosition(history.at(-1) || '');
 								setHistory((current) => current.slice(0, -1));
@@ -223,7 +234,7 @@ export function ExplorerPoolBrowser({
 							Previous
 						</button>
 						<button
-							disabled={busy || !page?.next}
+							disabled={busy || !matchesQuery || !page?.next}
 							onClick={() => {
 								setHistory((current) => [...current, position]);
 								setPosition(page?.next || '');

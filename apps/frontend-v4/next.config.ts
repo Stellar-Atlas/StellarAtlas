@@ -10,6 +10,8 @@ const publicDataApiBaseUrl = 'https://api.stellaratlas.io';
 
 const nextConfig: NextConfig = {
 	distDir: process.env.NEXT_DIST_DIR ?? '.next-production',
+	// Build-time only: large reference pages need room for cold shared-storage reads.
+	staticPageGenerationTimeout: 180,
 	experimental: {
 		serverActions: {
 			allowedOrigins: [

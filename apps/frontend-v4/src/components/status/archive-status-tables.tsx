@@ -17,6 +17,7 @@ import { formatInteger } from '@format/formatters';
 import { useLocalDateTimeFormatter } from '../local-date-time';
 import { ArchiveHealthPill } from './status-ui';
 import { CheckpointProofGuide } from './checkpoint-proof-guide';
+import { ArchiveRootProgressTable } from './archive-root-progress';
 import type { ArchiveSourceFindingPresentation } from './status-dashboard-headlines';
 import {
 	getStatusTablePage,
@@ -233,8 +234,11 @@ function ArchiveSourcesDetail({
 			<Link className="archive-inventory-link" href="/archives">
 				Open the complete archive-root inventory
 			</Link>
-			<div className="responsive-table">
-				<table className="archive-summary-table">
+			<ArchiveRootProgressTable sources={sources} />
+			<details className="archive-source-detail-table">
+				<summary>Detailed per-root evidence</summary>
+				<div className="responsive-table">
+					<table className="archive-summary-table">
 					<thead>
 						<tr>
 							<th>Archive source</th>
@@ -259,15 +263,16 @@ function ArchiveSourcesDetail({
 							</tr>
 						)}
 					</tbody>
-				</table>
-			</div>
-			<StatusTablePagination
-				label="Archive source pages"
-				onPageChange={setPage}
-				page={sourcePage.page}
-				pageSize={ARCHIVE_SOURCE_PAGE_SIZE}
-				totalRows={sources.length}
-			/>
+					</table>
+				</div>
+				<StatusTablePagination
+					label="Archive source pages"
+					onPageChange={setPage}
+					page={sourcePage.page}
+					pageSize={ARCHIVE_SOURCE_PAGE_SIZE}
+					totalRows={sources.length}
+				/>
+			</details>
 		</details>
 	);
 }

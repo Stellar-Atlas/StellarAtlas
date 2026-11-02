@@ -130,28 +130,36 @@ describe('explorer entity request lifecycle', () => {
 		session.cancel();
 		await expect(pending).resolves.toBeNull();
 	});
-	it('bounds an unavailable request and keeps it retryable', async () => {
+	it('keeps a slow request running until explicitly cancelled', async () => {
 		jest.useFakeTimers();
 		try {
+			const signals: AbortSignal[] = [];
 			const session = new ExplorerEntityRequest(
 				'assets',
 				undefined,
-				(_path, signal) =>
-					new Promise((_resolve, reject) => {
+				(_path, signal) => {
+					signals.push(signal);
+					return new Promise((_resolve, reject) => {
 						signal.addEventListener(
 							'abort',
 							() => reject(new Error('aborted')),
 							{ once: true }
 						);
-					})
+					});
+				}
 			);
 			const pending = session.run(request);
-			await jest.advanceTimersByTimeAsync(25000);
-			await expect(pending).resolves.toMatchObject({
-				ok: false,
-				message: expect.stringContaining('timed out')
+			await jest.advanceTimersByTimeAsync(30000);
+			expect(signals[0]?.aborted).toBe(false);
+			let settled = false;
+			void pending.then(() => {
+				settled = true;
 			});
+			await Promise.resolve();
+			expect(settled).toBe(false);
 			expect(session.retryRequest).toEqual(request);
+			session.cancel();
+			await expect(pending).resolves.toBeNull();
 			expect(jest.getTimerCount()).toBe(0);
 		} finally {
 			jest.useRealTimers();

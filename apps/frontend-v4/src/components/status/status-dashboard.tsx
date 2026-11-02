@@ -22,7 +22,6 @@ import {
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { getArchiveDownloadActivity } from './archive-download-activity';
 import { platformMonitoringStatus } from './status-dashboard-health';
-import { CompatibilityIndexPanel } from './compatibility-index-panel';
 import { formatArchiveWorkerCapacity } from './archive-worker-table-model';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
 import { resolveArchiveRuntimeActivity } from './archive-runtime-activity';
@@ -254,8 +253,6 @@ export function StatusDashboard({
 						archiveTelemetryAvailable={archiveTelemetryAvailable}
 					/>
 				)}
-
-				<CompatibilityIndexPanel fullHistory={fullHistory} />
 
 				<RecentScanLogs available={scanLogsAvailable} scanLogs={scanLogs} />
 			</div>

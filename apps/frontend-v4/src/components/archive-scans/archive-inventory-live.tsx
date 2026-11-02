@@ -7,6 +7,11 @@ import {
 	type ArchiveInventorySnapshot,
 	type ArchiveInventoryState
 } from '@api/archive-inventory-snapshot';
+import {
+	getCachedArchiveInventorySnapshot,
+	loadArchiveInventorySnapshot,
+	rememberArchiveInventorySnapshot
+} from '@api/archive-inventory-client';
 import { ArchiveInventoryView } from './archive-inventory-view';
 
 export function ArchiveInventoryLive({
@@ -14,36 +19,28 @@ export function ArchiveInventoryLive({
 }: {
 	readonly initialSnapshot: ArchiveInventorySnapshot | null;
 }): React.JSX.Element {
-	const [state, setState] = useState<ArchiveInventoryState>(() =>
-		initialSnapshot
-			? { snapshot: initialSnapshot, error: null }
-			: archiveInventoryRefreshFailed({ snapshot: null, error: null })
-	);
+	const [state, setState] = useState<ArchiveInventoryState>(() => {
+		const cached = getCachedArchiveInventorySnapshot();
+		const initialIsNewer =
+			initialSnapshot !== null &&
+			(cached === null ||
+				Date.parse(initialSnapshot.summary.generatedAt) >=
+					Date.parse(cached.summary.generatedAt));
+		const startingSnapshot = initialIsNewer ? initialSnapshot : cached;
+		return startingSnapshot
+			? { snapshot: startingSnapshot, error: null }
+			: archiveInventoryRefreshFailed({ snapshot: null, error: null });
+	});
 	const [refreshing, setRefreshing] = useState(false);
 	const refresh = useRef<() => void>(() => {});
 
 	useEffect(() => {
 		let disposed = false;
-		let inFlight: AbortController | null = null;
 		const load = async (): Promise<void> => {
-			if (inFlight !== null || document.visibilityState === 'hidden') return;
-			const controller = new AbortController();
-			inFlight = controller;
+			if (document.visibilityState === 'hidden') return;
 			setRefreshing(true);
-			const timeout = window.setTimeout(() => controller.abort(), 12_000);
 			try {
-				const response = await fetch('/api/archive-inventory', {
-					signal: controller.signal
-				});
-				if (!response.ok) throw new Error('Archive inventory request failed');
-				const snapshot: ArchiveInventorySnapshot = await response.json();
-				if (
-					!snapshot?.summary?.canonicalProofProgress ||
-					!Array.isArray(snapshot.summary.sources) ||
-					!Array.isArray(snapshot.nodes) ||
-					!Array.isArray(snapshot.organizations)
-				)
-					throw new Error('Archive inventory response is invalid');
+				const snapshot = await loadArchiveInventorySnapshot();
 				if (!disposed)
 					setState((previous) =>
 						archiveInventoryRefreshSucceeded(previous, snapshot)
@@ -51,15 +48,14 @@ export function ArchiveInventoryLive({
 			} catch {
 				if (!disposed) setState(archiveInventoryRefreshFailed);
 			} finally {
-				window.clearTimeout(timeout);
-				inFlight = null;
 				if (!disposed) setRefreshing(false);
 			}
 		};
 		refresh.current = () => {
 			void load();
 		};
-		if (initialSnapshot === null) void load();
+		if (initialSnapshot !== null) rememberArchiveInventorySnapshot(initialSnapshot);
+		if (getCachedArchiveInventorySnapshot() === null) void load();
 		const timer = window.setInterval(() => {
 			void load();
 		}, 30_000);
@@ -69,7 +65,6 @@ export function ArchiveInventoryLive({
 		document.addEventListener('visibilitychange', visible);
 		return () => {
 			disposed = true;
-			inFlight?.abort();
 			window.clearInterval(timer);
 			document.removeEventListener('visibilitychange', visible);
 			refresh.current = () => {};

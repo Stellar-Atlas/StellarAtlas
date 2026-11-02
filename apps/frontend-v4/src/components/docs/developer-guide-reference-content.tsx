@@ -27,6 +27,14 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 							<code>hubbleDatasets</code> for dataset schemas.
 						</p>
 						<p>
+							To call these fields from your application, copy the{' '}
+							<a href="/docs/querying#handle-errors">
+								JavaScript request with a timeout and error handling
+							</a>
+							. It checks HTTP and GraphQL errors and keeps partial data
+							separate from a complete result.
+						</p>
+						<p>
 							Typed fields include <code>hubbleTransaction</code>, operations,
 							assets, contracts, trades, offers, transfer activity, contract
 							events, account balances and asset holders. Entity list/detail
@@ -43,9 +51,11 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 					<>
 						<GraphqlExample example="operations" />
 						<p>
-							The returned <code>nextOffset</code> continues the same window.
-							Operations link to their transaction by hash when the parsed
-							relationship is available.
+							Set <code>input.offset</code> to the returned{' '}
+							<code>nextOffset</code> with the other inputs unchanged; stop when
+							it is null. This is offset pagination, not an{' '}
+							<code>input.after</code> cursor. Operations link to their
+							transaction by hash when the parsed relationship is available.
 						</p>
 					</>
 				)

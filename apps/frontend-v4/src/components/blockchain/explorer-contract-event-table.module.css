@@ -33,6 +33,26 @@
 .detailsColumn {
 	width: 7%;
 }
+.transactionEvents {
+	min-width: 760px;
+}
+.transactionEvents .ledgerColumn {
+	width: 20%;
+}
+.transactionEvents .eventColumn {
+	width: 23%;
+}
+.transactionEvents .dataColumn {
+	width: 48%;
+}
+.transactionEvents .detailsColumn {
+	width: 9%;
+}
+.eventContext {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
 .table th {
 	padding: 0.65rem 0.85rem;
 	background: var(--surface-hover);
