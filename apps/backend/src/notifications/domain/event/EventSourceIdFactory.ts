@@ -26,20 +26,24 @@ export class EventSourceIdFactory {
 			case 'node': {
 				const publicKeyResult = PublicKey.create(id);
 				if (publicKeyResult.isErr()) return err(publicKeyResult.error);
-				if (await this.isKnown(publicKeyResult.value, time))
-					return ok(publicKeyResult.value);
+				const known = await this.isKnown(publicKeyResult.value, time);
+				if (known.isErr()) return err(known.error);
+				if (known.value) return ok(publicKeyResult.value);
 				return err(new Error(`unknown public key: ${publicKeyResult.value}`));
 			}
 			case 'organization': {
 				const organizationId = new OrganizationId(id);
-				if (await this.isKnown(organizationId, time))
-					return ok(new OrganizationId(id));
+				const known = await this.isKnown(organizationId, time);
+				if (known.isErr()) return err(known.error);
+				if (known.value) return ok(new OrganizationId(id));
 				return err(new Error('Unknown organization id'));
 			}
 			case 'network': {
 				const networkId = new NetworkId(id);
 
-				if (await this.isKnown(networkId, time)) return ok(new NetworkId(id));
+				const known = await this.isKnown(networkId, time);
+				if (known.isErr()) return err(known.error);
+				if (known.value) return ok(new NetworkId(id));
 
 				return err(new Error(`Unknown network id ${networkId.value}`));
 			}
@@ -52,10 +56,6 @@ export class EventSourceIdFactory {
 		eventSourceId: EventSourceId,
 		time: Date
 	): Promise<Result<boolean, Error>> {
-		const publicKeyActiveResult =
-			await this.eventSourceService.isEventSourceIdKnown(eventSourceId, time);
-		if (publicKeyActiveResult.isErr() || !publicKeyActiveResult.value)
-			return ok(false);
-		return ok(true);
+		return this.eventSourceService.isEventSourceIdKnown(eventSourceId, time);
 	}
 }
