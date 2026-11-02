@@ -78,7 +78,7 @@ export class ArchiveObjectContentReuseVerifier {
 		releaseDownloadPermit ??= await this.downloadPermit.acquire();
 		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
 		const response = await this.httpService.get(urlResult.value, {
-			connectionTimeoutMs: 10_000,
+			connectionTimeoutMs: 60_000,
 			responseType: 'stream',
 			socketTimeoutMs: 60_000
 		});
