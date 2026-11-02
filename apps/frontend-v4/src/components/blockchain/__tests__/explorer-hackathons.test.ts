@@ -6,57 +6,41 @@ const entry = (overrides: Record<string, unknown> = {}) => ({
 	network: 'testnet',
 	award: 'first',
 	track: null,
-	evidence: 'verified',
 	...overrides
 });
 
-const labels = (value: unknown) =>
-	hackathonTags(value).map((tags) => tags.map((tag) => tag.label));
+const labels = (value: unknown) => hackathonTags(value).map((tag) => tag.label);
 
 describe('hackathonTags', () => {
-	it('should badge the event with its award, the network and the evidence', () => {
-		expect(labels([entry()])).toEqual([
-			['HackMeridian 2026 · 1st place', 'testnet', 'on-chain verified']
-		]);
-	});
-
-	it('should add a track badge only when one is given', () => {
-		expect(labels([entry({ track: 'scale' })])).toEqual([
-			['HackMeridian 2026 · 1st place', 'Scale', 'testnet', 'on-chain verified']
-		]);
-	});
-
-	it('should say code only when there is no on-chain proof, and omit a missing award', () => {
-		expect(labels([entry({ award: null, evidence: 'likely' })])).toEqual([
-			['HackMeridian 2026', 'testnet', 'code only']
-		]);
+	it('should make one badge of the event and its award', () => {
+		expect(labels([entry()])).toEqual(['HackMeridian 2026 · 1st place']);
 	});
 
 	it('should label a runner-up', () => {
-		expect(labels([entry({ award: 'runner-up' })])[0]?.[0]).toBe(
+		expect(labels([entry({ award: 'runner-up' })])).toEqual([
 			'HackMeridian 2026 · Runner-up'
-		);
+		]);
 	});
 
-	it('should tone a win and verified evidence as good, and code only as a warning', () => {
-		const [event, , proof] = hackathonTags([entry()]).flat();
-		const [, , unproven] = hackathonTags([
-			entry({ evidence: 'likely' })
-		]).flat();
+	it('should show the event alone when there is no award', () => {
+		expect(labels([entry({ award: null })])).toEqual(['HackMeridian 2026']);
+	});
 
-		expect([event?.tone, proof?.tone, unproven?.tone]).toEqual([
-			'good',
-			'good',
-			'warning'
-		]);
+	it('should tone an award as good and a plain entry as neutral', () => {
+		expect(
+			hackathonTags([entry(), entry({ award: null })]).map((t) => t.tone)
+		).toEqual(['good', 'neutral']);
+	});
+
+	it('should name the network in the tooltip', () => {
+		expect(hackathonTags([entry()])[0]?.title).toBe(
+			'HackMeridian 2026 ran on testnet'
+		);
 	});
 
 	it('should list every hackathon', () => {
 		expect(
-			hackathonTags([
-				entry(),
-				entry({ name: 'HackMeridian 2027', award: null })
-			])
+			labels([entry(), entry({ name: 'HackMeridian 2027', award: null })])
 		).toHaveLength(2);
 	});
 
@@ -67,9 +51,7 @@ describe('hackathonTags', () => {
 		}
 	);
 
-	it('should ignore an award or track it does not know', () => {
-		expect(labels([entry({ award: 'gold', track: 'x' })])).toEqual([
-			['HackMeridian 2026', 'testnet', 'on-chain verified']
-		]);
+	it('should ignore an award it does not know', () => {
+		expect(labels([entry({ award: 'gold' })])).toEqual(['HackMeridian 2026']);
 	});
 });

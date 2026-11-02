@@ -136,11 +136,9 @@ export function ExplorerContractProvenance({
 							<>
 								<dt>Hackathons</dt>
 								<dd>
-									{hackathons.map((tags) => (
-										<div className={styles.badges} key={tags[0]?.label}>
-											<StatusTags tags={tags} />
-										</div>
-									))}
+									<div className={styles.badges}>
+										<StatusTags tags={[...hackathons]} />
+									</div>
 									{status !== 'verified' && (
 										<span className={styles.muted}>
 											Based on the repository the developer supplied
