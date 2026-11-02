@@ -34,8 +34,15 @@ export function historyArchiveCheckpointProofTerminalReadySql(
 
 	return `(
         ${requirePredecessorProof ? predecessorReadySql : 'true'}
-        and (
-            exists (
+        and exists (
+            with terminal_bucket_dependencies as materialized (
+                ${historyArchiveCheckpointBucketDependenciesSql(
+					archiveUrlIdentity,
+					checkpointLedger
+				)}
+            )
+            select 1
+            where exists (
                 select 1
                 from "history_archive_object_queue" failed
                 where failed."archiveUrlIdentity" = ${archiveUrlIdentity}
@@ -47,12 +54,7 @@ export function historyArchiveCheckpointProofTerminalReadySql(
             )
             or exists (
                 select 1
-                from lateral (
-                    ${historyArchiveCheckpointBucketDependenciesSql(
-											archiveUrlIdentity,
-											checkpointLedger
-										)}
-                ) dependency
+                from terminal_bucket_dependencies dependency
                 join "history_archive_object_queue" failed_bucket
                     on failed_bucket."archiveUrlIdentity" = dependency."archiveUrlIdentity"
                     and failed_bucket."objectType" = 'bucket'
@@ -85,23 +87,13 @@ export function historyArchiveCheckpointProofTerminalReadySql(
                 )
                 and exists (
                     select 1
-                    from lateral (
-                    ${historyArchiveCheckpointBucketDependenciesSql(
-											archiveUrlIdentity,
-											checkpointLedger
-										)}
-                ) dependency
+                    from terminal_bucket_dependencies dependency
                     where dependency."archiveUrlIdentity" = ${archiveUrlIdentity}
                         and dependency."checkpointLedger" = ${checkpointLedger}
                 )
                 and not exists (
                     select 1
-                    from lateral (
-                    ${historyArchiveCheckpointBucketDependenciesSql(
-											archiveUrlIdentity,
-											checkpointLedger
-										)}
-                ) dependency
+                    from terminal_bucket_dependencies dependency
                     where dependency."archiveUrlIdentity" = ${archiveUrlIdentity}
                         and dependency."checkpointLedger" = ${checkpointLedger}
                         and not exists (
