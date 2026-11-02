@@ -1,6 +1,5 @@
 import { jest } from '@jest/globals';
-import { Script, createContext } from 'node:vm';
-import { liveUpdatesExample } from '../live-updates-example';
+import { createLiveUpdatesSession, type LiveUpdatesEnvironment } from './fixtures/live-updates-session';
 import { contractEventExample } from '../../blockchain/contract-event-query';
 import { contractActivityPath } from '../../../api/explorer-contract-activity';
 
@@ -44,18 +43,12 @@ function harness() {
 		onclose?: () => void;
 	}[] = [];
 	let next = 0;
-	const context = createContext({
-		AbortController,
-		JSON,
-		Set,
-		Number,
-		Error,
-		console: Object.fromEntries(
-			['log', 'error', 'info'].map((kind) => [
-				kind,
-				(...values: unknown[]) => output.push({ kind, values })
-			])
-		),
+	const environment: LiveUpdatesEnvironment = {
+		console: {
+			log: (...values) => { output.push({ kind: 'log', values }); },
+			error: (...values) => { output.push({ kind: 'error', values }); },
+			info: (...values) => { output.push({ kind: 'info', values }); }
+		},
 		WebSocket: class {
 			closed = false;
 			constructor(readonly url: string) {
@@ -82,8 +75,11 @@ function harness() {
 			reads.push({ url, signal: options.signal, response });
 			return response.promise;
 		}
-	});
-	new Script(liveUpdatesExample).runInContext(context);
+	};
+	const session = createLiveUpdatesSession(
+		'https://api.stellaratlas.io' + contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample),
+		Number(contractEventExample.min_ledger), Number(contractEventExample.max_ledger), environment
+	);
 	const socket = sockets[0]!;
 	return {
 		output,
@@ -94,12 +90,8 @@ function harness() {
 		send(value: unknown = notice) {
 			socket.onmessage?.({ data: JSON.stringify(value) });
 		},
-		stop() {
-			new Script('stopUpdates()').runInContext(context);
-		},
-		remembered() {
-			return new Script('seen.size').runInContext(context) as number;
-		},
+		stop: session.stop,
+		remembered: session.remembered,
 		fire(delay: number) {
 			const entry = [...timers].find(([, timer]) => timer.delay === delay);
 			expect(entry).toBeDefined();
