@@ -34,3 +34,17 @@ test('UTC labels include seconds and polling remains once per visible minute', a
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('Checks every minute. Incident times are observations.'));
 });
+
+test('the page publishes check purposes, freshness rules and the limits of history', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const method = html.match(/<section[^>]+aria-labelledby="check-method">([\s\S]+?)<\/section>/)?.[1];
+  assert.ok(method);
+  assert.match(method, /one-minute schedule/);
+  assert.match(method, /more than 3 minutes old.*shows the current status as unknown/);
+  assert.match(method, /Primary server.*reported availability/);
+  assert.match(method, /Data server.*query returns the expected result.*less than 5 minutes old.*at least one completed batch and at least one published row.*75 seconds old.*24 hours old/);
+  assert.match(method, /Failover service.*both saved snapshots have capture timestamps.*Snapshot age is shown for reference/);
+  assert.match(method, /A valid health response can report stale data/);
+  assert.match(method, /Last checked.*result.*when the saved snapshots were captured/);
+  assert.match(html, /Grey marks periods treated as unmonitored.*Green means no outage was recorded.*can miss individual gaps/);
+});
