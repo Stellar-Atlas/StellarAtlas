@@ -38,6 +38,17 @@ const actions = {
 };
 
 describe('typed contract activity presentation', () => {
+	it('blocks invalid embedded raw controls before mounting a request or REST link', () => {
+		for (const query of ['type_code=9', 'order=sideways', 'limit=500', 'order=asc&order=desc']) {
+			search = '?min_ledger=100&max_ledger=101&' + query;
+			try {
+				const html = renderToStaticMarkup(createElement(ExplorerContractActivity, { contractId, filters: {} }));
+				expect(html).toContain('role="alert"');
+				expect(html).not.toContain('Open REST response');
+				expect(html).not.toContain('Loading…');
+			} finally { search = ''; }
+		}
+	});
 	it('shows concise typed event fields and exact original numeric text', () => {
 		const html = renderToStaticMarkup(
 			createElement(ContractActivityView, {

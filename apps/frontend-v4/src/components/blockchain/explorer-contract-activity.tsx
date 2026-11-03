@@ -26,10 +26,24 @@ import {
 	createEventControls,
 	type EventControls
 } from './contract-event-controls';
-import { contractActivityUrlIdentity, eventControlsHref, eventPositionHref, readEventRoute } from './contract-event-route';
+import { contractActivityUrlIdentity, eventControlsHref, eventPositionHref, readEventRoute, eventRouteError } from './contract-event-route';
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
 export function ExplorerContractActivity({
+	contractId, filters, token
+}: {
+	readonly contractId: string;
+	readonly filters: ExplorerFilters;
+	readonly token?: EventTokenContext;
+}): React.JSX.Element {
+	const params = useSearchParams();
+	const error = readContractActivityTab(params.get('activity')) === 'events'
+		? eventRouteError(contractId, filters, new URLSearchParams(params.toString())) : null;
+	return error ? <p role="alert" className={styles.error}>{error}</p>
+		: <ContractActivitySelection contractId={contractId} filters={filters} token={token} />;
+}
+
+function ContractActivitySelection({
 	contractId,
 	filters,
 	token

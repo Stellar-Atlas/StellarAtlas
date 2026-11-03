@@ -1,8 +1,19 @@
 import type { ExplorerFilters } from '../../api/explorer-analytics';
 import type { ContractActivityTab } from '../../api/explorer-contract-activity';
 import { applyEventControls, createEventControls, type EventControls } from './contract-event-controls';
+import { contractEventQueryError } from './contract-event-query';
 
 const selectionKeys = ['type_code', 'order', 'limit', 'topic', 'q', 'after'] as const;
+
+/** Embedded views may use the API's default window, but never normalize invalid input. */
+export function eventRouteError(contractId: string, filters: ExplorerFilters, search: URLSearchParams): string | null {
+	const input = readEventRouteInput(filters, search);
+	for (const key of [...selectionKeys, 'min_ledger', 'max_ledger', 'transaction_hash', 'successful', 'in_successful_contract_call'])
+		if (search.getAll(key).length > 1) return 'Use one value for each event filter.';
+	const window = !input.min_ledger && !input.max_ledger && !search.has('min_ledger') && !search.has('max_ledger')
+		? { min_ledger: '1', max_ledger: '1' } : {};
+	return contractEventQueryError({ ...input, ...window, contract_id: contractId });
+}
 
 /** URL-owned event fields must not fall back to props from an older navigation. */
 export function readEventRouteInput(filters: ExplorerFilters, search: URLSearchParams): ExplorerFilters {
