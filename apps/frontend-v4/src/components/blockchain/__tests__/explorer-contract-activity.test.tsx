@@ -123,4 +123,16 @@ describe('typed contract activity presentation', () => {
 			expect(html).not.toContain('event-cursor');
 		} finally { search = ''; }
 	});
+	it('renders restored event controls and the same REST selection despite old props', () => {
+		search = '?order=asc&limit=50&type_code=1&topic=mint&q=account&after=next';
+		try {
+			const html = renderToStaticMarkup(createElement(ExplorerContractActivity, {
+				contractId, filters: { min_ledger: '100', max_ledger: '101', order: 'desc', limit: '10' }
+			}));
+			expect(html).toContain('<option value="asc" selected="">Oldest first');
+			expect(html).toContain('<option value="50" selected="">50');
+			expect(html).toContain('type_code=1&amp;order=asc&amp;topic=mint&amp;q=account&amp;view=typed&amp;include_summary=true&amp;after=next');
+			expect(html).not.toContain('events?limit=10');
+		} finally { search = ''; }
+	});
 });

@@ -23,8 +23,10 @@ import styles from './explorer-entity.module.css';
 import ui from './explorer-contract-controls.module.css';
 import {
 	applyEventControls,
-	createEventControls
+	createEventControls,
+	type EventControls
 } from './contract-event-controls';
+import { eventControlsHref, eventPositionHref, readEventRoute } from './contract-event-route';
 import { contractEventWorkspaceHref } from './contract-event-query';
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
@@ -47,19 +49,36 @@ export function ExplorerContractActivity({
 		if (href !== window.location.pathname + window.location.search + window.location.hash)
 			window.history.pushState(null, '', href);
 	};
-	const [controls, setControls] = useState(() => createEventControls(filters));
+	const applied = readEventRoute(filters, new URLSearchParams(params.toString()));
+	const controls = createEventControls(applied);
+	const setControls = (update: (current: EventControls) => EventControls): void => {
+		const href = eventControlsHref(pathname, window.location.search, update(controls), window.location.hash);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+	};
 	const [search, setSearch] = useState(controls.q);
-	const [summary, setSummary] = useState<ContractActivityPage['summary']>();
+	useEffect(() => setSearch(controls.q), [controls.q]);
+	const resultKey = contractId + ':' + tab + ':' + JSON.stringify(applied);
+	const [acceptedSummary, setSummary] = useState<{ key: string; value: ContractActivityPage['summary'] }>();
+	const summary = acceptedSummary?.key === resultKey ? acceptedSummary.value : undefined;
 	const onSummary = useCallback(
-		(value: ContractActivityPage['summary']) => setSummary(value),
-		[]
+		(value: ContractActivityPage['summary']) => setSummary({ key: resultKey, value }),
+		[resultKey]
 	);
-	const applied = applyEventControls(filters, controls);
-	if (
-		filters.after &&
-		JSON.stringify(controls) === JSON.stringify(createEventControls(filters))
-	)
-		applied.after = filters.after;
+	const position = applied.after ?? '';
+	const queryKey = JSON.stringify(applyEventControls(applied, controls));
+	const previousPositions = useRef(new Map<string, string>());
+	const previous = previousPositions.current.get(queryKey + ':' + position);
+	const move = (next: string, remember = false): void => {
+		if (remember) {
+			previousPositions.current.set(queryKey + ':' + next, position);
+			const oldest = previousPositions.current.keys().next().value;
+			if (previousPositions.current.size > 50 && oldest) previousPositions.current.delete(oldest);
+		}
+		const href = eventPositionHref(pathname, window.location.search, next, window.location.hash);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+	};
 	return (
 		<section className={styles.panel} aria-label="Contract activity">
 			<div className={styles.actions}>
@@ -191,7 +210,7 @@ export function ExplorerContractActivity({
 				</div>
 			)}
 			<ContractActivityResults
-				key={contractId + ':' + tab + ':' + JSON.stringify(applied)}
+				key={resultKey}
 				contractId={contractId}
 				filters={
 					tab === 'events' ? applied : { ...filters, limit: controls.limit }
@@ -199,6 +218,8 @@ export function ExplorerContractActivity({
 				tab={tab}
 				token={token}
 				onSummary={onSummary}
+				onNextPosition={next => move(next, Boolean(next))}
+				onPreviousPosition={previous === undefined ? undefined : () => move(previous)}
 			/>
 		</section>
 	);
@@ -209,13 +230,17 @@ function ContractActivityResults({
 	filters,
 	tab,
 	token,
-	onSummary
+	onSummary,
+	onNextPosition,
+	onPreviousPosition
 }: {
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
 	readonly tab: ContractActivityTab;
 	readonly token?: EventTokenContext;
 	readonly onSummary: (value: ContractActivityPage['summary']) => void;
+	readonly onNextPosition: (position: string) => void;
+	readonly onPreviousPosition?: () => void;
 }): React.JSX.Element {
 	const [state, dispatch] = useReducer(
 		contractActivityReducer,
@@ -233,6 +258,8 @@ function ContractActivityResults({
 	);
 	useEffect(() => {
 		let disposed = false;
+		const origin = window.location.pathname + window.location.search;
+		const current = (): boolean => !disposed && window.location.pathname + window.location.search === origin;
 		const abort = new AbortController();
 		active.current = abort;
 		setSlow(false);
@@ -245,13 +272,13 @@ function ContractActivityResults({
 			abort.signal
 		)
 			.then((page) => {
-				if (!disposed) {
+				if (current() && !abort.signal.aborted) {
 					dispatch({ type: 'loaded', requestId, page });
 					onSummary(page.summary);
 				}
 			})
 			.catch((error: unknown) => {
-				if (!disposed)
+				if (current())
 					dispatch({
 						type: 'failed',
 						requestId,
@@ -275,11 +302,6 @@ function ContractActivityResults({
 		contract_id: contractId,
 		after: displayedPosition
 	});
-	const firstHref = contractEventWorkspaceHref({
-		...filters,
-		contract_id: contractId,
-		after: ''
-	});
 	const view = (
 		<ContractActivityView
 			state={state}
@@ -288,21 +310,28 @@ function ContractActivityResults({
 			slow={slow}
 			onCancel={() => active.current?.abort()}
 			onRetry={() => dispatch({ type: 'retry' })}
-			onPrevious={() => dispatch({ type: 'previous' })}
-			onNext={() => dispatch({ type: 'next' })}
+			onPrevious={tab === 'events' ? onPreviousPosition ?? (() => {}) : () => dispatch({ type: 'previous' })}
+			onNext={tab === 'events' ? () => state.page?.nextPosition && onNextPosition(state.page.nextPosition) : () => dispatch({ type: 'next' })}
 			onRefresh={() => dispatch({ type: 'refresh' })}
+			canPrevious={tab === 'events' ? onPreviousPosition !== undefined : undefined}
 		/>
 	);
+	const linkedView = <>
+		<div className={styles.actions}><a
+			href={'https://api.stellaratlas.io' + (state.page ? contractActivityPath(contractId, tab, filters, displayedPosition) : path)}
+			target="_blank" rel="noreferrer">Open REST response</a></div>
+		{view}
+	</>;
 	return tab === 'events' ? (
 		<ExplorerInvestigationScope origin={pageHref}>
-			{view}
+			{linkedView}
 			<div className={styles.actions}>
 				{state.page && <a href={pageHref}>Link to this page</a>}
-				{displayedPosition && <a href={firstHref}>First page</a>}
+				{displayedPosition && <button disabled={state.loading} onClick={() => onNextPosition('')}>First page</button>}
 			</div>
 		</ExplorerInvestigationScope>
 	) : (
-		view
+		linkedView
 	);
 }
 
@@ -315,7 +344,8 @@ export function ContractActivityView({
 	onRetry,
 	onPrevious,
 	onNext,
-	onRefresh
+	onRefresh,
+	canPrevious
 }: {
 	readonly state: ContractActivityState;
 	readonly tab: ContractActivityTab;
@@ -326,6 +356,7 @@ export function ContractActivityView({
 	readonly onPrevious: () => void;
 	readonly onNext: () => void;
 	readonly onRefresh: () => void;
+	readonly canPrevious?: boolean;
 }): React.JSX.Element {
 	const page = state.page;
 	return (
@@ -367,7 +398,7 @@ export function ContractActivityView({
 				</span>
 				<div>
 					<button
-						disabled={state.loading || state.pageIndex === 0}
+						disabled={state.loading || !(canPrevious ?? state.pageIndex > 0)}
 						onClick={onPrevious}
 					>
 						Previous

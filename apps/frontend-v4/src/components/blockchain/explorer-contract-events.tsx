@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import type { ExplorerFilters } from '../../api/explorer-analytics';
-import { contractActivityPath } from '../../api/explorer-contract-activity';
 import { ExplorerContractActivity } from './explorer-contract-activity';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import {
@@ -165,23 +164,13 @@ export function ExplorerContractEvents({
 			{valid ? (
 				<>
 					<div className={styles.actions}>
-						<a
-							href={
-								'https://api.stellaratlas.io' +
-								contractActivityPath(contractId, 'events', filters)
-							}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Open REST response
-						</a>
 						<Link href="/docs/api/listAnalyticsContractEvents">
 							REST schema &amp; request tester
 						</Link>
 						<Link href="/docs/graphql">GraphQL query runner</Link>
 					</div>
 					<ExplorerContractActivity
-						key={contractEventWorkspaceHref(filters)}
+						key={contractId}
 						contractId={contractId}
 						filters={filters}
 					/>
