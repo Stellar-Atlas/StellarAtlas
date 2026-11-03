@@ -41,8 +41,15 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						</li>
 						<li>
 							<p>Read one page of the wallet’s balance observations.</p>
-							<Code>{`curl --fail-with-body '${api}${walletPath}' --output wallet-balances.json.partial &&
-mv wallet-balances.json.partial wallet-balances.json`}</Code>
+							<Code>{`(
+  trap - EXIT INT TERM
+  temporary=$(mktemp './wallet-balances.json.partial.XXXXXX') || exit
+  trap 'rm -f -- "$temporary"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  curl --fail-with-body '${api}${walletPath}' --output "$temporary" &&
+  mv -fT -- "$temporary" './wallet-balances.json'
+)`}</Code>
 							<p>
 								Inspect <code>balances</code>, matching <code>asset</code> to
 								the full KALE identity. The sample wallet is independent of the
@@ -56,8 +63,15 @@ mv wallet-balances.json.partial wallet-balances.json`}</Code>
 						</li>
 						<li>
 							<p>Read KALE holders, largest observed balance first.</p>
-							<Code>{`curl --fail-with-body '${api}${holderPath}' --output kale-holders.json.partial &&
-mv kale-holders.json.partial kale-holders.json`}</Code>
+							<Code>{`(
+  trap - EXIT INT TERM
+  temporary=$(mktemp './kale-holders.json.partial.XXXXXX') || exit
+  trap 'rm -f -- "$temporary"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  curl --fail-with-body '${api}${holderPath}' --output "$temporary" &&
+  mv -fT -- "$temporary" './kale-holders.json'
+)`}</Code>
 							<p>
 								Read <code>holders</code> as this page’s positive-balance
 								observations. Its length is not the total holder count; inspect{' '}
@@ -72,15 +86,17 @@ mv kale-holders.json.partial kale-holders.json`}</Code>
 						</li>
 					</ol>
 					<p>
-						The saved page is replaced only after curl succeeds. An HTTP or
-						transport failure means the refresh is unavailable, not an empty
-						balance or holder result. Stop this walkthrough on failure. Ignore
-						the incomplete <code>.partial</code> file and do not continue
-						pagination. If you retain the last successful response, label it as
-						saved data rather than a fresh read. Its{' '}
-						<code>watermark.catalogGeneratedAt</code> is the catalogue
-						generation time, not the time you saved the response or a pinned
-						balance snapshot.
+						These Bash examples use <code>mktemp</code> and GNU <code>mv</code>.
+						Each invocation creates its own temporary beside the saved page,
+						promotes only its successful response and cleans up its own
+						temporary on exit. The parentheses scope variables and traps to that
+						invocation. An HTTP or transport failure means the refresh is
+						unavailable, not an empty balance or holder result. Stop this
+						walkthrough on failure and do not continue pagination. If you retain
+						the last successful response, label it as saved data rather than a
+						fresh read. Its <code>watermark.catalogGeneratedAt</code> is the
+						catalogue generation time, not the time you saved the response or a
+						pinned balance snapshot.
 					</p>
 					<p>
 						Continue each result with its own <code>nextCursor</code> as{' '}

@@ -1,5 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	mkdtempSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -30,11 +36,20 @@ const commands = [
 	.filter((value) => value.includes('--output'));
 // A shell function replaces curl: no request or socket is made.
 const fakeCurl = `curl() {
+ local destination
  while [ "$#" -gt 0 ]; do
   if [ "$1" = --output ]; then shift; destination=$1; fi
   shift
  done
  printf '%s' "$RESPONSE" > "$destination"
+ if [ "\${ROLE:-}" = success ]; then
+  printf '%s' "$destination" > success-path
+  printf 'ready\\n' > ready
+  IFS= read -r release < release
+ elif [ "\${ROLE:-}" = failure ]; then
+  printf '%s' "$destination" > failure-path
+ fi
+ if [ "\${SIGNAL:-}" = TERM ]; then kill -TERM "$BASHPID"; fi
  return "$EXIT_CODE"
 }
 `;
@@ -55,7 +70,9 @@ describe('saved wallet and holder responses', () => {
 			expect(html).toContain(text);
 	});
 	for (const command of commands) {
-		const filename = command.match(/--output ([a-z-]+\.json)\.partial/)?.[1];
+		const filename = command.match(
+			/mktemp '\.\/([a-z-]+\.json)\.partial\.XXXXXX'/
+		)?.[1];
 		if (!filename) throw new Error('Missing partial response destination');
 		it.each([
 			{
@@ -80,6 +97,10 @@ describe('saved wallet and holder responses', () => {
 				const directory = mkdtempSync(join(tmpdir(), 'wallet-guide-'));
 				try {
 					writeFileSync(join(directory, filename), saved);
+					writeFileSync(
+						join(directory, filename + '.partial.other'),
+						'another invocation'
+					);
 					const result = spawnSync('/bin/bash', ['-c', fakeCurl + command], {
 						cwd: directory,
 						env: {
@@ -94,6 +115,115 @@ describe('saved wallet and holder responses', () => {
 					expect(readFileSync(join(directory, filename), 'utf8')).toBe(
 						status === 0 ? body : saved
 					);
+					expect(
+						readdirSync(directory).filter((name) =>
+							name.startsWith(filename + '.partial.')
+						)
+					).toEqual([filename + '.partial.other']);
+				} finally {
+					rmSync(directory, { recursive: true, force: true });
+				}
+			}
+		);
+		it(`${filename}: overlapping success and failure promote only the successful invocation's bytes`, () => {
+			const directory = mkdtempSync(join(tmpdir(), 'wallet guide overlap '));
+			try {
+				writeFileSync(join(directory, filename), saved);
+				const script =
+					fakeCurl +
+					`
+mkfifo ready release
+( ROLE=success; RESPONSE='successful bytes'; EXIT_CODE=0; ${command} ) & a=$!
+trap 'kill "$a" "\${b:-$a}" 2>/dev/null || :' EXIT TERM INT
+IFS= read -r ready_marker < ready
+( ROLE=failure; RESPONSE='failed bytes'; EXIT_CODE=22; ${command} ) & b=$!
+wait "$b"; failure_status=$?
+printf 'release\\n' > release
+wait "$a"; success_status=$?
+printf '%s %s' "$success_status" "$failure_status"
+`;
+				const result = spawnSync('/bin/bash', ['-c', script], {
+					cwd: directory,
+					env: { PATH: '/usr/bin:/bin' },
+					encoding: 'utf8',
+					timeout: 5000
+				});
+				expect(result.status).toBe(0);
+				expect(result.stdout).toBe('0 22');
+				expect(readFileSync(join(directory, filename), 'utf8')).toBe(
+					'successful bytes'
+				);
+				expect(readFileSync(join(directory, 'success-path'), 'utf8')).not.toBe(
+					readFileSync(join(directory, 'failure-path'), 'utf8')
+				);
+				expect(
+					readdirSync(directory).filter((name) =>
+						name.startsWith(filename + '.partial.')
+					)
+				).toEqual([]);
+			} finally {
+				rmSync(directory, { recursive: true, force: true });
+			}
+		});
+		it.each([
+			{
+				label: 'rename failure',
+				setup: 'mv() { return 73; }',
+				status: 73,
+				signal: ''
+			},
+			{
+				label: 'temporary creation failure',
+				setup: 'mktemp() { return 17; }',
+				status: 17,
+				signal: ''
+			},
+			{ label: 'TERM interruption', setup: '', status: 143, signal: 'TERM' }
+		])(
+			`${filename}: $label cleans only its own temporary and preserves caller state`,
+			({ setup, status, signal }) => {
+				const directory = mkdtempSync(join(tmpdir(), 'wallet guide cleanup '));
+				try {
+					writeFileSync(join(directory, filename), saved);
+					writeFileSync(join(directory, 'caller-owned'), 'retain');
+					const script =
+						fakeCurl +
+						`
+temporary=caller-owned
+trap 'printf x >> caller-exit' EXIT
+trap ':' INT TERM
+before=$(trap -p EXIT INT TERM)
+${setup}
+${command}
+status=$?
+after=$(trap -p EXIT INT TERM)
+[ "$before" = "$after" ] && [ "$temporary" = caller-owned ] || exit 99
+exit "$status"
+`;
+					const result = spawnSync('/bin/bash', ['-c', script], {
+						cwd: directory,
+						env: {
+							PATH: '/usr/bin:/bin',
+							RESPONSE: 'new bytes',
+							EXIT_CODE: '0',
+							SIGNAL: signal
+						},
+						encoding: 'utf8',
+						timeout: 5000
+					});
+					expect(result.status).toBe(status);
+					expect(readFileSync(join(directory, filename), 'utf8')).toBe(saved);
+					expect(readFileSync(join(directory, 'caller-owned'), 'utf8')).toBe(
+						'retain'
+					);
+					expect(readFileSync(join(directory, 'caller-exit'), 'utf8')).toBe(
+						'x'
+					);
+					expect(
+						readdirSync(directory).filter((name) =>
+							name.startsWith(filename + '.partial.')
+						)
+					).toEqual([]);
 				} finally {
 					rmSync(directory, { recursive: true, force: true });
 				}
