@@ -55,7 +55,22 @@ export const contractEventsGuide: DeveloperGuidePage = {
 			title: '1. Request the first event page',
 			content: (
 				<>
-					<Code>{`curl --fail-with-body '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}' --output page-1.json`}</Code>
+					<Code>{`(
+  trap - EXIT INT TERM
+  temporary=$(mktemp './page-1.json.partial.XXXXXX') || exit
+  trap 'rm -f -- "$temporary"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  curl --fail-with-body '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}' --output "$temporary" &&
+  mv -fT -- "$temporary" './page-1.json'
+)`}</Code>
+					<p>
+						This Bash example uses <code>mktemp</code> and GNU <code>mv</code>.
+						Each invocation replaces the saved page only after its own
+						successful response, then cleans up its temporary. On failure,
+						retain the previous file as saved data and stop; do not paginate
+						from an unsuccessful refresh.
+					</p>
 					<p>
 						The dynamic route is{' '}
 						<code>GET /v1/analytics/contracts/{'{contractId}'}/events</code>.
