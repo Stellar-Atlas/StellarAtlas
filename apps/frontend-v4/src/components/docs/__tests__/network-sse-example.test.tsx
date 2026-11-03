@@ -1,25 +1,22 @@
 import { describe, expect, it } from '@jest/globals';
-import { Script } from 'node:vm';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { networkSseExample } from '../network-sse-example';
 import { liveUpdatesGuide } from '../developer-guide-live-updates';
+import {
+	createNetworkSseSession,
+	type NetworkSseEvent
+} from './fixtures/network-sse-session';
 
 function harness() {
 	const output: { kind: string; values: readonly unknown[] }[] = [];
 	const sources: FakeEventSource[] = [];
 	class FakeEventSource {
-		readonly listeners = new Map<
-			string,
-			(event: Record<string, unknown>) => void
-		>();
+		readonly listeners = new Map<string, (event: NetworkSseEvent) => void>();
 		closes = 0;
 		constructor(readonly url: string) {
 			sources.push(this);
 		}
-		addEventListener(
-			name: string,
-			listener: (event: Record<string, unknown>) => void
-		) {
+		addEventListener(name: string, listener: (event: NetworkSseEvent) => void) {
 			this.listeners.set(name, listener);
 		}
 		close() {
@@ -29,9 +26,7 @@ function harness() {
 			this.listeners.get(name)?.(data === undefined ? {} : { data });
 		}
 	}
-	const stop: () => void = new Script(
-		'(function(){\n' + networkSseExample + '\nreturn stopNetworkUpdates;})()'
-	).runInNewContext({
+	const stop = createNetworkSseSession({
 		EventSource: FakeEventSource,
 		console: {
 			log: (...values: unknown[]) => output.push({ kind: 'log', values }),
