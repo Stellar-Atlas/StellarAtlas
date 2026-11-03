@@ -27,7 +27,6 @@ import {
 	type EventControls
 } from './contract-event-controls';
 import { eventControlsHref, eventPositionHref, readEventRoute } from './contract-event-route';
-import { contractEventWorkspaceHref } from './contract-event-query';
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
 export function ExplorerContractActivity({
@@ -199,10 +198,7 @@ export function ExplorerContractActivity({
 								: ''}
 						</span>
 						<a
-							href={contractEventWorkspaceHref({
-								...applied,
-								contract_id: contractId
-							})}
+							href={eventControlsHref(pathname, params.toString(), controls)}
 						>
 							Link to this query
 						</a>
@@ -242,6 +238,7 @@ function ContractActivityResults({
 	readonly onNextPosition: (position: string) => void;
 	readonly onPreviousPosition?: () => void;
 }): React.JSX.Element {
+	const pathname = usePathname(), params = useSearchParams();
 	const [state, dispatch] = useReducer(
 		contractActivityReducer,
 		tab === 'events' ? (filters.after ?? '') : '',
@@ -297,11 +294,7 @@ function ContractActivityResults({
 		};
 	}, [path, contractId, tab, requestedPosition, requestId, onSummary]);
 	const displayedPosition = state.positions[state.pageIndex] ?? '';
-	const pageHref = contractEventWorkspaceHref({
-		...filters,
-		contract_id: contractId,
-		after: displayedPosition
-	});
+	const pageHref = eventPositionHref(pathname, params.toString(), displayedPosition);
 	const view = (
 		<ContractActivityView
 			state={state}
