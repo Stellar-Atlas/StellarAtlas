@@ -188,6 +188,18 @@ describe('asset discovery workspace', () => {
 });
 
 describe('asset detail presentation', () => {
+	it('builds Browse all assets from current client origin, not stale initial or child filters, without refetching', () => {
+		route = new URL('https://explorer.invalid/explorer/assets/native?tab=contracts-events&q=event&activity=state&ledger_key_hash=key');
+		const render = () => hooks.render(() => renderWorkspace({ assetRef: 'native', initialFilters: { q: 'stale', min_ledger: '999' } }));
+		const browse = (tree: unknown) => elements(tree, element => element.props.children === 'Browse all assets')[0]!.props.href;
+		expect(browse(render())).toBe('/explorer/assets');
+		const directory = '/explorer/assets?q=USD&min_ledger=100&max_ledger=101';
+		route = new URL(route.pathname + '?' + new URLSearchParams({ return_to: directory, q: 'another event' }), route);
+		expect(browse(render())).toBe(directory);
+		route = new URL(route.pathname + '?q=child&after=event', route);
+		expect(browse(render())).toBe('/explorer/assets');
+		expect(requestMock).toHaveBeenCalledTimes(1);
+	});
 	it('normalizes an encoded CODE:ISSUER ref before detail detection and API lookup', async () => {
 		const code = 'BEER';
 		const issuer = 'GDW3CNKSP5AOTDQ2YCKNGC6L65CE4JDX3JS5BV427OB54HCF2J4PUEVG';
