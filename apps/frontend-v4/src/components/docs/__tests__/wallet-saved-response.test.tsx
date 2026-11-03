@@ -11,12 +11,17 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { assetsAndIssuersGuide } from '../developer-guide-assets-and-issuers';
+import { contractEventsGuide } from '../developer-guide-contract-events';
 
 const section = assetsAndIssuersGuide.sections.find(
 	(value) => value.id === 'wallet-and-holders'
 );
 if (!section) throw new Error('Missing wallet quickstart');
 const html = renderToStaticMarkup(section.content);
+const eventSection = contractEventsGuide.sections.find(
+	(value) => value.id === 'request-events'
+);
+if (!eventSection) throw new Error('Missing contract event request');
 const decode = (text: string): string =>
 	text.replace(
 		/&(?:amp|lt|gt|quot|#x27);/g,
@@ -30,7 +35,9 @@ const decode = (text: string): string =>
 			})[entity] ?? entity
 	);
 const commands = [
-	...html.matchAll(/<pre\b[^>]*><code\b[^>]*>([\s\S]*?)<\/code>/g)
+	...(html + renderToStaticMarkup(eventSection.content)).matchAll(
+		/<pre\b[^>]*><code\b[^>]*>([\s\S]*?)<\/code>/g
+	)
 ]
 	.map((match) => decode(match[1]!))
 	.filter((value) => value.includes('--output'));
@@ -56,9 +63,9 @@ const fakeCurl = `curl() {
 const saved =
 	'{"balances":[{"balance":1234567890.1234567,"balanceRaw":null,"trustLineLimitRaw":"9223372036854775807"}],"nextCursor":"old-page"}\n';
 
-describe('saved wallet and holder responses', () => {
-	it('publishes two guarded save commands and distinguishes retained data from a fresh response', () => {
-		expect(commands).toHaveLength(2);
+describe('saved wallet, holder and event responses', () => {
+	it('publishes three guarded save commands and distinguishes retained data from a fresh response', () => {
+		expect(commands).toHaveLength(3);
 		for (const text of [
 			'refresh is unavailable',
 			'not an empty',
@@ -71,7 +78,7 @@ describe('saved wallet and holder responses', () => {
 	});
 	for (const command of commands) {
 		const filename = command.match(
-			/mktemp '\.\/([a-z-]+\.json)\.partial\.XXXXXX'/
+			/mktemp '\.\/([a-z0-9-]+\.json)\.partial\.XXXXXX'/
 		)?.[1];
 		if (!filename) throw new Error('Missing partial response destination');
 		it.each([

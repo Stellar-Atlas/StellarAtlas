@@ -1,12 +1,13 @@
 import { Code, type DeveloperGuidePage } from './developer-guide-elements';
 import { liveUpdatesExample } from './live-updates-example';
+import { networkSseExample } from './network-sse-example';
 
 export const liveUpdatesGuide: DeveloperGuidePage = {
 	slug: 'live-updates',
-	title: 'WebSocket updates',
+	title: 'WebSocket and SSE updates',
 	group: 'Querying data',
 	description:
-		'Receive publication notices, then fetch only the data you need.',
+		'Distinguish dataset publication notices from network and SCP observation streams.',
 	sections: [
 		{
 			id: 'publication-feed',
@@ -101,6 +102,78 @@ export const liveUpdatesGuide: DeveloperGuidePage = {
 						A slow client may be closed with code <code>1013</code>. WebSocket
 						ping/pong heartbeats are handled by the browser; silence does not
 						mean there are missing dataset rows.
+					</p>
+				</>
+			)
+		},
+		{
+			id: 'network-sse',
+			title: 'Network and SCP Server-Sent Events',
+			content: (
+				<>
+					<p>
+						These separate HTTP feeds use <code>text/event-stream</code>, not
+						the publication WebSocket protocol. Paths below use the same API
+						base. Listen for named events with <code>addEventListener</code>;{' '}
+						<code>onmessage</code> alone does not receive them.
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th>GET path</th>
+								<th>Named events</th>
+								<th>Data</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<code>/v1/live</code>
+								</td>
+								<td>
+									<code>network</code>, <code>error</code>
+								</td>
+								<td>Network snapshot or an unavailable-snapshot message.</td>
+							</tr>
+							<tr>
+								<td>
+									<code>/v1/scp-statements/live</code>
+								</td>
+								<td>
+									<code>scp-metadata</code>, <code>scp</code>,{' '}
+									<code>error</code>
+								</td>
+								<td>
+									Observation source/freshness metadata and SCP statement
+									batches.
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						The network feed attempts an initial snapshot, then polls every five
+						seconds without overlapping reads. That interval does not prove the
+						snapshot is fresh. HTTP 200 can still carry a named{' '}
+						<code>error</code> event; it is not an empty successful snapshot.
+						SCP connections at capacity return HTTP 503 before starting the
+						stream. Check <code>scp-metadata</code> source and freshness before
+						treating observations as current.
+					</p>
+					<p>
+						From a StellarAtlas page, this example retains the response as JSON
+						text, closes on the first server or transport error, and leaves
+						previous data available. Call its cleanup function when leaving the
+						view. Native EventSource can reconnect automatically; closing it
+						here prevents that retry. Browser HTTP CORS rules still apply.
+					</p>
+					<Code language="javascript">{networkSseExample}</Code>
+					<p>
+						These streams do not publish wallet balances, asset holders or
+						contract-event rows. They are not a failover replacement for
+						unavailable analytics, and they do not implement Last-Event-ID
+						replay. A reconnect is a new observation session, not proof of
+						complete history. Keep historical pagination and coverage checks
+						with the relevant REST or GraphQL query.
 					</p>
 				</>
 			)
