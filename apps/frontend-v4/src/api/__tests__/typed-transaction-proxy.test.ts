@@ -38,6 +38,8 @@ describe('typed transaction proxy', () => {
 		expect(upstream.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
 		expect(result.status).toBe(200);
 		expect(result.headers.get('cache-control')).toBe('no-store');
+		expect(result.headers.get('content-type')).toBe('application/json; charset=utf-8');
+		expect(result.headers.get('x-content-type-options')).toBe('nosniff');
 		expect(await result.json()).toEqual({ transaction: { hash } });
 	});
 
@@ -69,5 +71,55 @@ describe('typed transaction proxy', () => {
 		}
 		expect((await GET(new Request(path + '?' + query, { method: 'HEAD' }), context)).status).toBe(405);
 		expect(upstream).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		new Headers({ 'content-type': 'text/html' }),
+		new Headers({ 'content-type': 'application/json', 'content-length': '16777217' })
+	])('rejects unsafe response headers and cancels the upstream body: %j', async headers => {
+		const cancel = jest.fn();
+		const body = new ReadableStream<Uint8Array>({ cancel });
+		globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers }));
+		const result = await GET(new Request(path + '?' + query), context);
+		expect(result.status).toBe(502);
+		expect(result.headers.get('content-type')).toMatch(/^application\/json/);
+		expect(result.headers.get('x-content-type-options')).toBe('nosniff');
+		expect(cancel).toHaveBeenCalledTimes(1);
+	});
+
+	it('cuts off an underdeclared streamed body at the actual byte cap', async () => {
+		const cancel = jest.fn();
+		const chunk = new Uint8Array(1024 * 1024);
+		const body = new ReadableStream<Uint8Array>({ pull(stream) { stream.enqueue(chunk); }, cancel });
+		globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(body, {
+			headers: { 'content-type': 'application/json', 'content-length': '1' }
+		}));
+		const result = await GET(new Request(path + '?' + query), context);
+		const reader = result.body!.getReader();
+		for (let i = 0; i < 16; i++) expect((await reader.read()).value?.byteLength).toBe(chunk.length);
+		await expect(reader.read()).rejects.toThrow('explorer size limit');
+		expect(cancel).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(['deadline', 'caller', 'consumer'] as const)('cancels an incomplete body on %s after headers', async reason => {
+		const caller = new AbortController();
+		const cancel = jest.fn();
+		const body = new ReadableStream<Uint8Array>({ cancel });
+		globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(body, {
+			headers: { 'content-type': 'application/json' }
+		}));
+		const result = await GET(new Request(path + '?' + query, { signal: caller.signal }), context);
+		const reader = result.body!.getReader();
+		const read = reader.read();
+		if (reason === 'consumer') {
+			await reader.cancel();
+			expect(await read).toMatchObject({ done: true });
+		} else {
+			const rejected = expect(read).rejects.toBeDefined();
+			if (reason === 'caller') caller.abort();
+			else await jest.advanceTimersByTimeAsync(65_000);
+			await rejected;
+		}
+		expect(cancel).toHaveBeenCalledTimes(1);
 	});
 });

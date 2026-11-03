@@ -2,9 +2,12 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const deadlineMs = 65_000;
+// At most 20 operations, 20 effects and 20 events, including decoded and raw
+// representations. Leave room for dense records without buffering the page.
+const maxResponseBytes = 16 * 1024 * 1024;
 const cursorKeys = ['operations_after', 'effects_after', 'events_after'];
 const allowed = new Set(['view', 'limit', 'ledger_sequence', ...cursorKeys]);
-const noStore = { 'cache-control': 'no-store' };
+const noStore = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
 
 /** Only the explorer's typed GET bypasses Next's default 30s rewrite proxy. */
 export async function GET(
@@ -26,19 +29,38 @@ export async function GET(
 
 	const base = (process.env.STELLAR_ATLAS_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:3000').replace(/\/+$/, '');
 	const deadline = AbortSignal.timeout(deadlineMs);
+	const signal = AbortSignal.any([request.signal, deadline]);
 	try {
 		const upstream = await fetch(base + '/v1/analytics/transactions/' + hash + '?' + query, {
 			headers: { accept: 'application/json' },
 			cache: 'no-store',
 			redirect: 'error',
-			signal: AbortSignal.any([request.signal, deadline])
+			signal
 		});
-		const headers = new Headers(noStore);
-		for (const name of ['content-type', 'retry-after']) {
-			const value = upstream.headers.get(name);
-			if (value !== null) headers.set(name, value);
+		const media = upstream.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+		const length = upstream.headers.get('content-length');
+		const error = media !== 'application/json' || !upstream.body
+			? 'The transaction service did not return a JSON response.'
+			: length !== null && (!/^\d+$/.test(length) || Number(length) > maxResponseBytes)
+				? 'The transaction response exceeds the explorer size limit.'
+				: null;
+		if (error || !upstream.body) {
+			void upstream.body?.cancel().catch(() => undefined);
+			return Response.json({ error }, { status: 502, headers: noStore });
 		}
-		return new Response(upstream.body, { status: upstream.status, headers });
+		const headers = new Headers({ ...noStore, 'content-type': 'application/json; charset=utf-8' });
+		const retryAfter = upstream.headers.get('retry-after');
+		if (retryAfter !== null) headers.set('retry-after', retryAfter);
+		let bytes = 0;
+		const body = upstream.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+			transform(chunk, stream) {
+				bytes += chunk.byteLength;
+				if (bytes > maxResponseBytes)
+					throw new Error('The transaction response exceeds the explorer size limit.');
+				stream.enqueue(chunk);
+			}
+		}), { signal });
+		return new Response(body, { status: upstream.status, headers });
 	} catch {
 		const timedOut = deadline.aborted && !request.signal.aborted;
 		return Response.json({
