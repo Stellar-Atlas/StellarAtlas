@@ -19,6 +19,7 @@ import {
 	ExplorerEntityTable
 } from './explorer-entity-table';
 import { ExplorerContractActivity } from './explorer-contract-activity';
+import { preserveContractActivityContext } from './contract-state-route';
 import { ExplorerContractProvenance } from './explorer-contract-provenance';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import {
@@ -120,7 +121,8 @@ function EntityBrowser({
 					data.offset,
 					returnTo
 				);
-				const href = withExplorerReturnTo(url, returnTo) + window.location.hash;
+				const destination = collection === 'contracts' && identifier ? preserveContractActivityContext(url, window.location.search) : url;
+				const href = withExplorerReturnTo(destination, returnTo) + window.location.hash;
 				if (href !== window.location.pathname + window.location.search + window.location.hash) {
 					if (historyMode === 'push') window.history.pushState(null, '', href);
 					else window.history.replaceState(null, '', href);

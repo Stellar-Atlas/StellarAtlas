@@ -55,7 +55,7 @@ export function contractActivityUrlIdentity(search: string, tab: ContractActivit
 	const params = new URLSearchParams(search);
 	const fixed = ['contract_id', 'min_ledger', 'max_ledger', ...(tab === 'events'
 		? ['transaction_hash', 'start_time', 'end_time', 'successful', 'in_successful_contract_call']
-		: ['ledger_key_hash', 'durability', 'deleted'])];
+		: ['ledger_key_hash', 'durability', 'deleted', 'limit', 'state_offset', 'state_for', 'offset'])];
 	return JSON.stringify([
 		params.get('activity') === 'state' ? 'state' : 'events',
 		fixed.map(key => params.getAll(key)),

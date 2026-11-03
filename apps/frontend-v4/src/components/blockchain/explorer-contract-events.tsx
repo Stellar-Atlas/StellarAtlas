@@ -49,6 +49,8 @@ export function ExplorerContractEvents({
 				>
 					{params.get('return_to') && <input type="hidden" name="return_to" value={params.get('return_to') ?? ''} />}
 					{params.get('activity') === 'state' && <input type="hidden" name="activity" value="state" />}
+					{params.get('activity') === 'state' && ['ledger_key_hash', 'durability', 'deleted', 'state_offset', 'state_for'].map(name => params.has(name)
+						? <input key={name} type="hidden" name={name} value={params.get(name) ?? ''} /> : null)}
 					{['order', 'limit', 'q'].map((name) =>
 						filters[name] ? (
 							<input

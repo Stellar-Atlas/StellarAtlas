@@ -134,6 +134,19 @@ describe('typed contract activity presentation', () => {
 			expect(html).not.toContain('event-cursor');
 		} finally { search = ''; }
 	});
+	it('renders the embedded state REST selection and rejects invalid bounds without mounting data', () => {
+		search = '?activity=state&min_ledger=100&max_ledger=101&ledger_key_hash=key&durability=persistent&deleted=false&after=event-cursor';
+		try {
+			const html = renderToStaticMarkup(createElement(ExplorerContractActivity, { contractId, filters: {} }));
+			expect(html).toContain('state?limit=25&amp;min_ledger=100&amp;max_ledger=101&amp;ledger_key_hash=key&amp;durability=persistent&amp;deleted=false&amp;offset=0');
+			expect(html).not.toContain('event-cursor');
+			search = '?activity=state&min_ledger=102&max_ledger=101';
+			const invalid = renderToStaticMarkup(createElement(ExplorerContractActivity, { contractId, filters: {} }));
+			expect(invalid).toContain('role="alert"');
+			expect(invalid).not.toContain('Open REST response');
+			expect(invalid).not.toContain('Loading…');
+		} finally { search = ''; }
+	});
 	it('renders restored event controls and the same REST selection despite old props', () => {
 		search = '?order=asc&limit=50&type_code=1&topic=mint&q=account&after=next';
 		try {

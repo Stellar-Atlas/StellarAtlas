@@ -29,6 +29,7 @@ import {
 import { contractActivityUrlIdentity, eventControlsHref, eventPositionHref, readEventRoute, eventRouteError } from './contract-event-route';
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
+import { readStateRoute, statePositionHref, type StateRoute } from './contract-state-route';
 export function ExplorerContractActivity({
 	contractId, filters, token
 }: {
@@ -37,20 +38,34 @@ export function ExplorerContractActivity({
 	readonly token?: EventTokenContext;
 }): React.JSX.Element {
 	const params = useSearchParams();
-	const error = readContractActivityTab(params.get('activity')) === 'events'
-		? eventRouteError(contractId, filters, new URLSearchParams(params.toString())) : null;
+	let error: string | null = null, stateRoute: StateRoute | undefined;
+	try {
+		if (readContractActivityTab(params.get('activity')) === 'state')
+			stateRoute = readStateRoute(contractId, filters, new URLSearchParams(params.toString()));
+		else error = eventRouteError(contractId, filters, new URLSearchParams(params.toString()));
+	} catch (failure: unknown) { error = failure instanceof Error ? failure.message : 'Invalid state query.'; }
 	return error ? <p role="alert" className={styles.error}>{error}</p>
-		: <ContractActivitySelection contractId={contractId} filters={filters} token={token} />;
+		: stateRoute?.normalize ? <NormalizeStateRoute route={stateRoute} />
+		: <ContractActivitySelection contractId={contractId} filters={filters} token={token} stateRoute={stateRoute} />;
+}
+
+function NormalizeStateRoute({ route }: { readonly route: StateRoute }): React.JSX.Element {
+	useEffect(() => {
+		window.history.replaceState(null, '', statePositionHref(window.location.pathname, window.location.search, route, route.position, window.location.hash));
+	}, [route]);
+	return <p role="status">Loading…</p>;
 }
 
 function ContractActivitySelection({
 	contractId,
 	filters,
-	token
+	token,
+	stateRoute
 }: {
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
 	readonly token?: EventTokenContext;
+	readonly stateRoute?: StateRoute;
 }): React.JSX.Element {
 	const pathname = usePathname();
 	const params = useSearchParams();
@@ -74,24 +89,24 @@ function ContractActivitySelection({
 	};
 	const [search, setSearch] = useState(controls.q);
 	useEffect(() => setSearch(controls.q), [controls.q]);
-	const resultKey = contractId + ':' + tab + ':' + JSON.stringify(applied);
+	const resultKey = contractId + ':' + tab + ':' + (stateRoute ? stateRoute.identity + ':' + stateRoute.position : JSON.stringify(applied));
 	const [acceptedSummary, setSummary] = useState<{ key: string; value: ContractActivityPage['summary'] }>();
 	const summary = acceptedSummary?.key === resultKey ? acceptedSummary.value : undefined;
 	const onSummary = useCallback(
 		(value: ContractActivityPage['summary']) => setSummary({ key: resultKey, value }),
 		[resultKey]
 	);
-	const position = applied.after ?? '';
+	const position = stateRoute?.position ?? applied.after ?? '';
 	const queryKey = contractId + ':' + JSON.stringify(applyEventControls(applied, controls));
 	const previousPositions = useRef(new Map<string, string>());
-	const previous = previousPositions.current.get(queryKey + ':' + position);
+	const previous = stateRoute ? (position ? String(Math.max(0, Number(position) - Number(stateRoute.filters.limit))) : undefined) : previousPositions.current.get(queryKey + ':' + position);
 	const move = (next: string, remember = false): void => {
 		if (remember) {
 			previousPositions.current.set(queryKey + ':' + next, position);
 			const oldest = previousPositions.current.keys().next().value;
 			if (previousPositions.current.size > 50 && oldest) previousPositions.current.delete(oldest);
 		}
-		const href = eventPositionHref(pathname, window.location.search, next, window.location.hash);
+		const href = stateRoute ? statePositionHref(pathname, window.location.search, stateRoute, next, window.location.hash) : eventPositionHref(pathname, window.location.search, next, window.location.hash);
 		if (href !== window.location.pathname + window.location.search + window.location.hash)
 			window.history.pushState(null, '', href);
 	};
@@ -226,10 +241,12 @@ function ContractActivitySelection({
 				key={resultKey}
 				contractId={contractId}
 				filters={
-					tab === 'events' ? applied : { ...filters, limit: controls.limit }
+					stateRoute?.filters ?? applied
 				}
 				tab={tab}
 				token={token}
+				initialPosition={position}
+				pageHref={stateRoute ? statePositionHref(pathname, params.toString(), stateRoute, position) : eventPositionHref(pathname, params.toString(), position)}
 				onSummary={onSummary}
 				onNextPosition={next => move(next, Boolean(next))}
 				onPreviousPosition={previous === undefined ? undefined : () => move(previous)}
@@ -245,7 +262,9 @@ function ContractActivityResults({
 	token,
 	onSummary,
 	onNextPosition,
-	onPreviousPosition
+	onPreviousPosition,
+	initialPosition,
+	pageHref
 }: {
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
@@ -254,11 +273,12 @@ function ContractActivityResults({
 	readonly onSummary: (value: ContractActivityPage['summary']) => void;
 	readonly onNextPosition: (position: string) => void;
 	readonly onPreviousPosition?: () => void;
+	readonly initialPosition: string;
+	readonly pageHref: string;
 }): React.JSX.Element {
-	const pathname = usePathname(), params = useSearchParams();
 	const [state, dispatch] = useReducer(
 		contractActivityReducer,
-		tab === 'events' ? (filters.after ?? '') : '',
+		initialPosition,
 		createContractActivityState
 	);
 	const { requestId, requestedPosition } = state;
@@ -311,7 +331,6 @@ function ContractActivityResults({
 		};
 	}, [path, contractId, tab, requestedPosition, requestId, onSummary]);
 	const displayedPosition = state.positions[state.pageIndex] ?? '';
-	const pageHref = eventPositionHref(pathname, params.toString(), displayedPosition);
 	const view = (
 		<ContractActivityView
 			state={state}
@@ -320,10 +339,10 @@ function ContractActivityResults({
 			slow={slow}
 			onCancel={() => active.current?.abort()}
 			onRetry={() => dispatch({ type: 'retry' })}
-			onPrevious={tab === 'events' ? onPreviousPosition ?? (() => {}) : () => dispatch({ type: 'previous' })}
-			onNext={tab === 'events' ? () => state.page?.nextPosition && onNextPosition(state.page.nextPosition) : () => dispatch({ type: 'next' })}
+			onPrevious={onPreviousPosition ?? (() => {})}
+			onNext={() => state.page?.nextPosition && onNextPosition(state.page.nextPosition)}
 			onRefresh={() => dispatch({ type: 'refresh' })}
-			canPrevious={tab === 'events' ? onPreviousPosition !== undefined : undefined}
+			canPrevious={onPreviousPosition !== undefined}
 		/>
 	);
 	const linkedView = <>
@@ -332,7 +351,7 @@ function ContractActivityResults({
 			target="_blank" rel="noreferrer">Open REST response</a></div>
 		{view}
 	</>;
-	return tab === 'events' ? (
+	return (
 		<ExplorerInvestigationScope origin={pageHref}>
 			{linkedView}
 			<div className={styles.actions}>
@@ -340,8 +359,6 @@ function ContractActivityResults({
 				{displayedPosition && <button disabled={state.loading} onClick={() => onNextPosition('')}>First page</button>}
 			</div>
 		</ExplorerInvestigationScope>
-	) : (
-		linkedView
 	);
 }
 
