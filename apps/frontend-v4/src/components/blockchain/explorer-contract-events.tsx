@@ -47,6 +47,8 @@ export function ExplorerContractEvents({
 					className={events.form}
 					key={JSON.stringify(filters)}
 				>
+					{params.get('return_to') && <input type="hidden" name="return_to" value={params.get('return_to') ?? ''} />}
+					{params.get('activity') === 'state' && <input type="hidden" name="activity" value="state" />}
 					{['order', 'limit', 'q'].map((name) =>
 						filters[name] ? (
 							<input

@@ -59,12 +59,14 @@ describe('contract events workspace', () => {
 		expect(html).not.toContain('Open REST response');
 	});
 	it('keeps the range form aligned with URL-applied event controls', () => {
-		search = '?order=asc&limit=50&type_code=1&topic=mint&q=account';
+		search = '?order=asc&limit=50&type_code=1&topic=mint&q=account&return_to=%2Fexplorer%3Fq%3DUSD&activity=state';
 		try {
 			const html = renderToStaticMarkup(createElement(ExplorerContractEvents, { filters: contractEventExample }));
 			expect(html).toContain('name="order" value="asc"');
 			expect(html).toContain('name="limit" value="50"');
 			expect(html).toContain('name="q" value="account"');
+			expect(html).toContain('name="return_to" value="/explorer?q=USD"');
+			expect(html).toContain('name="activity" value="state"');
 			expect(html).toMatch(/name="topic"[^>]*value="mint"/);
 		} finally { search = ''; }
 	});
