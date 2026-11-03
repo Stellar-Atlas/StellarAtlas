@@ -147,6 +147,10 @@ describe('saved wallet, holder and event responses', () => {
 					expect(readFileSync(join(directory, filename), 'utf8')).toBe(
 						status === 0 ? body : saved
 					);
+					if (/^(wallet-balances|kale-holders)(-next)?\.json$/.test(filename)) {
+						const args = readFileSync(join(directory, 'curl-args'), 'utf8');
+						expect(args.split('\n')[0]).toBe('-q');
+					}
 					if (filename.endsWith('-next.json')) {
 						expect(
 							readFileSync(

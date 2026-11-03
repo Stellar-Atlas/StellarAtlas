@@ -23,7 +23,7 @@ function saveObservationPage(path: string, firstPage: string, next = false) {
   trap 'exit 143' TERM
 ${cursor}  temporary=$(mktemp './${file}.partial.XXXXXX') || exit
   trap 'rm -f -- "$temporary"' EXIT
-  status=$(curl --fail-with-body --connect-timeout 5 --max-time 30 \\
+  status=$(curl -q --fail-with-body --connect-timeout 5 --max-time 30 \\
     --write-out '%{http_code}:%header{x-stellaratlas-fallback}' \\
     '${api}${path}'${query} --output "$temporary") || exit
   if [[ $status != 2[0-9][0-9]: ]]; then
