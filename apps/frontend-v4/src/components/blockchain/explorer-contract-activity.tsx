@@ -66,7 +66,7 @@ export function ExplorerContractActivity({
 		[resultKey]
 	);
 	const position = applied.after ?? '';
-	const queryKey = JSON.stringify(applyEventControls(applied, controls));
+	const queryKey = contractId + ':' + JSON.stringify(applyEventControls(applied, controls));
 	const previousPositions = useRef(new Map<string, string>());
 	const previous = previousPositions.current.get(queryKey + ':' + position);
 	const move = (next: string, remember = false): void => {
