@@ -1,6 +1,7 @@
 import { Code, type DeveloperGuidePage } from './developer-guide-elements';
 import { liveUpdatesExample } from './live-updates-example';
 import { networkSseExample } from './network-sse-example';
+import { networkWebSocketExample } from './network-websocket-example';
 
 export const liveUpdatesGuide: DeveloperGuidePage = {
 	slug: 'live-updates',
@@ -175,6 +176,103 @@ export const liveUpdatesGuide: DeveloperGuidePage = {
 						complete history. Keep historical pagination and coverage checks
 						with the relevant REST or GraphQL query.
 					</p>
+				</>
+			)
+		},
+		{
+			id: 'network-websocket',
+			title: 'Network and SCP WebSocket channels',
+			content: (
+				<>
+					<p>
+						<code>wss://api.stellaratlas.io/v1/live/ws</code> is a separate
+						observation protocol. Select comma-separated <code>channels</code>{' '}
+						in the connection URL; do not send a JSON subscribe message or the
+						publication feed’s ready/dataset protocol.
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th>Channel</th>
+								<th>Message types</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<code>summary</code>
+								</td>
+								<td>
+									<code>summary</code> and <code>latestLedger</code>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<code>network</code>
+								</td>
+								<td>
+									<code>network</code> and <code>latestLedger</code>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<code>scp</code>
+								</td>
+								<td>
+									<code>scp</code>, or <code>scpGraph</code> with{' '}
+									<code>scpMode=graph</code>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					<p>
+						Messages use a <code>type</code> and <code>payload</code>; all
+						connections may also receive <code>heartbeat</code> and{' '}
+						<code>error</code>. Omitting channels selects network and full SCP,
+						without summary. Omit <code>scpMode</code> for full SCP;{' '}
+						<code>scpMode=full</code> is not accepted. Unknown/duplicate
+						channels, repeated selectors or graph mode without SCP fail upgrade
+						validation with HTTP 400.
+					</p>
+					<p>
+						SCP frames include <code>source</code>, <code>freshness</code>,{' '}
+						<code>freshnessMs</code>, <code>observedAt</code>,{' '}
+						<code>cursor</code> and <code>truncated</code>. For an explicit
+						reconnect, pass both cursor fields as <code>afterObservedAtMs</code>{' '}
+						and URL-encoded <code>afterStatementHash</code>, exactly once each.
+						The timestamp is a nonnegative safe integer in milliseconds, not a
+						ledger number. This resumes within retained observations ordered by
+						observation time and statement hash; it is not arbitrary historical
+						replay. The cursor affects SCP only; it does not rewind network,
+						summary or latest-ledger snapshots. <code>truncated=true</code>{' '}
+						means the bounded update may have more data; false does not prove
+						complete network history.
+					</p>
+					<p>
+						Check source/freshness even after a successful connection. A
+						latest-ledger message may identify a Horizon fallback; that is not
+						live SCP sourcing from public RPC or analytics failover. A heartbeat
+						indicates connection activity, not fresh or complete data. Server
+						errors can arrive in an open connection; capacity/backpressure can
+						close it with 1013, and send failures with 1011.
+					</p>
+					<p>
+						Unlike the publication feed, this retained network/SCP handler has
+						no application-level Origin allowlist. HTTP CORS is not WebSocket
+						authorization, and deployment/edge restrictions may still apply;
+						this is not a live cross-origin acceptance claim.
+					</p>
+					<p>
+						The single-session example below selects summary and compact SCP. It
+						inspects the envelope and logs original JSON text without converting
+						string identifiers, slot indices or values to Number. It does not
+						validate the full payload, automatically reconnect or advance a
+						resume cursor. The frontend’s existing{' '}
+						<code>subscribeToLiveNetworkStream</code> helper handles validation,
+						shared subscriptions and bounded reconnects; its cursor resets when
+						SCP mode changes or a hidden tab becomes visible again.
+					</p>
+					<Code language="javascript">{networkWebSocketExample}</Code>
 				</>
 			)
 		}
