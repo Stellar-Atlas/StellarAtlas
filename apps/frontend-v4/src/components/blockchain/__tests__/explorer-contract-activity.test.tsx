@@ -38,6 +38,17 @@ const actions = {
 };
 
 describe('typed contract activity presentation', () => {
+	it('blocks invalid embedded raw controls before mounting a request or REST link', () => {
+		for (const query of ['type_code=9', 'order=sideways', 'limit=500', 'order=asc&order=desc']) {
+			search = '?min_ledger=100&max_ledger=101&' + query;
+			try {
+				const html = renderToStaticMarkup(createElement(ExplorerContractActivity, { contractId, filters: {} }));
+				expect(html).toContain('role="alert"');
+				expect(html).not.toContain('Open REST response');
+				expect(html).not.toContain('Loading…');
+			} finally { search = ''; }
+		}
+	});
 	it('shows concise typed event fields and exact original numeric text', () => {
 		const html = renderToStaticMarkup(
 			createElement(ContractActivityView, {
@@ -121,6 +132,31 @@ describe('typed contract activity presentation', () => {
 			expect(html).toContain('aria-pressed="true">State changes');
 			expect(html).not.toContain('All events');
 			expect(html).not.toContain('event-cursor');
+		} finally { search = ''; }
+	});
+	it('renders the embedded state REST selection and rejects invalid bounds without mounting data', () => {
+		search = '?activity=state&min_ledger=100&max_ledger=101&ledger_key_hash=key&durability=persistent&deleted=false&after=event-cursor';
+		try {
+			const html = renderToStaticMarkup(createElement(ExplorerContractActivity, { contractId, filters: {} }));
+			expect(html).toContain('state?limit=25&amp;min_ledger=100&amp;max_ledger=101&amp;ledger_key_hash=key&amp;durability=persistent&amp;deleted=false&amp;offset=0');
+			expect(html).not.toContain('event-cursor');
+			search = '?activity=state&min_ledger=102&max_ledger=101';
+			const invalid = renderToStaticMarkup(createElement(ExplorerContractActivity, { contractId, filters: {} }));
+			expect(invalid).toContain('role="alert"');
+			expect(invalid).not.toContain('Open REST response');
+			expect(invalid).not.toContain('Loading…');
+		} finally { search = ''; }
+	});
+	it('renders restored event controls and the same REST selection despite old props', () => {
+		search = '?order=asc&limit=50&type_code=1&topic=mint&q=account&after=next';
+		try {
+			const html = renderToStaticMarkup(createElement(ExplorerContractActivity, {
+				contractId, filters: { min_ledger: '100', max_ledger: '101', order: 'desc', limit: '10' }
+			}));
+			expect(html).toContain('<option value="asc" selected="">Oldest first');
+			expect(html).toContain('<option value="50" selected="">50');
+			expect(html).toContain('type_code=1&amp;order=asc&amp;topic=mint&amp;q=account&amp;view=typed&amp;include_summary=true&amp;after=next');
+			expect(html).not.toContain('events?limit=10');
 		} finally { search = ''; }
 	});
 });
