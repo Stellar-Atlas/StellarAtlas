@@ -104,6 +104,7 @@ describe('saved wallet and holder responses', () => {
 					const result = spawnSync('/bin/bash', ['-c', fakeCurl + command], {
 						cwd: directory,
 						env: {
+							NODE_ENV: 'test',
 							PATH: '/usr/bin:/bin',
 							RESPONSE: body,
 							EXIT_CODE: String(status)
@@ -144,7 +145,7 @@ printf '%s %s' "$success_status" "$failure_status"
 `;
 				const result = spawnSync('/bin/bash', ['-c', script], {
 					cwd: directory,
-					env: { PATH: '/usr/bin:/bin' },
+					env: { NODE_ENV: 'test', PATH: '/usr/bin:/bin' },
 					encoding: 'utf8',
 					timeout: 5000
 				});
@@ -203,6 +204,7 @@ exit "$status"
 					const result = spawnSync('/bin/bash', ['-c', script], {
 						cwd: directory,
 						env: {
+							NODE_ENV: 'test',
 							PATH: '/usr/bin:/bin',
 							RESPONSE: 'new bytes',
 							EXIT_CODE: '0',
