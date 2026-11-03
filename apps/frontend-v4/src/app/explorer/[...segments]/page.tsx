@@ -56,7 +56,7 @@ async function EntityRoute({
 		return (
 			<>
 				<ExplorerEntityNavigation active="transfers" />
-				<TransferActivityPanel initialFilters={filters} />
+				<TransferActivityPanel />
 			</>
 		);
 	if ((collection === 'accounts' || collection === 'ledgers') && identifier)

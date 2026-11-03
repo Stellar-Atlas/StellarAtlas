@@ -1,35 +1,13 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
-import {
-	buildTransferActivityPath,
-	formatTransferAmount,
-	parseTransferActivityPage,
-	type TransferActivityPage,
-	type TransferFilters
-} from '../../api/transfer-activity';
+import { useId, useState } from 'react';
+import { localTimeInput } from '../../api/explorer-search-route';
+import { formatTransferAmount, type TransferFilters } from '../../api/transfer-activity';
+import { ExplorerInvestigationScope, ExplorerLink } from '../blockchain/explorer-investigation';
 import { LocalDateTime } from '../local-date-time';
+import { transferFields, transferTransactionReference } from './transfer-investigation-route';
+import { useTransferInvestigation } from './use-transfer-investigation';
 import styles from './transfer-activity-panel.module.css';
-
-const fields = [
-	[
-		'event_topic',
-		'Event topic (transfer, mint, burn, clawback or fee)',
-		'text'
-	],
-	['account', 'Account (sender or recipient)', 'text'],
-	['asset', 'Asset (native or CODE:ISSUER)', 'text'],
-	['from', 'Sender', 'text'],
-	['to', 'Recipient', 'text'],
-	['min_ledger', 'First ledger (included)', 'text'],
-	['max_ledger', 'Last ledger (included)', 'text'],
-	['start_time', 'From time (your timezone, included)', 'datetime-local'],
-	['end_time', 'Until time (your timezone, excluded)', 'datetime-local'],
-	['min_amount_raw', 'Minimum raw integer amount', 'text'],
-	['max_amount_raw', 'Maximum raw integer amount', 'text'],
-	['transaction_hash', 'Transaction hash', 'text'],
-	['contract_id', 'Token contract ID', 'text']
-] as const;
 const sample: TransferFilters = {
 	asset: 'native',
 	event_topic: 'transfer',
@@ -37,95 +15,21 @@ const sample: TransferFilters = {
 	max_ledger: '26000099'
 };
 
-export function TransferActivityPanel({
-	initialFilters = sample
-}: {
-	readonly initialFilters?: TransferFilters;
+export function TransferActivityPanel(): React.JSX.Element {
+	const activity = useTransferInvestigation();
+	return (
+		<ExplorerInvestigationScope origin={activity.href}>
+			<TransferActivityView key={activity.href} activity={activity} />
+		</ExplorerInvestigationScope>
+	);
+}
+
+function TransferActivityView({ activity }: {
+	readonly activity: ReturnType<typeof useTransferInvestigation>;
 }): React.JSX.Element {
 	const id = useId();
-	const [filters, setFilters] = useState<TransferFilters>(initialFilters);
-	const [result, setResult] = useState<TransferActivityPage | null>(null);
-	const [status, setStatus] = useState(
-		'No request sent. Edit filters and select Find transfers.'
-	);
-	const [requestPath, setRequestPath] = useState('');
-	const [busy, setBusy] = useState(false);
-	const [cursor, setCursor] = useState<string | undefined>();
-	const [history, setHistory] = useState<(string | undefined)[]>([]);
-	const [submitted, setSubmitted] = useState<TransferFilters>(initialFilters);
-	const controller = useRef<AbortController | null>(null);
-	useEffect(() => () => controller.current?.abort(), []);
-
-	async function run(
-		nextFilters: TransferFilters,
-		nextCursor?: string,
-		direction: 'reset' | 'next' | 'previous' = 'reset'
-	): Promise<void> {
-		if (controller.current) return;
-		const abort = new AbortController();
-		controller.current = abort;
-		const timeout = setTimeout(() => abort.abort(), 20_000);
-		setBusy(true);
-		const started = performance.now();
-		try {
-			const path = buildTransferActivityPath(nextFilters, nextCursor);
-			setRequestPath(path);
-			setStatus('Requesting parsed transfer data…');
-			const response = await fetch(path, {
-				headers: { accept: 'application/json' },
-				credentials: 'omit',
-				signal: abort.signal
-			});
-			const body: unknown = await response.json();
-			if (!response.ok) {
-				const detail =
-					typeof body === 'object' &&
-					body !== null &&
-					'error' in body &&
-					typeof body.error === 'string'
-						? body.error
-						: typeof body === 'object' &&
-							  body !== null &&
-							  'message' in body &&
-							  typeof body.message === 'string'
-							? body.message
-							: 'Request could not be completed.';
-				throw new Error('HTTP ' + response.status + ': ' + detail);
-			}
-			const page = parseTransferActivityPage(body);
-			setResult(page);
-			setSubmitted({ ...nextFilters });
-			setHistory((current) =>
-				direction === 'next'
-					? [...current, cursor]
-					: direction === 'previous'
-						? current.slice(0, -1)
-						: []
-			);
-			setCursor(nextCursor);
-			setStatus(
-				'HTTP ' +
-					response.status +
-					' · ' +
-					Math.round(performance.now() - started) +
-					' ms · ' +
-					page.transfers.length +
-					' returned'
-			);
-		} catch (error) {
-			setStatus(
-				abort.signal.aborted
-					? 'Request canceled or timed out. Previous results remain visible.'
-					: error instanceof Error
-						? error.message
-						: 'Request failed.'
-			);
-		} finally {
-			clearTimeout(timeout);
-			controller.current = null;
-			setBusy(false);
-		}
-	}
+	const [filters, setFilters] = useState<TransferFilters>(activity.filters);
+	const { page: result, error, busy, requestPath } = activity;
 
 	return (
 		<section className={styles.panel} aria-labelledby={id} aria-busy={busy}>
@@ -140,17 +44,19 @@ export function TransferActivityPanel({
 			<form
 				onSubmit={(event) => {
 					event.preventDefault();
-					void run(filters);
+					activity.submit(filters);
 				}}
 			>
 				<fieldset disabled={busy} className={styles.form}>
 					<legend>Filters</legend>
-					{fields.map(([key, label, type]) => (
+					{transferFields.map(([key, label, type]) => (
 						<label key={key}>
 							{label}
 							<input
 								type={type}
-								value={filters[key] ?? ''}
+								value={type === 'datetime-local'
+									? localTimeInput(filters[key] ?? '')
+									: filters[key] ?? ''}
 								onChange={(event) => {
 									const value = event.currentTarget.value;
 									setFilters((current) => ({
@@ -176,23 +82,33 @@ export function TransferActivityPanel({
 					<button
 						type="button"
 						disabled={busy}
-						onClick={() => {
-							setFilters(sample);
-							setStatus('Sample loaded. Select Find transfers.');
-						}}
+						onClick={() => setFilters(sample)}
 					>
 						Load sample
 					</button>
 					{busy && (
-						<button type="button" onClick={() => controller.current?.abort()}>
+						<button type="button" onClick={activity.cancel}>
 							Cancel request
 						</button>
 					)}
 				</div>
 			</form>
 			<p role="status" aria-live="polite">
-				{status}
+				{error ?? (busy ? 'Requesting transfers…' : result
+					? result.transfers.length + ' returned'
+					: 'Edit filters and select Find transfers.')}
 			</p>
+			{activity.retry && <button type="button" onClick={activity.retry}>Retry transfers</button>}
+			{(result || activity.previous) && (
+				<div className={styles.actions}>
+					<button type="button" disabled={busy || !activity.previous} onClick={activity.previous ?? undefined}>
+						Previous transfers
+					</button>
+					<button type="button" disabled={busy || !activity.next} onClick={activity.next ?? undefined}>
+						Next transfers
+					</button>
+				</div>
+			)}
 			{requestPath && <code className={styles.request}>GET {requestPath}</code>}
 			{result && (
 				<>
@@ -203,27 +119,13 @@ export function TransferActivityPanel({
 						only; gaps and later backfills may exist. An empty page does not
 						establish that an account never held this asset.
 					</p>
-					<div className={styles.actions}>
-						<button
-							disabled={busy || history.length === 0}
-							onClick={() => void run(submitted, history.at(-1), 'previous')}
-						>
-							Previous transfers
-						</button>
-						<button
-							disabled={busy || !result.nextCursor}
-							onClick={() =>
-								void run(submitted, result.nextCursor ?? undefined, 'next')
-							}
-						>
-							Next transfers
-						</button>
-					</div>
 					{result.transfers.length === 0 ? (
 						<p>No matching published transfers in this window.</p>
 					) : (
 						<ul className={styles.rows}>
-							{result.transfers.map((row) => (
+							{result.transfers.map((row) => {
+								const transaction = transferTransactionReference(row.transactionHash, row.ledgerSequence);
+								return (
 								<li className={styles.row} key={row.id}>
 									<strong>
 										{formatTransferAmount(row.amountRaw, row.amountScale)}{' '}
@@ -240,7 +142,9 @@ export function TransferActivityPanel({
 										<dt>To</dt>
 										<dd>{row.toMuxed ?? row.to ?? 'not supplied'}</dd>
 										<dt>Transaction</dt>
-										<dd>{row.transactionHash}</dd>
+										<dd>{transaction.href
+											? <ExplorerLink href={transaction.href}>{transaction.label}</ExplorerLink>
+											: transaction.label}</dd>
 										<dt>Raw amount</dt>
 										<dd>
 											{row.amountRaw}
@@ -250,7 +154,8 @@ export function TransferActivityPanel({
 										</dd>
 									</dl>
 								</li>
-							))}
+								);
+							})}
 						</ul>
 					)}
 					<details>
