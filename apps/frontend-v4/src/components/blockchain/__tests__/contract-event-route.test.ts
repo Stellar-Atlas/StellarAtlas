@@ -33,6 +33,10 @@ describe('event selection URL contract', () => {
 		expect(input.order).toBe('sideways');
 		expect(contractEventQueryError(input)).toBe('Choose newest or oldest events first.');
 	});
+	it('honors explicit event bounds and outcomes on an embedded route with no initial filters', () => {
+		const restored = readEventRoute({}, new URLSearchParams('min_ledger=100&max_ledger=101&successful=false&transaction_hash=abc&limit=50'));
+		expect(restored).toEqual({ min_ledger: '100', max_ledger: '101', successful: 'false', transaction_hash: 'abc', order: 'desc', limit: '50' });
+	});
 	it('ignores URL ordering and return context but rejects a different data selection', () => {
 		const original = '?min_ledger=100&max_ledger=101&q=account&limit=25&return_to=%2Fexplorer';
 		const identity = contractActivityUrlIdentity(original, 'events');

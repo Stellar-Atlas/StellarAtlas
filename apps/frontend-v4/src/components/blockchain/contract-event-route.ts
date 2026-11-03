@@ -7,6 +7,8 @@ const selectionKeys = ['type_code', 'order', 'limit', 'topic', 'q', 'after'] as 
 /** URL-owned event fields must not fall back to props from an older navigation. */
 export function readEventRouteInput(filters: ExplorerFilters, search: URLSearchParams): ExplorerFilters {
 	const next = { ...filters };
+	for (const key of ['min_ledger', 'max_ledger', 'start_time', 'end_time', 'transaction_hash', 'successful', 'in_successful_contract_call'])
+		if (search.has(key)) next[key] = search.get(key) ?? '';
 	for (const key of selectionKeys) {
 		delete next[key];
 		const value = search.get(key);
