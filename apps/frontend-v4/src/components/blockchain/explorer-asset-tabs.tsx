@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { AssetRecord } from './explorer-asset-types';
+import { isContractAccount } from '../../domain/classic-account';
 import { ParsedIssuerMetadata } from './explorer-issuer-metadata';
 import { ExplorerAssetHolders } from './explorer-asset-holders';
 import { ExplorerAssetMarkets } from './explorer-asset-markets';
@@ -40,6 +41,7 @@ export function ExplorerAssetTabs({
 			window.history.pushState(null, '', href);
 	};
 	const { asset, metadata } = record;
+	const contractId = asset.contractId || (asset.kind === 'contract' && isContractAccount(asset.id) ? asset.id : undefined);
 	return (
 		<div className={ui.assetTabs}>
 			<nav className={ui.tabBar} aria-label="Asset sections">
@@ -103,7 +105,13 @@ export function ExplorerAssetTabs({
 				) : (
 					<ExplorerAssetMarkets asset={asset} />
 				))}
-			{tab === 'Contracts & events' && asset.contractId && (
+			{tab === 'Contracts & events' && !contractId && (
+				<section aria-label="Contract activity">
+					<h3>Contract activity</h3>
+					<p role="status">Contract address unavailable for this asset.</p>
+				</section>
+			)}
+			{tab === 'Contracts & events' && contractId && (
 				<>
 					<h3>
 						{asset.kind === 'contract'
@@ -112,18 +120,18 @@ export function ExplorerAssetTabs({
 					</h3>
 					<Link
 						className={ui.plainHash}
-						href={'/explorer/contracts/' + asset.contractId}
+						href={'/explorer/contracts/' + contractId}
 					>
-						{asset.contractId}
+						{contractId}
 					</Link>
 					<ExplorerContractActivity
-						contractId={asset.contractId}
+						contractId={contractId}
 						filters={{}}
 						token={
 							asset.kind === 'contract'
 								? undefined
 								: {
-										contractId: asset.contractId,
+										contractId,
 										assetId: asset.id,
 										symbol: asset.code ?? 'XLM',
 										decimals: 7

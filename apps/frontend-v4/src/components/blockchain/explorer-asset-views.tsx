@@ -12,6 +12,7 @@ import type {
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 import { ParsedIssuerMetadata } from './explorer-issuer-metadata';
+import { isContractAccount } from '../../domain/classic-account';
 
 const EMPTY_FILTERS: ExplorerFilters = Object.freeze({});
 
@@ -241,7 +242,7 @@ export function AssetDetails({
 				<div>
 					<h3>
 						{asset.code ??
-							(asset.kind === 'contract' ? asset.contractId : undefined) ??
+							(asset.kind === 'contract' ? asset.contractId ?? (isContractAccount(asset.id) ? asset.id : undefined) : undefined) ??
 							'Asset'}
 					</h3>
 					<p>
