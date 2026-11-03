@@ -77,7 +77,7 @@ describe('typed transaction proxy', () => {
 		new Headers({ 'content-type': 'text/html' }),
 		new Headers({ 'content-type': 'application/json', 'content-length': '16777217' })
 	])('rejects unsafe response headers and cancels the upstream body: %j', async headers => {
-		const cancel = jest.fn();
+		const cancel = jest.fn<() => void>();
 		const body = new ReadableStream<Uint8Array>({ cancel });
 		globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers }));
 		const result = await GET(new Request(path + '?' + query), context);
@@ -88,7 +88,7 @@ describe('typed transaction proxy', () => {
 	});
 
 	it('cuts off an underdeclared streamed body at the actual byte cap', async () => {
-		const cancel = jest.fn();
+		const cancel = jest.fn<() => void>();
 		const chunk = new Uint8Array(1024 * 1024);
 		const body = new ReadableStream<Uint8Array>({ pull(stream) { stream.enqueue(chunk); }, cancel });
 		globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(body, {
@@ -103,7 +103,7 @@ describe('typed transaction proxy', () => {
 
 	it.each(['deadline', 'caller', 'consumer'] as const)('cancels an incomplete body on %s after headers', async reason => {
 		const caller = new AbortController();
-		const cancel = jest.fn();
+		const cancel = jest.fn<() => void>();
 		const body = new ReadableStream<Uint8Array>({ cancel });
 		globalThis.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(body, {
 			headers: { 'content-type': 'application/json' }
