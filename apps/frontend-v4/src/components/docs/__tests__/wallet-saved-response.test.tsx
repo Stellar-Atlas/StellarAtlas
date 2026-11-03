@@ -41,11 +41,13 @@ const commands = [
 ]
 	.map((match) => decode(match[1]!))
 	.filter((value) => value.includes('--output'));
-// A shell function replaces curl: no request or socket is made.
+// Shell fixtures simulate transfer outcomes and the cursor read.
 const fakeCurl = `curl() {
- local destination
+ local destination write_status
+ printf '%s\\n' "$@" > curl-args
  while [ "$#" -gt 0 ]; do
   if [ "$1" = --output ]; then shift; destination=$1; fi
+  if [ "$1" = --write-out ]; then shift; write_status=$1; fi
   shift
  done
  printf '%s' "$RESPONSE" > "$destination"
@@ -57,15 +59,36 @@ const fakeCurl = `curl() {
   printf '%s' "$destination" > failure-path
  fi
  if [ "\${SIGNAL:-}" = TERM ]; then kill -TERM "$BASHPID"; fi
+ if [ -n "$write_status" ]; then printf '%s' "\${HTTP_STATUS:-200:}"; fi
  return "$EXIT_CODE"
+}
+jq() {
+ [ "$1" = -er ] && [ "$2" = '.nextCursor | strings | select(length > 0)' ] || return 2
+ local page
+ IFS= read -r page < "$3" || return 2
+ case "$page" in
+  '{"nextCursor":"opaque+/="}') printf '%s\\n' 'opaque+/=' ;;
+  '{"nextCursor":null}') return 4 ;;
+  *) return 2 ;;
+ esac
 }
 `;
 const saved =
 	'{"balances":[{"balance":1234567890.1234567,"balanceRaw":null,"trustLineLimitRaw":"9223372036854775807"}],"nextCursor":"old-page"}\n';
 
+const firstPage = '{"nextCursor":"opaque+/="}\n';
+function seedFirstPage(directory: string, filename: string) {
+	if (filename.endsWith('-next.json')) {
+		writeFileSync(
+			join(directory, filename.replace('-next.json', '.json')),
+			firstPage
+		);
+	}
+}
+
 describe('saved wallet, holder and event responses', () => {
-	it('publishes three guarded save commands and distinguishes retained data from a fresh response', () => {
-		expect(commands).toHaveLength(3);
+	it('publishes five guarded save commands and distinguishes retained data from a fresh response', () => {
+		expect(commands).toHaveLength(5);
 		for (const text of [
 			'refresh is unavailable',
 			'not an empty',
@@ -103,6 +126,7 @@ describe('saved wallet, holder and event responses', () => {
 			({ status, body }) => {
 				const directory = mkdtempSync(join(tmpdir(), 'wallet-guide-'));
 				try {
+					seedFirstPage(directory, filename);
 					writeFileSync(join(directory, filename), saved);
 					writeFileSync(
 						join(directory, filename + '.partial.other'),
@@ -123,6 +147,21 @@ describe('saved wallet, holder and event responses', () => {
 					expect(readFileSync(join(directory, filename), 'utf8')).toBe(
 						status === 0 ? body : saved
 					);
+					if (/^(wallet-balances|kale-holders)(-next)?\.json$/.test(filename)) {
+						const args = readFileSync(join(directory, 'curl-args'), 'utf8');
+						expect(args.split('\n')[0]).toBe('-q');
+					}
+					if (filename.endsWith('-next.json')) {
+						expect(
+							readFileSync(
+								join(directory, filename.replace('-next.json', '.json')),
+								'utf8'
+							)
+						).toBe(firstPage);
+						expect(readFileSync(join(directory, 'curl-args'), 'utf8')).toContain(
+							'--data-urlencode\nafter=opaque+/=\n'
+						);
+					}
 					expect(
 						readdirSync(directory).filter((name) =>
 							name.startsWith(filename + '.partial.')
@@ -136,6 +175,7 @@ describe('saved wallet, holder and event responses', () => {
 		it(`${filename}: overlapping success and failure promote only the successful invocation's bytes`, () => {
 			const directory = mkdtempSync(join(tmpdir(), 'wallet guide overlap '));
 			try {
+				seedFirstPage(directory, filename);
 				writeFileSync(join(directory, filename), saved);
 				const script =
 					fakeCurl +
@@ -192,6 +232,7 @@ printf '%s %s' "$success_status" "$failure_status"
 			({ setup, status, signal }) => {
 				const directory = mkdtempSync(join(tmpdir(), 'wallet guide cleanup '));
 				try {
+					seedFirstPage(directory, filename);
 					writeFileSync(join(directory, filename), saved);
 					writeFileSync(join(directory, 'caller-owned'), 'retain');
 					const script =
@@ -239,4 +280,40 @@ exit "$status"
 			}
 		);
 	}
+	it.each([
+		{ cursor: firstPage, http: '200:snapshot', status: 22 },
+		{ cursor: firstPage, http: '302:', status: 22 },
+		{ cursor: '{"nextCursor":null}\n', http: '200:', status: 4 }
+	])('retains the next page when continuation exits $status ($http)', ({
+		cursor,
+		http,
+		status
+	}) => {
+		const command = commands.find((value) => value.includes('wallet-balances-next.json'));
+		if (!command) throw new Error('Missing wallet continuation');
+		const directory = mkdtempSync(join(tmpdir(), 'wallet-guide-stop-'));
+		try {
+			writeFileSync(join(directory, 'wallet-balances.json'), cursor);
+			writeFileSync(join(directory, 'wallet-balances-next.json'), saved);
+			const result = spawnSync('/bin/bash', ['-c', fakeCurl + command], {
+				cwd: directory,
+				env: {
+					NODE_ENV: 'test',
+					PATH: '/usr/bin:/bin',
+					HTTP_STATUS: http,
+					RESPONSE: 'unexpected body',
+					EXIT_CODE: '0'
+				},
+				encoding: 'utf8',
+				timeout: 5000
+			});
+			expect(result.status).toBe(status);
+			expect(readFileSync(join(directory, 'wallet-balances-next.json'), 'utf8')).toBe(saved);
+			const entries = readdirSync(directory);
+			expect(entries.some((name) => name.includes('.partial.'))).toBe(false);
+			expect(entries.includes('curl-args')).toBe(status !== 4);
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
 });
