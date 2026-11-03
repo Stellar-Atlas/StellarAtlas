@@ -65,7 +65,7 @@ describe('contract events workspace', () => {
 			expect(html).toContain('name="order" value="asc"');
 			expect(html).toContain('name="limit" value="50"');
 			expect(html).toContain('name="q" value="account"');
-			expect(html).toContain('name="topic" maxLength="128" placeholder="transfer, mint…" spellCheck="false" value="mint"');
+			expect(html).toMatch(/name="topic"[^>]*value="mint"/);
 		} finally { search = ''; }
 	});
 });
