@@ -1,5 +1,6 @@
 import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
 import { contractEventExample } from '../blockchain/contract-event-query';
+import { contractReproductionSection } from './developer-guide-contract-reproduction';
 
 const outcomes = [
 	[
@@ -187,6 +188,7 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 					</p>
 				</>
 			)
-		}
+		},
+		contractReproductionSection
 	]
 };
