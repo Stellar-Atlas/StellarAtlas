@@ -1,15 +1,42 @@
 import { parseTransferActivityPage, type TransferActivityPage } from '../../api/transfer-activity';
 import type { Asset } from './explorer-asset-types';
 
+export type AssetActivitySelection = { before: number | undefined; after: string | null };
+const activityKeys = ['asset_activity_for', 'asset_activity_before', 'asset_activity_after'] as const;
+const validBefore = (value: number): boolean => Number.isSafeInteger(value) && value >= 2 && value <= 2_147_483_647;
+const validAfter = (value: string): boolean => /^[A-Za-z0-9_-]{1,2048}$/.test(value);
+
+export function readAssetActivitySelection(params: URLSearchParams, asset: Asset): AssetActivitySelection {
+	if (activityKeys.every(key => !params.has(key))) return { before: asset.lastObservedLedger, after: null };
+	const end = params.get('asset_activity_before'), after = params.get('asset_activity_after');
+	if (activityKeys.some(key => params.getAll(key).length > 1) ||
+		params.get('asset_activity_for') !== asset.id || (end === null && after === null) ||
+		(end !== null && (!/^[1-9]\d{0,9}$/.test(end) || !validBefore(Number(end)))) ||
+		(after !== null && !validAfter(after))) throw new Error('Invalid or unrelated activity selection. Open the latest activity to start again.');
+	return { before: end === null ? undefined : Number(end), after };
+}
+
+export function assetActivityHref(path: string, search: string, asset: Asset, selection: AssetActivitySelection | null, hash = ''): string {
+	const params = new URLSearchParams(search);
+	for (const key of activityKeys) params.delete(key);
+	if (selection && (selection.before !== undefined || selection.after !== null)) {
+		params.set('asset_activity_for', asset.id);
+		if (selection.before !== undefined) params.set('asset_activity_before', String(selection.before));
+		if (selection.after !== null) params.set('asset_activity_after', selection.after);
+		readAssetActivitySelection(params, asset);
+	}
+	return path + (params.size ? '?' + params.toString() : '') + hash;
+}
+
 export function assetActivityPath(asset: Asset, before: number | undefined, after: string | null): string {
 	const params = new URLSearchParams({limit:'25'});
 	params.set(asset.kind === 'contract' ? 'contract_id' : 'asset', asset.kind === 'contract' ? asset.contractId || asset.id : asset.id);
 	if (before !== undefined) {
-		if (!Number.isSafeInteger(before) || before < 2 || before > 2_147_483_647) throw new Error('Invalid activity ledger window.');
+		if (!validBefore(before)) throw new Error('Invalid activity ledger window.');
 		params.set('min_ledger',String(Math.max(2,before-2047))); params.set('max_ledger',String(before));
 	}
 	if (after !== null) {
-		if (!/^[A-Za-z0-9_-]{1,2048}$/.test(after)) throw new Error('Invalid transfer continuation.');
+		if (!validAfter(after)) throw new Error('Invalid transfer continuation.');
 		params.set('after',after);
 	}
 	return '/v1/activity/transfers?' + params;

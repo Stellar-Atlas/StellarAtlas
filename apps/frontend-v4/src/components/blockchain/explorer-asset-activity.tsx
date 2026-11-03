@@ -1,6 +1,6 @@
 'use client';
 
-import { ExplorerLink as Link } from './explorer-investigation';
+import { ExplorerInvestigationScope, ExplorerLink as Link } from './explorer-investigation';
 import {
 	formatTransferAmount
 } from '../../api/transfer-activity';
@@ -40,7 +40,7 @@ function AssetActivity({asset}:{readonly asset:Asset}): React.JSX.Element {
 	const activity = useAssetTransferActivity(asset);
 	const {before,page,busy,error}=activity;
 	return (
-		<section className={ui.holderSection} aria-label="Asset transfer activity" aria-busy={busy}>
+		<ExplorerInvestigationScope origin={activity.origin}><section className={ui.holderSection} aria-label="Asset transfer activity" aria-busy={busy}>
 			<div className={ui.sectionHeading}>
 				<h3>Transfers &amp; transactions</h3>
 				<span className={ui.observationLabel}>Published activity</span>
@@ -65,7 +65,7 @@ function AssetActivity({asset}:{readonly asset:Asset}): React.JSX.Element {
 			{error && (
 				<p className={styles.error} role="alert">
 					{error}
-					<button type="button" disabled={busy} onClick={activity.retry}>Retry activity</button>
+					{activity.retry && <button type="button" disabled={busy} onClick={activity.retry}>Retry activity</button>}
 				</p>
 			)}
 			{page && (
@@ -149,6 +149,6 @@ function AssetActivity({asset}:{readonly asset:Asset}): React.JSX.Element {
 						</button>
 						<button type="button" disabled={busy} onClick={activity.first}>First page</button>
 					</div>
-		</section>
+		</section></ExplorerInvestigationScope>
 	);
 }
