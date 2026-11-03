@@ -4,13 +4,18 @@ import { applyEventControls, createEventControls, type EventControls } from './c
 const selectionKeys = ['type_code', 'order', 'limit', 'topic', 'q', 'after'] as const;
 
 /** URL-owned event fields must not fall back to props from an older navigation. */
-export function readEventRoute(filters: ExplorerFilters, search: URLSearchParams): ExplorerFilters {
+export function readEventRouteInput(filters: ExplorerFilters, search: URLSearchParams): ExplorerFilters {
 	const next = { ...filters };
 	for (const key of selectionKeys) {
 		delete next[key];
 		const value = search.get(key);
 		if (value !== null) next[key] = value;
 	}
+	return next;
+}
+
+export function readEventRoute(filters: ExplorerFilters, search: URLSearchParams): ExplorerFilters {
+	const next = readEventRouteInput(filters, search);
 	const applied = applyEventControls(next, createEventControls(next));
 	if (next.after) applied.after = next.after;
 	return applied;

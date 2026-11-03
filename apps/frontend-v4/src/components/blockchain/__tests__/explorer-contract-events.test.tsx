@@ -2,9 +2,10 @@ import { jest } from '@jest/globals';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { contractEventExample } from '../contract-event-query';
+let search = '';
 jest.unstable_mockModule('next/navigation', () => ({
 	usePathname: () => '/explorer/contract-events',
-	useSearchParams: () => new URLSearchParams()
+	useSearchParams: () => new URLSearchParams(search)
 }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
@@ -56,5 +57,15 @@ describe('contract events workspace', () => {
 		expect(html).toContain('role="alert"');
 		expect(html).not.toContain('Loading…');
 		expect(html).not.toContain('Open REST response');
+	});
+	it('keeps the range form aligned with URL-applied event controls', () => {
+		search = '?order=asc&limit=50&type_code=1&topic=mint&q=account';
+		try {
+			const html = renderToStaticMarkup(createElement(ExplorerContractEvents, { filters: contractEventExample }));
+			expect(html).toContain('name="order" value="asc"');
+			expect(html).toContain('name="limit" value="50"');
+			expect(html).toContain('name="q" value="account"');
+			expect(html).toContain('name="topic" maxLength="128" placeholder="transfer, mint…" spellCheck="false" value="mint"');
+		} finally { search = ''; }
 	});
 });

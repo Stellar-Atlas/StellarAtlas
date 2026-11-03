@@ -1,7 +1,11 @@
+'use client';
+
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { ExplorerFilters } from '../../api/explorer-analytics';
 import { ExplorerContractActivity } from './explorer-contract-activity';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
+import { readEventRouteInput } from './contract-event-route';
 import {
 	contractEventExample,
 	contractEventQueryError,
@@ -11,10 +15,14 @@ import styles from './explorer-entity.module.css';
 import events from './explorer-contract-events.module.css';
 
 export function ExplorerContractEvents({
-	filters
+	filters: initialFilters
 }: {
 	readonly filters: ExplorerFilters;
 }): React.JSX.Element {
+	const params = useSearchParams();
+	const filters = Object.values(initialFilters).some(Boolean)
+		? readEventRouteInput(initialFilters, new URLSearchParams(params.toString()))
+		: initialFilters;
 	const requested = Object.values(filters).some(Boolean);
 	const error = requested ? contractEventQueryError(filters) : null;
 	const contractId = filters.contract_id?.trim() ?? '';

@@ -1,6 +1,7 @@
 import { contractActivityPath } from '../../../api/explorer-contract-activity';
 import { createEventControls } from '../contract-event-controls';
-import { eventControlsHref, eventPositionHref, readEventRoute } from '../contract-event-route';
+import { eventControlsHref, eventPositionHref, readEventRoute, readEventRouteInput } from '../contract-event-route';
+import { contractEventExample, contractEventQueryError } from '../contract-event-query';
 
 describe('event selection URL contract', () => {
 	it('restores URL selection instead of stale initial controls and cursor', () => {
@@ -26,5 +27,10 @@ describe('event selection URL contract', () => {
 		const nextUrl = new URL(next, url.origin);
 		expect(nextUrl.searchParams.get('after')).toBe('opaque+/cursor=');
 		expect(eventPositionHref(url.pathname, nextUrl.search, '', nextUrl.hash)).toBe(first);
+	});
+	it('retains invalid raw URL controls for validation instead of silently widening them', () => {
+		const input = readEventRouteInput(contractEventExample, new URLSearchParams('order=sideways&limit=500'));
+		expect(input.order).toBe('sideways');
+		expect(contractEventQueryError(input)).toBe('Choose newest or oldest events first.');
 	});
 });
