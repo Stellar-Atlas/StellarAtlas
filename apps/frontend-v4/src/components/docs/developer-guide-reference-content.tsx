@@ -5,6 +5,14 @@ import {
 	type DeveloperGuidePage
 } from './developer-guide-elements';
 import { publicHealthMetricsSection } from './public-health-metrics-guide';
+import { graphqlExamples } from './graphql-request';
+import { balanceObservationPath } from '../../api/explorer-balance-observations';
+
+const savedBalanceExamplePath = balanceObservationPath(
+	'balances',
+	graphqlExamples.balances.variables.account,
+	null
+);
 
 export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 	{
@@ -143,6 +151,54 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 							catalog does not promise full Hubble feature parity or complete
 							chain history. Follow the published coverage and each response’s
 							semantics.
+						</p>
+					</>
+				)
+			},
+			{
+				id: 'saved-api-responses',
+				title: 'Recognize a saved API response',
+				content: (
+					<>
+						<p>
+							Some public REST reads can return saved data when the live
+							service is unavailable. Check the HTTP status and headers before
+							parsing the body. This balance request prints both:
+						</p>
+						<Code>{`curl --include --fail-with-body --connect-timeout 5 --max-time 30 '${api}${savedBalanceExamplePath}'`}</Code>
+						<p>
+							<code>X-StellarAtlas-Fallback: snapshot</code> identifies the
+							saved response path, including errors. If present,{' '}
+							<code>X-StellarAtlas-Snapshot</code> gives the capture time.
+							Compare it with the current time to estimate the age of the
+							capture. Treat the age as unknown if the timestamp is missing,
+							invalid or in the future. Capture time does not tell you how
+							recent the underlying ledger observations are. A missing
+							fallback header does not establish freshness.
+						</p>
+						<p>
+							Saved balance responses can include <code>capturedAt</code>,{' '}
+							<code>semantics</code> and{' '}
+							<code>watermark.snapshotPinned: true</code>. Check coverage and
+							keep saved data separate from live results. A saved response does
+							not provide current ledger state, complete history or live SCP
+							observations.
+						</p>
+						<p>
+							A saved <code>503</code> can mean the requested data or query
+							was not captured; it is unavailable, not an empty result. A
+							saved <code>404</code> means the record was not found in the
+							saved data. It does not establish absence on the current chain.
+							A <code>409</code> for a cursor from a different capture means
+							you should restart from the first page. Keep cursors with their
+							filters and data source; do not reuse them across live and saved
+							responses or across captures.
+						</p>
+						<p>
+							GraphQL POSTs, writes, requests with an Authorization header,
+							WebSocket upgrades and live server-sent event streams still
+							require the live service. A saved page or a successful saved
+							REST read does not mean these operations are available.
 						</p>
 					</>
 				)
