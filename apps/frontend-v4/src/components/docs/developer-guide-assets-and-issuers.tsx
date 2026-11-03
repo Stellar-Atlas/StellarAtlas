@@ -10,6 +10,30 @@ const holderPath = balanceObservationPath('holders', kale, null, {
 	order: graphqlExamples.holders.variables.input.order
 });
 
+function saveObservationPage(path: string, firstPage: string, next = false) {
+	const file = next ? firstPage.replace('.json', '-next.json') : firstPage;
+	const cursor = next
+		? `  after=$(jq -er '.nextCursor | strings | select(length > 0)' './${firstPage}') || exit
+`
+		: '';
+	const query = next ? ' --get --data-urlencode "after=$after"' : '';
+	return `(
+  trap - EXIT INT TERM
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+${cursor}  temporary=$(mktemp './${file}.partial.XXXXXX') || exit
+  trap 'rm -f -- "$temporary"' EXIT
+  status=$(curl --fail-with-body --connect-timeout 5 --max-time 30 \\
+    --write-out '%{http_code}:%header{x-stellaratlas-fallback}' \\
+    '${api}${path}'${query} --output "$temporary") || exit
+  if [[ $status != 2[0-9][0-9]: ]]; then
+    printf '%s\\n' "Expected a live HTTP success, got $status" >&2
+    exit 22
+  fi
+  mv -fT -- "$temporary" './${file}'
+)`;
+}
+
 export const assetsAndIssuersGuide: DeveloperGuidePage = {
 	slug: 'assets-and-issuers',
 	title: 'Assets, balances and issuers',
@@ -41,15 +65,7 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						</li>
 						<li>
 							<p>Read one page of the wallet’s balance observations.</p>
-							<Code>{`(
-  trap - EXIT INT TERM
-  temporary=$(mktemp './wallet-balances.json.partial.XXXXXX') || exit
-  trap 'rm -f -- "$temporary"' EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  curl --fail-with-body '${api}${walletPath}' --output "$temporary" &&
-  mv -fT -- "$temporary" './wallet-balances.json'
-)`}</Code>
+							<Code>{saveObservationPage(walletPath, 'wallet-balances.json')}</Code>
 							<p>
 								Inspect <code>balances</code>, matching <code>asset</code> to
 								the full KALE identity. The sample wallet is independent of the
@@ -63,15 +79,7 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						</li>
 						<li>
 							<p>Read KALE holders, largest observed balance first.</p>
-							<Code>{`(
-  trap - EXIT INT TERM
-  temporary=$(mktemp './kale-holders.json.partial.XXXXXX') || exit
-  trap 'rm -f -- "$temporary"' EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  curl --fail-with-body '${api}${holderPath}' --output "$temporary" &&
-  mv -fT -- "$temporary" './kale-holders.json'
-)`}</Code>
+							<Code>{saveObservationPage(holderPath, 'kale-holders.json')}</Code>
 							<p>
 								Read <code>holders</code> as this page’s positive-balance
 								observations. Its length is not the total holder count; inspect{' '}
@@ -86,9 +94,10 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						</li>
 					</ol>
 					<p>
-						These Bash examples use <code>mktemp</code> and GNU <code>mv</code>.
+						These Bash examples use curl 7.84 or newer, <code>mktemp</code> and
+						GNU <code>mv</code>.
 						Each invocation creates its own temporary beside the saved page,
-						promotes only its successful response and cleans up its own
+						promotes only a successful response without a fallback marker and cleans up its own
 						temporary on exit. The parentheses scope variables and traps to that
 						invocation. An HTTP or transport failure means the refresh is
 						unavailable, not an empty balance or holder result. Stop this
@@ -99,24 +108,23 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						pinned balance snapshot.
 					</p>
 					<p>
-						Continue each result with its own <code>nextCursor</code> as{' '}
-						<code>after</code>. With <code>jq</code> installed, these commands
-						request the second pages only when a cursor exists:
+						After saving a first page successfully, use its <code>nextCursor</code>{' '}
+						as <code>after</code>. With <code>jq</code> installed, run the matching
+						command to save a separate second page. A missing, null or unusable
+						cursor stops the command before it sends a request.
 					</p>
-					<Code>{`after=$(jq -er '.nextCursor // empty' wallet-balances.json) &&
-curl --fail-with-body --get '${api}${walletPath}' \\
-  --data-urlencode "after=$after"
-
-after=$(jq -er '.nextCursor // empty' kale-holders.json) &&
-curl --fail-with-body --get '${api}${holderPath}' \\
-  --data-urlencode "after=$after"`}</Code>
+					<Code>{saveObservationPage(walletPath, 'wallet-balances.json', true)}</Code>
+					<Code>{saveObservationPage(holderPath, 'kale-holders.json', true)}</Code>
 					<p>
 						Keep the same account or asset, limit, sort and order. Stop on{' '}
 						<code>nextCursor: null</code>; never exchange discovery, balance and
 						holder cursors. These are latest-ingested observations, not
 						current-chain balances or a frozen snapshot. Amounts retain source
-						Float64 precision. Check <code>coverage</code>,{' '}
-						<code>watermark</code> and precision fields; an empty page alone
+						Float64 precision. The files preserve the original JSON bytes.
+						Keep raw integer strings as strings to avoid rounding. Check each
+						page’s <code>coverage</code>, <code>watermark</code> and precision
+						fields. Treat findings as partial when the response reports coverage
+						gaps or when more pages remain. An empty page alone
 						does not prove a wallet never held an asset. See{' '}
 						<a href="/docs/querying">pagination and error handling</a>.
 					</p>
