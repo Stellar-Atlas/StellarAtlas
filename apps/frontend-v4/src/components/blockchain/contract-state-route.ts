@@ -57,9 +57,14 @@ export function statePositionHref(pathname: string, search: string, route: State
 /** The parent contract lookup pins its window without dropping the selected state page. */
 export function preserveContractActivityContext(href: string, search: string): string {
 	const params = new URLSearchParams(search), url = new URL(href, 'https://example.invalid');
-	for (const key of ['activity', 'ledger_key_hash', 'durability', 'deleted', 'state_offset', 'state_for']) {
+	for (const key of ['activity', 'ledger_key_hash', 'durability', 'deleted', 'state_offset', 'state_for', 'after', 'type_code', 'order', 'topic', 'q', 'transaction_hash', 'successful', 'in_successful_contract_call']) {
 		url.searchParams.delete(key);
 		for (const value of params.getAll(key)) url.searchParams.append(key, value);
 	}
 	return url.pathname + url.search + url.hash;
+}
+
+/** The parent identity lookup accepts a window, not the child activity's filters. */
+export function contractIdentityFilters(filters: ExplorerFilters): ExplorerFilters {
+	return Object.fromEntries(Object.entries(filters).filter(([key]) => ['min_ledger', 'max_ledger', 'start_time', 'end_time', 'limit'].includes(key)));
 }

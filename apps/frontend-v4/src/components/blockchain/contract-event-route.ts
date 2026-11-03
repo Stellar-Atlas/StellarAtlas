@@ -10,7 +10,7 @@ export function eventRouteError(contractId: string, filters: ExplorerFilters, se
 	const input = readEventRouteInput(filters, search);
 	for (const key of [...selectionKeys, 'min_ledger', 'max_ledger', 'transaction_hash', 'successful', 'in_successful_contract_call'])
 		if (search.getAll(key).length > 1) return 'Use one value for each event filter.';
-	const window = !input.min_ledger && !input.max_ledger && !search.has('min_ledger') && !search.has('max_ledger')
+	const window: ExplorerFilters = !input.min_ledger && !input.max_ledger && !search.has('min_ledger') && !search.has('max_ledger')
 		? { min_ledger: '1', max_ledger: '1' } : {};
 	return contractEventQueryError({ ...input, ...window, contract_id: contractId });
 }

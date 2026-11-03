@@ -19,7 +19,7 @@ import {
 	ExplorerEntityTable
 } from './explorer-entity-table';
 import { ExplorerContractActivity } from './explorer-contract-activity';
-import { preserveContractActivityContext } from './contract-state-route';
+import { contractIdentityFilters, preserveContractActivityContext } from './contract-state-route';
 import { ExplorerContractProvenance } from './explorer-contract-provenance';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import {
@@ -56,7 +56,10 @@ function EntityBrowser({
 	const returnTo = useExplorerReturnTo();
 	const params = useSearchParams();
 	const search = params?.toString() ?? null;
-	const selection = useMemo(() => readExplorerPageSelection(search, initialFilters, initialOffset, !!identifier), [search, initialFilters, initialOffset, identifier]);
+	const selection = useMemo(() => {
+		const next = readExplorerPageSelection(search, initialFilters, initialOffset, !!identifier);
+		return collection === 'contracts' && identifier ? { ...next, filters: contractIdentityFilters(next.filters) } : next;
+	}, [search, initialFilters, initialOffset, identifier, collection]);
 	const selectionKey = explorerSelectionKey(selection.filters, selection.offset);
 	const acceptedSelection = useRef<string | null>(null);
 	const loadRevision = useRef(0);

@@ -1,6 +1,6 @@
 import { contractActivityPath } from '../../../api/explorer-contract-activity';
 import { contractActivityUrlIdentity } from '../contract-event-route';
-import { preserveContractActivityContext, readStateRoute, statePositionHref } from '../contract-state-route';
+import { contractIdentityFilters, preserveContractActivityContext, readStateRoute, statePositionHref } from '../contract-state-route';
 
 const contract = 'C-test';
 const first = 'activity=state&min_ledger=100&max_ledger=101&ledger_key_hash=key&durability=persistent&deleted=false&after=event-cursor&topic=mint&tab=contracts-events&return_to=%2Fexplorer';
@@ -48,6 +48,12 @@ describe('state selection and continuation', () => {
 		const destination = preserveContractActivityContext('/explorer/contracts/C-test?min_ledger=100&max_ledger=101&after=event-cursor', first + '&state_offset=25&state_for=identity');
 		const params = new URL(destination, 'https://example.invalid').searchParams;
 		for (const key of ['activity', 'ledger_key_hash', 'durability', 'deleted', 'after', 'state_offset', 'state_for']) expect(params.has(key)).toBe(true);
+	});
+	it('keeps child filters out of the parent identity lookup without dropping shared context', () => {
+		const filters = { min_ledger: '100', max_ledger: '101', limit: '25', deleted: 'false', after: 'events', topic: 'mint', order: 'asc', q: '100' };
+		expect(contractIdentityFilters(filters)).toEqual({ min_ledger: '100', max_ledger: '101', limit: '25' });
+		const pinned = new URL(preserveContractActivityContext('/explorer/contracts/C-test?min_ledger=100&max_ledger=101', new URLSearchParams(filters).toString()), 'https://example.invalid');
+		for (const key of ['deleted', 'after', 'topic', 'order', 'q']) expect(pinned.searchParams.get(key)).toBe(filters[key as keyof typeof filters]);
 	});
 	it('rejects late responses across state pages but not unrelated event-page changes', () => {
 		const identity = contractActivityUrlIdentity(first, 'state');
