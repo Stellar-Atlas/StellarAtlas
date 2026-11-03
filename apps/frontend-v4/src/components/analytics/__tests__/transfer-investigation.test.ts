@@ -34,7 +34,11 @@ const settle = async () => {
 	await new Promise<void>(resolve => setImmediate(resolve));
 	return render();
 };
-const params = (call: number) => new URL(request.mock.calls[call][0], base).searchParams;
+const params = (call: number) => {
+	const path = request.mock.calls[call]?.[0];
+	if (!path) throw new Error('Missing expected request ' + call);
+	return new URL(path, base).searchParams;
+};
 beforeEach(() => {
 	route = new URL(start, base); unavailable = false; request.mockClear();
 	const setLocation = (_state: unknown, _title: string, href: string) => { route = new URL(href, base); };
@@ -95,5 +99,5 @@ it('does not query a malformed link or replace a failed continuation with an emp
 	failed.retry?.();
 	expect((await settle()).error).toMatch(/503/);
 	expect(route.href).toBe(failedUrl);
-	expect(request.mock.calls[0][0]).toBe(request.mock.calls[1][0]);
+	expect(params(0).toString()).toBe(params(1).toString());
 });

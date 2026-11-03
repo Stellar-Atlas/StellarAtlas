@@ -38,13 +38,14 @@ export function readTransferSelection(params: URLSearchParams): {
 } {
 	const filters: TransferFilters = {};
 	const active = params.has(runKey), after = params.get(pageKey), raw = params.get(windowKey);
-	const tuple = raw?.split(':').map(Number);
+	const tuple = raw === null ? null : /^(\d+):(\d+)$/.exec(raw);
 	const window: TransferWindow | undefined =
-		tuple?.length === 2 ? [tuple[0], tuple[1]] : undefined;
+		tuple ? [Number(tuple[1]), Number(tuple[2])] : undefined;
 	const invalid = () => ({ filters, selection: null, error: 'Invalid transfer link. Review the filters and select Find transfers to start again.' });
 	for (const [name] of transferFields) {
 		const values = params.getAll(name);
-		if (values.length === 1 && values[0].length <= 512) filters[name] = values[0];
+		const value = values[0];
+		if (values.length === 1 && value !== undefined && value.length <= 512) filters[name] = value;
 	}
 	const validTime = (value: string | undefined): boolean =>
 		!value || (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) &&
