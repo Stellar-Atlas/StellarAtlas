@@ -26,7 +26,7 @@ import {
 	createEventControls,
 	type EventControls
 } from './contract-event-controls';
-import { eventControlsHref, eventPositionHref, readEventRoute } from './contract-event-route';
+import { contractActivityUrlIdentity, eventControlsHref, eventPositionHref, readEventRoute } from './contract-event-route';
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
 export function ExplorerContractActivity({
@@ -42,6 +42,7 @@ export function ExplorerContractActivity({
 	const params = useSearchParams();
 	const tab = readContractActivityTab(params.get('activity'));
 	const setTab = (next: ContractActivityTab) => {
+		if (next === tab) return;
 		const href = contractActivityTabHref(
 			pathname, window.location.search, next, window.location.hash
 		);
@@ -51,7 +52,9 @@ export function ExplorerContractActivity({
 	const applied = readEventRoute(filters, new URLSearchParams(params.toString()));
 	const controls = createEventControls(applied);
 	const setControls = (update: (current: EventControls) => EventControls): void => {
-		const href = eventControlsHref(pathname, window.location.search, update(controls), window.location.hash);
+		const next = createEventControls(applyEventControls({}, update(controls)));
+		if (!applied.after && JSON.stringify(next) === JSON.stringify(controls)) return;
+		const href = eventControlsHref(pathname, window.location.search, next, window.location.hash);
 		if (href !== window.location.pathname + window.location.search + window.location.hash)
 			window.history.pushState(null, '', href);
 	};
@@ -255,8 +258,8 @@ function ContractActivityResults({
 	);
 	useEffect(() => {
 		let disposed = false;
-		const origin = window.location.pathname + window.location.search;
-		const current = (): boolean => !disposed && window.location.pathname + window.location.search === origin;
+		const origin = window.location.pathname, identity = contractActivityUrlIdentity(window.location.search, tab);
+		const current = (): boolean => !disposed && window.location.pathname === origin && contractActivityUrlIdentity(window.location.search, tab) === identity;
 		const abort = new AbortController();
 		active.current = abort;
 		setSlow(false);

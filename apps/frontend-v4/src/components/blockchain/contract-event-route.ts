@@ -1,4 +1,5 @@
 import type { ExplorerFilters } from '../../api/explorer-analytics';
+import type { ContractActivityTab } from '../../api/explorer-contract-activity';
 import { applyEventControls, createEventControls, type EventControls } from './contract-event-controls';
 
 const selectionKeys = ['type_code', 'order', 'limit', 'topic', 'q', 'after'] as const;
@@ -34,4 +35,17 @@ export function eventPositionHref(pathname: string, search: string, position: st
 	if (position) params.set('after', position);
 	else params.delete('after');
 	return pathname + (params.size ? '?' + params : '') + hash;
+}
+
+/** Query identity, not parameter order or an unrelated return link, gates late responses. */
+export function contractActivityUrlIdentity(search: string, tab: ContractActivityTab): string {
+	const params = new URLSearchParams(search);
+	const fixed = ['contract_id', 'min_ledger', 'max_ledger', ...(tab === 'events'
+		? ['transaction_hash', 'start_time', 'end_time', 'successful', 'in_successful_contract_call']
+		: ['ledger_key_hash', 'durability', 'deleted'])];
+	return JSON.stringify([
+		params.get('activity') === 'state' ? 'state' : 'events',
+		fixed.map(key => params.getAll(key)),
+		tab === 'events' ? readEventRoute({}, params) : null
+	]);
 }

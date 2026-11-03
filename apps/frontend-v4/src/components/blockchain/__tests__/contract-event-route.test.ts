@@ -1,6 +1,6 @@
 import { contractActivityPath } from '../../../api/explorer-contract-activity';
 import { createEventControls } from '../contract-event-controls';
-import { eventControlsHref, eventPositionHref, readEventRoute, readEventRouteInput } from '../contract-event-route';
+import { contractActivityUrlIdentity, eventControlsHref, eventPositionHref, readEventRoute, readEventRouteInput } from '../contract-event-route';
 import { contractEventExample, contractEventQueryError } from '../contract-event-query';
 
 describe('event selection URL contract', () => {
@@ -32,5 +32,13 @@ describe('event selection URL contract', () => {
 		const input = readEventRouteInput(contractEventExample, new URLSearchParams('order=sideways&limit=500'));
 		expect(input.order).toBe('sideways');
 		expect(contractEventQueryError(input)).toBe('Choose newest or oldest events first.');
+	});
+	it('ignores URL ordering and return context but rejects a different data selection', () => {
+		const original = '?min_ledger=100&max_ledger=101&q=account&limit=25&return_to=%2Fexplorer';
+		const identity = contractActivityUrlIdentity(original, 'events');
+		expect(contractActivityUrlIdentity('?return_to=%2Fother&order=desc&limit=25&q=account&max_ledger=101&min_ledger=100', 'events')).toBe(identity);
+		for (const change of ['&after=next', '&topic=mint', '&type_code=1', '&successful=false', '&activity=state'])
+			expect(contractActivityUrlIdentity(original + change, 'events')).not.toBe(identity);
+		expect(contractActivityUrlIdentity(original.replace('max_ledger=101', 'max_ledger=102'), 'events')).not.toBe(identity);
 	});
 });
