@@ -39,14 +39,17 @@ export async function GET(
 		});
 		const media = upstream.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
 		const length = upstream.headers.get('content-length');
-		const error = media !== 'application/json' || !upstream.body
+		const error = upstream.ok && upstream.status !== 200
+			? 'The transaction service returned an unexpected success status.'
+			: media !== 'application/json' || !upstream.body
 			? 'The transaction service did not return a JSON response.'
 			: length !== null && (!/^\d+$/.test(length) || Number(length) > maxResponseBytes)
 				? 'The transaction response exceeds the explorer size limit.'
 				: null;
 		if (error || !upstream.body) {
 			void upstream.body?.cancel().catch(() => undefined);
-			return Response.json({ error }, { status: 502, headers: noStore });
+			const status = upstream.status >= 400 && upstream.status <= 599 ? upstream.status : 502;
+			return Response.json({ error }, { status, headers: noStore });
 		}
 		const headers = new Headers({ ...noStore, 'content-type': 'application/json; charset=utf-8' });
 		const retryAfter = upstream.headers.get('retry-after');

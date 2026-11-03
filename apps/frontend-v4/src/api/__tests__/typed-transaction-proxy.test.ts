@@ -87,6 +87,26 @@ describe('typed transaction proxy', () => {
 		expect(cancel).toHaveBeenCalledTimes(1);
 	});
 
+	it('rejects partial success before forwarding a body and retains a real error status', async () => {
+		const cancel = jest.fn<() => void>();
+		const body = new ReadableStream<Uint8Array>({ cancel });
+		const fetchMock = jest.fn<typeof fetch>()
+			.mockResolvedValueOnce(new Response(body, {
+				status: 206, headers: { 'content-type': 'application/json', 'content-range': 'bytes 0-9/100' }
+			}))
+			.mockResolvedValueOnce(new Response('<html>Unavailable</html>', {
+				status: 503, headers: { 'content-type': 'text/html' }
+			}));
+		globalThis.fetch = fetchMock;
+		const partial = await GET(new Request(path + '?' + query), context);
+		expect(partial.status).toBe(502);
+		expect(await partial.json()).toEqual({ error: 'The transaction service returned an unexpected success status.' });
+		expect(cancel).toHaveBeenCalledTimes(1);
+		const unavailable = await GET(new Request(path + '?' + query), context);
+		expect(unavailable.status).toBe(503);
+		expect(await unavailable.json()).toEqual({ error: 'The transaction service did not return a JSON response.' });
+	});
+
 	it('cuts off an underdeclared streamed body at the actual byte cap', async () => {
 		const cancel = jest.fn<() => void>();
 		const chunk = new Uint8Array(1024 * 1024);
