@@ -35,13 +35,14 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 								Read <code>data[].id</code> and <code>issuer</code>; a ticker
 								can match multiple assets. This walkthrough uses{' '}
 								<code>{kale}</code>. If discovery has another page, pass its{' '}
-								<code>nextCursor</code>{' '}
-								as <code>cursor</code> with the same symbol and limit.
+								<code>nextCursor</code> as <code>cursor</code> with the same
+								symbol and limit.
 							</p>
 						</li>
 						<li>
 							<p>Read one page of the wallet’s balance observations.</p>
-							<Code>{`curl --fail-with-body '${api}${walletPath}' --output wallet-balances.json`}</Code>
+							<Code>{`curl --fail-with-body '${api}${walletPath}' --output wallet-balances.json.partial &&
+mv wallet-balances.json.partial wallet-balances.json`}</Code>
 							<p>
 								Inspect <code>balances</code>, matching <code>asset</code> to
 								the full KALE identity. The sample wallet is independent of the
@@ -55,13 +56,14 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						</li>
 						<li>
 							<p>Read KALE holders, largest observed balance first.</p>
-							<Code>{`curl --fail-with-body '${api}${holderPath}' --output kale-holders.json`}</Code>
+							<Code>{`curl --fail-with-body '${api}${holderPath}' --output kale-holders.json.partial &&
+mv kale-holders.json.partial kale-holders.json`}</Code>
 							<p>
 								Read <code>holders</code> as this page’s positive-balance
 								observations. Its length is not the total holder count; inspect{' '}
 								<code>indexedSummary</code> and{' '}
-								<code>watermark.indexStatus</code>{' '}
-								before using an indexed summary. See the{' '}
+								<code>watermark.indexStatus</code> before using an indexed
+								summary. See the{' '}
 								<a href="/docs/api/listAnalyticsAssetHoldersResource">
 									holders reference
 								</a>
@@ -69,6 +71,17 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 							</p>
 						</li>
 					</ol>
+					<p>
+						The saved page is replaced only after curl succeeds. An HTTP or
+						transport failure means the refresh is unavailable, not an empty
+						balance or holder result. Stop this walkthrough on failure. Ignore
+						the incomplete <code>.partial</code> file and do not continue
+						pagination. If you retain the last successful response, label it as
+						saved data rather than a fresh read. Its{' '}
+						<code>watermark.catalogGeneratedAt</code> is the catalogue
+						generation time, not the time you saved the response or a pinned
+						balance snapshot.
+					</p>
 					<p>
 						Continue each result with its own <code>nextCursor</code> as{' '}
 						<code>after</code>. With <code>jq</code> installed, these commands
@@ -86,9 +99,9 @@ curl --fail-with-body --get '${api}${holderPath}' \\
 						<code>nextCursor: null</code>; never exchange discovery, balance and
 						holder cursors. These are latest-ingested observations, not
 						current-chain balances or a frozen snapshot. Amounts retain source
-						Float64 precision. Check{' '}
-						<code>coverage</code>, <code>watermark</code> and precision fields;
-						an empty page alone does not prove a wallet never held an asset. See{' '}
+						Float64 precision. Check <code>coverage</code>,{' '}
+						<code>watermark</code> and precision fields; an empty page alone
+						does not prove a wallet never held an asset. See{' '}
 						<a href="/docs/querying">pagination and error handling</a>.
 					</p>
 					<p>
