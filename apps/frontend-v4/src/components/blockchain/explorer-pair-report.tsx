@@ -10,6 +10,8 @@ import {
 } from '../../api/explorer-analytics';
 import {
 	loadPairReport,
+	pairReportHref as reportHref,
+	pairReportLanes as lanes,
 	validatePairReportSelection,
 	type PairReportLane,
 	type PairReportSelection
@@ -17,29 +19,7 @@ import {
 import styles from './explorer-entity.module.css';
 import ui from './explorer-pair-report.module.css';
 
-const lanes: readonly PairReportLane[] = [
-	'a-to-b',
-	'b-to-a',
-	'pool-a-b',
-	'pool-b-a'
-];
 type Report = Awaited<ReturnType<typeof loadPairReport>>;
-
-function reportHref(
-	selection: PairReportSelection,
-	offsets: Partial<Readonly<Record<PairReportLane, number>>> = {}
-): string {
-	const params = new URLSearchParams({
-		asset_a: selection.assetA,
-		asset_b: selection.assetB,
-		min_ledger: selection.minLedger ?? '',
-		max_ledger: selection.maxLedger ?? '',
-		limit: selection.limit
-	});
-	for (const lane of lanes)
-		if (offsets[lane]) params.set(lane + '_offset', String(offsets[lane]));
-	return '/explorer/markets?' + params;
-}
 
 export function ExplorerPairReport({
 	initialFilters
@@ -90,10 +70,11 @@ export function ExplorerPairReport({
 			if (abort.signal.aborted) return;
 			setReport(result);
 			setDraft(result.selection);
+			const origins = new URLSearchParams(window.location.search).getAll('return_to');
 			window.history.replaceState(
 				null,
 				'',
-				reportHref(result.selection, initialOffsets.current)
+				reportHref(result.selection, initialOffsets.current, origins.length === 1 ? origins[0] : null)
 			);
 		})()
 			.catch((cause: unknown) => {
