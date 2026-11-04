@@ -64,12 +64,12 @@ describe('explorer request containment', () => {
 				controller.signal.addEventListener('abort', () => reject(new DOMException('Stopped', 'AbortError')), { once: true })
 			);
 			const pending = executeExplorerRequest(() =>
-				withExplorerRequestDeadline(timed, 25_000, () => waitForAbort(timed)), generic);
-			await jest.advanceTimersByTimeAsync(24_999);
+				withExplorerRequestDeadline(timed, 70_000, () => waitForAbort(timed)), generic);
+			await jest.advanceTimersByTimeAsync(69_999);
 			expect(timed.signal.aborted).toBe(false);
 			await jest.advanceTimersByTimeAsync(1);
 			await expect(pending).resolves.toEqual({
-				ok: false, message: 'This request timed out in the browser after 25 seconds. Try again.'
+				ok: false, message: 'This request timed out in the browser after 70 seconds. Try again.'
 			});
 
 			const canceled = new AbortController();

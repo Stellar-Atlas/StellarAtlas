@@ -87,7 +87,7 @@ function ObservationPanel({
 				controller.current = abort;
 				try {
 					return {
-						page: await withExplorerRequestDeadline(abort, 25_000, () =>
+						page: await withExplorerRequestDeadline(abort, kind === 'balances' ? 70_000 : 25_000, () =>
 							fetchBalanceObservations(kind, identifier, cursor, abort.signal)
 						),
 						cursor,

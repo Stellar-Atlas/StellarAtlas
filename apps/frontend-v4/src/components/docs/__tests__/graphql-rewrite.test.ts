@@ -2,10 +2,10 @@ import nextConfig from '../../../../next.config';
 
 describe('same-origin GraphQL documentation transport', () => {
 	it('uses the configured API base for one fixed GraphQL route', async () => {
-		const routes = await nextConfig.rewrites?.();
-		expect(Array.isArray(routes)).toBe(true);
-		if (!Array.isArray(routes))
-			throw new Error('Expected fixed rewrite routes');
+		const config = await nextConfig.rewrites?.();
+		if (!config || Array.isArray(config))
+			throw new Error('Expected ordered rewrite routes');
+		const routes = config.afterFiles ?? [];
 		const apiBase =
 			process.env.STELLAR_ATLAS_PUBLIC_API_URL?.trim() ||
 			'http://127.0.0.1:3000';
@@ -18,9 +18,10 @@ describe('same-origin GraphQL documentation transport', () => {
 	});
 
 	it('preserves the existing REST and raw OpenAPI routes', async () => {
-		const routes = await nextConfig.rewrites?.();
-		if (!Array.isArray(routes))
-			throw new Error('Expected fixed rewrite routes');
+		const config = await nextConfig.rewrites?.();
+		if (!config || Array.isArray(config))
+			throw new Error('Expected ordered rewrite routes');
+		const routes = config.afterFiles ?? [];
 		expect(routes.map((route) => route.source)).toEqual([
 			'/graphql',
 			'/horizon',
@@ -30,5 +31,11 @@ describe('same-origin GraphQL documentation transport', () => {
 			'/v1',
 			'/v1/:path*'
 		]);
+		expect(config.beforeFiles).toEqual([{
+			source: '/v1/analytics/accounts/:account/balances',
+			has: [{ type: 'query', key: 'limit', value: '25' }],
+			destination: '/api/explorer/account-balances/:account'
+		}]);
+		expect(config.fallback).toEqual([]);
 	});
 });
