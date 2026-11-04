@@ -13,6 +13,7 @@ import {
 	rememberArchiveInventorySnapshot
 } from '@api/archive-inventory-client';
 import { ArchiveInventoryView } from './archive-inventory-view';
+import { AtlasAnalytics } from '../atlas-analytics';
 
 export function ArchiveInventoryLive({
 	initialSnapshot
@@ -73,6 +74,7 @@ export function ArchiveInventoryLive({
 
 	return (
 		<>
+			<AtlasAnalytics event="archives" ready={state.snapshot !== null} />
 			{state.error !== null && (
 				<section
 					className="panel detail-panel"
