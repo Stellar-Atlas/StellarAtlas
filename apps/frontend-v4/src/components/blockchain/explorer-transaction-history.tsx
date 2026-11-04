@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { validLedgerSequence } from '../../api/explorer-ledger-transactions';
 import { LedgerTransactions } from './explorer-ledger-activity';
 import { transactionHistoryHref, type TransactionHistorySelection } from './transaction-history-route';
@@ -15,6 +15,13 @@ export function ExplorerTransactionHistory({ selection, search, result }: {
 	const active = selection.mode === 'ledger' ? selection : null;
 	const [ledgerInput, setLedgerInput] = useState(active?.ledger ?? '');
 	const [inputError, setInputError] = useState(false);
+	const paging = useRef(false);
+	const focusPageHeading = useCallback((heading: HTMLHeadingElement | null) => {
+		if (heading && paging.current) {
+			paging.current = false;
+			heading.focus();
+		}
+	}, []);
 	const navigate = (ledger: string | null, offset = 0) => {
 		const href = transactionHistoryHref(window.location.search, ledger === null ? null : { ledger, offset }, window.location.hash);
 		if (href !== window.location.pathname + window.location.search + window.location.hash)
@@ -60,7 +67,12 @@ export function ExplorerTransactionHistory({ selection, search, result }: {
 				<LedgerTransactions key={active.ledger + ':' + active.offset} ledger={active.ledger} offset={active.offset}
 					detailReturnTo={'/explorer' + (search ? '?' + search : '')}
 					resultFilter={result}
-					onPage={offset => navigate(active.ledger, offset)} />
+					headingRef={focusPageHeading}
+					onPage={offset => {
+						if (offset === active.offset) return;
+						paging.current = true;
+						navigate(active.ledger, offset);
+					}} />
 			</>}
 		</section>
 	);

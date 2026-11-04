@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, type RefCallback } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { buildEntityHref, requestExplorerJson } from '../../api/explorer-analytics';
 import { buildLedgerTransactionsPath, parseLedgerTransactions, validLedgerSequence, type LedgerTransactionPage } from '../../api/explorer-ledger-transactions';
@@ -42,12 +42,13 @@ function LedgerActivity({ ledger }: { readonly ledger: string }): React.JSX.Elem
 	</section>;
 }
 
-export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo, resultFilter }: {
+export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo, resultFilter, headingRef }: {
 	readonly ledger: string;
 	readonly offset: number;
 	readonly onPage: (offset: number) => void;
 	readonly detailReturnTo?: string;
 	readonly resultFilter?: TransactionPageResult;
+	readonly headingRef?: RefCallback<HTMLHeadingElement>;
 }): React.JSX.Element {
 	const request = useExplorerRequest<LedgerTransactionPage | null>(null, 'Transaction records could not be loaded.');
 	const controller = useRef<AbortController | null>(null);
@@ -72,7 +73,7 @@ export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo, res
 		<button disabled={request.loading || nextOffset === null || nextOffset > 10000} onClick={() => { if (nextOffset !== null) onPage(nextOffset); }}>Next transactions</button>
 	</div>;
 	return <section id="ledger-transactions" aria-label="Ledger transactions" aria-busy={request.loading}>
-		<h3>Transactions in ledger {ledger}</h3>
+		<h3 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>Transactions in ledger {ledger}</h3>
 		<p className={styles.muted}>Published records only. This endpoint does not confirm ledger coverage.</p>
 		{pagination}
 		<ExplorerRequestNotice loading={request.loading} error={request.error} onRetry={() => void load()}
