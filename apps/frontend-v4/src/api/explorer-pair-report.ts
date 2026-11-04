@@ -16,6 +16,7 @@ export interface PairReportSelection {
 
 export type PairReportLane = 'a-to-b' | 'b-to-a' | 'pool-a-b' | 'pool-b-a';
 export const pairReportLanes: readonly PairReportLane[] = ['a-to-b', 'b-to-a', 'pool-a-b', 'pool-b-a'];
+export const pairReportMaxOffset = 10_000;
 export type PairReportSectionResult =
 	| { readonly page: AnalyticsEntityPage; readonly error?: never }
 	| { readonly page?: never; readonly error: string };
@@ -104,8 +105,8 @@ export function pairReportApiPath(
 	offset = 0
 ): string {
 	const selected = validatePairReportSelection(selection);
-	if (!Number.isSafeInteger(offset) || offset < 0) {
-		throw new Error('Offset must be a non-negative safe integer.');
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset > pairReportMaxOffset) {
+		throw new Error('Offset must be between 0 and 10,000.');
 	}
 
 	const isPool = lane === 'pool-a-b' || lane === 'pool-b-a';

@@ -14,6 +14,7 @@ import {
 	loadPairReport,
 	pairReportHref as reportHref,
 	pairReportLanes as lanes,
+	pairReportMaxOffset,
 	validatePairReportSelection,
 	type PairReportLane,
 	type PairReportSelection
@@ -54,7 +55,7 @@ export function ExplorerPairReport({
 				const value = Number(initialFilters[lane + '_offset'] ?? 0);
 				return [
 					lane,
-					Number.isSafeInteger(value) && value >= 0 && value <= 10000
+					Number.isSafeInteger(value) && value >= 0 && value <= pairReportMaxOffset
 						? value
 						: 0
 				];

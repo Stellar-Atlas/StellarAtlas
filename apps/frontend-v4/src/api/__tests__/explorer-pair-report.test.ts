@@ -56,6 +56,7 @@ describe('explorer pair report API helper', () => {
 		expect(poolReverse.searchParams.get('min_ledger')).toBe('100');
 		expect(poolReverse.searchParams.get('max_ledger')).toBe('120');
 		expect(poolReverse.searchParams.has('include_deleted')).toBe(false);
+		expect(() => pairReportApiPath(selected, 'pool-b-a', 10_001)).toThrow('10,000');
 	});
 
 	it('pins all follow-up pages to the first returned window with at most two concurrent requests', async () => {

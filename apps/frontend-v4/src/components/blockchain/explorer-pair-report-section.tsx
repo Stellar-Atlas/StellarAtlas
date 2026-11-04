@@ -10,6 +10,7 @@ import {
 } from '../../api/explorer-analytics';
 import {
 	pairReportApiPath,
+	pairReportMaxOffset,
 	type PairReportLane,
 	type PairReportSectionResult,
 	type PairReportSelection
@@ -95,6 +96,7 @@ export function PairReportSection({
 			</div>
 		</section>
 	);
+	const beyondLimit = page.nextOffset !== null && page.nextOffset > pairReportMaxOffset;
 	return (
 		<section className={styles.panel} aria-label={title} aria-busy={busy}>
 			<div className={ui.heading}>
@@ -113,7 +115,7 @@ export function PairReportSection({
 			<div className={styles.status}>
 				<span>
 					{page.rows.length} {pool ? 'observation' : 'trade'}{page.rows.length === 1 ? '' : 's'} shown
-					{page.nextOffset !== null ? ' · More available' : ''}
+					{beyondLimit ? ' · Narrow the ledger range for more' : page.nextOffset !== null ? ' · More available' : ''}
 				</span>
 				{pool && (
 					<span>
@@ -154,7 +156,7 @@ export function PairReportSection({
 					Previous
 				</button>
 				<button
-					disabled={busy || page.nextOffset === null}
+					disabled={busy || page.nextOffset === null || beyondLimit}
 					onClick={() => void load(page.nextOffset ?? 0, false)}
 				>
 					Next
