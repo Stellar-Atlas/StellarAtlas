@@ -1,9 +1,9 @@
 'use client';
 import { useCallback, useEffect, useRef } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { buildEntityHref, requestExplorerJson } from '../../api/explorer-analytics';
 import { buildLedgerTransactionsPath, parseLedgerTransactions, validLedgerSequence, type LedgerTransactionPage } from '../../api/explorer-ledger-transactions';
-import { sanitizeExplorerReturnTo, withExplorerReturnTo } from '../../api/explorer-return-context';
+import { sanitizeExplorerReturnTo } from '../../api/explorer-return-context';
 import { ExplorerLink as Link, useExplorerReturnTo } from './explorer-investigation';
 import { adjacentLedgerHref, ledgerActivityHref, readLedgerActivity } from './ledger-activity-route';
 import { ExplorerTransactionTable } from './explorer-transaction-table';
@@ -47,7 +47,6 @@ function LedgerTransactions({ ledger, offset, onPage }: {
 }): React.JSX.Element {
 	const request = useExplorerRequest<LedgerTransactionPage | null>(null, 'Transaction records could not be loaded.');
 	const controller = useRef<AbortController | null>(null);
-	const router = useRouter();
 	const pathname = usePathname();
 	const params = useSearchParams();
 	const returnTo = useExplorerReturnTo();
@@ -68,7 +67,7 @@ function LedgerTransactions({ ledger, offset, onPage }: {
 		{page && <>
 			{page.records.length ? <ExplorerTransactionTable transactions={page}
 				caption={`Published transaction records for ledger ${ledger}. Dates are shown in your local time.`}
-				onInspect={(hash, sequence) => router.push(withExplorerReturnTo(buildEntityHref('transactions', hash, { ledger_sequence: sequence }), returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')))} />
+				returnTo={returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')} />
 				: <p>No transaction records returned for this page.</p>}
 		</>}
 		{(page || offset > 0) && <div className={styles.actions}>

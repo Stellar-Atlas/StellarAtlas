@@ -1,20 +1,19 @@
 'use client';
 import { useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { getExplorerRecentTransactions } from '../../app/actions/network-data';
 import { RecentTransactionsView } from './blockchain-explorer-results';
 import { initialExplorerTransactions } from './blockchain-explorer-state';
-import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerSearchForm } from './explorer-search-form';
-import { buildEntityHref } from '../../api/explorer-analytics';
+import styles from './explorer-transaction-table.module.css';
 
 export function BlockchainExplorer(): React.JSX.Element {
-	const router = useRouter();
+	const search = useSearchParams().get('search');
 	const feed = useExplorerRequest(
 		initialExplorerTransactions,
-		'Transaction data could not be refreshed.'
+		'Could not load transactions.'
 	);
 	const refresh = useCallback(
 		() => feed.run(() => getExplorerRecentTransactions(20)),
@@ -23,20 +22,15 @@ export function BlockchainExplorer(): React.JSX.Element {
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
+	const transactions = feed.result.transactions;
+	const hasRows = Boolean(transactions?.records.length);
 	return (
 		<section className="blockchain-explorer-workspace">
 			<ExplorerEntityNavigation active="transactions" />
-			<section
-				className="explorer-panel explorer-primary"
-				aria-label="Search blockchain"
-			>
-				<h2>Search the blockchain</h2>
-				<p>
-					Open a transaction, account, ledger, operation, asset, or contract.
-					Browse the parsed history using the sections above.
-				</p>
+			<details key={search ?? ''} open={search ? true : undefined} className={`explorer-panel ${styles.finder}`}>
+				<summary>Find by hash, address, ledger or asset</summary>
 				<ExplorerSearchForm />
-			</section>
+			</details>
 			<section
 				className="explorer-panel explorer-feed-panel"
 				aria-label="Browse transactions"
@@ -44,7 +38,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 			>
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<h2>Latest available transactions</h2>
+						<h2>Recent transactions</h2>
 						<span>
 							Open a record to inspect its operations, events and related
 							accounts.
@@ -54,25 +48,17 @@ export function BlockchainExplorer(): React.JSX.Element {
 						Refresh
 					</button>
 				</div>
-				<ExplorerRequestNotice
-					error={feed.error}
-					loading={feed.loading}
-					onRetry={() => void refresh()}
-				/>
-				{feed.result.transactions !== null ? (
-					<RecentTransactionsView
-						onInspect={(hash, ledger) =>
-							router.push(
-								buildEntityHref('transactions', hash, {
-									ledger_sequence: ledger
-								})
-							)
-						}
-						result={feed.result}
-					/>
-				) : !feed.loading && !feed.error ? (
-					<p>No transaction records returned.</p>
-				) : null}
+				{feed.error ? (
+					<div className="explorer-state warning explorer-request-notice" role="alert">
+						<span>{feed.error}{hasRows ? ' Showing last loaded transactions.' : ''}</span>
+						<button className="inspect-action" type="button" onClick={() => void refresh()}>Try again</button>
+					</div>
+				) : (feed.loading || !transactions) && (
+					<p className="explorer-state neutral" role="status">
+						{hasRows ? 'Refreshing transactions. Last loaded transactions remain visible.' : 'Loading recent transactions…'}
+					</p>
+				)}
+				{transactions && ((!feed.error && !feed.loading) || hasRows) && <RecentTransactionsView transactions={transactions} />}
 			</section>
 		</section>
 	);
