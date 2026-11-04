@@ -62,12 +62,13 @@ export const contractEventsGuide: DeveloperGuidePage = {
 			title: '1. Request the first event page',
 			content: (
 				<>
-					<Code>{saveRestPage(eventPath, 'page-1.json', undefined, eventDeadlineSeconds)}</Code>
+					<Code>{saveRestPage(eventPath, 'page-1.json', undefined, eventDeadlineSeconds, true)}</Code>
 					<p>
-						These Bash examples use curl 7.84 or newer, <code>mktemp</code> and
-						GNU <code>mv</code>. Each invocation replaces the saved page after
-						an HTTP success without a fallback marker, then cleans up its
-						temporary. On failure,
+						These Bash examples use curl 7.84 or newer, <code>jq</code>,{' '}
+						<code>mktemp</code> and GNU <code>mv</code>. Each invocation
+						replaces the saved page only after an HTTP success without a
+						fallback marker and a body that parses as one JSON object. It
+						cleans up its temporary. On failure,
 						retain the previous file as saved data and stop; do not paginate
 						from an unsuccessful refresh.
 					</p>
@@ -221,7 +222,7 @@ export const contractEventsGuide: DeveloperGuidePage = {
 						the first page’s opaque cursor and keeps the same filters. A missing,
 						null or unusable cursor stops the command before it sends a request.
 					</p>
-					<Code>{saveRestPage(eventPath, 'page-2.json', 'page-1.json', eventDeadlineSeconds)}</Code>
+					<Code>{saveRestPage(eventPath, 'page-2.json', 'page-1.json', eventDeadlineSeconds, true)}</Code>
 					<p>
 						Copy <code>nextCursor</code> into <code>after</code> and preserve
 						the contract and all filters. Do not send <code>offset</code> with

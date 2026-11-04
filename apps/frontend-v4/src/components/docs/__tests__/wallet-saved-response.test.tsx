@@ -71,6 +71,10 @@ const fakeCurl = `curl() {
  return "$EXIT_CODE"
 }
 jq() {
+ if [ "$1" = -es ]; then
+  [ "$2" = 'length == 1 and (.[0] | type == "object")' ] && [ -f "$3" ]
+  return
+ fi
  [ "$1" = -er ] && [ "$2" = '.nextCursor | strings | select(length > 0)' ] || return 2
  local page
  IFS= read -r page < "$3" || return 2

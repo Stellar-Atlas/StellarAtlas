@@ -4,13 +4,18 @@ export function saveRestPage(
 	path: string,
 	file: string,
 	previous?: string,
-	deadlineSeconds = 30
+	deadlineSeconds = 30,
+	requireJsonObject = false
 ): string {
 	const cursor = previous
 		? `  after=$(jq -er '.nextCursor | strings | select(length > 0)' './${previous}') || exit
 `
 		: '';
 	const query = previous ? ' --get --data-urlencode "after=$after"' : '';
+	const validate = requireJsonObject
+		? `  jq -es 'length == 1 and (.[0] | type == "object")' "$temporary" >/dev/null || exit
+`
+		: '';
 	return `(
   trap - EXIT INT TERM
   trap 'exit 130' INT
@@ -24,6 +29,6 @@ ${cursor}  temporary=$(mktemp './${file}.partial.XXXXXX') || exit
     printf '%s\\n' "Expected a live HTTP success, got $status" >&2
     exit 22
   fi
-  mv -fT -- "$temporary" './${file}'
+${validate}  mv -fT -- "$temporary" './${file}'
 )`;
 }
