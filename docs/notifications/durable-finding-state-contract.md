@@ -58,3 +58,22 @@ With true configuration, the existing archive-first and then generic-event flow,
 Direct subscription confirmation and requested unsubscribe-link emails use separate use cases and remain outside this worker gate. Provider bindings, including local SMTP selection, still exist for those flows. Do not describe this setting as an all-email kill switch.
 
 This enforcement is a behavior change: earlier worker code ignored the existing flag. Before deployment, review the effective setting and the expected notification service explicitly. A default or false setting now stops worker notification work; deploying without that review could unintentionally stop a previously expected sender. Conversely, this correction is not permission to set the flag true, activate a provider or apply a migration. Enabling archive delivery still requires the finding-state schema and separately approved opt-in, privacy and provider readiness. Do not solve rollout ambiguity by silently enabling delivery or treating a source merge as sender activation.
+
+### Activation preflight
+
+1. Identify the exact API and network scanner builds and their effective settings separately. The scanner calls `Notify.execute` after scan persistence. Deploying the frontend or API alone leaves scanner delivery unchanged. Keep automatic migrations disabled on ordinary service starts.
+2. From the qualified `apps/backend` runtime directory, use the approved database connection to list pending migrations:
+
+   ```bash
+   DATABASE_MIGRATIONS_RUN=false node lib/core/infrastructure/cli/database-migrations.js
+   ```
+
+   Exit 2 means migrations are pending. The explicit false prevents initialization from applying them during inspection. The archive migration is `ArchiveIntegrityNotificationState1793635200000`. It adds `archive_integrity_notification_state` and `IDX_archive_source_unmute` without a backfill. Review the index lock window and the full pending list before separately authorizing an apply. The CLI's `--apply` option applies **all** pending managed migrations. Stop on an unexpected entry. Confirm the migration history, table, foreign key, constraints and index before enabling the scanner.
+3. Verify the existing sender binding and the link base on both processes. With `NOTIFICATIONS_ENABLED=false`, direct confirmation and unsubscribe-link handlers remain callable, but the environment loader uses fallback user-service settings and a localhost frontend base. Do not qualify real direct email with those fallback values. Validate the approved existing transport and effective `FRONTEND_BASE_URL`, including both the notification links and the archive evidence link. A provider accepting a message is only one step. Confirm that the approved test inbox receives it.
+4. Enable the qualified scanner only after approving both archive and generic scanner notifications. The switch is global. Use the reviewed gated build and a false scanner setting to hold or stop new worker delivery. Preserve finding state and acknowledgements on application rollback. An older scanner that ignores the switch does not provide this hold.
+
+### Controlled delivery acceptance
+
+Use one approved test inbox and one selected node that advertises an archive root with an eligible finding. The subscription accepts a node source ID. The alert describes the archive root. Request opt-in and check that no archive alert arrives while it is pending. Follow the confirmation link before checking for an eligible observation. Wait for normal scan processing and use existing evidence. Do not manufacture a public failure to trigger a message.
+
+Check one delivered alert for the expected root, object, failure, observation time and archive details link. A newer unchanged observation inside the cooldown should produce no duplicate. Follow the unsubscribe link and verify that later eligible observations produce no further alerts for the test recipient. Record only the result and non-sensitive identifiers. Keep recipient details and link tokens private. Leave the acceptance pending if no eligible observation occurs.
