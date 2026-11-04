@@ -18,10 +18,12 @@ import (
 
 type Config struct {
 	// Endpoint comes from operator configuration, not query parameters or input rows.
-	Endpoint                  string
-	User                      string
-	Password                  string
-	Database                  string
+	Endpoint string
+	User     string
+	Password string
+	Database string
+	// A nil Transport uses the shared direct transport, without environment
+	// proxies. An explicit Transport is trusted to route ClickHouse requests.
 	HTTPClient                *http.Client
 	HolderIndexEnabled        bool
 	HolderIndexStoragePolicy  string
@@ -65,6 +67,13 @@ var (
 	uuidPattern       = regexp.MustCompile("^[0-9a-fA-F-]{36}$")
 )
 
+var directHTTPTransport = func() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// Do not send warehouse credentials or row data through an ambient proxy.
+	transport.Proxy = nil
+	return transport
+}()
+
 func New(config Config) (*Client, error) {
 	endpoint, err := url.Parse(config.Endpoint)
 	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") ||
@@ -88,6 +97,9 @@ func New(config Config) (*Client, error) {
 	httpClient := http.Client{Timeout: 2 * time.Minute}
 	if config.HTTPClient != nil {
 		httpClient = *config.HTTPClient
+	}
+	if httpClient.Transport == nil {
+		httpClient.Transport = directHTTPTransport
 	}
 	// Never replay SQL, row data, or credentials to a redirect target.
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error {
