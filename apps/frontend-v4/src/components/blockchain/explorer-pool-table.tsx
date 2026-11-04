@@ -6,7 +6,7 @@ import { LocalDateTime } from '../local-date-time';
 import { formatDecimal } from './explorer-format-values';
 import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
 import styles from './explorer-pool-table.module.css';
-import { poolDetailHref } from './pool-history-links';
+import { poolRowDetailHref } from './pool-history-links';
 
 export type PoolSort =
 	| 'pool'
@@ -79,6 +79,7 @@ export function ExplorerPoolTable({
 					{rows.map((row, index) => {
 						const id = entityText(row, 'id'),
 							ledger = entityText(row, 'ledgerSequence');
+						const detail = poolRowDetailHref(id, row.ledgerSequence, row.deleted, context);
 						return (
 							<tr key={id + ':' + ledger + ':' + index}>
 								<td>
@@ -118,12 +119,12 @@ export function ExplorerPoolTable({
 									<LocalDateTime dateTime={entityText(row, 'closedAt')} />
 								</td>
 								<td>
-									<Link
+									{detail ? <Link
 										className={styles.identifier}
-										href={poolDetailHref(id, context)}
+										href={detail}
 									>
 										<code>{id}</code>
-									</Link>
+									</Link> : <code className={styles.identifier}>{id || '—'}</code>}
 								</td>
 							</tr>
 						);

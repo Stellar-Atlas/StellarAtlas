@@ -32,7 +32,6 @@ interface Props {
 interface WalletPagination {
 	readonly after: string | null;
 	readonly previousLabel: string;
-	readonly first: () => void;
 	readonly previous: () => void;
 	readonly next: (after: string) => void;
 }
@@ -54,8 +53,7 @@ function WalletBalances(props: Props): React.JSX.Element {
 	};
 	return <ObservationPanel key={after ?? ''} {...props} autoLoad={props.autoLoad || after !== null}
 		pagination={{ after,
-			previousLabel: after && previousPages.current.has(after) ? 'Previous balances' : 'First balances',
-			first: () => navigate(null),
+			previousLabel: after && previousPages.current.has(after) ? 'Previous balances' : 'Go to first balances page',
 			previous: () => navigate(after ? previousPages.current.get(after) ?? null : null),
 			next: (cursor) => {
 				previousPages.current.set(cursor, after);
@@ -101,6 +99,8 @@ function ObservationPanel({
 		[identifier, kind, request.run]
 	);
 	const initialCursor = pagination?.after ?? null;
+	const walletNext = current?.page.nextCursor ?? null;
+	const retainedWalletRows = Boolean(current?.page.rows.length);
 	useEffect(() => {
 		if (autoLoad) load(initialCursor, []);
 	}, [autoLoad, initialCursor, load]);
@@ -114,40 +114,63 @@ function ObservationPanel({
 		>
 			<h2>{kind === 'balances' ? 'Account balances' : 'Asset holders'}</h2>
 			<BalanceObservationProvenance kind={kind} page={current?.page} />
-			<div className={styles.actions}>
+			{(!pagination || (!pagination.after && !request.error)) && <div className={styles.actions}>
 				<button
 					type="button"
 					disabled={request.loading}
-					onClick={() => pagination?.after ? pagination.first() : load(null, [])}
+					onClick={() => load(null, [])}
 				>
 					{current || autoLoad ? 'Refresh first page' : `Load ${kind}`}
 				</button>
-			</div>
-			<ExplorerRequestNotice
+			</div>}
+			{pagination ? <>
+				{request.loading && <p role="status" className={styles.muted}>Loading balances…</p>}
+				{request.error && <div className="explorer-state warning explorer-request-notice" role="alert">
+					<span>
+						{pagination.after ? 'Could not load this balances page.' : 'Could not load account balances.'}
+						{retainedWalletRows ? ' Showing last loaded balances for this page.' : ''}
+					</span>
+					<button className="inspect-action" type="button" onClick={request.retry}>Retry this page</button>
+				</div>}
+			</> : <ExplorerRequestNotice
 				loading={request.loading}
 				error={request.error}
 				onRetry={request.retry}
-			/>
-			{current && (
-				<>
-					<BalanceObservationResults kind={kind} page={current.page} showProvenance={false} />
+			/>}
+			{current && (!pagination || retainedWalletRows || (!request.error && !request.loading)) &&
+				<BalanceObservationResults kind={kind} page={current.page} showProvenance={false} />}
+			{pagination ? (pagination.after !== null || current !== null) &&
+				<div className={styles.actions} role="group" aria-label="Balances pages">
+					{pagination.after !== null && <button type="button" onClick={pagination.previous}>
+						{pagination.previousLabel}
+					</button>}
+					<button type="button" disabled={request.loading || request.error !== null || !validWalletCursor(walletNext)}
+						onClick={() => {
+							if (!request.loading && request.error === null && validWalletCursor(walletNext))
+								pagination.next(walletNext);
+						}}>
+						Next balances
+					</button>
+					{current && !request.error && !request.loading && <span>{current.page.rows.length} returned</span>}
+				</div>
+			: current && (
 					<div className={styles.actions}>
 						<button
 							type="button"
-							disabled={request.loading || (pagination ? pagination.after === null : current.history.length === 0)}
-							onClick={() => pagination ? pagination.previous() :
+							disabled={request.loading || current.history.length === 0}
+							onClick={() =>
 								load(
 									current.history.at(-1) ?? null,
 									current.history.slice(0, -1)
 								)
 							}
 						>
-							{pagination ? pagination.previousLabel : `Previous ${kind}`}
+							Previous {kind}
 						</button>
 						<button
 							type="button"
-							disabled={request.loading || (pagination ? !validWalletCursor(current.page.nextCursor) : current.page.nextCursor === null)}
-							onClick={() => pagination && current.page.nextCursor ? pagination.next(current.page.nextCursor) :
+							disabled={request.loading || current.page.nextCursor === null}
+							onClick={() =>
 								load(current.page.nextCursor, [
 									...current.history,
 									current.cursor
@@ -158,7 +181,6 @@ function ObservationPanel({
 						</button>
 						<span>{current.page.rows.length} returned</span>
 					</div>
-				</>
 			)}
 		</section>
 	);

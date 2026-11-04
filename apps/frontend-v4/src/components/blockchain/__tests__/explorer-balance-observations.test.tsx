@@ -2,6 +2,11 @@ import { jest } from '@jest/globals';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { BalanceObservationPage } from '../../../api/explorer-balance-observations';
+let search = '';
+jest.unstable_mockModule('next/navigation', () => ({
+	usePathname: () => '/explorer/accounts/GACCOUNT',
+	useSearchParams: () => new URLSearchParams(search)
+}));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
 }));
@@ -56,6 +61,18 @@ describe('explorer balance observation presentation', () => {
 		expect(html).not.toContain('Load balances');
 		expect(html).toContain('Latest ingested observations');
 		expect(html).toContain('not current-chain or historical as-of balances');
+	});
+	it('keeps a first-page exit visible on a shared continuation before any rows load', () => {
+		search = 'wallet_for=GACCOUNT&wallet_after=next&tab=activity';
+		try {
+			const html = renderToStaticMarkup(createElement(ExplorerBalanceObservations, {
+				kind: 'balances', identifier: 'GACCOUNT'
+			}));
+			expect(html).toContain('Go to first balances page');
+			expect(html).toMatch(/<button[^>]*disabled[^>]*>Next balances<\/button>/);
+			expect(html).not.toContain('Refresh first page');
+			expect(html).not.toContain('No balances');
+		} finally { search = ''; }
 	});
 	it('renders observed amounts, relationship links, raw precision and ledger coverage without false current claims', () => {
 		const html = renderToStaticMarkup(

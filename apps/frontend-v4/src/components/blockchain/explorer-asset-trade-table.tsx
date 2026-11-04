@@ -5,11 +5,14 @@ import { LocalDateTime } from '../local-date-time';
 import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
 import { ExplorerLink as Link } from './explorer-investigation';
 import { formatMarketAmount, marketAssetLabel } from './explorer-market-values';
+import { assetPairReportHref } from './asset-market-route';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 
 /** Bounded historical trade rows; caller supplies the accepted response window. */
-export function ExplorerAssetTradeTable({ rows, window }: {
+export function ExplorerAssetTradeTable({ asset, origin, rows, window }: {
+	readonly asset: string;
+	readonly origin: string;
 	readonly rows: readonly EntityRecord[];
 	readonly window: AnalyticsEntityPage['window'];
 }): React.JSX.Element {
@@ -18,7 +21,10 @@ export function ExplorerAssetTradeTable({ rows, window }: {
 		<div className={styles.tableWrap}>
 			<table className={styles.table} aria-label="Trade observations">
 				<thead><tr><th>Pair</th><th>Sold → bought</th><th>Operation</th><th>Ledger</th><th>Time</th><th>Report</th></tr></thead>
-				<tbody>{rows.map((row, index) => (
+				<tbody>{rows.map((row, index) => {
+					const pairHref = assetPairReportHref(asset, entityText(recordValue(row.sellingAsset), 'id'),
+						entityText(recordValue(row.buyingAsset), 'id'), window, origin);
+					return (
 					<tr key={entityText(row, 'id') + ':' + index}>
 						<td data-label="Pair"><ExplorerAssetPair a={row.sellingAsset} b={row.buyingAsset} metadata={metadata} /></td>
 						<td data-label="Sold → bought" className={ui.numeric}><div>
@@ -32,13 +38,10 @@ export function ExplorerAssetTradeTable({ rows, window }: {
 							{Number(row.ledgerSequence).toLocaleString('en-US')}
 						</Link></div></td>
 						<td data-label="Time"><div>{typeof row.closedAt === 'string' && <LocalDateTime dateTime={row.closedAt} />}</div></td>
-						<td data-label="Report"><div><Link href={'/explorer/markets?' + new URLSearchParams({
-							asset_a: entityText(recordValue(row.sellingAsset), 'id'),
-							asset_b: entityText(recordValue(row.buyingAsset), 'id'),
-							min_ledger: String(window.minLedger), max_ledger: String(window.maxLedger)
-						})}>Pair report</Link></div></td>
+						<td data-label="Report"><div>{pairHref ? <a href={pairHref}>Pair report</a> : '—'}</div></td>
 					</tr>
-				))}</tbody>
+					);
+				})}</tbody>
 			</table>
 		</div>
 	);

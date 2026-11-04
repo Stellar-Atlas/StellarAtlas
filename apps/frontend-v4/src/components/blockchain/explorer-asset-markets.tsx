@@ -35,6 +35,7 @@ export function ExplorerAssetMarkets({
 	const maximum = asset.lastObservedLedger ?? 2;
 	const pathname = usePathname();
 	const params = useSearchParams();
+	const origin = pathname + (params.size ? '?' + params.toString() : '');
 	const { view, min, max } = readAssetMarketRoute(params, maximum);
 	const selection = useMemo(() => ({ view, min, max }), [view, min, max]);
 	const [refresh, setRefresh] = useState(0);
@@ -200,13 +201,13 @@ export function ExplorerAssetMarkets({
 						{result.pages.map((page, side) => (
 							<Link
 								key={side}
-								href={assetTradeSideHref(asset.id, side === 0 ? 'sell' : 'buy', page.window, pathname + (params.size ? '?' + params.toString() : ''))}
+								href={assetTradeSideHref(asset.id, side === 0 ? 'sell' : 'buy', page.window, origin)}
 							>
 								Browse {side === 0 ? 'sell-side' : 'buy-side'} trades
 							</Link>
 						))}
 					</div>
-					<ExplorerAssetTradeTable rows={result.rows} window={result.pages[0]!.window} />
+					<ExplorerAssetTradeTable asset={asset.id} origin={origin} rows={result.rows} window={result.pages[0]!.window} />
 					<p className={styles.muted} title="Parsed trade amounts are floating-point observations, not exact raw-unit amounts.">Amounts: source Float64 precision.</p>
 					{result.rows.length === 0 && (
 						<p className={styles.muted}>No observations in this range.</p>
