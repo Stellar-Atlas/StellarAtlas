@@ -1,6 +1,7 @@
 import { buildEntityHref, type ExplorerFilters } from './explorer-analytics';
 import { withExplorerReturnTo } from './explorer-return-context';
 import { isContractAccount } from '../domain/classic-account';
+import { normalizeSorobanDomainName } from '../domain/soroban-domain-name';
 
 export function decodeExplorerIdentifier(value: string): string | null {
 	try {
@@ -91,6 +92,12 @@ export function resolveExplorerSearch(
 ): string | null {
 	const value = query.trim();
 	if (!value || value.length > 128) return null;
+	if (type === 'soroban-domain') {
+		const name = normalizeSorobanDomainName(value);
+		return name === null
+			? null
+			: '/explorer/soroban-domains?' + new URLSearchParams({ name });
+	}
 	const symbol = /^[A-Za-z0-9]{1,12}$/.test(value);
 	if (
 		symbol && value !== 'native' &&
@@ -143,9 +150,15 @@ export function explorerSearchNavigation(href: string, query: string, type: stri
 	const route = resolveExplorerSearch(query, type);
 	if (route === null) return null;
 	const current = new URL(href);
-	current.searchParams.set('search', query.trim());
+	const search = query.trim();
+	current.searchParams.set('search', search);
 	current.searchParams.set('search_type', type);
 	const origin = current.pathname + current.search + current.hash;
+	if (type === 'soroban-domain') {
+		// Keep the submitted finder state without carrying unrelated or nested URL context.
+		const back = '/explorer?' + new URLSearchParams({ search, search_type: type });
+		return { origin, destination: withExplorerReturnTo(route, back, true) };
+	}
 	return {
 		origin,
 		destination: withExplorerReturnTo(route, origin, route.startsWith('/explorer/assets?'))

@@ -1,6 +1,10 @@
 import { fetchValidatedJson } from '@api/http-client';
 import { PageHeading } from '@components/layout/page-heading';
 import { isClassicAccount, isContractAccount } from '@domain/classic-account';
+import {
+	MAX_SOROBAN_DOMAIN_NAME_LENGTH,
+	normalizeSorobanDomainName
+} from '@domain/soroban-domain-name';
 import styles from '@components/blockchain/explorer-entity.module.css';
 import ui from '@components/blockchain/explorer-asset-workspace.module.css';
 
@@ -86,10 +90,11 @@ export default async function ExplorerSorobanDomainsPage({
 }): Promise<React.JSX.Element> {
 	const { name: query } = await searchParams;
 	const input =
-		typeof query === 'string' && query.length <= 67 ? query.trim() : '';
-	const valid = /^(?:[A-Za-z]{1,15}\.){1,4}[Xx][Ll][Mm]$/.test(input);
-	const name = input.toLowerCase();
-	const result = valid ? await lookupDomain(name) : null;
+		typeof query === 'string' && query.length <= MAX_SOROBAN_DOMAIN_NAME_LENGTH
+			? query.trim()
+			: '';
+	const name = normalizeSorobanDomainName(input);
+	const result = name === null ? null : await lookupDomain(name);
 
 	return (
 		<main className="shell">
@@ -109,12 +114,12 @@ export default async function ExplorerSorobanDomainsPage({
 						name="name"
 						defaultValue={input}
 						placeholder="example.xlm"
-						maxLength={67}
+						maxLength={MAX_SOROBAN_DOMAIN_NAME_LENGTH}
 						required
 					/>
 					<button type="submit">Look up name</button>
 				</form>
-				{query !== undefined && !valid && (
+				{query !== undefined && name === null && (
 					<p className={styles.error} role="alert">
 						Enter a .xlm name with one to four alphabetic labels of at most 15
 						letters each.

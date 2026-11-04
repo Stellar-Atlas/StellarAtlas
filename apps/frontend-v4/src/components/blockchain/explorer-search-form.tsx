@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { explorerSearchNavigation } from '../../api/explorer-search-route';
 
-const searchTypes = ['auto', 'transaction', 'account', 'ledger', 'operation', 'asset', 'contract', 'pool'] as const;
+const searchTypes = ['auto', 'transaction', 'account', 'ledger', 'operation', 'asset', 'contract', 'pool', 'soroban-domain'] as const;
 
 export function ExplorerSearchForm(): React.JSX.Element {
 	const params = useSearchParams();
@@ -27,7 +27,9 @@ function SearchForm({ initialQuery, initialType }: {
 			event.preventDefault();
 			const navigation = explorerSearchNavigation(window.location.href, query, type);
 			if (!navigation) {
-				setError('Enter a valid identifier for the selected search type.');
+				setError(type === 'soroban-domain'
+					? 'Enter an exact .xlm name with one to four alphabetic labels of at most 15 letters each.'
+					: 'Enter a valid identifier for the selected search type.');
 				return;
 			}
 			// Save the submitted search in this history entry, not on every keystroke.
@@ -36,12 +38,13 @@ function SearchForm({ initialQuery, initialType }: {
 		}}>
 			<input aria-label="Explorer search" aria-invalid={error ? true : undefined}
 				aria-describedby={error ? 'explorer-search-error' : undefined}
-				placeholder="Hash, address, ledger, operation ID, or asset code"
+				placeholder={type === 'soroban-domain' ? 'example.xlm' : 'Hash, address, ledger, operation ID, or asset code'}
 				maxLength={128} value={query} onChange={(event) => { setQuery(event.currentTarget.value); setError(null); }} />
 			<select aria-label="Search type" value={type}
 				onChange={(event) => { setType(event.currentTarget.value); setError(null); }}>
 				{searchTypes.map((value) => <option key={value} value={value}>
-					{value === 'auto' ? 'Detect automatically' : value === 'pool' ? 'Liquidity pool' : value}
+					{value === 'auto' ? 'Detect automatically' : value === 'pool' ? 'Liquidity pool'
+						: value === 'soroban-domain' ? 'Soroban Domains (.xlm)' : value}
 				</option>)}
 			</select>
 			<button type="submit" disabled={!query.trim()}>Search</button>
