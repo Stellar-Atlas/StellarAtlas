@@ -44,7 +44,7 @@ it('disambiguates same-symbol issuers and reversed/native reserve orientation fr
 
 it('keeps partial-history and pagination context in the actual historical report section', () => {
 	const page: AnalyticsEntityPage = { entity: 'liquidity-pools', rows: [{ ...base, deleted: true }], limit: 25, offset: 0, nextOffset: 25, window: { minLedger: 64877680, maxLedger: 64877698 }, coverage: {}, coverageStatus: 'partial_or_unknown', semantics: 'Historical changes, not current liquidity.' };
-	const html = renderToStaticMarkup(createElement(PairReportSection, { lane: 'pool-a-b', selection: { assetA: a, assetB: b, minLedger: '64877680', maxLedger: '64877698', limit: '25' }, initialPage: page }));
+	const html = renderToStaticMarkup(createElement(PairReportSection, { lane: 'pool-a-b', selection: { assetA: a, assetB: b, minLedger: '64877680', maxLedger: '64877698', limit: '25' }, initial: { page }, initialOffset: page.offset, onRecovered: () => undefined }));
 	expect(html).toContain('Partial history'); expect(html).toContain('More available'); expect(html).toContain('Removed');
 	expect(html).toContain('Historical native pool changes'); expect(html).toContain('JSON'); expect(html).toContain('Next');
 	expect(html.replaceAll('<!-- -->', '')).toContain('1 distinct pool on this page');

@@ -16,6 +16,9 @@ export interface PairReportSelection {
 
 export type PairReportLane = 'a-to-b' | 'b-to-a' | 'pool-a-b' | 'pool-b-a';
 export const pairReportLanes: readonly PairReportLane[] = ['a-to-b', 'b-to-a', 'pool-a-b', 'pool-b-a'];
+export type PairReportSectionResult =
+	| { readonly page: AnalyticsEntityPage; readonly error?: never }
+	| { readonly page?: never; readonly error: string };
 
 export function pairReportHref(
 	selection: PairReportSelection,
@@ -156,7 +159,7 @@ export async function loadPairReport(
 	offsets: Partial<Readonly<Record<PairReportLane, number>>> = {}
 ): Promise<{
 	selection: PairReportSelection;
-	pages: Readonly<Record<PairReportLane, AnalyticsEntityPage>>;
+	sections: Readonly<Record<PairReportLane, PairReportSectionResult>>;
 }> {
 	const selected = validatePairReportSelection(selection);
 	throwIfAborted(signal);
@@ -173,34 +176,27 @@ export async function loadPairReport(
 	};
 	const { minLedger, maxLedger } = first.window;
 
-	throwIfAborted(signal);
-	const [reverseTrades, forwardPools] = await Promise.all([
-		requestJson(
-			pairReportApiPath(pinnedSelection, 'b-to-a', offsets['b-to-a']),
-			signal
-		),
-		requestJson(
-			pairReportApiPath(pinnedSelection, 'pool-a-b', offsets['pool-a-b']),
-			signal
-		)
-	]);
-	const reversePage = parsePinnedPage(reverseTrades, minLedger, maxLedger);
-	const forwardPoolPage = parsePinnedPage(forwardPools, minLedger, maxLedger);
-
-	throwIfAborted(signal);
-	const reversePools = await requestJson(
-		pairReportApiPath(pinnedSelection, 'pool-b-a', offsets['pool-b-a']),
-		signal
-	);
-	const reversePoolPage = parsePinnedPage(reversePools, minLedger, maxLedger);
+	const load = async (lane: PairReportLane): Promise<PairReportSectionResult> => {
+		throwIfAborted(signal);
+		try {
+			const raw = await requestJson(pairReportApiPath(pinnedSelection, lane, offsets[lane]), signal);
+			throwIfAborted(signal);
+			return { page: parsePinnedPage(raw, minLedger, maxLedger) };
+		} catch (cause: unknown) {
+			throwIfAborted(signal);
+			return { error: cause instanceof Error ? cause.message : 'This section is unavailable.' };
+		}
+	};
+	const [reverseTrades, forwardPools] = await Promise.all([load('b-to-a'), load('pool-a-b')]);
+	const reversePools = await load('pool-b-a');
 
 	return {
 		selection: pinnedSelection,
-		pages: {
-			'a-to-b': first,
-			'b-to-a': reversePage,
-			'pool-a-b': forwardPoolPage,
-			'pool-b-a': reversePoolPage
+		sections: {
+			'a-to-b': { page: first },
+			'b-to-a': reverseTrades,
+			'pool-a-b': forwardPools,
+			'pool-b-a': reversePools
 		}
 	};
 }

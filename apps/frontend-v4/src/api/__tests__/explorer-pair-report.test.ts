@@ -83,7 +83,7 @@ describe('explorer pair report API helper', () => {
 		);
 		expect(result.selection.minLedger).toBe('500');
 		expect(result.selection.maxLedger).toBe('520');
-		expect(Object.keys(result.pages)).toEqual([
+		expect(Object.keys(result.sections)).toEqual([
 			'a-to-b',
 			'b-to-a',
 			'pool-a-b',
@@ -96,6 +96,19 @@ describe('explorer pair report API helper', () => {
 			expect(url.searchParams.get('min_ledger')).toBe('500');
 			expect(url.searchParams.get('max_ledger')).toBe('520');
 		}
+	});
+
+	it('retains pinned trades and the other pool lane after a single pool failure', async () => {
+		const requestJson = async (path: string) => {
+			const url = new URL(path, 'https://example.test');
+			if (url.searchParams.get('asset_a') === assetA) throw new Error('Fixture pool unavailable');
+			return page(500, 520, url.pathname.split('/').at(-1)!);
+		};
+		const result = await loadPairReport(selection(), new AbortController().signal, requestJson);
+		expect(result.sections['pool-a-b']).toEqual({ error: 'Fixture pool unavailable' });
+		expect(result.sections['a-to-b'].page?.entity).toBe('trades');
+		expect(result.sections['b-to-a'].page?.entity).toBe('trades');
+		expect(result.sections['pool-b-a'].page?.entity).toBe('liquidity-pools');
 	});
 
 	it('normalizes native assets and rejects invalid identities or ledger selections', () => {

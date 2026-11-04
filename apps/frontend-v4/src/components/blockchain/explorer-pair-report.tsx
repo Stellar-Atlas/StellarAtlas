@@ -246,7 +246,7 @@ export function ExplorerPairReport({
 							</strong>
 							<span>
 								{lanes.every(
-									(lane) => report.pages[lane].coverageStatus === 'complete'
+										(lane) => report.sections[lane].page?.coverageStatus === 'complete'
 								)
 									? 'Selected window published'
 									: 'Partial or unknown historical coverage'}
@@ -267,7 +267,11 @@ export function ExplorerPairReport({
 						key={reportHref(report.selection) + lane}
 						lane={lane}
 						selection={report.selection}
-						initialPage={report.pages[lane]}
+						initial={report.sections[lane]}
+						initialOffset={initialOffsets.current[lane]}
+						onRecovered={(page) => setReport((current) => current?.selection === report.selection
+							? { ...current, sections: { ...current.sections, [lane]: { page } } }
+							: current)}
 					/>
 				))}
 		</div>
