@@ -22,3 +22,96 @@
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
+.marketPair {
+	display: grid;
+	gap: 0.25rem;
+	overflow-wrap: anywhere;
+}
+.marketPair a {
+	color: var(--blue);
+}
+.marketPlots {
+	max-width: 56rem;
+	min-width: 0;
+	display: grid;
+	gap: 0.75rem;
+}
+.marketPlots figure {
+	display: grid;
+	grid-template-columns: minmax(2.5rem, auto) minmax(0, 1fr);
+	column-gap: 0.4rem;
+	margin: 0;
+}
+.marketPlots figcaption {
+	grid-column: 1 / -1;
+	display: flex;
+	gap: 0.25rem 0.65rem;
+	flex-wrap: wrap;
+	align-items: baseline;
+}
+.marketPlots figcaption span,
+.axis,
+.chartDates {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+.axis {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: flex-end;
+	max-width: 8rem;
+	overflow-wrap: anywhere;
+	padding-block: 0.35rem;
+	font-variant-numeric: tabular-nums;
+}
+.marketPlots svg {
+	width: 100%;
+	height: clamp(4rem, 13vw, 6.5rem);
+}
+.axis[data-single-value='true'] {
+	justify-content: center;
+}
+.gridline {
+	stroke: currentColor;
+	opacity: 0.25;
+	vector-effect: non-scaling-stroke;
+}
+.closePoint,
+.volumeBar {
+	fill: var(--blue);
+}
+.closePoint {
+	stroke: var(--blue);
+	stroke-width: 1.5px;
+	vector-effect: non-scaling-stroke;
+}
+.volumeBar {
+	opacity: 0.7;
+}
+.chartDates {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 0.25rem 0.8rem;
+	margin: 0;
+}
+.historyValues {
+	overflow-x: auto;
+	max-width: 100%;
+}
+.historyTable {
+	width: 100%;
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+}
+.historyTable :is(td, th) {
+	text-align: start;
+	white-space: nowrap;
+	padding: 0.35rem 0.6rem;
+}
+@media (max-width: 36rem) {
+	.marketPlots figure {
+		grid-template-columns: minmax(2.5rem, 4.5rem) minmax(0, 1fr);
+	}
+}

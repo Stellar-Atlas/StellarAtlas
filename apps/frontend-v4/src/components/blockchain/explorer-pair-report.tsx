@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ExplorerLink as Link } from './explorer-investigation';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { PairReportSection } from './explorer-pair-report-section';
+import { ExplorerMarketHistory } from './explorer-market-history';
 import {
 	requestExplorerJson,
 	type ExplorerFilters
@@ -278,6 +279,7 @@ export function ExplorerPairReport({
 					</>
 				)}
 			</section>
+			{report && <ExplorerMarketHistory key={reportHref(report.selection)} selection={report.selection} />}
 			{report &&
 				lanes.map((lane) => (
 					<PairReportSection
