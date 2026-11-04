@@ -9,6 +9,7 @@ import {
 	type ArchiveRadarResponse
 } from 'shared';
 import type { PublicKnownArchiveEvidence } from '@domain/known-archive-evidence';
+import { radarArchiveReportUrl } from '@domain/radar-links';
 import { buildBrowserApiUrl } from '@api/browser-client';
 
 type FailurePage = PublicKnownArchiveEvidence['remoteFailures'];
@@ -36,6 +37,7 @@ function RadarObservation({
 	const [state, setState] = useState<
 		ArchiveRadarResponse | 'loading' | 'failed' | null
 	>(null);
+	const reportUrl = radarArchiveReportUrl(root);
 	const pending = useRef<AbortController | null>(null);
 	useEffect(
 		() => () => {
@@ -86,6 +88,13 @@ function RadarObservation({
 				Compare an external observation with the Atlas evidence already loaded
 				here. No additional Atlas evidence is requested.
 			</p>
+			{reportUrl && (
+				<p>
+					<a href={reportUrl} rel="noreferrer">
+						View on Radar (JSON)
+					</a>
+				</p>
+			)}
 			<button
 				type="button"
 				disabled={state === 'loading'}

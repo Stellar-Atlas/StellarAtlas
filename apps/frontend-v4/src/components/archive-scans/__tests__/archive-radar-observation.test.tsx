@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { radarArchiveReportUrl, radarValidatorUrl } from '@domain/radar-links';
 import {
 	isArchiveRadarResponse,
 	type ArchiveRadarResponse,
@@ -63,6 +64,37 @@ describe('Radar beside already-loaded archive evidence', () => {
 		expect(html).toContain('Check Radar observation');
 		expect(html).toContain('Radar has not been requested');
 		expect(html).not.toContain('Reported by Radar');
+		expect(html).toContain(
+			'<a href="https://radar.withobsrvr.com/api/v1/history-scan/https%3A%2F%2Fhistory.example.com%2FHistory" rel="noreferrer">View on Radar (JSON)</a>'
+		);
+	});
+	it('links exact archive and validator identities, never inferred from names', () => {
+		expect(radarArchiveReportUrl('http://history.stellar.org/prd/core-live/core_live_001/')).toBe(
+			'https://radar.withobsrvr.com/api/v1/history-scan/http%3A%2F%2Fhistory.stellar.org%2Fprd%2Fcore-live%2Fcore_live_001'
+		);
+		const publicKey = 'GCGB2S2KGYARPVIA37HYZXVRM2YZUEXA6S33ZU5BUDC6THSB62LZSTYH';
+		expect(radarValidatorUrl({ publicKey, isValidator: true })).toBe(
+			'https://radar.withobsrvr.com/nodes/' + publicKey
+		);
+		expect(radarValidatorUrl({ publicKey, isValidator: false })).toBeNull();
+		expect(radarValidatorUrl({ publicKey: publicKey.slice(0, -1) + 'A', isValidator: true })).toBeNull();
+		expect(radarValidatorUrl(null)).toBeNull();
+	});
+	it('omits unsafe or missing archive mappings', () => {
+		for (const archiveUrl of [
+			'', '//example.com/History', 'javascript:alert(1)',
+			'https://example.com@archive.example/History',
+			'https://example.com/History?token=not-public',
+			'https://example.com/History#other',
+			'https://example.com/' + 'ü'.repeat(400)
+		]) {
+			expect(radarArchiveReportUrl(archiveUrl)).toBeNull();
+			expect(renderToStaticMarkup(createElement(ArchiveRadarObservationPanel, {
+				archiveUrl, failures
+			}))).not.toContain('View on Radar');
+		}
+		const href = radarArchiveReportUrl('https://example.com/A%2FB');
+		expect(href).toBe('https://radar.withobsrvr.com/api/v1/history-scan/https%3A%2F%2Fexample.com%2FA%252FB');
 	});
 	it('preserves old scan times and partial/unknown-coverage warnings', () => {
 		const html = render();
