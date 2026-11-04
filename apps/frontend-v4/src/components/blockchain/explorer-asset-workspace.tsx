@@ -11,6 +11,8 @@ import type {
 	Metadata
 } from './explorer-asset-types';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { assetDirectoryLink } from './asset-directory-link';
 import { isAssetDiscoveryReference, normalizeAssetRef, parseAsset } from './asset-data';
 import { ExplorerAssetDiscovery } from './explorer-asset-discovery';
 import {
@@ -24,7 +26,6 @@ import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 
-const EMPTY_FILTERS: ExplorerFilters = Object.freeze({});
 const POLL_DELAYS = [2_000, 4_000, 8_000, 15_000] as const;
 
 type Props = {
@@ -102,9 +103,9 @@ export function ExplorerAssetWorkspace(props: Props): React.JSX.Element {
 
 function ExplorerAssetRecordWorkspace({
 	assetRef,
-	issuerId,
-	initialFilters = EMPTY_FILTERS
+	issuerId
 }: Props): React.JSX.Element {
+	const params = useSearchParams();
 	const canonicalAssetRef = normalizeAssetRef(assetRef);
 	const [detail, setDetail] = useState<AssetRecord | null>(null);
 	const [issuer, setIssuer] = useState<AssetRecord | null>(null);
@@ -200,12 +201,7 @@ function ExplorerAssetRecordWorkspace({
 					</div>
 					{canonicalAssetRef && (
 						<Link
-							href={
-								'/explorer/assets' +
-								(Object.keys(initialFilters).length
-									? '?' + new URLSearchParams(initialFilters)
-									: '')
-							}
+							href={assetDirectoryLink(params)}
 						>
 							Browse all assets
 						</Link>

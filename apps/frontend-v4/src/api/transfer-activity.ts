@@ -96,14 +96,15 @@ function record(value: unknown): value is Record<string, unknown> {
 function nullableString(value: unknown): value is string | null {
 	return value === null || typeof value === 'string';
 }
-function transfer(value: unknown): value is TransferActivity {
+function transfer(value: unknown, allowUnrecordedHash: boolean): value is TransferActivity {
 	return (
 		record(value) &&
 		typeof value.id === 'string' &&
 		typeof value.ledgerSequence === 'number' &&
 		Number.isSafeInteger(value.ledgerSequence) &&
 		typeof value.closedAt === 'string' &&
-		typeof value.transactionHash === 'string' &&
+		(typeof value.transactionHash === 'string' ||
+			(allowUnrecordedHash && value.transactionHash == null)) &&
 		typeof value.transactionId === 'string' &&
 		nullableString(value.operationId) &&
 		nullableString(value.from) &&
@@ -122,12 +123,13 @@ function transfer(value: unknown): value is TransferActivity {
 	);
 }
 export function parseTransferActivityPage(
-	value: unknown
+	value: unknown,
+	{ allowUnrecordedHash = false } = {}
 ): TransferActivityPage {
 	if (
 		!record(value) ||
 		!Array.isArray(value.transfers) ||
-		!value.transfers.every(transfer) ||
+		!value.transfers.every(row => transfer(row, allowUnrecordedHash)) ||
 		typeof value.limit !== 'number' ||
 		!nullableString(value.nextCursor) ||
 		!record(value.watermark) ||
@@ -139,5 +141,10 @@ export function parseTransferActivityPage(
 	) {
 		throw new Error('The analytics API returned an invalid transfer response.');
 	}
-	return value as unknown as TransferActivityPage;
+	const page = value as unknown as TransferActivityPage;
+	return allowUnrecordedHash
+		? { ...page, transfers: page.transfers.map(row =>
+			row.transactionHash == null ? { ...row, transactionHash: '' } : row
+		) }
+		: page;
 }

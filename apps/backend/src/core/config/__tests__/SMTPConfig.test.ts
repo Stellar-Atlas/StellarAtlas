@@ -21,7 +21,8 @@ describe('SMTP Configuration', () => {
 			process.env.NETWORK_OVERLAY_VERSION = '25';
 			process.env.NETWORK_OVERLAY_MIN_VERSION = '25';
 			process.env.NETWORK_STELLAR_CORE_VERSION = '19.0.0';
-			process.env.NETWORK_QUORUM_SET = '["GDMOXZXNN2UQJQJ47C3T6LLHZD366TJ3BKSGWM66F7MD5JXBP6DBRQXZ"]';
+			process.env.NETWORK_QUORUM_SET =
+				'["GDMOXZXNN2UQJQJ47C3T6LLHZD366TJ3BKSGWM66F7MD5JXBP6DBRQXZ"]';
 			process.env.NETWORK_ID = 'testnet';
 			process.env.NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
 			process.env.NETWORK_KNOWN_PEERS = '[["127.0.0.1", 11625]]';
@@ -128,7 +129,8 @@ describe('SMTP Configuration', () => {
 			process.env.NETWORK_OVERLAY_VERSION = '25';
 			process.env.NETWORK_OVERLAY_MIN_VERSION = '25';
 			process.env.NETWORK_STELLAR_CORE_VERSION = '19.0.0';
-			process.env.NETWORK_QUORUM_SET = '["GDMOXZXNN2UQJQJ47C3T6LLHZD366TJ3BKSGWM66F7MD5JXBP6DBRQXZ"]';
+			process.env.NETWORK_QUORUM_SET =
+				'["GDMOXZXNN2UQJQJ47C3T6LLHZD366TJ3BKSGWM66F7MD5JXBP6DBRQXZ"]';
 			process.env.NETWORK_ID = 'testnet';
 			process.env.NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
 			process.env.NETWORK_KNOWN_PEERS = '[["127.0.0.1", 11625]]';
@@ -143,7 +145,9 @@ describe('SMTP Configuration', () => {
 			const result = getConfigFromEnv();
 
 			expect(result.isErr()).toBeTruthy();
-			expect(result._unsafeUnwrapErr().message).toContain('SMTP_HOST must be defined');
+			expect(result._unsafeUnwrapErr().message).toContain(
+				'SMTP_HOST must be defined'
+			);
 		});
 
 		it('should return error when SMTP_USERNAME is missing', () => {
@@ -154,7 +158,9 @@ describe('SMTP Configuration', () => {
 			const result = getConfigFromEnv();
 
 			expect(result.isErr()).toBeTruthy();
-			expect(result._unsafeUnwrapErr().message).toContain('SMTP_USERNAME must be defined');
+			expect(result._unsafeUnwrapErr().message).toContain(
+				'SMTP_USERNAME must be defined'
+			);
 		});
 
 		it('should return error when SMTP_PASSWORD is missing', () => {
@@ -165,7 +171,9 @@ describe('SMTP Configuration', () => {
 			const result = getConfigFromEnv();
 
 			expect(result.isErr()).toBeTruthy();
-			expect(result._unsafeUnwrapErr().message).toContain('SMTP_PASSWORD must be defined');
+			expect(result._unsafeUnwrapErr().message).toContain(
+				'SMTP_PASSWORD must be defined'
+			);
 		});
 
 		it('should return error when SMTP_FROM_ADDRESS is missing', () => {
@@ -176,7 +184,9 @@ describe('SMTP Configuration', () => {
 			const result = getConfigFromEnv();
 
 			expect(result.isErr()).toBeTruthy();
-			expect(result._unsafeUnwrapErr().message).toContain('SMTP_FROM_ADDRESS must be defined');
+			expect(result._unsafeUnwrapErr().message).toContain(
+				'SMTP_FROM_ADDRESS must be defined'
+			);
 		});
 
 		it('should return error when SMTP_FROM_ADDRESS is invalid email', () => {
@@ -188,7 +198,9 @@ describe('SMTP Configuration', () => {
 			const result = getConfigFromEnv();
 
 			expect(result.isErr()).toBeTruthy();
-			expect(result._unsafeUnwrapErr().message).toContain('SMTP_FROM_ADDRESS must be a valid email');
+			expect(result._unsafeUnwrapErr().message).toContain(
+				'SMTP_FROM_ADDRESS must be a valid email'
+			);
 		});
 
 		it('should return error when SMTP_PORT is not a valid number', () => {
@@ -201,7 +213,9 @@ describe('SMTP Configuration', () => {
 			const result = getConfigFromEnv();
 
 			expect(result.isErr()).toBeTruthy();
-			expect(result._unsafeUnwrapErr().message).toContain('SMTP_PORT must be a valid number');
+			expect(result._unsafeUnwrapErr().message).toContain(
+				'SMTP_PORT must be a valid number'
+			);
 		});
 
 		it('should return error when SMTP_PORT is out of valid range', () => {
@@ -214,7 +228,9 @@ describe('SMTP Configuration', () => {
 			const result = getConfigFromEnv();
 
 			expect(result.isErr()).toBeTruthy();
-			expect(result._unsafeUnwrapErr().message).toContain('SMTP_PORT must be between 1 and 65535');
+			expect(result._unsafeUnwrapErr().message).toContain(
+				'SMTP_PORT must be between 1 and 65535'
+			);
 		});
 	});
 
@@ -227,11 +243,28 @@ describe('SMTP Configuration', () => {
 			process.env.NETWORK_OVERLAY_VERSION = '25';
 			process.env.NETWORK_OVERLAY_MIN_VERSION = '25';
 			process.env.NETWORK_STELLAR_CORE_VERSION = '19.0.0';
-			process.env.NETWORK_QUORUM_SET = '["GDMOXZXNN2UQJQJ47C3T6LLHZD366TJ3BKSGWM66F7MD5JXBP6DBRQXZ"]';
+			process.env.NETWORK_QUORUM_SET =
+				'["GDMOXZXNN2UQJQJ47C3T6LLHZD366TJ3BKSGWM66F7MD5JXBP6DBRQXZ"]';
 			process.env.NETWORK_ID = 'testnet';
 			process.env.NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
 			process.env.NETWORK_KNOWN_PEERS = '[["127.0.0.1", 11625]]';
 		});
+
+		it.each([undefined, 'false'])(
+			'keeps notifications disabled without delivery credentials when NOTIFICATIONS_ENABLED is %s',
+			(value) => {
+				if (value === undefined) delete process.env.NOTIFICATIONS_ENABLED;
+				else process.env.NOTIFICATIONS_ENABLED = value;
+				delete process.env.ENABLE_LOCAL_SMTP;
+				delete process.env.USER_SERVICE_BASE_URL;
+				delete process.env.USER_SERVICE_USERNAME;
+				delete process.env.USER_SERVICE_PASSWORD;
+				delete process.env.FRONTEND_BASE_URL;
+				const result = getConfigFromEnv();
+				expect(result.isOk()).toBe(true);
+				if (result.isOk()) expect(result.value.enableNotifications).toBe(false);
+			}
+		);
 
 		it('should maintain existing user service config when SMTP is disabled', () => {
 			process.env.NOTIFICATIONS_ENABLED = 'true';

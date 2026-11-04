@@ -26,7 +26,7 @@ export async function requestExplorerTransaction(
 	}
 	return recordValue(
 		await requestExplorerJson(
-			'/v1/analytics/transactions/' + encodeURIComponent(hash) + '?' + query,
+			'/api/explorer/typed-transactions/' + encodeURIComponent(hash) + '?' + query,
 			signal
 		)
 	);

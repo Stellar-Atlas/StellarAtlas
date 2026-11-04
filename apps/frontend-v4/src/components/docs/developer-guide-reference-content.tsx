@@ -5,6 +5,14 @@ import {
 	type DeveloperGuidePage
 } from './developer-guide-elements';
 import { publicHealthMetricsSection } from './public-health-metrics-guide';
+import { graphqlExamples } from './graphql-request';
+import { balanceObservationPath } from '../../api/explorer-balance-observations';
+
+const savedBalanceExamplePath = balanceObservationPath(
+	'balances',
+	graphqlExamples.balances.variables.account,
+	null
+);
 
 export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 	{
@@ -148,6 +156,54 @@ export const developerGuideReferencePages: readonly DeveloperGuidePage[] = [
 				)
 			},
 			{
+				id: 'saved-api-responses',
+				title: 'Recognize a saved API response',
+				content: (
+					<>
+						<p>
+							Some public REST reads can return saved data when the live
+							service is unavailable. Check the HTTP status and headers before
+							parsing the body. This balance request prints both:
+						</p>
+						<Code>{`curl --include --fail-with-body --connect-timeout 5 --max-time 30 '${api}${savedBalanceExamplePath}'`}</Code>
+						<p>
+							<code>X-StellarAtlas-Fallback: snapshot</code> identifies the
+							saved response path, including errors. If present,{' '}
+							<code>X-StellarAtlas-Snapshot</code> gives the capture time.
+							Compare it with the current time to estimate the age of the
+							capture. Treat the age as unknown if the timestamp is missing,
+							invalid or in the future. Capture time does not tell you how
+							recent the underlying ledger observations are. A missing
+							fallback header does not establish freshness.
+						</p>
+						<p>
+							Saved balance responses can include <code>capturedAt</code>,{' '}
+							<code>semantics</code> and{' '}
+							<code>watermark.snapshotPinned: true</code>. Check coverage and
+							keep saved data separate from live results. A saved response does
+							not provide current ledger state, complete history or live SCP
+							observations.
+						</p>
+						<p>
+							A saved <code>503</code> can mean the requested data or query
+							was not captured; it is unavailable, not an empty result. A
+							saved <code>404</code> means the record was not found in the
+							saved data. It does not establish absence on the current chain.
+							A <code>409</code> for a cursor from a different capture means
+							you should restart from the first page. Keep cursors with their
+							filters and data source; do not reuse them across live and saved
+							responses or across captures.
+						</p>
+						<p>
+							GraphQL POSTs, writes, requests with an Authorization header,
+							WebSocket upgrades and live server-sent event streams still
+							require the live service. A saved page or a successful saved
+							REST read does not mean these operations are available.
+						</p>
+					</>
+				)
+			},
+			{
 				id: 'history-downloads',
 				title: 'Immutable history downloads',
 				content: (
@@ -182,6 +238,56 @@ curl --fail-with-body --connect-timeout 5 --max-time 10 '${api}/v1/history-data/
 							complete-file digest. Use the embedded Parquet schema with its
 							version; published batch coverage does not establish complete
 							chain history or an arbitrary-ledger state witness.
+						</p>
+						<h3 id="offline-parquet-inspection">
+							Inspect one complete local file
+						</h3>
+						<p>
+							Use Python 3.11+ with a maintained PyArrow release already
+							available; the recipe was qualified with PyArrow 26.0.0. Versions
+							below{' '}
+							<a href="https://arrow.apache.org/blog/2023/11/09/14.0.1-release/">
+								14.0.1 are rejected
+							</a>
+							. If the reader is missing, follow the{' '}
+							<a href="https://arrow.apache.org/docs/python/install.html">
+								PyArrow prerequisite instructions
+							</a>{' '}
+							deliberately before rerunning. The command installs nothing.
+						</p>
+						<p>
+							From a repository checkout, run{' '}
+							<a href="https://github.com/Stellar-Atlas/StellarAtlas/blob/main/scripts/inspect_history_parquet.py">
+								the inspection script
+							</a>{' '}
+							with an already-downloaded complete Parquet file and a saved JSON
+							object containing only its selected output descriptor, including{' '}
+							<code>byteCount</code>, <code>sha256</code>,{' '}
+							<code>recordCount</code>, <code>mediaType</code>,{' '}
+							<code>dataset</code> and <code>schemaVersion</code>. Keep the
+							local file unchanged throughout inspection.
+						</p>
+						<Code>{`python3 scripts/inspect_history_parquet.py \\
+  /path/to/complete-ledgers.parquet /path/to/selected-output.json --preview 5`}</Code>
+						<p>
+							The script streams the complete SHA-256 and exact byte count
+							before opening the footer. It compares the footer row count with
+							the descriptor and reports physical/converted/logical types, Arrow
+							schema and footer metadata. The descriptor’s schema-version label
+							is separate from embedded metadata, which may be empty. Readers
+							can normalize legacy converted annotations; inspect the logical
+							types and Arrow schema as well.
+						</p>
+						<p>
+							The ledger preview displays at most 5 rows (hard cap 10),
+							selecting unsigned <code>ledger_sequence</code> and signed{' '}
+							<code>total_coins</code>/ <code>fee_pool</code> as exact decimal
+							strings, including values above <code>2^53</code>. No float,
+							dataframe or JavaScript Number conversion is used. Reader
+							page/column decoding can exceed the displayed rows; this is not a
+							byte-I/O cap. Use <code>--preview 0</code> for metadata-only
+							inspection of another dataset, then choose its columns
+							deliberately.
 						</p>
 					</>
 				)

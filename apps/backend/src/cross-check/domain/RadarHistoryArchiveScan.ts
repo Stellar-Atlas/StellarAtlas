@@ -7,7 +7,8 @@ export type RadarHistoryArchiveScanFailureKind =
 	| 'invalid_payload'
 	| 'max_bytes_exceeded'
 	| 'network_error'
-	| 'timeout';
+	| 'timeout'
+	| 'cancelled';
 
 export interface RadarHistoryArchiveScanFailureDTO {
 	readonly kind: RadarHistoryArchiveScanFailureKind;
@@ -32,6 +33,7 @@ export interface RadarHistoryArchiveScanDTO {
 }
 
 export interface RadarHistoryArchiveScanFetchOptions {
+	readonly signal?: AbortSignal;
 	readonly maxBytes?: number;
 	readonly timeoutMs?: number;
 }

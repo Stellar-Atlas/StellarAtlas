@@ -60,6 +60,7 @@ function LedgerTransactions({ ledger, offset, onPage }: {
 	}), [ledger, offset, request.run]);
 	useEffect(() => { void load(); return () => controller.current?.abort(); }, [load]);
 	const page = request.result;
+	const nextOffset = page?.nextOffset ?? null;
 	return <section id="ledger-transactions" aria-label="Ledger transactions" aria-busy={request.loading}>
 		<h3>Transactions in ledger {ledger}</h3>
 		<p className={styles.muted}>Published records only; historical coverage may be incomplete.</p>
@@ -69,12 +70,12 @@ function LedgerTransactions({ ledger, offset, onPage }: {
 				caption={`Published transaction records for ledger ${ledger}. Dates are shown in your local time.`}
 				onInspect={(hash, sequence) => router.push(withExplorerReturnTo(buildEntityHref('transactions', hash, { ledger_sequence: sequence }), returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')))} />
 				: <p>No transaction records returned for this page.</p>}
-			<div className={styles.actions}>
-				<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
-				<button disabled={request.loading || page.nextOffset === null || page.nextOffset > 10000} onClick={() => { if (page.nextOffset !== null) onPage(page.nextOffset); }}>Next transactions</button>
-				<span>{page.records.length} returned</span>
-			</div>
-			{page.nextOffset !== null && page.nextOffset > 10000 && <p className={styles.muted}>Pagination limit reached.</p>}
 		</>}
+		{(page || offset > 0) && <div className={styles.actions}>
+			<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
+			<button disabled={request.loading || nextOffset === null || nextOffset > 10000} onClick={() => { if (nextOffset !== null) onPage(nextOffset); }}>Next transactions</button>
+			{page && <span>{page.records.length} returned</span>}
+		</div>}
+		{nextOffset !== null && nextOffset > 10000 && <p className={styles.muted}>Pagination limit reached.</p>}
 	</section>;
 }

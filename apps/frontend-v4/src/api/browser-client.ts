@@ -23,6 +23,8 @@ const getBrowserApiBaseUrl = (): string => {
 	return window.location.origin;
 };
 
+export const buildBrowserApiUrl = (path: string): string => new URL(path, getBrowserApiBaseUrl()).toString();
+
 export const buildBrowserRealtimeUrl = (path: string): string => {
 	const configuredUrl =
 		process.env.NEXT_PUBLIC_STELLAR_ATLAS_WS_URL?.trim() ?? '';

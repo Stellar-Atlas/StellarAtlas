@@ -23,43 +23,93 @@ import styles from './explorer-entity.module.css';
 import ui from './explorer-contract-controls.module.css';
 import {
 	applyEventControls,
-	createEventControls
+	createEventControls,
+	type EventControls
 } from './contract-event-controls';
-import { contractEventWorkspaceHref } from './contract-event-query';
+import { contractActivityUrlIdentity, eventControlsHref, eventPositionHref, readEventRoute, eventRouteError } from './contract-event-route';
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
+import { readStateRoute, statePositionHref, type StateRoute } from './contract-state-route';
 export function ExplorerContractActivity({
-	contractId,
-	filters,
-	token
+	contractId, filters, token
 }: {
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
 	readonly token?: EventTokenContext;
 }): React.JSX.Element {
+	const params = useSearchParams();
+	let error: string | null = null, stateRoute: StateRoute | undefined;
+	try {
+		if (readContractActivityTab(params.get('activity')) === 'state')
+			stateRoute = readStateRoute(contractId, filters, new URLSearchParams(params.toString()));
+		else error = eventRouteError(contractId, filters, new URLSearchParams(params.toString()));
+	} catch (failure: unknown) { error = failure instanceof Error ? failure.message : 'Invalid state query.'; }
+	return error ? <p role="alert" className={styles.error}>{error}</p>
+		: stateRoute?.normalize ? <NormalizeStateRoute route={stateRoute} />
+		: <ContractActivitySelection contractId={contractId} filters={filters} token={token} stateRoute={stateRoute} />;
+}
+
+function NormalizeStateRoute({ route }: { readonly route: StateRoute }): React.JSX.Element {
+	useEffect(() => {
+		window.history.replaceState(null, '', statePositionHref(window.location.pathname, window.location.search, route, route.position, window.location.hash));
+	}, [route]);
+	return <p role="status">Loading…</p>;
+}
+
+function ContractActivitySelection({
+	contractId,
+	filters,
+	token,
+	stateRoute
+}: {
+	readonly contractId: string;
+	readonly filters: ExplorerFilters;
+	readonly token?: EventTokenContext;
+	readonly stateRoute?: StateRoute;
+}): React.JSX.Element {
 	const pathname = usePathname();
 	const params = useSearchParams();
 	const tab = readContractActivityTab(params.get('activity'));
 	const setTab = (next: ContractActivityTab) => {
+		if (next === tab) return;
 		const href = contractActivityTabHref(
 			pathname, window.location.search, next, window.location.hash
 		);
 		if (href !== window.location.pathname + window.location.search + window.location.hash)
 			window.history.pushState(null, '', href);
 	};
-	const [controls, setControls] = useState(() => createEventControls(filters));
+	const applied = readEventRoute(filters, new URLSearchParams(params.toString()));
+	const controls = createEventControls(applied);
+	const setControls = (update: (current: EventControls) => EventControls): void => {
+		const next = createEventControls(applyEventControls({}, update(controls)));
+		if (!applied.after && JSON.stringify(next) === JSON.stringify(controls)) return;
+		const href = eventControlsHref(pathname, window.location.search, next, window.location.hash);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+	};
 	const [search, setSearch] = useState(controls.q);
-	const [summary, setSummary] = useState<ContractActivityPage['summary']>();
+	useEffect(() => setSearch(controls.q), [controls.q]);
+	const resultKey = contractId + ':' + tab + ':' + (stateRoute ? stateRoute.identity + ':' + stateRoute.position : JSON.stringify(applied));
+	const [acceptedSummary, setSummary] = useState<{ key: string; value: ContractActivityPage['summary'] }>();
+	const summary = acceptedSummary?.key === resultKey ? acceptedSummary.value : undefined;
 	const onSummary = useCallback(
-		(value: ContractActivityPage['summary']) => setSummary(value),
-		[]
+		(value: ContractActivityPage['summary']) => setSummary({ key: resultKey, value }),
+		[resultKey]
 	);
-	const applied = applyEventControls(filters, controls);
-	if (
-		filters.after &&
-		JSON.stringify(controls) === JSON.stringify(createEventControls(filters))
-	)
-		applied.after = filters.after;
+	const position = stateRoute?.position ?? applied.after ?? '';
+	const queryKey = contractId + ':' + JSON.stringify(applyEventControls(applied, controls));
+	const previousPositions = useRef(new Map<string, string>());
+	const previous = stateRoute ? (position ? String(Math.max(0, Number(position) - Number(stateRoute.filters.limit))) : undefined) : previousPositions.current.get(queryKey + ':' + position);
+	const move = (next: string, remember = false): void => {
+		if (remember) {
+			previousPositions.current.set(queryKey + ':' + next, position);
+			const oldest = previousPositions.current.keys().next().value;
+			if (previousPositions.current.size > 50 && oldest) previousPositions.current.delete(oldest);
+		}
+		const href = stateRoute ? statePositionHref(pathname, window.location.search, stateRoute, next, window.location.hash) : eventPositionHref(pathname, window.location.search, next, window.location.hash);
+		if (href !== window.location.pathname + window.location.search + window.location.hash)
+			window.history.pushState(null, '', href);
+	};
 	return (
 		<section className={styles.panel} aria-label="Contract activity">
 			<div className={styles.actions}>
@@ -180,10 +230,7 @@ export function ExplorerContractActivity({
 								: ''}
 						</span>
 						<a
-							href={contractEventWorkspaceHref({
-								...applied,
-								contract_id: contractId
-							})}
+							href={eventControlsHref(pathname, params.toString(), controls)}
 						>
 							Link to this query
 						</a>
@@ -191,14 +238,18 @@ export function ExplorerContractActivity({
 				</div>
 			)}
 			<ContractActivityResults
-				key={contractId + ':' + tab + ':' + JSON.stringify(applied)}
+				key={resultKey}
 				contractId={contractId}
 				filters={
-					tab === 'events' ? applied : { ...filters, limit: controls.limit }
+					stateRoute?.filters ?? applied
 				}
 				tab={tab}
 				token={token}
+				initialPosition={position}
+				pageHref={stateRoute ? statePositionHref(pathname, params.toString(), stateRoute, position) : eventPositionHref(pathname, params.toString(), position)}
 				onSummary={onSummary}
+				onNextPosition={next => move(next, Boolean(next))}
+				onPreviousPosition={previous === undefined ? undefined : () => move(previous)}
 			/>
 		</section>
 	);
@@ -209,17 +260,25 @@ function ContractActivityResults({
 	filters,
 	tab,
 	token,
-	onSummary
+	onSummary,
+	onNextPosition,
+	onPreviousPosition,
+	initialPosition,
+	pageHref
 }: {
 	readonly contractId: string;
 	readonly filters: ExplorerFilters;
 	readonly tab: ContractActivityTab;
 	readonly token?: EventTokenContext;
 	readonly onSummary: (value: ContractActivityPage['summary']) => void;
+	readonly onNextPosition: (position: string) => void;
+	readonly onPreviousPosition?: () => void;
+	readonly initialPosition: string;
+	readonly pageHref: string;
 }): React.JSX.Element {
 	const [state, dispatch] = useReducer(
 		contractActivityReducer,
-		tab === 'events' ? (filters.after ?? '') : '',
+		initialPosition,
 		createContractActivityState
 	);
 	const { requestId, requestedPosition } = state;
@@ -233,6 +292,8 @@ function ContractActivityResults({
 	);
 	useEffect(() => {
 		let disposed = false;
+		const origin = window.location.pathname, identity = contractActivityUrlIdentity(window.location.search, tab);
+		const current = (): boolean => !disposed && window.location.pathname === origin && contractActivityUrlIdentity(window.location.search, tab) === identity;
 		const abort = new AbortController();
 		active.current = abort;
 		setSlow(false);
@@ -245,13 +306,13 @@ function ContractActivityResults({
 			abort.signal
 		)
 			.then((page) => {
-				if (!disposed) {
+				if (current() && !abort.signal.aborted) {
 					dispatch({ type: 'loaded', requestId, page });
 					onSummary(page.summary);
 				}
 			})
 			.catch((error: unknown) => {
-				if (!disposed)
+				if (current())
 					dispatch({
 						type: 'failed',
 						requestId,
@@ -270,16 +331,6 @@ function ContractActivityResults({
 		};
 	}, [path, contractId, tab, requestedPosition, requestId, onSummary]);
 	const displayedPosition = state.positions[state.pageIndex] ?? '';
-	const pageHref = contractEventWorkspaceHref({
-		...filters,
-		contract_id: contractId,
-		after: displayedPosition
-	});
-	const firstHref = contractEventWorkspaceHref({
-		...filters,
-		contract_id: contractId,
-		after: ''
-	});
 	const view = (
 		<ContractActivityView
 			state={state}
@@ -288,21 +339,26 @@ function ContractActivityResults({
 			slow={slow}
 			onCancel={() => active.current?.abort()}
 			onRetry={() => dispatch({ type: 'retry' })}
-			onPrevious={() => dispatch({ type: 'previous' })}
-			onNext={() => dispatch({ type: 'next' })}
+			onPrevious={onPreviousPosition ?? (() => {})}
+			onNext={() => state.page?.nextPosition && onNextPosition(state.page.nextPosition)}
 			onRefresh={() => dispatch({ type: 'refresh' })}
+			canPrevious={onPreviousPosition !== undefined}
 		/>
 	);
-	return tab === 'events' ? (
+	const linkedView = <>
+		<div className={styles.actions}><a
+			href={'https://api.stellaratlas.io' + (state.page ? contractActivityPath(contractId, tab, filters, displayedPosition) : path)}
+			target="_blank" rel="noreferrer">Open REST response</a></div>
+		{view}
+	</>;
+	return (
 		<ExplorerInvestigationScope origin={pageHref}>
-			{view}
+			{linkedView}
 			<div className={styles.actions}>
 				{state.page && <a href={pageHref}>Link to this page</a>}
-				{displayedPosition && <a href={firstHref}>First page</a>}
+				{displayedPosition && <button disabled={state.loading} onClick={() => onNextPosition('')}>First page</button>}
 			</div>
 		</ExplorerInvestigationScope>
-	) : (
-		view
 	);
 }
 
@@ -315,7 +371,8 @@ export function ContractActivityView({
 	onRetry,
 	onPrevious,
 	onNext,
-	onRefresh
+	onRefresh,
+	canPrevious
 }: {
 	readonly state: ContractActivityState;
 	readonly tab: ContractActivityTab;
@@ -326,6 +383,7 @@ export function ContractActivityView({
 	readonly onPrevious: () => void;
 	readonly onNext: () => void;
 	readonly onRefresh: () => void;
+	readonly canPrevious?: boolean;
 }): React.JSX.Element {
 	const page = state.page;
 	return (
@@ -367,7 +425,7 @@ export function ContractActivityView({
 				</span>
 				<div>
 					<button
-						disabled={state.loading || state.pageIndex === 0}
+						disabled={state.loading || !(canPrevious ?? state.pageIndex > 0)}
 						onClick={onPrevious}
 					>
 						Previous

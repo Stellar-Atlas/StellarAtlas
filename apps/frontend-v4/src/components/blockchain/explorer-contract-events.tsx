@@ -1,8 +1,11 @@
+'use client';
+
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { ExplorerFilters } from '../../api/explorer-analytics';
-import { contractActivityPath } from '../../api/explorer-contract-activity';
 import { ExplorerContractActivity } from './explorer-contract-activity';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
+import { readEventRouteInput } from './contract-event-route';
 import {
 	contractEventExample,
 	contractEventQueryError,
@@ -12,10 +15,14 @@ import styles from './explorer-entity.module.css';
 import events from './explorer-contract-events.module.css';
 
 export function ExplorerContractEvents({
-	filters
+	filters: initialFilters
 }: {
 	readonly filters: ExplorerFilters;
 }): React.JSX.Element {
+	const params = useSearchParams();
+	const filters = Object.values(initialFilters).some(Boolean)
+		? readEventRouteInput(initialFilters, new URLSearchParams(params.toString()))
+		: initialFilters;
 	const requested = Object.values(filters).some(Boolean);
 	const error = requested ? contractEventQueryError(filters) : null;
 	const contractId = filters.contract_id?.trim() ?? '';
@@ -40,6 +47,10 @@ export function ExplorerContractEvents({
 					className={events.form}
 					key={JSON.stringify(filters)}
 				>
+					{params.get('return_to') && <input type="hidden" name="return_to" value={params.get('return_to') ?? ''} />}
+					{params.get('activity') === 'state' && <input type="hidden" name="activity" value="state" />}
+					{params.get('activity') === 'state' && ['ledger_key_hash', 'durability', 'deleted', 'state_offset', 'state_for'].map(name => params.has(name)
+						? <input key={name} type="hidden" name={name} value={params.get(name) ?? ''} /> : null)}
 					{['order', 'limit', 'q'].map((name) =>
 						filters[name] ? (
 							<input
@@ -165,23 +176,13 @@ export function ExplorerContractEvents({
 			{valid ? (
 				<>
 					<div className={styles.actions}>
-						<a
-							href={
-								'https://api.stellaratlas.io' +
-								contractActivityPath(contractId, 'events', filters)
-							}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Open REST response
-						</a>
 						<Link href="/docs/api/listAnalyticsContractEvents">
 							REST schema &amp; request tester
 						</Link>
 						<Link href="/docs/graphql">GraphQL query runner</Link>
 					</div>
 					<ExplorerContractActivity
-						key={contractEventWorkspaceHref(filters)}
+						key={contractId}
 						contractId={contractId}
 						filters={filters}
 					/>

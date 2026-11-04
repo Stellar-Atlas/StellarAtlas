@@ -1,4 +1,5 @@
 export { Network, type PublicKey, type OrganizationId } from './network.js';
+export * from './dto/archive-radar-observation.js';
 export {
 	isHistoryArchiveInconclusiveTransportFailure,
 	historyArchiveContentFailurePattern,

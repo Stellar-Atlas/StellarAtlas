@@ -19,6 +19,13 @@ import { HistoryArchiveIntegrityFailureDetectedEvent } from '../../domain/event/
 import { Notifier } from '../../domain/notifier/Notifier.js';
 import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
 import { HistoryArchiveIntegrityNotificationRunLock } from '../../infrastructure/database/HistoryArchiveIntegrityNotificationRunLock.js';
+import {
+	archiveFinding,
+	archiveNotificationFindingLimit,
+	type ArchiveFindingStateRepository,
+	type ArchiveSourcePlan
+} from '../../domain/subscription/ArchiveFindingState.js';
+import type { Notification } from '../../domain/subscription/Notification.js';
 
 const defaultObjectsPerArchiveRoot = 50;
 const maxObjectsPerArchiveRoot = 100;
@@ -49,7 +56,9 @@ export class NotifyHistoryArchiveIntegrityFailures {
 		private readonly runLock: HistoryArchiveIntegrityNotificationRunLock,
 		@inject('Logger') private readonly logger: Logger,
 		@inject('ExceptionLogger')
-		private readonly exceptionLogger: ExceptionLogger
+		private readonly exceptionLogger: ExceptionLogger,
+		@inject('ArchiveFindingStateRepository')
+		private readonly findingState: ArchiveFindingStateRepository
 	) {}
 
 	async execute(
@@ -101,13 +110,37 @@ export class NotifyHistoryArchiveIntegrityFailures {
 			roots,
 			normalizeObjectsPerArchiveRoot(options.objectsPerArchiveRoot)
 		);
-		const notifications = subscribers.flatMap((subscriber) => {
-			const notification = subscriber.publishNotificationAbout(
-				candidates,
-				new Date()
-			);
-			return notification === null ? [] : [notification];
-		});
+		const prepared = new Map<Notification, { plans: ArchiveSourcePlan[] }>();
+		const findings = candidates.map(archiveFinding);
+		if (findings.length > 0)
+			for (const subscriber of subscribers) {
+				const plans = await this.findingState.prepare(
+					subscriber.userId.value,
+					findings.filter((finding) =>
+						subscriber.isSubscribedTo(finding.event.sourceId)
+					)
+				);
+				const selected: ArchiveSourcePlan[] = [];
+				let count = 0;
+				for (const plan of plans) {
+					if (count + plan.findings.length > archiveNotificationFindingLimit)
+						continue;
+					selected.push(plan);
+					count += plan.findings.length;
+				}
+				if (count === 0) continue;
+				const notification: Notification = {
+					subscriber,
+					events: selected.flatMap((plan) =>
+						plan.findings.map((finding) => finding.event)
+					),
+					time: new Date()
+				};
+				prepared.set(notification, {
+					plans: selected
+				});
+			}
+		const notifications = [...prepared.keys()];
 		if (notifications.length === 0) {
 			return {
 				candidateEvents: candidates.length,
@@ -119,11 +152,12 @@ export class NotifyHistoryArchiveIntegrityFailures {
 		}
 
 		const delivery = await this.notifier.sendNotifications(notifications);
-		await this.subscriberRepository.save(
-			delivery.successfulNotifications.map(
-				(notification) => notification.subscriber
-			)
-		);
+		for (const notification of delivery.successfulNotifications) {
+			const acknowledgement = prepared.get(notification);
+			if (!acknowledgement)
+				throw new Error('Archive notification acknowledgement missing');
+			await this.findingState.acknowledge(acknowledgement.plans);
+		}
 		delivery.failedNotifications.forEach((failure) =>
 			this.exceptionLogger.captureException(failure.cause)
 		);

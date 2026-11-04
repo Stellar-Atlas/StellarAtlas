@@ -26,36 +26,44 @@ const nextConfig: NextConfig = {
 	},
 	productionBrowserSourceMaps: true,
 	reactStrictMode: true,
-	rewrites: async () => [
-		{
-			destination: `${normalizedApiBaseUrl}/graphql`,
-			source: '/graphql'
-		},
-		{
-			destination: `${publicDataApiBaseUrl}/horizon/`,
-			source: '/horizon'
-		},
-		{
-			destination: `${publicDataApiBaseUrl}/horizon/:path*`,
-			source: '/horizon/:path*'
-		},
-		{
-			destination: `${publicDataApiBaseUrl}/rpc`,
-			source: '/rpc'
-		},
-		{
-			destination: `${normalizedApiBaseUrl}/docs/:path*`,
-			source: '/api-docs/:path*'
-		},
-		{
-			destination: `${normalizedApiBaseUrl}/v1`,
-			source: '/v1'
-		},
-		{
-			destination: `${normalizedApiBaseUrl}/v1/:path*`,
-			source: '/v1/:path*'
-		}
-	]
+	rewrites: async () => ({
+		beforeFiles: [{
+			source: '/v1/analytics/accounts/:account/balances',
+			has: [{ type: 'query', key: 'limit', value: '25' }],
+			destination: '/api/explorer/account-balances/:account'
+		}],
+		afterFiles: [
+			{
+				destination: `${normalizedApiBaseUrl}/graphql`,
+				source: '/graphql'
+			},
+			{
+				destination: `${publicDataApiBaseUrl}/horizon/`,
+				source: '/horizon'
+			},
+			{
+				destination: `${publicDataApiBaseUrl}/horizon/:path*`,
+				source: '/horizon/:path*'
+			},
+			{
+				destination: `${publicDataApiBaseUrl}/rpc`,
+				source: '/rpc'
+			},
+			{
+				destination: `${normalizedApiBaseUrl}/docs/:path*`,
+				source: '/api-docs/:path*'
+			},
+			{
+				destination: `${normalizedApiBaseUrl}/v1`,
+				source: '/v1'
+			},
+			{
+				destination: `${normalizedApiBaseUrl}/v1/:path*`,
+				source: '/v1/:path*'
+			}
+		],
+		fallback: []
+	})
 };
 
 export default nextConfig;

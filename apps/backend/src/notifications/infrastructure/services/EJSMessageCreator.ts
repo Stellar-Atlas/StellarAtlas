@@ -23,6 +23,7 @@ import { EventSource } from '../../domain/event/EventSource.js';
 import type { MessageCreator } from '../../domain/notifier/MessageCreator.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { archiveIntegrityEmailDetails } from './ArchiveIntegrityEmailDetails.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -202,6 +203,10 @@ export class EJSMessageCreator implements MessageCreator {
 			changeMessage = 'Nodes changed';
 		}
 		return {
+			archiveIntegrity: archiveIntegrityEmailDetails(
+				event,
+				this.frontendBaseUrl
+			),
 			description: this.eventDescriptions[event.type]
 				? this.eventDescriptions[event.type]
 				: event.type,

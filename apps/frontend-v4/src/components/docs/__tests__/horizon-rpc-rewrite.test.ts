@@ -48,9 +48,10 @@ describe('same-origin Horizon and RPC transport', () => {
 			expect(await rewrite(path + '?request_id=7')).toBe(
 				apiBase + '/rpc?request_id=7'
 			);
-			const routes = await nextConfig.rewrites?.();
-			if (!Array.isArray(routes))
-				throw new Error('Expected fixed rewrite routes');
+			const config = await nextConfig.rewrites?.();
+			if (!config || Array.isArray(config))
+				throw new Error('Expected ordered rewrite routes');
+			const routes = config.afterFiles ?? [];
 			expect(routes.find((route) => route.source === '/rpc')).toEqual({
 				source: '/rpc',
 				destination: apiBase + '/rpc'

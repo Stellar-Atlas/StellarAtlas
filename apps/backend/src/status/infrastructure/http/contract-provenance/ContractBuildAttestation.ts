@@ -63,6 +63,66 @@ function regexEscape(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// This is the only approved reusable signer revision. The certificate must
+// attribute the build to the requested repository and workflow at build time;
+// it does not establish current repository ownership.
+const reusableSigner =
+	'https://github.com/stellar-expert/soroban-build-workflow/.github/workflows/release.yml@refs/heads/main';
+const reusableSignerCommit = 'fbd0e2c5bbcbcd22439c06b5f1da47e2b27672d4';
+const fulcioOid = '1.3.6.1.4.1.57264.1.';
+
+function verifyReusableIdentity(
+	certificate: Record<string, unknown>,
+	repository: string,
+	caller: string,
+	commit: string,
+	ref: string,
+	runUrl: string | null
+): void {
+	// sigstore@5 returns the authenticated X.509 extension octets on the verified
+	// signer. Fulcio encodes these modern claims as DER UTF8String, not raw text.
+	const claims = Array.isArray(certificate.oids)
+		? certificate.oids.map(record)
+		: [];
+	const expected = {
+		9: reusableSigner,
+		10: caller === reusableSigner ? commit : reusableSignerCommit,
+		12: 'https://github.com/' + repository,
+		13: commit,
+		14: ref,
+		18: caller,
+		19: commit,
+		...(runUrl === null ? {} : { 21: runUrl })
+	};
+	for (const [number, value] of Object.entries(expected)) {
+		const oid = fulcioOid + number;
+		const matches = claims.filter((claim) => {
+			const id = record(claim.oid).id;
+			return Array.isArray(id) && id.join('.') === oid;
+		});
+		const utf8 = Buffer.from(value);
+		const bytes = matches[0]?.value;
+		const length = utf8.length;
+		// Canonical DER includes a long-form length for longer workflow identities.
+		if (length > 0xffff)
+			throw new Error('Reusable certificate claim is too long');
+		const header =
+			length < 128
+				? [0x0c, length]
+				: length < 256
+					? [0x0c, 0x81, length]
+					: [0x0c, 0x82, length >> 8, length & 0xff];
+		if (
+			matches.length !== 1 ||
+			!Buffer.isBuffer(bytes) ||
+			!bytes.equals(Buffer.concat([Buffer.from(header), utf8]))
+		)
+			throw new Error(
+				'Reusable signer certificate does not bind required claim ' + number
+			);
+	}
+}
+
 export async function verifyContractBuildAttestation(
 	bundle: unknown,
 	repository: string,
@@ -144,12 +204,14 @@ export async function verifyContractBuildAttestation(
 		workflow.path +
 		'@' +
 		workflow.ref;
+	const signerIdentities = new Set([identity, reusableSigner]);
 	// Sigstore validates the complete untrusted bundle structure before cryptographic verification.
 	const verified = record(
 		await verifySignature(parsedBundle as Bundle, {
 			certificateIssuer: 'https://token.actions.githubusercontent.com',
-			certificateIdentityURI: '^' + regexEscape(identity) + '$',
-			certificateOIDs: { '1.3.6.1.4.1.57264.1.3': commit },
+			certificateIdentityURI:
+				'^(?:' + [...signerIdentities].map(regexEscape).join('|') + ')$',
+			certificateOIDs: { [fulcioOid + '3']: commit },
 			ctLogThreshold: 1,
 			tlogThreshold: 1,
 			timeout: 10_000,
@@ -157,14 +219,30 @@ export async function verifyContractBuildAttestation(
 			tufCachePath: join(tmpdir(), 'stellaratlas-sigstore')
 		})
 	);
-	if (record(verified.identity).subjectAlternativeName !== identity)
-		throw new Error('Verified signer does not match build workflow');
 	const run = record(record(predicate.runDetails).metadata).invocationId;
 	const runPattern = new RegExp(
 		'^https://github\\.com/' +
 			regexEscape(repository) +
 			'/actions/runs/[0-9]+(?:/attempts/[0-9]+)?$'
 	);
+	let runUrl = typeof run === 'string' && runPattern.test(run) ? run : null;
+	const certificate = record(verified.identity);
+	const verifiedSigner = certificate.subjectAlternativeName;
+	if (verifiedSigner === reusableSigner) {
+		// The same SAN can also be the signer's own direct release workflow.
+		// Never let a reusable invocation of that workflow pass as a direct build.
+		// A run link is optional. If present, require the certificate to bind it too.
+		if (runUrl !== null && runUrl.length > 256) runUrl = null;
+		verifyReusableIdentity(
+			certificate,
+			repository,
+			identity,
+			commit,
+			workflow.ref,
+			runUrl
+		);
+	} else if (verifiedSigner !== identity)
+		throw new Error('Verified signer does not match build workflow');
 	return {
 		repository,
 		commit,
@@ -176,7 +254,7 @@ export async function verifyContractBuildAttestation(
 			commit +
 			'/' +
 			workflow.path,
-		runUrl: typeof run === 'string' && runPattern.test(run) ? run : null,
+		runUrl,
 		attestationUrl:
 			'https://api.github.com/repos/' +
 			repository +

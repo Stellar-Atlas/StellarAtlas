@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ExplorerLink as Link } from './explorer-investigation';
 import { LocalDateTime } from '../local-date-time';
+import { assetTabHref } from './asset-tab-route';
 import { isClassicComparisonAsset, readSimilarCursor, similarAssetsHref, similarAssetSourceHref } from './similar-assets-page';
 import { useSimilarAssetsPage } from './use-similar-assets-page';
 import styles from './explorer-entity.module.css';
@@ -31,8 +32,14 @@ function SimilarAssets({asset}:{readonly asset:string}):React.JSX.Element {
 				<thead><tr><th scope="col">Asset</th><th scope="col">Issuer</th><th scope="col">Identity source</th></tr></thead>
 				<tbody>{page.rows.map(row=>{
 					const source=similarAssetSourceHref(row.source);
+					const detailHref='/explorer/assets/'+encodeURIComponent(row.id);
 					return <tr key={row.id}>
-						<td data-label="Asset"><div><Link href={'/explorer/assets/'+encodeURIComponent(row.id)}>{row.code}</Link></div></td>
+						<td data-label="Asset"><div>
+							<Link href={detailHref}>{row.code}</Link>
+							{row.kind==='classic'&&<div>
+								<Link href={assetTabHref(detailHref,'','Same symbol')} aria-label={`Compare ${row.code} issued by ${row.issuer}`}>Compare</Link>
+							</div>}
+						</div></td>
 						<td data-label="Issuer"><div>{row.kind==='native'?'Native asset':<Link className={styles.hash} href={'/explorer/issuers/'+row.issuer}>{row.issuer}</Link>}</div></td>
 						<td data-label="Identity source"><div>{source?<a href={source} target="_blank" rel="noopener noreferrer">Project reference</a>:row.source?'Reference unavailable':'Not supplied'}</div></td>
 					</tr>;

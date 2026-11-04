@@ -1,5 +1,5 @@
 import { err, ok, Result } from 'neverthrow';
-import { Url } from '@core/domain/Url.js';
+import { normalizeHistoryArchiveRootUrl } from 'shared';
 import type {
 	CrossCheckRadarHistoryArchiveScanSource,
 	RadarHistoryArchiveScanDTO,
@@ -46,14 +46,34 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 			RadarHistoryArchiveScanSourceAdapter.defaultTimeoutMs;
 		const maxBytes =
 			options.maxBytes ?? RadarHistoryArchiveScanSourceAdapter.defaultMaxBytes;
+		const deadline = new AbortController();
+		const timer = setTimeout(
+			() => deadline.abort(new DOMException('Radar deadline', 'TimeoutError')),
+			timeoutMs
+		);
+		const signal = options.signal
+			? AbortSignal.any([deadline.signal, options.signal])
+			: deadline.signal;
 
 		try {
+			signal.throwIfAborted();
 			const response = await this.fetchFn(url, {
 				headers: { accept: 'application/json' },
-				signal: AbortSignal.timeout(timeoutMs)
+				signal,
+				redirect: 'manual'
 			});
-			if (response.status === 404) return ok(null);
-			if (!response.ok) {
+			if (signal.aborted) {
+				await response.body?.cancel().catch(() => undefined);
+				signal.throwIfAborted();
+			}
+			if (response.status === 404 && !response.redirected) {
+				await response.body?.cancel();
+				signal.throwIfAborted();
+				return ok(null);
+			}
+			if (!response.ok || response.redirected) {
+				await response.body?.cancel();
+				signal.throwIfAborted();
 				return err(
 					radarHistoryArchiveScanFailure(
 						'http_status',
@@ -66,8 +86,10 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 			const bodyOrError = await readBoundedRadarText(
 				response,
 				maxBytes,
-				'RADAR history archive scan'
+				'RADAR history archive scan',
+				signal
 			);
+			signal.throwIfAborted();
 			if (bodyOrError.isErr()) {
 				return err(
 					radarHistoryArchiveScanFailure(
@@ -81,13 +103,22 @@ export class RadarHistoryArchiveScanSourceAdapter implements CrossCheckRadarHist
 			return parseRadarHistoryArchiveScan({
 				body: bodyOrError.value,
 				endpointUrl: url,
-				fetchedAt: this.now().toISOString()
+				fetchedAt: this.now().toISOString(),
+				requestedArchiveUrl: decodeURIComponent(encodedUrlOrError.value)
 			});
 		} catch (error) {
-			const mappedError = mapRadarFetchError(error);
+			if (options.signal?.aborted)
+				return err(
+					radarHistoryArchiveScanFailure('cancelled', 'RADAR request cancelled')
+				);
+			const mappedError = mapRadarFetchError(
+				deadline.signal.aborted ? deadline.signal.reason : error
+			);
 			return err(
 				radarHistoryArchiveScanFailure(mappedError.kind, mappedError.message)
 			);
+		} finally {
+			clearTimeout(timer);
 		}
 	}
 }
@@ -96,6 +127,7 @@ interface ParseRadarHistoryArchiveScanDTO {
 	readonly body: string;
 	readonly endpointUrl: string;
 	readonly fetchedAt: string;
+	readonly requestedArchiveUrl: string;
 }
 
 function parseRadarHistoryArchiveScan(
@@ -126,6 +158,15 @@ function parseRadarHistoryArchiveScan(
 			)
 		);
 	}
+	const payloadRoot = safeRootIdentity(url);
+	if (payloadRoot === null || payloadRoot !== dto.requestedArchiveUrl) {
+		return err(
+			radarHistoryArchiveScanFailure(
+				'invalid_payload',
+				'RADAR history archive scan root does not match the requested archive'
+			)
+		);
+	}
 
 	return ok({
 		contentHashSha256: hashSha256(dto.body),
@@ -139,15 +180,15 @@ function parseRadarHistoryArchiveScan(
 		latestVerifiedLedger: readNullableLedger(payload.latestVerifiedLedger),
 		sourceId: 'withobsrvr-radar',
 		startDate,
-		url
+		url: payloadRoot
 	});
 }
 
 function encodeArchiveUrl(
 	archiveUrl: string
 ): Result<string, RadarHistoryArchiveScanFailureDTO> {
-	const urlOrError = Url.create(archiveUrl);
-	if (urlOrError.isErr()) {
+	const normalized = safeRootIdentity(archiveUrl);
+	if (normalized === null) {
 		return err(
 			radarHistoryArchiveScanFailure(
 				'invalid_archive_url',
@@ -156,7 +197,24 @@ function encodeArchiveUrl(
 		);
 	}
 
-	return ok(encodeURIComponent(urlOrError.value.value));
+	return ok(encodeURIComponent(normalized));
+}
+
+function safeRootIdentity(value: string): string | null {
+	try {
+		const url = new URL(value);
+		if (
+			url.href.includes('?') ||
+			url.href.includes('#') ||
+			url.username ||
+			url.password ||
+			!['http:', 'https:'].includes(url.protocol)
+		)
+			return null;
+		return normalizeHistoryArchiveRootUrl(value);
+	} catch {
+		return null;
+	}
 }
 
 function parseJson(

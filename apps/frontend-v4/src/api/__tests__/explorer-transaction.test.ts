@@ -27,7 +27,7 @@ describe('ClickHouse transaction lookup', () => {
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(fetchMock.mock.calls[0]?.[0]).toBe(
-			'/v1/analytics/transactions/abc?view=typed&limit=20'
+			'/api/explorer/typed-transactions/abc?view=typed&limit=20'
 		);
 	});
 	it('passes the resolved ledger and independent relation cursors on subsequent pages', async () => {
@@ -42,7 +42,7 @@ describe('ClickHouse transaction lookup', () => {
 			new AbortController().signal
 		);
 		expect(fetchMock.mock.calls[0]?.[0]).toBe(
-			'/v1/analytics/transactions/a%2Fb?view=typed&limit=20&ledger_sequence=63490364&operations_after=op&events_after=ev'
+			'/api/explorer/typed-transactions/a%2Fb?view=typed&limit=20&ledger_sequence=63490364&operations_after=op&events_after=ev'
 		);
 	});
 	it('preserves API failures instead of returning a legacy summary as parsed data', async () => {

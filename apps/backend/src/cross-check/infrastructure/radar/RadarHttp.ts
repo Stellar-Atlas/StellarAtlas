@@ -21,7 +21,8 @@ export interface RadarNetworkFailureDTO {
 export async function readBoundedRadarText(
 	response: Response,
 	maxBytes: number,
-	sourceLabel: string
+	sourceLabel: string,
+	signal?: AbortSignal
 ): Promise<Result<string, RadarMaxBytesFailureDTO>> {
 	if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
 		return err(createMaxBytesExceededFailure(sourceLabel, maxBytes));
@@ -39,10 +40,18 @@ export async function readBoundedRadarText(
 	const decoder = new TextDecoder();
 	let byteCount = 0;
 	let text = '';
+	let cancellation: Promise<void> | undefined;
+	const onAbort = (): void => {
+		cancellation = reader.cancel(signal?.reason).catch(() => undefined);
+	};
+	signal?.addEventListener('abort', onAbort, { once: true });
 
 	try {
+		if (signal?.aborted) onAbort();
 		while (true) {
+			signal?.throwIfAborted();
 			const result = await reader.read();
+			signal?.throwIfAborted();
 			if (result.done) break;
 
 			byteCount += result.value.byteLength;
@@ -56,6 +65,8 @@ export async function readBoundedRadarText(
 		text += decoder.decode();
 		return ok(text);
 	} finally {
+		signal?.removeEventListener('abort', onAbort);
+		await cancellation;
 		reader.releaseLock();
 	}
 }
