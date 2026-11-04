@@ -1,5 +1,4 @@
 import {
-	api,
 	Code,
 	GraphqlExample,
 	type DeveloperGuidePage
@@ -9,6 +8,14 @@ import {
 	contractEventWorkspaceHref
 } from '../blockchain/contract-event-query';
 import { contractActivityPath } from '../../api/explorer-contract-activity';
+import { saveRestPage } from './save-rest-page-example';
+
+const eventPath = contractActivityPath(
+	contractEventExample.contract_id!,
+	'events',
+	contractEventExample
+);
+const eventDeadlineSeconds = 70;
 
 export const contractEventsGuide: DeveloperGuidePage = {
 	slug: 'contract-events',
@@ -55,19 +62,13 @@ export const contractEventsGuide: DeveloperGuidePage = {
 			title: '1. Request the first event page',
 			content: (
 				<>
-					<Code>{`(
-  trap - EXIT INT TERM
-  temporary=$(mktemp './page-1.json.partial.XXXXXX') || exit
-  trap 'rm -f -- "$temporary"' EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  curl --fail-with-body '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}' --output "$temporary" &&
-  mv -fT -- "$temporary" './page-1.json'
-)`}</Code>
+					<Code>{saveRestPage(eventPath, 'page-1.json', undefined, eventDeadlineSeconds, true)}</Code>
 					<p>
-						This Bash example uses <code>mktemp</code> and GNU <code>mv</code>.
-						Each invocation replaces the saved page only after its own
-						successful response, then cleans up its temporary. On failure,
+						These Bash examples use curl 7.84 or newer, <code>jq</code>,{' '}
+						<code>mktemp</code> and GNU <code>mv</code>. Each invocation
+						replaces the saved page only after an HTTP success without a
+						fallback marker and a body that parses as one JSON object. It
+						cleans up its temporary. On failure,
 						retain the previous file as saved data and stop; do not paginate
 						from an unsuccessful refresh.
 					</p>
@@ -216,14 +217,12 @@ export const contractEventsGuide: DeveloperGuidePage = {
 			content: (
 				<>
 					<p>
-						Save the successful first response as <code>page-1.json</code>. With{' '}
-						<code>jq</code> installed, this command reads its opaque cursor and
-						requests the next page of the same example. If the cursor is null,
-						there is no second page to request.
+						After saving <code>page-1.json</code>, use this command with{' '}
+						<code>jq</code> installed to save <code>page-2.json</code>. It reads
+						the first page’s opaque cursor and keeps the same filters. A missing,
+						null or unusable cursor stops the command before it sends a request.
 					</p>
-					<Code>{`after=$(jq -er '.nextCursor // empty' page-1.json) &&
-curl --fail-with-body --get '${api}${contractActivityPath(contractEventExample.contract_id!, 'events', contractEventExample)}' \\
-  --data-urlencode "after=$after"`}</Code>
+					<Code>{saveRestPage(eventPath, 'page-2.json', 'page-1.json', eventDeadlineSeconds, true)}</Code>
 					<p>
 						Copy <code>nextCursor</code> into <code>after</code> and preserve
 						the contract and all filters. Do not send <code>offset</code> with

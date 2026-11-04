@@ -197,8 +197,10 @@ curl --fail-with-body --connect-timeout 5 --max-time 30 --get 'https://api.stell
 		expect(html.split(path)).toHaveLength(3);
 		for (const text of [
 			'page-1.json',
+			'page-2.json',
 			'summary.total',
-			'nextCursor // empty',
+			'nextCursor | strings',
+			'curl -q --fail-with-body --connect-timeout 5 --max-time 70',
 			'--data-urlencode',
 			'after=$after',
 			'/docs/querying',
