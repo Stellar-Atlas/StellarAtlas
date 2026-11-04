@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { AssetRecord } from './explorer-asset-types';
+import { withExplorerReturnTo } from '../../api/explorer-return-context';
 import { isContractAccount } from '../../domain/classic-account';
 import { ParsedIssuerMetadata } from './explorer-issuer-metadata';
 import { ExplorerAssetHolders } from './explorer-asset-holders';
@@ -42,6 +43,10 @@ export function ExplorerAssetTabs({
 	};
 	const { asset, metadata } = record;
 	const contractId = asset.contractId || (asset.kind === 'contract' && isContractAccount(asset.id) ? asset.id : undefined);
+	// Use this asset view, not the catalogue origin inherited by its other links.
+	const returnQuery = new URLSearchParams(params.toString());
+	returnQuery.delete('return_to');
+	const currentAssetView = pathname + (returnQuery.size ? '?' + returnQuery : '');
 	return (
 		<div className={ui.assetTabs}>
 			<nav className={ui.tabBar} aria-label="Asset sections">
@@ -120,7 +125,8 @@ export function ExplorerAssetTabs({
 					</h3>
 					<Link
 						className={ui.plainHash}
-						href={'/explorer/contracts/' + contractId}
+						href={withExplorerReturnTo('/explorer/contracts/' + encodeURIComponent(contractId), currentAssetView)}
+						prefetch={false}
 					>
 						{contractId}
 					</Link>

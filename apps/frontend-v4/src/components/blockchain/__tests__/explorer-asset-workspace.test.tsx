@@ -185,6 +185,78 @@ describe('asset discovery workspace', () => {
 		expect(requestMock.mock.calls[1]?.[0]).toContain('q=USDC');
 		expect(requestMock.mock.calls[1]?.[0]).toContain('min_ledger=60000000');
 	});
+
+	it('applies exact code and issuer, then restores a scoped cursor after clear, Back and reload', async () => {
+		const issuer = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
+		route = new URL('https://explorer.invalid/explorer/assets?return_to=%2Fexplorer#directory');
+		requestMock.mockImplementation(async path => {
+			const query = new URL(path, route).searchParams;
+			return {
+				data: [{ id: 'USD:' + issuer, code: 'USD', kind: 'classic', issuer }],
+				nextCursor: query.get('issuer') && !query.has('cursor') ? 'catalogue-next' : null,
+				generatedAt: '2026-11-02T01:00:00Z',
+				coverage: { catalogueReady: true, observedAssetCount: 98765 }
+			};
+		});
+		const render = () => hooks.render(() => renderWorkspace({}));
+		const settle = async () => { await new Promise(resolve => setImmediate(resolve)); return render(); };
+		const button = (tree: unknown, label: string) => elements(tree, e =>
+			e.type === 'button' && (e.props.children === label || e.props['aria-label'] === label))[0]!;
+		const click = (tree: unknown, label: string) => {
+			const control = button(tree, label);
+			expect(control.props.disabled).toBeFalsy();
+			(control.props.onClick as () => void)();
+		};
+		const input = (tree: unknown, label: string) => {
+			const field = elements(tree, e => e.type === 'label' && Array.isArray(e.props.children) && e.props.children[0] === label)[0]!;
+			return elements(field, e => e.type === 'input')[0]!;
+		};
+		const lastRequest = () => new URL(requestMock.mock.calls.at(-1)![0], route).searchParams;
+		render();
+		let tree = await settle();
+		for (const [label, value] of [['Exact asset code', 'USD'], ['Issuer address', issuer], ['From ledger', '100']] as const) {
+			(input(tree, label).props.onChange as (event: unknown) => void)({ currentTarget: { value } });
+			tree = render();
+		}
+		expect(requestMock).toHaveBeenCalledTimes(1);
+		(elements(tree, e => e.type === 'form')[0]!.props.onSubmit as (event: unknown) => void)({ preventDefault: () => undefined });
+		render(); tree = await settle();
+		expect(Object.fromEntries(lastRequest())).toEqual({ symbol: 'USD', issuer, min_ledger: '100', limit: '25' });
+		expect(renderedText(tree)).toContain('Published catalogue coverage may be incomplete.');
+		expect(renderedText(tree)).toMatch(/1\s+asset\s+on this page/);
+		expect(renderedText(tree)).not.toContain('98765');
+		expect(renderedText(tree)).toMatch(/From ledger\s*:\s*100/);
+		click(tree, 'Next assets'); render(); tree = await settle();
+		expect(lastRequest().get('cursor')).toBe('catalogue-next');
+		expect(lastRequest().has('cursor_for')).toBe(false);
+		const saved = route.href;
+
+		hooks.reset(); render(); tree = await settle();
+		expect(lastRequest().get('cursor')).toBe('catalogue-next');
+		expect(input(tree, 'Exact asset code').props.value).toBe('USD');
+		expect(input(tree, 'Issuer address').props.value).toBe(issuer);
+		click(tree, 'Remove from ledger filter'); render(); tree = await settle();
+		expect(Object.fromEntries(lastRequest())).toEqual({ symbol: 'USD', issuer, limit: '25' });
+		expect(route.searchParams.has('cursor_for')).toBe(false);
+		click(tree, 'Clear all filters'); render(); tree = await settle();
+		expect(Object.fromEntries(lastRequest())).toEqual({ limit: '25' });
+		expect(route.searchParams.get('return_to')).toBe('/explorer');
+		expect(route.hash).toBe('#directory');
+		expect(renderedText(tree)).not.toContain('Clear all filters');
+
+		route = new URL(saved); render(); tree = await settle(); // Browser Back to the prior continued result.
+		expect(Object.fromEntries(lastRequest())).toEqual({ symbol: 'USD', issuer, min_ledger: '100', cursor: 'catalogue-next', limit: '25' });
+		expect(renderedText(tree)).toMatch(/From ledger\s*:\s*100/);
+	});
+
+	it('reports an unavailable catalogue without presenting it as zero matches', async () => {
+		requestMock.mockResolvedValueOnce({ data: [], nextCursor: null, generatedAt: null, coverage: { catalogueReady: false } });
+		const render = () => hooks.render(() => renderWorkspace({}));
+		render(); await new Promise(resolve => setImmediate(resolve));
+		const text = renderedText(render());
+		expect(text).toContain('Asset catalogue is not available yet.');
+		expect(text).not.toMatch(/assets on this page|No assets matched/);
+	});
 });
 
 describe('asset detail presentation', () => {
