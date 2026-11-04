@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { Networks, StrKey } from '@stellar/stellar-sdk';
 import express from 'express';
 import request from 'supertest';
+import { AssetCatalogue } from '../../asset-catalogue/AssetCatalogue.js';
+import { AssetCatalogueSource } from '../../asset-catalogue/AssetCatalogueSource.js';
 import { classicAsset } from '../../asset-catalogue/AssetIdentity.js';
 import * as metadataValues from '../../asset-metadata/AssetMetadataValues.js';
 import { parseIssuerToml } from '../../asset-metadata/parseIssuerToml.js';
@@ -114,7 +116,7 @@ function fixture(assets: readonly ReturnType<typeof observed>[] = []) {
 	const cache = new IssuerDomainCache(root, network);
 	const index = jest.spyOn(cache, 'readIndexedDomains');
 	const catalogue = {
-		issuerObservationsSnapshot: jest.fn(async () => ({
+		cachedIssuerObservationsSnapshot: jest.fn(() => ({
 			generatedAt: observedAt,
 			assets
 		}))
@@ -218,7 +220,7 @@ issuer = "invalid"
 	);
 	await request(app).get('/v1/issuer-domains/sub.issuer.example').expect(200);
 	expect(index).toHaveBeenCalledTimes(1);
-	expect(catalogue.issuerObservationsSnapshot).toHaveBeenCalledTimes(1);
+	expect(catalogue.cachedIssuerObservationsSnapshot).toHaveBeenCalledTimes(1);
 	expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -363,6 +365,89 @@ test('marks an unreadable cache entry as incomplete instead of claiming complete
 	});
 });
 
+test('recovers a real writer’s trailing-dot cache record for equivalent DNS requests', async () => {
+	const writtenHost = domain.toUpperCase() + '.';
+	const requestImpl = jest.fn(async () => ({
+		status: 200,
+		headers: {},
+		body: Buffer.from(`ACCOUNTS = ["${first}"]`)
+	}));
+	const service = new AssetMetadataService({
+		cacheRoot: root,
+		networkPassphrase: network,
+		resolveIssuerHomeDomain: async () => writtenHost,
+		requestImpl,
+		now: () => now
+	});
+	await expect(service.ensureIssuerMetadata(first)).resolves.toMatchObject({
+		homeDomain: writtenHost,
+		tomlUrl: 'https://' + domain + './.well-known/stellar.toml'
+	});
+	const { app } = fixture();
+	for (const spelling of [domain, writtenHost]) {
+		const response = await request(app)
+			.get('/v1/issuer-domains/' + spelling)
+			.expect(200);
+		expect(response.body).toMatchObject({
+			domain,
+			toml: {
+				status: 'available',
+				url: 'https://' + domain + './.well-known/stellar.toml'
+			},
+			accounts: [{ accountId: first, association: 'corroborated' }]
+		});
+	}
+	expect(requestImpl).toHaveBeenCalledTimes(1);
+});
+
+test('issuer lookup never starts a real cold catalogue load and uses the same instance when warm', async () => {
+	await home(first, domain);
+	const catalogueRoot = join(root, 'catalogue');
+	await mkdir(catalogueRoot);
+	await writeFile(
+		join(catalogueRoot, 'catalogue.json'),
+		JSON.stringify({
+			version: 1,
+			generatedAt: observedAt,
+			watermark: 'fixture',
+			maximumObservedLedger: 110,
+			assets: [observed('USD', first)]
+		})
+	);
+	const source = new AssetCatalogueSource(network, {
+		HUBBLE_CLICKHOUSE_URL: 'http://unused.invalid'
+	});
+	const refresh = jest.spyOn(source, 'refresh');
+	const catalogue = new AssetCatalogue(source, catalogueRoot, network);
+	const load = jest.spyOn(catalogue, 'load');
+	let clock = now;
+	const lookup = new IssuerDomainLookup(
+		new IssuerDomainCache(root, network),
+		catalogue,
+		() => clock
+	);
+	const app = express().use('/v1', issuerDomainRouter(network, lookup));
+	const cold = await request(app)
+		.get('/v1/issuer-domains/' + domain)
+		.expect(200);
+	expect(cold.body).toMatchObject({
+		catalogue: { generatedAt: null, status: 'unavailable' },
+		accounts: [{ accountId: first, assets: [] }]
+	});
+	expect(load).not.toHaveBeenCalled();
+	await catalogue.load(); // Existing owner warm-up, outside either domain request.
+	clock += 61_000;
+	const warm = await request(app)
+		.get('/v1/issuer-domains/' + domain)
+		.expect(200);
+	expect(warm.body).toMatchObject({
+		catalogue: { generatedAt: observedAt, status: 'available' },
+		accounts: [{ accountId: first, assets: [{ id: 'USD:' + first }] }]
+	});
+	expect(load).toHaveBeenCalledTimes(1);
+	expect(refresh).not.toHaveBeenCalled();
+});
+
 test('coalesces the cold index read and rejects excess concurrent lookups', async () => {
 	const { app, lookup, index } = fixture();
 	const gate =
@@ -391,6 +476,8 @@ test('coalesces the cold index read and rejects excess concurrent lookups', asyn
 
 test.each([
 	'127.0.0.1',
+	'127.0.0.0x1',
+	'foo.0x10',
 	'localhost',
 	'mate.xlm',
 	'a..example',

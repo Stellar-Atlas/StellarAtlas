@@ -26,7 +26,7 @@ export class IssuerDomainLookup {
 		>,
 		private readonly catalogue: Pick<
 			AssetCatalogue,
-			'issuerObservationsSnapshot'
+			'cachedIssuerObservationsSnapshot'
 		>,
 		private readonly now: () => number = Date.now
 	) {}
@@ -156,12 +156,10 @@ export class IssuerDomainLookup {
 	}
 
 	private async index() {
-		const [domains, catalogue] = await Promise.all([
-			this.cache.readIndexedDomains(),
-			this.catalogue.issuerObservationsSnapshot().catch(() => null)
-		]);
+		const domains = await this.cache.readIndexedDomains();
+		const catalogue = this.catalogue.cachedIssuerObservationsSnapshot();
 		const assets = new Map<string, Map<string, AssetObservation>>();
-		if (catalogue?.generatedAt) {
+		if (catalogue.generatedAt) {
 			for (
 				let i = 0;
 				i < Math.min(catalogue.assets.length, MAX_CATALOGUE_ASSETS);
@@ -188,8 +186,8 @@ export class IssuerDomainLookup {
 		return {
 			domains,
 			assets,
-			generatedAt: catalogue?.generatedAt ?? null,
-			assetStatus: !catalogue?.generatedAt
+			generatedAt: catalogue.generatedAt,
+			assetStatus: !catalogue.generatedAt
 				? 'unavailable'
 				: catalogue.assets.length > MAX_CATALOGUE_ASSETS
 					? 'partial'

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { open, opendir } from 'node:fs/promises';
+import { isIP } from 'node:net';
 import { join } from 'node:path';
 import { StrKey } from '@stellar/stellar-sdk';
 import {
@@ -26,7 +27,14 @@ export function normalizeIssuerDomain(value: string): string | null {
 		)
 	)
 		return null;
-	return host;
+	try {
+		// WHATWG treats several dotted numeric spellings as IPs rather than DNS.
+		return isIP(host) === 0 && new URL('https://' + host).hostname === host
+			? host
+			: null;
+	} catch {
+		return null;
+	}
 }
 
 export interface IndexedDomain {
@@ -111,6 +119,21 @@ export class IssuerDomainCache {
 	}
 
 	async readToml(domain: string, now: number): Promise<CachedDomainToml> {
+		const canonical = await this.readTomlRecord(domain, domain, now);
+		if (canonical.status === 'available') return canonical;
+		// Older writers preserve the root dot in both the cache key and URL.
+		const dotted = await this.readTomlRecord(domain, domain + '.', now);
+		return dotted.status === 'available' ||
+			(canonical.url === null && dotted.url !== null)
+			? dotted
+			: canonical;
+	}
+
+	private async readTomlRecord(
+		domain: string,
+		cacheHost: string,
+		now: number
+	): Promise<CachedDomainToml> {
 		const empty = {
 			status: 'unavailable' as const,
 			url: null,
@@ -119,15 +142,17 @@ export class IssuerDomainCache {
 			accounts: new Set<string>(),
 			currencies: new Map<string, Set<string>>()
 		};
+		if (normalizeIssuerDomain(domain) !== domain) return empty;
 		const raw = await readCacheJson(
-			join(this.root, 'issuers', this.cacheKey(domain) + '.json'),
+			join(this.root, 'issuers', this.cacheKey(cacheHost) + '.json'),
 			512 * 1024
 		);
-		const url = issuerTomlUrl(domain);
+		const url = issuerTomlUrl(cacheHost);
 		if (
 			!isRecord(raw) ||
 			typeof raw.homeDomain !== 'string' ||
 			normalizeIssuerDomain(raw.homeDomain) !== domain ||
+			raw.homeDomain.toLowerCase() !== cacheHost ||
 			raw.networkPassphrase !== this.network ||
 			raw.tomlUrl !== url ||
 			!Array.isArray(raw.currencies)
