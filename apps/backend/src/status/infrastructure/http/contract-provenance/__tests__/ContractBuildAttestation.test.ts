@@ -8,14 +8,18 @@ const hash = 'a'.repeat(64);
 const commit = 'b'.repeat(40);
 const ref = 'refs/tags/v1';
 const workflowPath = '.github/workflows/release.yml';
-const workflowIdentity = (repo: string, workflowRef = ref) =>
-	'https://github.com/' + repo + '/' + workflowPath + '@' + workflowRef;
+const workflowIdentity = (
+	repo: string,
+	workflowRef = ref,
+	path = workflowPath
+) => 'https://github.com/' + repo + '/' + path + '@' + workflowRef;
 const identity = workflowIdentity(repository);
 function bundle(
 	subjectHash = hash,
 	repo = repository,
 	workflowRef = ref,
-	runUrl?: string
+	runUrl?: string,
+	path = workflowPath
 ) {
 	return {
 		mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json',
@@ -40,7 +44,7 @@ function bundle(
 							externalParameters: {
 								workflow: {
 									repository: 'https://github.com/' + repo,
-									path: workflowPath,
+									path,
 									ref: workflowRef
 								}
 							}
@@ -122,16 +126,20 @@ describe('authenticated reusable release workflow binding', () => {
 	const signerRepo = 'stellar-expert/soroban-build-workflow';
 	const signerRef = 'refs/heads/main';
 	const signer = workflowIdentity(signerRepo, signerRef);
-	const claims: Record<number, string> = {
+	const callerClaims = (
+		repo: string,
+		workflowRef = ref,
+		path = workflowPath
+	): Record<number, string> => ({
 		9: signer,
 		10: 'fbd0e2c5bbcbcd22439c06b5f1da47e2b27672d4',
-		12: 'https://github.com/' + caller,
+		12: 'https://github.com/' + repo,
 		13: commit,
-		14: ref,
-		15: '836034564',
-		18: workflowIdentity(caller),
+		14: workflowRef,
+		18: workflowIdentity(repo, workflowRef, path),
 		19: commit
-	};
+	});
+	const claims = callerClaims(caller);
 	const oid = (number: number, value: string) => ({
 		oid: { id: [1, 3, 6, 1, 4, 1, 57264, 1, number] },
 		value: Buffer.concat([
@@ -168,14 +176,33 @@ describe('authenticated reusable release workflow binding', () => {
 		expect(allowed.test(signer + '-spoof')).toBe(false);
 	});
 
+	it('verifies a second caller with its own workflow path and branch claims', async () => {
+		const second = 'example/another-contract';
+		const secondRef = 'refs/heads/stable';
+		const secondPath = '.github/workflows/publish.yaml';
+		await expect(
+			verifyContractBuildAttestation(
+				bundle(hash, second, secondRef, undefined, secondPath),
+				second,
+				hash,
+				signature(signer, callerClaims(second, secondRef, secondPath))
+			)
+		).resolves.toMatchObject({
+			repository: second,
+			commit,
+			workflowUrl:
+				'https://github.com/' + second + '/blob/' + commit + '/' + secondPath
+		});
+	});
+
 	it.each<[number, string]>([
 		[9, workflowIdentity('attacker/build', signerRef)],
 		[10, 'c'.repeat(40)],
 		[12, 'https://github.com/attacker/contract'],
 		[13, 'c'.repeat(40)],
 		[14, 'refs/heads/unrelated'],
-		[15, '836034565'],
 		[18, workflowIdentity('attacker/contract')],
+		[18, workflowIdentity(caller, ref, '.github/workflows/unrelated.yml')],
 		[19, 'c'.repeat(40)]
 	])('rejects a wrong authenticated claim (%s)', async (number, value) => {
 		await expect(
@@ -242,10 +269,10 @@ describe('authenticated reusable release workflow binding', () => {
 		).rejects.toThrow('required claim 21');
 	});
 
-	it('rejects reuse by another repository, unknown signers, and the wrong artifact', async () => {
+	it('rejects certificate replay for another repository, unknown signers, and the wrong artifact', async () => {
 		await expect(
 			verifyContractBuildAttestation(bundle(), repository, hash, signature())
-		).rejects.toThrow('signer');
+		).rejects.toThrow('required claim 12');
 		await expect(
 			verifyContractBuildAttestation(
 				bundle(hash, caller),
@@ -267,13 +294,28 @@ describe('authenticated reusable release workflow binding', () => {
 	});
 
 	it('keeps direct verification when the reusable signer repository builds for itself', async () => {
+		const input = bundle(hash, signerRepo, signerRef);
 		await expect(
 			verifyContractBuildAttestation(
-				bundle(hash, signerRepo, signerRef),
+				input,
 				signerRepo,
 				hash,
-				signature(signer, {})
+				signature(signer, {
+					...callerClaims(signerRepo, signerRef),
+					10: commit
+				})
 			)
 		).resolves.toMatchObject({ repository: signerRepo, commit });
+		await expect(
+			verifyContractBuildAttestation(input, signerRepo, hash, signature())
+		).rejects.toThrow('required claim 10');
+		await expect(
+			verifyContractBuildAttestation(
+				input,
+				signerRepo,
+				hash,
+				signature(signer, { ...claims, 10: commit })
+			)
+		).rejects.toThrow('required claim 12');
 	});
 });

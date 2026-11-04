@@ -38,6 +38,8 @@ mockModule('../BoundedProvenanceJson.js', () => ({
 }));
 const { contractProvenanceRouter } =
 	await import('../ContractProvenanceRouter');
+const { ContractProvenanceService } =
+	await import('../ContractProvenanceService');
 
 function xdrString(value: string): Buffer {
 	const bytes = Buffer.from(value),
@@ -195,6 +197,76 @@ describe('synthetic registered provenance journey', () => {
 			build: { status: 'invalid', record: null }
 		});
 		expect(verify).not.toHaveBeenCalled();
+	});
+	it('rejects copied source metadata, predicate and Wasm digest signed by another caller', async () => {
+		// The attacker's repository called the approved reusable signer but reused
+		// the victim's exact Wasm/metadata and claimed the victim in the statement.
+		verify.mockResolvedValue({
+			identity: {
+				subjectAlternativeName:
+					'https://github.com/stellar-expert/soroban-build-workflow/.github/workflows/release.yml@refs/heads/main',
+				oids: [
+					[
+						9,
+						'https://github.com/stellar-expert/soroban-build-workflow/.github/workflows/release.yml@refs/heads/main'
+					],
+					[10, 'fbd0e2c5bbcbcd22439c06b5f1da47e2b27672d4'],
+					[12, 'https://github.com/attacker/contract'],
+					[13, commit],
+					[14, 'refs/tags/v1'],
+					[
+						18,
+						'https://github.com/attacker/contract/.github/workflows/release.yml@refs/tags/v1'
+					],
+					[19, commit]
+				].map(([number, value]) => {
+					const bytes = Buffer.from(String(value));
+					return {
+						oid: { id: [1, 3, 6, 1, 4, 1, 57264, 1, number] },
+						value: Buffer.concat([Buffer.from([0x0c, bytes.length]), bytes])
+					};
+				})
+			}
+		});
+		const result = await invoke();
+		expect(result.status).toBe(200);
+		expect(result.body).toMatchObject({
+			metadata: { sourceRepository: 'example/contract' },
+			wasmSha256: hash,
+			build: { status: 'invalid', record: null }
+		});
+		expect(verify).toHaveBeenCalledTimes(1);
+	});
+	it('does not reuse cached evidence across repositories for the same digest', async () => {
+		const service = new ContractProvenanceService(
+			undefined,
+			'synthetic network'
+		);
+		// Identical Wasm cannot embed two different source_repo values. Exercise
+		// the build-evidence cache boundary directly instead of faking that state.
+		const check = (repo: string) => service['build'](repo, hash);
+		await expect(check('example/contract')).resolves.toMatchObject({
+			status: 'verified',
+			record: { repository: 'example/contract' }
+		});
+		await expect(check('attacker/contract')).resolves.toEqual({
+			status: 'invalid',
+			record: null
+		});
+		await expect(check('example/contract')).resolves.toMatchObject({
+			status: 'verified'
+		});
+		expect(fetchProvenanceJson.mock.calls.map(([url]) => String(url))).toEqual(
+			['example/contract', 'attacker/contract'].map(
+				(repo) =>
+					'https://api.github.com/repos/' +
+					repo +
+					'/attestations/sha256:' +
+					hash +
+					'?per_page=5'
+			)
+		);
+		expect(verify).toHaveBeenCalledTimes(1);
 	});
 	it('keeps unpublished and external evidence failure as unresolved HTTP200 results', async () => {
 		for (const status of ['not_published', 'unavailable']) {
