@@ -15,8 +15,8 @@
         @reset="onReset"
       >
         <b-alert variant="success" :show="requested === 'subscription'">
-          Request received. Follow the confirmation link in your email to
-          activate or update alerts.
+          Request received. If you receive a confirmation email, follow its
+          link to activate or update alerts.
         </b-alert>
         <b-alert variant="success" :show="requested === 'unsubscribe'">
           Request received. If you have a subscription, follow the link in the
