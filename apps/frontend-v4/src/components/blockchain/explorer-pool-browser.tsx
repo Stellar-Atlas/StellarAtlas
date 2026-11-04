@@ -12,6 +12,7 @@ import {
 } from '../../api/explorer-analytics';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerPoolTable, type PoolSort } from './explorer-pool-table';
+import { ExplorerPoolReserveChart } from './explorer-pool-reserve-chart';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-pool-table.module.css';
 import { subscribeWarehousePublication } from '../../api/warehouse-publication-stream';
@@ -126,6 +127,7 @@ function PoolBrowser({
 		return () => abort.abort();
 	}, [path, historical, version, sort, order]);
 	const matchesQuery = page?.requestPath === path;
+	const reserveAsset = asset || filters.asset;
 	const refresh = () => {
 		if (position) navigate({ ...route, position: '' });
 		else setVersion((current) => current + 1);
@@ -207,6 +209,8 @@ function PoolBrowser({
 				)}
 				{page && (
 					<ExplorerInvestigationScope origin={page.origin}>
+					{matchesQuery && !busy && !error && !page.historical && reserveAsset &&
+						<ExplorerPoolReserveChart asset={reserveAsset} rows={page.rows} />}
 					<ExplorerPoolTable
 						rows={page.rows}
 						sort={page.sort}
