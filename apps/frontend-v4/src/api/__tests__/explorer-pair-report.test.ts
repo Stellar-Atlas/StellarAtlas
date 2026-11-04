@@ -131,6 +131,34 @@ describe('explorer pair report API helper', () => {
 		).toThrow('Limit must be');
 	});
 
+	it('uses the reverse trade as the only fallback anchor and never opens pool queries without a valid range', async () => {
+		for (const reverseAvailable of [true, false]) {
+			const requests: URL[] = [];
+			const requestJson = async (path: string) => {
+				const url = new URL(path, 'https://example.test');
+				requests.push(url);
+				if (requests.length === 1) throw new Error('Forward trades unavailable');
+				if (!reverseAvailable) return page(2, 5000, 'trades');
+				return page(500, 520, url.pathname.split('/').at(-1)!);
+			};
+			const report = loadPairReport(selection(), new AbortController().signal, requestJson);
+			if (reverseAvailable) {
+				const result = await report;
+				expect(result.sections['a-to-b']).toEqual({ error: 'Forward trades unavailable' });
+				expect(result.sections['b-to-a'].page?.entity).toBe('trades');
+				expect(requests).toHaveLength(4);
+				expect(requests[1]?.searchParams.get('selling_asset')).toBe(assetB);
+				for (const pool of requests.slice(2)) {
+					expect(pool.searchParams.get('min_ledger')).toBe('500');
+					expect(pool.searchParams.get('max_ledger')).toBe('520');
+				}
+			} else {
+				await expect(report).rejects.toThrow('Forward trades unavailable');
+				expect(requests).toHaveLength(2);
+			}
+		}
+	});
+
 	it('does not start the next request after cancellation', async () => {
 		const controller = new AbortController();
 		let calls = 0;
