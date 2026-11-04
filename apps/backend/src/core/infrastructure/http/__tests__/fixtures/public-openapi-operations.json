@@ -98,6 +98,7 @@
   "get /v1/history-data/batches/{batchId}/{dataset} downloadHistoryDataBatchArtifact",
   "get /v1/history-data/catalog getHistoryDataCatalog",
   "get /v1/indexing/ranges getIndexingRanges",
+  "get /v1/issuer-domains/{domain} getIssuerDomainEvidence",
   "get /v1/issuers listIssuerResources",
   "get /v1/issuers/{issuer} getIssuerResource",
   "get /v1/issuers/{issuer}/assets listIssuerAssetResources",
