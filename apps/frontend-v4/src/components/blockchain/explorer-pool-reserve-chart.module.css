@@ -1,0 +1,47 @@
+.chart {
+	display: grid;
+	gap: .6rem;
+	min-width: 0;
+	max-width: 54rem;
+	padding: .8rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+.chart p, .observed, .identity {
+	font-size: .8rem;
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+.chart ol {
+	display: grid;
+	gap: .6rem;
+	margin: 0;
+	padding-inline-start: 1.5rem;
+}
+.chart li {
+	padding-inline-start: .2rem;
+	min-width: 0;
+}
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: .2rem .6rem;
+	overflow-wrap: anywhere;
+	font-variant-numeric: tabular-nums;
+}
+.row a, .identity, .observed {
+	color: var(--blue);
+}
+.track {
+	height: .35rem;
+	margin-block: .25rem;
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--surface-hover);
+}
+.bar {
+	height: 100%;
+	background: var(--blue);
+}
