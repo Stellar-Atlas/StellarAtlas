@@ -64,6 +64,7 @@ export function ExplorerInvestigation({
 	const pathname = usePathname();
 	const params = useSearchParams();
 	const returnTo = sanitizeExplorerReturnTo(params.get('return_to'));
+	const returnPath = returnTo ? new URL(returnTo, 'https://explorer.invalid').pathname : '';
 	const origin =
 		returnTo ??
 		sanitizeExplorerReturnTo(
@@ -75,9 +76,8 @@ export function ExplorerInvestigation({
 				<div className={`shell ${styles.returnBar}`}>
 					<a href={returnTo}>
 						←{' '}
-						{new URL(returnTo, 'https://explorer.invalid').pathname
-							.split('/')
-							.filter(Boolean).length > 2
+						{returnPath === '/explorer/markets' ? 'Back to pair report'
+							: returnPath.split('/').filter(Boolean).length > 2
 							? 'Back to investigation'
 							: 'Back to results'}
 					</a>
@@ -98,6 +98,7 @@ export function ExplorerLink({
 	readonly collectionContext?: boolean;
 }): React.JSX.Element {
 	const { origin, pairDetailOrigin } = useContext(InvestigationOrigin);
-	const detail = /^\/explorer\/(?:trades|transactions|operations|liquidity-pools)\/[^/?#]+(?:[?#]|$)/.test(href);
-	return <a {...props} href={withExplorerReturnTo(href, detail ? pairDetailOrigin ?? origin : origin, collectionContext)} />;
+	const pairOrigin = pairDetailOrigin && /^\/explorer\/(?:trades|transactions|operations|liquidity-pools)\/[^/?#]+(?:[?#]|$)/.test(href)
+		? pairDetailOrigin : origin;
+	return <a {...props} href={withExplorerReturnTo(href, pairOrigin, collectionContext)} />;
 }
