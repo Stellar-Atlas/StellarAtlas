@@ -1,4 +1,4 @@
-import { readTransactionActivityRoute, transactionActivityHref, transactionActivityKey } from '../transaction-activity-route';
+import { readTransactionActivityRoute, restoreTransactionRelation, transactionActivityHref, transactionActivityKey, transactionRelationPositionKey } from '../transaction-activity-route';
 
 describe('transaction activity URL selection', () => {
 	it('round-trips exact independent opaque cursors, ledger and return context', () => {
@@ -20,5 +20,17 @@ describe('transaction activity URL selection', () => {
 		const url = new URL(transactionActivityHref('/explorer/transactions/hash-A', '?ledger_sequence=100&activity_for=hash-A&operations_after=old&events_after=old', { ledger: '101', cursors: {} }, 'hash-A'), 'http://fixture.invalid');
 		expect([...url.searchParams.entries()]).toEqual([['ledger_sequence', '101']]);
 		expect(transactionActivityKey({ ledger: '', cursors: { events: 'e', operations: 'o' } })).toBe(transactionActivityKey({ ledger: '', cursors: { operations: 'o', events: 'e' } }));
+	});
+	it('restores only the failed relation and keeps predecessor identity independent of other pages', () => {
+		const route = { ledger: '100', cursors: { operations: 'op-next', effects: 'effects-current', events: 'events-current' } };
+		const otherPages = { ...route, cursors: { ...route.cursors, effects: 'different' } };
+		expect(transactionRelationPositionKey(route, 'operations')).toBe(transactionRelationPositionKey(otherPages, 'operations'));
+		expect(transactionRelationPositionKey(route, 'operations')).not.toBe(transactionRelationPositionKey({ ...route, ledger: '101' }, 'operations'));
+		expect(restoreTransactionRelation(route, 'operations', 'op-previous')).toEqual({
+			...route, cursors: { ...route.cursors, operations: 'op-previous' }
+		});
+		expect(restoreTransactionRelation(route, 'operations', undefined)).toEqual({
+			ledger: '100', cursors: { effects: 'effects-current', events: 'events-current' }
+		});
 	});
 });
