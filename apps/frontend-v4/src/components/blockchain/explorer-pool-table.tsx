@@ -1,12 +1,12 @@
 'use client';
 
 import { ExplorerLink as Link } from './explorer-investigation';
-import { entityText, type EntityRecord, type ExplorerFilters } from '../../api/explorer-analytics';
+import { entityText, recordValue, type EntityRecord, type ExplorerFilters } from '../../api/explorer-analytics';
 import { LocalDateTime } from '../local-date-time';
 import { formatDecimal } from './explorer-format-values';
 import { ExplorerAssetPair, usePairMetadata } from './explorer-asset-pair';
 import styles from './explorer-pool-table.module.css';
-import { poolRowDetailHref } from './pool-history-links';
+import { poolPairReportHref, poolRowDetailHref } from './pool-history-links';
 
 export type PoolSort =
 	| 'pool'
@@ -36,13 +36,15 @@ export function ExplorerPoolTable({
 	sort = 'trustlines',
 	order = 'desc',
 	onSort,
-	context = {}
+	context = {},
+	pairReport
 }: {
 	readonly rows: readonly EntityRecord[];
 	readonly sort?: PoolSort;
 	readonly order?: 'asc' | 'desc';
 	readonly onSort?: (key: PoolSort) => void;
 	readonly context?: ExplorerFilters;
+	readonly pairReport?: { readonly asset: string; readonly origin: string; readonly historicalWindow?: EntityRecord };
 }): React.JSX.Element {
 	const metadata = usePairMetadata(rows);
 	return (
@@ -80,6 +82,10 @@ export function ExplorerPoolTable({
 						const id = entityText(row, 'id'),
 							ledger = entityText(row, 'ledgerSequence');
 						const detail = poolRowDetailHref(id, row.ledgerSequence, row.deleted, context);
+						const market = pairReport && !row.deleted
+							? poolPairReportHref(pairReport.asset, entityText(recordValue(row.assetA), 'id'),
+								entityText(recordValue(row.assetB), 'id'), pairReport.origin, pairReport.historicalWindow)
+							: null;
 						return (
 							<tr key={id + ':' + ledger + ':' + index}>
 								<td>
@@ -92,6 +98,7 @@ export function ExplorerPoolTable({
 											metadata={metadata}
 										/>
 									)}
+									{market && <a className={styles.pairReport} href={market}>Historical pair report</a>}
 								</td>
 								<td className={styles.number}>
 									{formatDecimal(entityText(row, 'reserveA'))}

@@ -216,6 +216,9 @@ function PoolBrowser({
 						sort={page.sort}
 						order={page.order}
 						context={page.historical ? poolContextFromRequest(page.requestPath, page.window) : undefined}
+						pairReport={embedded && asset ? {
+							asset, origin: page.origin, ...(page.historical ? { historicalWindow: page.window } : {})
+						} : undefined}
 						onSort={(key) => {
 							navigate({ ...route, sort: key, order: page.sort === key && page.order === 'desc' ? 'asc' : 'desc', position: '' });
 						}}
