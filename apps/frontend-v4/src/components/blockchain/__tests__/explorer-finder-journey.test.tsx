@@ -110,6 +110,21 @@ it('opens actual asset Transfers from paged candidates and restores both pages a
 	expect(backToCatalogue.searchParams.has('return_to')).toBe(false);
 });
 
+it('omits a flattened catalogue target when it would make the actual transaction link exceed 4096 characters', async () => {
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: { get location() { return location; } } });
+	const prefix = '/explorer/assets?symbol=USDC&market_context=';
+	const catalogue = prefix + 'x'.repeat(4090 - prefix.length);
+	expect(readAssetDiscoverySelection(new URL(catalogue, site).searchParams)).toEqual({
+		query: { symbol: 'USDC' }, cursor: null
+	});
+	location = new URL('/explorer/assets/' + encodeURIComponent(id), site);
+	location.searchParams.set('tab', 'transfers');
+	location.searchParams.set('return_to', catalogue);
+	const html = await renderAssetTransfers();
+	const transaction = links(html).find(url => url.pathname === '/explorer/transactions/' + hash);
+	expect(transaction?.href).toBe(site + '/explorer/transactions/' + hash + '?ledger_sequence=121');
+});
+
 it('keeps exact identifiers and only routes a C-address to assets when explicitly requested', () => {
 	expect(resolveExplorerSearch(id)).toBe('/explorer/assets/' + encodeURIComponent(id));
 	expect(resolveExplorerSearch(sac)).toBe('/explorer/contracts/' + sac);

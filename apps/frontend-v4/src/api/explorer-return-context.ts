@@ -1,5 +1,6 @@
 const EXPLORER_BASE = 'https://explorer-return.invalid';
 const MAX_RETURN_TO_LENGTH = 4096;
+const ASSET_CATALOGUE_PATH = '/explorer/assets';
 
 function explorerUrl(value: string): URL | null {
 	if (
@@ -41,7 +42,7 @@ function isAssetActivity(url: URL): boolean {
 
 function assetCatalogueReturnTo(value: string | null): string | null {
 	const url = value === null ? null : explorerUrl(value);
-	if (url?.pathname !== '/explorer/assets') return null;
+	if (url?.pathname !== ASSET_CATALOGUE_PATH) return null;
 	const path = relativeExplorerPath(url);
 	return path.length <= MAX_RETURN_TO_LENGTH ? path : null;
 }
@@ -109,8 +110,12 @@ export function withExplorerReturnTo(
 	if (sanitizedOrigin === null) return cleanDestination;
 
 	const linked = attachReturnTo(destinationUrl, sanitizedOrigin);
-	const catalogue = nestedAssetCatalogue(new URL(sanitizedOrigin, EXPLORER_BASE));
-	if (catalogue === null || linked.length <= MAX_RETURN_TO_LENGTH) return linked;
+	if (linked.length <= MAX_RETURN_TO_LENGTH) return linked;
+	const originUrl = new URL(sanitizedOrigin, EXPLORER_BASE);
+	// A catalogue fallback may already be flat before the destination is encoded.
+	if (originUrl.pathname === ASSET_CATALOGUE_PATH) return cleanDestination;
+	const catalogue = nestedAssetCatalogue(originUrl);
+	if (catalogue === null) return linked;
 	const fallback = attachReturnTo(destinationUrl, catalogue);
 	return fallback.length <= MAX_RETURN_TO_LENGTH ? fallback : cleanDestination;
 }

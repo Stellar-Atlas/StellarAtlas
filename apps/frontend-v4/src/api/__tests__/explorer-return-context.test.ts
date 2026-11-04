@@ -97,4 +97,16 @@ describe('explorer return context', () => {
 		expect(destination.length).toBeLessThanOrEqual(4096);
 		expect(new URL(destination, base).searchParams.get('return_to')).toBe(catalogue);
 	});
+
+	it('bounds a catalogue return that was flattened before final destination encoding', () => {
+		const prefix = '/explorer/assets?symbol=USDC&market_context=';
+		const catalogue = prefix + 'x'.repeat(4090 - prefix.length);
+		const flattened = withAssetCatalogueReturnTo(activity, catalogue);
+		expect(flattened).toBe(catalogue);
+		expect(withExplorerReturnTo(tx, flattened)).toBe(tx);
+
+		// Unrelated flat return contexts keep their existing behavior.
+		const flat = catalogue.replace('/explorer/assets?', '/explorer/ledgers?');
+		expect(new URL(withExplorerReturnTo(tx, flat), base).searchParams.get('return_to')).toBe(flat);
+	});
 });
