@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ExplorerLink } from './explorer-investigation';
 import type { PublicRecentTransactions } from '@api/types';
 import { buildEntityHref } from '../../api/explorer-analytics';
+import { withExplorerReturnTo } from '../../api/explorer-return-context';
 import {
 	formatDate,
 	formatTransactionHash,
@@ -14,14 +15,13 @@ import { formatAtomic } from './explorer-format-values';
 
 export function ExplorerTransactionTable({
 	transactions,
-	onInspect,
+	returnTo,
 	caption = 'Latest available transaction records. Dates are shown in your local time.'
 }: {
 	readonly transactions: Pick<PublicRecentTransactions, 'records' | 'limit'>;
-	readonly onInspect: (hash: string, ledger: string) => void;
+	readonly returnTo?: string;
 	readonly caption?: string;
 }): React.JSX.Element {
-	const [expandedHash, setExpandedHash] = useState<string | null>(null);
 	const [copiedHash, setCopiedHash] = useState<string | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(
@@ -52,121 +52,87 @@ export function ExplorerTransactionTable({
 			aria-label="Transaction records"
 			tabIndex={0}
 		>
-			<table className={styles.table}>
+			<table className={styles.table} role="table">
 				<caption>{caption}</caption>
-				<thead>
-					<tr>
+				<thead role="rowgroup">
+					<tr role="row">
 						{[
 							'Transaction',
-							'Source account',
+							'Result',
 							'Closed',
 							'Ledger',
 							'Operations',
 							'Fee (XLM)',
-							'Result',
-							'Details'
+							'Source account'
 						].map((label) => (
-							<th key={label} scope="col">
+							<th key={label} scope="col" role="columnheader">
 								{label}
 							</th>
 						))}
 					</tr>
 				</thead>
-				<tbody>
-					{transactions.records.slice(0, transactions.limit).map((tx) => (
-						<tr key={tx.hash}>
-							<td data-label="Transaction">
-								<div className={styles.hash}>
+				<tbody role="rowgroup">
+					{transactions.records.slice(0, transactions.limit).map((tx) => {
+						const href = buildEntityHref('transactions', tx.hash, { ledger_sequence: tx.ledger });
+						const displayHash = formatTransactionHash(tx.hash);
+						const label = 'Open transaction ' + displayHash;
+						const displayAccount = tx.sourceAccount.slice(0, 6) + '…' + tx.sourceAccount.slice(-5);
+						return (
+							<tr key={tx.hash} role="row">
+								<td data-label="Transaction" role="cell">
+									<div className={styles.hash}>
+										{returnTo ? (
+											<a className={styles.identifier} aria-label={label} href={withExplorerReturnTo(href, returnTo)}>{displayHash}</a>
+										) : (
+											<ExplorerLink className={styles.identifier} aria-label={label} href={href}>{displayHash}</ExplorerLink>
+										)}
+										<details className={styles.identifiers}>
+											<summary aria-label={'IDs for ' + displayHash}>IDs</summary>
+											<div className={styles.fullHash}>
+												<span>Transaction hash</span>
+												<code>{tx.hash}</code>
+												<span>Source account</span>
+												<code>{tx.sourceAccount}</code>
+												<button type="button" onClick={() => void copyHash(tx.hash)}>Copy hash</button>
+												<span role="status">{copiedHash === tx.hash ? 'Copied' : ''}</span>
+											</div>
+										</details>
+									</div>
+								</td>
+								<td data-label="Result" role="cell">
+									<span className={tx.successful ? styles.success : styles.failed}>
+										{tx.successful ? 'Successful' : 'Failed'}
+									</span>
+								</td>
+								<td data-label="Closed" role="cell">
+									<time dateTime={tx.createdAt}>{formatDate(tx.createdAt)}</time>
+								</td>
+								<td data-label="Ledger" role="cell">
+									<ExplorerLink href={buildEntityHref('ledgers', tx.ledger)}>
+										{tx.ledger}
+									</ExplorerLink>
+								</td>
+								<td data-label="Operations" role="cell" className={styles.numeric}>
+									{tx.operationCount}
+								</td>
+								<td data-label="Fee (XLM)" role="cell" className={styles.numeric}>
+									<div className={styles.fee}>{/^\d+$/.test(tx.feeCharged) ? <>
+										<span>{formatAtomic(tx.feeCharged, 7)}</span>
+										<small>{tx.feeCharged} stroops</small>
+									</> : '—'}</div>
+								</td>
+								<td data-label="Source account" role="cell">
 									<ExplorerLink
 										className={styles.identifier}
-										title={tx.hash}
-										href={buildEntityHref('transactions', tx.hash, {
-											ledger_sequence: tx.ledger
-										})}
+										href={buildEntityHref('accounts', tx.sourceAccount)}
+										aria-label={'Source account ' + displayAccount}
 									>
-										{formatTransactionHash(tx.hash)}
+										{displayAccount}
 									</ExplorerLink>
-									<div className={styles.actions}>
-										<button
-											type="button"
-											onClick={() => void copyHash(tx.hash)}
-											aria-label={'Copy transaction hash ' + tx.hash}
-										>
-											{copiedHash === tx.hash ? 'Copied' : 'Copy'}
-										</button>
-										<button
-											type="button"
-											aria-label={
-												(expandedHash === tx.hash ? 'Collapse' : 'Expand') +
-												' transaction hash ' +
-												tx.hash
-											}
-											aria-expanded={expandedHash === tx.hash}
-											aria-controls={'transaction-hash-' + tx.hash}
-											onClick={() =>
-												setExpandedHash(
-													expandedHash === tx.hash ? null : tx.hash
-												)
-											}
-										>
-											{expandedHash === tx.hash ? 'Hide' : 'Full'}
-										</button>
-									</div>
-									{expandedHash === tx.hash && (
-										<code
-											className={styles.fullHash}
-											id={'transaction-hash-' + tx.hash}
-										>
-											{tx.hash}
-										</code>
-									)}
-								</div>
-							</td>
-							<td data-label="Source account">
-								<ExplorerLink
-									className={styles.identifier}
-									href={buildEntityHref('accounts', tx.sourceAccount)}
-									title={tx.sourceAccount}
-								>
-									{tx.sourceAccount}
-								</ExplorerLink>
-							</td>
-							<td data-label="Closed">
-								<time dateTime={tx.createdAt}>{formatDate(tx.createdAt)}</time>
-							</td>
-							<td data-label="Ledger">
-								<ExplorerLink href={buildEntityHref('ledgers', tx.ledger)}>
-									{tx.ledger}
-								</ExplorerLink>
-							</td>
-							<td data-label="Operations" className={styles.numeric}>
-								{tx.operationCount}
-							</td>
-							<td data-label="Fee (XLM)" className={styles.numeric}>
-								<div className={styles.fee}>{/^\d+$/.test(tx.feeCharged) ? <>
-									<span>{formatAtomic(tx.feeCharged, 7)}</span>
-									<small>{tx.feeCharged} stroops</small>
-								</> : '—'}</div>
-							</td>
-							<td data-label="Result">
-								<span
-									className={tx.successful ? styles.success : styles.failed}
-								>
-									{tx.successful ? 'Successful' : 'Failed'}
-								</span>
-							</td>
-							<td data-label="Details">
-								<button
-									className={styles.inspect}
-									type="button"
-									onClick={() => onInspect(tx.hash, tx.ledger)}
-									aria-label={'Inspect transaction ' + tx.hash}
-								>
-									Inspect
-								</button>
-							</td>
-						</tr>
-					))}
+								</td>
+							</tr>
+						);
+					})}
 				</tbody>
 			</table>
 		</div>

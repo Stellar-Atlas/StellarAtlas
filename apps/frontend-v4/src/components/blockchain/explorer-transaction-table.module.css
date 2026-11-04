@@ -53,19 +53,15 @@
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 6px 10px;
-	min-width: 196px;
+	min-width: 0;
 }
 .identifier {
 	font-family: var(--font-mono);
 	white-space: nowrap;
 	font-size: 0.78rem;
 }
-.actions {
-	display: flex;
-	gap: 4px;
-}
-.actions button,
-.inspect {
+.identifiers summary,
+.identifiers button {
 	border: 1px solid var(--border);
 	border-radius: 4px;
 	background: transparent;
@@ -74,19 +70,26 @@
 	padding: 4px 7px;
 	cursor: pointer;
 }
-.actions button:hover,
-.inspect:hover {
+.identifiers summary:hover,
+.identifiers button:hover {
 	color: var(--blue);
 	background: var(--surface-hover);
 }
+.identifiers[open] {
+	flex-basis: 100%;
+}
+.identifiers summary {
+	width: fit-content;
+}
 .fullHash {
-	display: block;
-	width: 100%;
-	max-width: 290px;
+	display: grid;
+	gap: 4px;
+	width: min(16rem, 100%);
 	white-space: normal;
 	overflow-wrap: anywhere;
 	font-size: 0.75rem;
 }
+.fullHash button { justify-self: start; min-height: 32px; }
 .numeric {
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
@@ -108,7 +111,7 @@
 	color: var(--state-warning-ink);
 	background: var(--state-warning-bg);
 }
-@media (max-width: 680px) {
+@media (max-width: 800px) {
 	.container {
 		overflow: visible;
 	}
@@ -128,24 +131,27 @@
 	.table caption {
 		display: block;
 	}
-	.table tr {
+	.table tbody tr {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px 12px;
 		padding: 10px 12px;
 		border-top: 1px solid var(--border);
 	}
 	.table td {
 		display: grid;
-		grid-template-columns: 94px minmax(0, 1fr);
-		gap: 8px;
-		padding: 5px 0;
+		gap: 2px;
+		padding: 0;
 		border: 0;
+		min-width: 0;
 	}
 	.table td::before {
 		content: attr(data-label);
 		color: var(--muted);
 		font-size: 0.75rem;
 	}
-	.hash {
-		min-width: 0;
+	.table td:first-child {
+		grid-column: 1 / -1;
 	}
 	.identifier {
 		white-space: normal;
@@ -154,11 +160,41 @@
 	.table time {
 		min-width: 0;
 	}
-	.actions button,
-	.inspect {
-		min-height: 32px;
+	.table a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 24px;
 	}
-	.table td:last-child::before {
-		align-self: center;
+}
+.finder.finder {
+	display: block;
+	padding-block: 6px;
+}
+.finder.finder[open] {
+	padding-bottom: 16px;
+}
+.finder summary,
+.identifiers summary {
+	cursor: pointer;
+	min-height: 32px;
+	align-content: center;
+}
+.finder summary {
+	font-weight: 600;
+}
+.finder[open] summary {
+	margin-bottom: 8px;
+}
+.finder summary:focus-visible,
+.table :is(a, summary, button):focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+.feedStatus.feedStatus {
+	font-weight: 400;
+}
+@media (max-width: 360px) {
+	.table td[data-label='Fee (XLM)'] {
+		grid-column: 1 / -1;
 	}
 }
