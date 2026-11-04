@@ -6,6 +6,31 @@ const routes = {
 	'account balance': ['/v1/analytics/accounts/', '/balances']
 } as const;
 
+function configuredExplorerApiBase(): URL {
+	// The deployment chooses the authority. Reject ambiguous spellings before
+	// URL can reinterpret them, including dot segments in the configured prefix.
+	const base = process.env.STELLAR_ATLAS_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:3000';
+	const parts = /^https?:\/\/(\[[0-9a-f:.]+\]|[a-z0-9._-]+)(?::[0-9]+)?(\/.*)?$/i.exec(base);
+	const [, host, path = ''] = parts ?? [];
+	if (!host || /[\s\p{Cc}\\?#]/u.test(base)) throw new Error('Invalid explorer API base URL');
+	// Preserve a single terminal DNS root dot, but never accept an empty label.
+	if (host.startsWith('.') || host.includes('..'))
+		throw new Error('Invalid explorer API hostname');
+	const prefix = path.replace(/\/+$/, '');
+	if (prefix.includes('//')) throw new Error('Invalid explorer API base prefix');
+	for (const segment of prefix.split('/')) {
+		const decoded = decodeURIComponent(segment);
+		if (decoded === '.' || decoded === '..' || /[\p{Cc}/\\%?#]/u.test(decoded))
+			throw new Error('Invalid explorer API base prefix');
+	}
+	// Let URL normalize decimal ports and bracketed IPv6, but reject legacy
+	// IPv4 aliases such as decimal integers, hexadecimal and octal hosts.
+	const target = new URL(base);
+	if (!host.startsWith('[') && target.hostname !== host.toLowerCase())
+		throw new Error('Invalid explorer API hostname');
+	return target;
+}
+
 export async function proxyExplorerJson(
 	request: Request,
 	resource: keyof typeof routes,
@@ -16,10 +41,7 @@ export async function proxyExplorerJson(
 	const deadline = AbortSignal.timeout(deadlineMs);
 	const signal = AbortSignal.any([request.signal, deadline]);
 	try {
-		const target = new URL(process.env.STELLAR_ATLAS_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:3000');
-		if ((target.protocol !== 'http:' && target.protocol !== 'https:') ||
-			target.username || target.password || target.search || target.hash)
-			throw new Error('Invalid explorer API base URL');
+		const target = configuredExplorerApiBase();
 		if (!identifier || /[^A-Za-z0-9]/.test(identifier))
 			throw new Error('Invalid explorer path segment');
 		// Request data cannot set the authority or select a raw upstream path.
