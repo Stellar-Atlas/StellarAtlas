@@ -34,10 +34,10 @@ function relativeExplorerPath(url: URL): string {
 	return `${url.pathname}${url.search}`;
 }
 
-function isAssetActivity(url: URL): boolean {
+function isAssetInvestigation(url: URL): boolean {
 	const tabs = url.searchParams.getAll('tab');
 	return /^\/explorer\/assets\/[^/]+$/.test(url.pathname) &&
-		tabs.length === 1 && tabs[0] === 'transfers';
+		tabs.length === 1 && (tabs[0] === 'transfers' || tabs[0] === 'markets');
 }
 
 function assetCatalogueReturnTo(value: string | null): string | null {
@@ -48,7 +48,7 @@ function assetCatalogueReturnTo(value: string | null): string | null {
 }
 
 function nestedAssetCatalogue(url: URL): string | null {
-	if (!isAssetActivity(url)) return null;
+	if (!isAssetInvestigation(url)) return null;
 	const values = url.searchParams.getAll('return_to');
 	return values.length === 1 ? assetCatalogueReturnTo(values[0]!) : null;
 }
@@ -66,7 +66,7 @@ export function withAssetCatalogueReturnTo(
 	const catalogue = assetCatalogueReturnTo(origin);
 	if (catalogue === null) return activity;
 	const url = explorerUrl(activity);
-	if (url === null || !isAssetActivity(url)) return catalogue;
+	if (url === null || !isAssetInvestigation(url)) return catalogue;
 	relativeExplorerPath(url);
 	const nested = attachReturnTo(url, catalogue);
 	return nested.length <= MAX_RETURN_TO_LENGTH ? nested : catalogue;

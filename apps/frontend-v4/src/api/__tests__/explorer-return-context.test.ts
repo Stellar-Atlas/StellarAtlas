@@ -70,7 +70,8 @@ describe('explorer return context', () => {
 		const destination = new URL(withExplorerReturnTo(tx, fromCatalogue), base);
 		expect(destination.searchParams.get('ledger_sequence')).toBe('121');
 		expect(sanitizeExplorerReturnTo(destination.searchParams.get('return_to'))).toBe(fromCatalogue);
-		expect(sanitizeExplorerReturnTo(withRawReturn(activity.replace('tab=transfers', 'tab=markets'), catalogue))).not.toContain('return_to');
+		expect(sanitizeExplorerReturnTo(withRawReturn(activity.replace('tab=transfers', 'tab=holders'), catalogue))).not.toContain('return_to');
+		expect(sanitizeExplorerReturnTo(withRawReturn(activity.replace('tab=transfers', 'tab=markets&tab=holders'), catalogue))).not.toContain('return_to');
 	});
 
 	it.each([

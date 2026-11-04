@@ -1,4 +1,4 @@
-import { assetMarketRouteHref, assetTradeSideHref, defaultAssetMarketRoute, readAssetMarketRoute } from '../asset-market-route';
+import { assetMarketRouteHref, assetPairReportHref, assetTradeSideHref, defaultAssetMarketRoute, readAssetMarketRoute } from '../asset-market-route';
 
 describe('asset market URL state', () => {
 	it('continues each trade side independently with a bounded page, accepted range and safe asset return', () => {
@@ -36,6 +36,29 @@ describe('asset market URL state', () => {
 		expect(readAssetMarketRoute(new URLSearchParams('market_view=liquidity-pools&market_trade_min=2000&market_trade_max=3000'), 1000))
 			.toEqual({ view: 'liquidity-pools', min: '2000', max: '3000' });
 		expect(defaultAssetMarketRoute(2049)).toEqual({ view: 'trades', min: '2', max: '2049' });
+	});
+	it('returns from a pair or trade side to the accepted market and filtered catalogue', () => {
+		const base = 'https://explorer.invalid';
+		const catalogue = '/explorer/assets?symbol=USD&cursor=next&cursor_for=selection';
+		const asset = '/explorer/assets/native?tab=markets&holder_cursor=older&market_trade_min=2&market_trade_max=20';
+		const window = { minLedger: 21, maxLedger: 30 };
+		const counter = 'USD:G' + 'A'.repeat(55);
+		const from = (returnTo: string) => asset + '&return_to=' + encodeURIComponent(returnTo);
+		for (const href of [assetPairReportHref('native', 'native', counter, window, from(catalogue))!,
+			assetTradeSideHref('native', 'buy', window, from(catalogue))]) {
+			const back = new URL(new URL(href, base).searchParams.get('return_to')!, base);
+			expect(back.pathname).toBe('/explorer/assets/native');
+			expect(back.searchParams.get('tab')).toBe('markets');
+			expect(back.searchParams.get('market_trade_min')).toBe('21');
+			expect(back.searchParams.get('market_trade_max')).toBe('30');
+			expect(back.searchParams.get('holder_cursor')).toBe('older');
+			expect(back.searchParams.get('return_to')).toBe(catalogue);
+		}
+		for (const invalid of ['//evil.invalid/explorer/assets', '/explorer/accounts/GA']) {
+			const href = assetPairReportHref('native', 'native', counter, window, from(invalid))!;
+			const back = new URL(new URL(href, base).searchParams.get('return_to')!, base);
+			expect(back.searchParams.has('return_to')).toBe(false);
+		}
 	});
 	it('never forwards malformed, partial, reversed, repeated or excessive ranges', () => {
 		for (const query of ['market_trade_min=-1&market_trade_max=10', 'market_trade_min=2', 'market_trade_min=20&market_trade_max=10', 'market_trade_min=2&market_trade_max=2050', 'market_trade_min=2&market_trade_max=4294967296', 'market_trade_min=2&market_trade_max=3&market_trade_max=4', 'market_view=unknown'])
