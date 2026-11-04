@@ -94,6 +94,41 @@
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
+.historyControls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 0.6rem;
+}
+.historyControls label {
+	display: grid;
+	gap: 0.25rem;
+	min-width: 0;
+	font-size: 0.84rem;
+}
+.historyControls input {
+	width: min(10rem, 100%);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 0.55rem 0.7rem;
+	min-block-size: 40px;
+}
+.historyControls button {
+	background: var(--button-secondary);
+	border: 1px solid var(--button-secondary-border);
+	border-radius: 6px;
+	color: var(--blue);
+	min-block-size: 40px;
+	padding-inline: 0.75rem;
+}
+.historyControls button:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+.historyControls :is(input, button):focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
 .fee { display: grid; gap: .15rem; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .fee small { font-size: .68rem; color: var(--muted); }
 .success,

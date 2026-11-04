@@ -29,6 +29,6 @@ export function parseLedgerTransactions(ledger: string, offset: number, value: u
 		return { hash, ledger, createdAt: closedAt, sourceAccount: row.account, successful: row.successful, operationCount: row.operation_count, feeCharged };
 	});
 	const nextOffset = data.nextOffset === undefined ? records.length === 25 ? offset + 25 : null : data.nextOffset;
-	if (nextOffset !== null && (typeof nextOffset !== 'number' || !Number.isSafeInteger(nextOffset) || nextOffset <= offset)) invalid();
+	if (nextOffset !== null && nextOffset !== offset + 25) invalid();
 	return { records, limit: 25, offset, nextOffset };
 }

@@ -7,10 +7,28 @@ import { initialExplorerTransactions } from './blockchain-explorer-state';
 import { useExplorerRequest } from './use-explorer-request';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerSearchForm } from './explorer-search-form';
+import { ExplorerTransactionHistory } from './explorer-transaction-history';
+import { readTransactionHistory } from './transaction-history-route';
 import styles from './explorer-transaction-table.module.css';
 
 export function BlockchainExplorer(): React.JSX.Element {
-	const search = useSearchParams().get('search');
+	const params = useSearchParams();
+	const search = params.get('search');
+	const history = readTransactionHistory(params);
+	return (
+		<section className="blockchain-explorer-workspace">
+			<ExplorerEntityNavigation active="transactions" />
+			<details key={search ?? ''} open={search ? true : undefined} className={`explorer-panel ${styles.finder}`}>
+				<summary>Find by hash, address, ledger or asset</summary>
+				<ExplorerSearchForm />
+			</details>
+			<ExplorerTransactionHistory key={history.mode === 'ledger' ? history.ledger : history.mode} selection={history} search={params.toString()} />
+			{history.mode === 'recent' && <RecentTransactions />}
+		</section>
+	);
+}
+
+function RecentTransactions(): React.JSX.Element {
 	const feed = useExplorerRequest(
 		initialExplorerTransactions,
 		'Could not load transactions.'
@@ -25,12 +43,6 @@ export function BlockchainExplorer(): React.JSX.Element {
 	const transactions = feed.result.transactions;
 	const hasRows = Boolean(transactions?.records.length);
 	return (
-		<section className="blockchain-explorer-workspace">
-			<ExplorerEntityNavigation active="transactions" />
-			<details key={search ?? ''} open={search ? true : undefined} className={`explorer-panel ${styles.finder}`}>
-				<summary>Find by hash, address, ledger or asset</summary>
-				<ExplorerSearchForm />
-			</details>
 			<section
 				className="explorer-panel explorer-feed-panel"
 				aria-label="Browse transactions"
@@ -60,6 +72,5 @@ export function BlockchainExplorer(): React.JSX.Element {
 				)}
 				{transactions && ((!feed.error && !feed.loading) || hasRows) && <RecentTransactionsView transactions={transactions} />}
 			</section>
-		</section>
 	);
 }
