@@ -25,6 +25,7 @@ export interface AssetMetadata {
 }
 
 export interface IssuerMetadata {
+	readonly accounts?: readonly string[];
 	readonly homeDomain: string;
 	readonly tomlUrl: string;
 	readonly networkPassphrase: string;
