@@ -33,12 +33,56 @@ function relativeExplorerPath(url: URL): string {
 	return `${url.pathname}${url.search}`;
 }
 
+function isAssetActivity(url: URL): boolean {
+	const tabs = url.searchParams.getAll('tab');
+	return /^\/explorer\/assets\/[^/]+$/.test(url.pathname) &&
+		tabs.length === 1 && tabs[0] === 'transfers';
+}
+
+function assetCatalogueReturnTo(value: string | null): string | null {
+	const url = value === null ? null : explorerUrl(value);
+	if (url?.pathname !== '/explorer/assets') return null;
+	const path = relativeExplorerPath(url);
+	return path.length <= MAX_RETURN_TO_LENGTH ? path : null;
+}
+
+function nestedAssetCatalogue(url: URL): string | null {
+	if (!isAssetActivity(url)) return null;
+	const values = url.searchParams.getAll('return_to');
+	return values.length === 1 ? assetCatalogueReturnTo(values[0]!) : null;
+}
+
+function attachReturnTo(url: URL, origin: string): string {
+	url.searchParams.set('return_to', origin);
+	return `${url.pathname}${url.search}`;
+}
+
+/** Carry just one catalogue hop, or return straight to it if both pages cannot fit. */
+export function withAssetCatalogueReturnTo(
+	activity: string,
+	origin: string | null
+): string {
+	const catalogue = assetCatalogueReturnTo(origin);
+	if (catalogue === null) return activity;
+	const url = explorerUrl(activity);
+	if (url === null || !isAssetActivity(url)) return catalogue;
+	relativeExplorerPath(url);
+	const nested = attachReturnTo(url, catalogue);
+	return nested.length <= MAX_RETURN_TO_LENGTH ? nested : catalogue;
+}
+
 export function sanitizeExplorerReturnTo(
 	value: string | null | undefined
 ): string | null {
 	if (value == null) return null;
 	const url = explorerUrl(value);
-	return url === null ? null : relativeExplorerPath(url);
+	if (url === null) return null;
+	const catalogue = nestedAssetCatalogue(url);
+	const path = relativeExplorerPath(url);
+	if (path.length > MAX_RETURN_TO_LENGTH) return null;
+	if (catalogue === null) return path;
+	const nested = attachReturnTo(url, catalogue);
+	return nested.length <= MAX_RETURN_TO_LENGTH ? nested : catalogue;
 }
 
 export function withExplorerReturnTo(
@@ -64,7 +108,9 @@ export function withExplorerReturnTo(
 	const sanitizedOrigin = sanitizeExplorerReturnTo(origin);
 	if (sanitizedOrigin === null) return cleanDestination;
 
-	destinationUrl.searchParams.set('return_to', sanitizedOrigin);
-	destinationUrl.hash = '';
-	return `${destinationUrl.pathname}${destinationUrl.search}`;
+	const linked = attachReturnTo(destinationUrl, sanitizedOrigin);
+	const catalogue = nestedAssetCatalogue(new URL(sanitizedOrigin, EXPLORER_BASE));
+	if (catalogue === null || linked.length <= MAX_RETURN_TO_LENGTH) return linked;
+	const fallback = attachReturnTo(destinationUrl, catalogue);
+	return fallback.length <= MAX_RETURN_TO_LENGTH ? fallback : cleanDestination;
 }

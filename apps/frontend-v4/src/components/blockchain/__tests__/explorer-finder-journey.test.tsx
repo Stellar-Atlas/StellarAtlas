@@ -1,8 +1,14 @@
 import { jest } from '@jest/globals';
-import { createElement } from 'react';
+import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import * as explorerAnalytics from '../../../api/explorer-analytics';
 import { explorerSearchNavigation, resolveExplorerSearch } from '../../../api/explorer-search-route';
+import { assetActivityHref } from '../asset-activity-page';
 import { assetDiscoveryHref, assetDiscoveryPath, readAssetDiscoverySelection } from '../asset-discovery-page';
+import { assetTabHref } from '../asset-tab-route';
+import { HookHarness } from './asset-workspace-hook-harness';
+
+const { createElement } = React;
 
 const site = 'https://atlas.invalid';
 const issuer = 'GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE';
@@ -10,22 +16,53 @@ const otherIssuer = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const sac = 'CBQSUF57OYX4RIMCZV62DKN6JFOTEKPHIZASMJYOUOCNHGNG2P3XQLSE';
 const hash = 'a'.repeat(64);
 const id = 'KALE:' + issuer;
+const asset = { id, kind: 'classic' as const, code: 'KALE', issuer, lastObservedLedger: 140 };
+const hooks = new HookHarness();
 let location = new URL('/explorer', site);
+const closedAt = '2026-11-04T00:00:00Z';
+const request = jest.fn(async (_path: string) => ({
+	transfers: [{
+		id: 'fixture', ledgerSequence: 121, closedAt, transactionHash: hash,
+		transactionId: '1', operationId: null, from: issuer, to: otherIssuer, toMuxed: null,
+		asset: { id, code: 'KALE', issuer, type: 'credit_alphanum4' }, contractId: '',
+		eventTopic: 'transfer', amountRaw: '10000000', amountScale: 7
+	}],
+	limit: 25, nextCursor: null, elapsedMilliseconds: 1,
+	watermark: { minimumLedger: 2, maximumLedger: 140, coverage: 'ingested-only', observedAt: closedAt }
+}));
+jest.unstable_mockModule('react', () => ({
+	...React, useEffect: hooks.useEffect, useRef: hooks.useRef, useState: hooks.useState
+}));
 jest.unstable_mockModule('next/navigation', () => ({
 	usePathname: () => location.pathname,
 	useSearchParams: () => location.searchParams
 }));
+jest.unstable_mockModule('../../../api/explorer-analytics', () => ({ ...explorerAnalytics, requestExplorerJson: request }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-asset-workspace.module.css', () => ({ default: {} }));
 const { ExplorerInvestigation, ExplorerInvestigationScope } = await import('../explorer-investigation');
 const { AssetTable } = await import('../explorer-asset-views');
-const { ExplorerTransferTable } = await import('../explorer-transfer-table');
+const { ExplorerAssetTabs } = await import('../explorer-asset-tabs');
+
+afterEach(() => {
+	hooks.reset();
+	Reflect.deleteProperty(globalThis, 'window');
+});
 
 function links(html: string): URL[] {
 	return [...html.matchAll(/href="([^"]+)"/g)].map(match => new URL(match[1]!.replaceAll('&amp;', '&'), site));
 }
 
-it('opens asset candidates from the finder and restores the paged range through linked records', () => {
+async function renderAssetTransfers(): Promise<string> {
+	const render = () => hooks.render(() => renderToStaticMarkup(createElement(ExplorerInvestigation, null,
+		createElement(ExplorerAssetTabs, { record: { asset } }))));
+	render();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	return render();
+}
+
+it('opens actual asset Transfers from paged candidates and restores both pages after transaction reload', async () => {
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: { get location() { return location; } } });
 	const start = explorerSearchNavigation(site + '/explorer', ' KALE ', 'auto')!;
 	expect(start.origin).toBe('/explorer?search=KALE&search_type=auto');
 	location = new URL(start.destination, site);
@@ -40,26 +77,37 @@ it('opens asset candidates from the finder and restores the paged range through 
 	const results = renderToStaticMarkup(createElement(ExplorerInvestigation, null,
 		createElement(ExplorerInvestigationScope, { origin: paged.pathname + paged.search, children:
 			createElement(AssetTable, { filters: selection.query, assets: [
-				{ id, kind: 'classic', code: 'KALE', issuer },
+				asset,
 				{ id: 'KALE:' + otherIssuer, kind: 'classic', code: 'KALE', issuer: otherIssuer }
 			] })
 		})));
 	const assets = links(results).filter(url => url.pathname.startsWith('/explorer/assets/'));
 	expect(assets.map(url => decodeURIComponent(url.pathname.split('/').at(-1)!))).toEqual([id, 'KALE:' + otherIssuer]);
-	location = assets[0]!;
-	const activity = renderToStaticMarkup(createElement(ExplorerInvestigation, null,
-		createElement(ExplorerTransferTable, { rows: [{
-			id: 'fixture', ledgerSequence: 121, closedAt: '2026-11-04T00:00:00Z', transactionHash: hash,
-			transactionId: '1', operationId: null, from: issuer, to: otherIssuer, toMuxed: null,
-			asset: { id, code: 'KALE', issuer, type: 'credit_alphanum4' }, contractId: null,
-			eventTopic: 'transfer', amountRaw: '10000000', amountScale: 7
-		}] })));
+	const detail = assets[0]!;
+	const transfers = new URL(assetTabHref(detail.pathname, detail.search, 'Transfers'), site);
+	location = new URL(assetActivityHref(transfers.pathname, transfers.search, asset, { before: 140, after: 'transfer_page' }), site);
+	const activity = await renderAssetTransfers();
+	expect(activity).toContain('Asset transfer activity');
+	const expectedRequest = '/v1/activity/transfers?limit=25&asset=' + encodeURIComponent(id) +
+		'&min_ledger=2&max_ledger=140&after=transfer_page';
+	expect(request).toHaveBeenLastCalledWith(expectedRequest, expect.any(AbortSignal));
+	expect(activity).not.toContain('role="alert"');
 	const transaction = links(activity).find(url => url.pathname === '/explorer/transactions/' + hash)!;
 	expect(transaction.searchParams.get('ledger_sequence')).toBe('121');
+	hooks.reset();
 	location = new URL(transaction.href, site); // Direct open/reload, with no local UI state.
-	const back = links(renderToStaticMarkup(createElement(ExplorerInvestigation, { children: null })))[0]!;
-	expect(back.pathname).toBe('/explorer/assets');
-	expect(readAssetDiscoverySelection(back.searchParams)).toEqual(selection);
+	const backToAsset = links(renderToStaticMarkup(createElement(ExplorerInvestigation, { children: null })))[0]!;
+	expect(backToAsset.pathname).toBe(detail.pathname);
+	expect(backToAsset.searchParams.get('tab')).toBe('transfers');
+	expect(backToAsset.searchParams.get('asset_activity_after')).toBe('transfer_page');
+	location = backToAsset;
+	const reloaded = await renderAssetTransfers();
+	expect(request).toHaveBeenCalledTimes(2);
+	expect(request).toHaveBeenLastCalledWith(expectedRequest, expect.any(AbortSignal));
+	const backToCatalogue = links(reloaded)[0]!;
+	expect(backToCatalogue.pathname).toBe('/explorer/assets');
+	expect(readAssetDiscoverySelection(backToCatalogue.searchParams)).toEqual(selection);
+	expect(backToCatalogue.searchParams.has('return_to')).toBe(false);
 });
 
 it('keeps exact identifiers and only routes a C-address to assets when explicitly requested', () => {
