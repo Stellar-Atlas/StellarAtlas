@@ -4,16 +4,85 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type endpointTestTransport func(*http.Request) (*http.Response, error)
 
 func (f endpointTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestClickHouseDirectTransportIgnoresAmbientProxy(t *testing.T) {
+	// net/http caches its proxy environment process-wide. Exercise it in a fresh
+	// copy of this test binary so other tests cannot affect the control.
+	const child = "HUBBLE_TEST_DIRECT_TRANSPORT_CHILD"
+	if os.Getenv(child) != "1" {
+		t.Setenv(child, "1")
+		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestClickHouseDirectTransportIgnoresAmbientProxy$")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("isolated transport test: %v\n%s", err, output)
+		}
+		return
+	}
+	const endpoint = "http://warehouse.invalid:8123/sql"
+	const ambient = "http://unrelated-proxy.invalid:3128"
+	t.Setenv("HTTP_PROXY", ambient)
+	t.Setenv("NO_PROXY", "unused.invalid")
+	t.Setenv("REQUEST_METHOD", "")
+	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proxy, err := http.ProxyFromEnvironment(req); err != nil || proxy == nil || proxy.String() != ambient {
+		t.Fatalf("control request did not select the ambient proxy: %v, %v", proxy, err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		user, pass, auth := r.BasicAuth()
+		if err != nil || r.Method != http.MethodPost || r.Host != "warehouse.invalid:8123" ||
+			r.URL.Path != "/sql" || r.URL.Query().Get("query") != "SELECT 1" ||
+			!auth || user != "etl" || pass != "fixture" || string(body) != "row data" {
+			t.Error("direct request did not preserve the endpoint or payload")
+		}
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer server.Close()
+	base := &http.Client{Timeout: 5 * time.Second}
+	client, err := New(Config{Endpoint: endpoint, Database: "test_db", User: "etl", Password: "fixture", HTTPClient: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.Transport != nil || client.http.Timeout != base.Timeout {
+		t.Fatal("construction mutated the supplied client or changed its timeout")
+	}
+	transport := client.http.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	direct := transport.(*http.Transport).Clone()
+	defer direct.CloseIdleConnections()
+	direct.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if address != "warehouse.invalid:8123" {
+			return nil, errors.New("request tried to dial an unexpected destination: " + address)
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+	}
+	client.http.Transport = direct
+	ctx, cancel := context.WithTimeout(t.Context(), base.Timeout)
+	defer cancel()
+	got, err := client.execute(ctx, "SELECT 1", nil, []byte("row data"))
+	if err != nil || string(got) != "ok" {
+		t.Fatalf("expected a successful direct POST, got %q, %v", got, err)
+	}
+}
 
 func TestClickHouseQueryDoesNotChangeConfiguredDestination(t *testing.T) {
 	const endpoint = "https://clickhouse.invalid:8123/proxy%2Fsql?keep=a&keep=b&query=replace"
