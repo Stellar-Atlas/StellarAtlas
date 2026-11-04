@@ -1,0 +1,11 @@
+<clickhouse>
+  <listen_host replace="1">0.0.0.0</listen_host>
+  <logger>
+    <level>warning</level>
+    <console>true</console>
+  </logger>
+  <query_log remove="1"/>
+  <query_thread_log remove="1"/>
+  <text_log remove="1"/>
+  <trace_log remove="1"/>
+</clickhouse>

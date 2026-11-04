@@ -1,0 +1,64 @@
+name: atlas-analytics
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: plausible_db
+      POSTGRES_PASSWORD: ${ATLAS_ANALYTICS_DB_PASSWORD:?Set a URL-safe database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [storage]
+    healthcheck:
+      test: [CMD, pg_isready, -U, postgres, -d, plausible_db]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  events:
+    image: clickhouse/clickhouse-server:24.12-alpine
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    volumes:
+      - events-data:/var/lib/clickhouse
+      - ./clickhouse.xml:/etc/clickhouse-server/config.d/atlas.xml:ro
+    networks: [storage]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8123/ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  plausible:
+    image: ghcr.io/plausible/community-edition:v3.2.1
+    command: [sh, -ec, "/entrypoint.sh db createdb && /entrypoint.sh db migrate && exec /entrypoint.sh run"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      events:
+        condition: service_healthy
+    environment:
+      BASE_URL: ${ATLAS_ANALYTICS_BASE_URL:?Set the approved HTTPS origin}
+      SECRET_KEY_BASE: ${ATLAS_ANALYTICS_SECRET_KEY_BASE:?Set a private secret}
+      DATABASE_URL: postgres://postgres:${ATLAS_ANALYTICS_DB_PASSWORD}@postgres:5432/plausible_db
+      CLICKHOUSE_DATABASE_URL: http://events:8123/plausible_events_db
+      DISABLE_REGISTRATION: invite_only
+      TMPDIR: /var/lib/plausible/tmp
+    ports:
+      - "127.0.0.1:${ATLAS_ANALYTICS_LOCAL_PORT:-18080}:8000"
+    volumes:
+      - plausible-data:/var/lib/plausible
+    networks: [storage, ingress]
+    restart: unless-stopped
+
+networks:
+  storage:
+    internal: true
+  ingress: {}
+
+volumes:
+  postgres-data: {}
+  events-data: {}
+  plausible-data: {}

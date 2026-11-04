@@ -2,10 +2,10 @@ package catalog
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/stellar/go-stellar-sdk/network"
 )
 
 type Batch struct {
@@ -30,7 +30,7 @@ func Load(
 		return nil, fmt.Errorf("connect to immutable batch catalog: %w", err)
 	}
 	defer connection.Close(context.Background())
-	networkHash := sha256.Sum256([]byte(networkPassphrase))
+	networkID := network.ID(networkPassphrase)
 	rows, err := connection.Query(ctx, `
 		select batch.id::text,
 			batch.start_ledger,
@@ -45,7 +45,7 @@ func Load(
 		where batch.network_passphrase_hash = $1
 			and dataset.dataset = 'ledger-close-meta'
 		order by batch.start_ledger, batch.id
-	`, networkHash[:])
+	`, networkID[:])
 	if err != nil {
 		return nil, fmt.Errorf("read immutable batch catalog: %w", err)
 	}

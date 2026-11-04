@@ -1,17 +1,33 @@
 const deadlineMs = 65_000;
 export const noStore = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
 
+const routes = {
+	transaction: ['/v1/analytics/transactions/', ''],
+	'account balance': ['/v1/analytics/accounts/', '/balances']
+} as const;
+
 export async function proxyExplorerJson(
 	request: Request,
-	upstreamPath: string,
-	resource: 'transaction' | 'account balance',
+	resource: keyof typeof routes,
+	identifier: string,
+	query: URLSearchParams,
 	maxResponseBytes: number
 ): Promise<Response> {
-	const base = (process.env.STELLAR_ATLAS_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:3000').replace(/\/+$/, '');
 	const deadline = AbortSignal.timeout(deadlineMs);
 	const signal = AbortSignal.any([request.signal, deadline]);
 	try {
-		const upstream = await fetch(base + upstreamPath, {
+		const target = new URL(process.env.STELLAR_ATLAS_PUBLIC_API_URL?.trim() || 'http://127.0.0.1:3000');
+		if ((target.protocol !== 'http:' && target.protocol !== 'https:') ||
+			target.username || target.password || target.search || target.hash)
+			throw new Error('Invalid explorer API base URL');
+		if (!identifier || /[^A-Za-z0-9]/.test(identifier))
+			throw new Error('Invalid explorer path segment');
+		// Request data cannot set the authority or select a raw upstream path.
+		// Encode each component separately; encoding a full URL is not safe.
+		const [prefix, suffix] = routes[resource];
+		target.pathname = target.pathname.replace(/\/+$/, '') + prefix + encodeURIComponent(identifier) + suffix;
+		target.search = [...query].map(([key, value]) => encodeURIComponent(key) + '=' + encodeURIComponent(value)).join('&');
+		const upstream = await fetch(target.href, {
 			headers: { accept: 'application/json' },
 			cache: 'no-store',
 			redirect: 'error',

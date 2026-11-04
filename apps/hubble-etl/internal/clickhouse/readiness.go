@@ -34,5 +34,13 @@ func (c *Client) CheckReady(ctx context.Context) error {
 			return fmt.Errorf("warehouse table %s.%s unavailable: %w", c.database, table, err)
 		}
 	}
+	if c.singleCopyOperations {
+		if err := c.checkSingleCopyOperations(ctx); err != nil {
+			return err
+		}
+	}
+	if c.virtualLedgerTransactions {
+		return c.checkVirtualLedgerTransactions(ctx)
+	}
 	return nil
 }
