@@ -10,7 +10,7 @@ import {
 
 const rpcRequest = jest.fn<
 	Promise<unknown>,
-	[URL, { method: string; params?: object }]
+	[URL, { method: string; params?: object }, { signal: AbortSignal }]
 >();
 const moduleJest = (
 	import.meta as ImportMeta & {
@@ -304,6 +304,84 @@ test('stops returning a cached address when the root expires', async () => {
 		status: 'expired'
 	});
 	expect(rpcRequest).toHaveBeenCalledTimes(6);
+});
+
+test('cache hits also respect the sixty-second ledger freshness ceiling', async () => {
+	installRpc({ closeTime: now - 59 });
+	const resolver = new SorobanDomainResolver(rpcUrl);
+	await expect(resolver.resolve(root)).resolves.toMatchObject({
+		status: 'resolved'
+	});
+	jest.mocked(Date.now).mockReturnValue((now + 1) * 1000);
+	await expect(resolver.resolve(root)).rejects.toThrow(
+		'ledger time unavailable or stale'
+	);
+	expect(rpcRequest).toHaveBeenCalledTimes(6);
+});
+
+test('spends a single nine-second deadline across delayed RPC stages', async () => {
+	jest.useFakeTimers({ doNotFake: ['Date'] });
+	try {
+		rpcRequest.mockImplementation(async (_url, { method }, { signal }) => {
+			await new Promise<void>((resolve, reject) => {
+				const timer = setTimeout(resolve, 4_000);
+				signal.addEventListener(
+					'abort',
+					() => {
+						clearTimeout(timer);
+						reject(signal.reason);
+					},
+					{ once: true }
+				);
+			});
+			return {
+				jsonrpc: '2.0',
+				id: 1,
+				result:
+					method === 'getNetwork'
+						? { passphrase: Networks.PUBLIC }
+						: { latestLedger: ledger, error: 'Error(Contract, #307)' }
+			};
+		});
+		const resolver = new SorobanDomainResolver(rpcUrl);
+		const assertion = expect(resolver.resolve(root)).rejects.toMatchObject({
+			name: 'AbortError'
+		});
+		await jest.advanceTimersByTimeAsync(8_999);
+		expect(rpcRequest.mock.calls.map(([, { method }]) => method)).toEqual([
+			'getNetwork',
+			'simulateTransaction',
+			'getLedgers'
+		]);
+		const [first, second, third] = rpcRequest.mock.calls.map(
+			([, , { signal }]) => signal
+		);
+		expect(first).toBe(second);
+		expect(first).toBe(third);
+		expect(third?.aborted).toBe(false);
+		await jest.advanceTimersByTimeAsync(1);
+		await assertion;
+		expect(third?.aborted).toBe(true);
+		installRpc();
+		await expect(resolver.resolve(root)).resolves.toMatchObject({
+			status: 'resolved'
+		});
+	} finally {
+		jest.useRealTimers();
+	}
+});
+
+test('disconnecting one coalesced caller keeps the other caller’s RPC alive', async () => {
+	const caller = new AbortController();
+	const resolver = new SorobanDomainResolver(rpcUrl);
+	const disconnected = expect(
+		resolver.resolve(root, caller.signal)
+	).rejects.toMatchObject({ name: 'AbortError' });
+	const other = resolver.resolve(root);
+	caller.abort();
+	await disconnected;
+	await expect(other).resolves.toMatchObject({ status: 'resolved' });
+	expect(rpcRequest).toHaveBeenCalledTimes(3);
 });
 
 test('coalesces duplicate requests and rejects excess concurrent lookups', async () => {

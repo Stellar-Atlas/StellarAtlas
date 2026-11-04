@@ -1,3 +1,5 @@
+import http from 'node:http';
+import https from 'node:https';
 import {
 	Account,
 	Contract,
@@ -20,6 +22,7 @@ const SIMULATION_ACCOUNT =
 	'GALAXYVOIDAOPZTDLHILAJQKCVVFMD4IKLXLSZV5YHO7VY74IWZILUTO';
 const SUCCESS_TTL_MS = 60_000;
 const NEGATIVE_TTL_MS = 10_000;
+const LOOKUP_TIMEOUT_MS = 9_000; // Leaves time for the Explorer's 12-second HTTP fetch.
 const MAX_IN_FLIGHT = 2;
 const MAX_WAITERS_PER_NAME = 16;
 
@@ -41,45 +44,94 @@ export type SorobanDomainLookup = Observation &
 
 export class SorobanDomainBusy extends Error {}
 
+interface PendingLookup {
+	readonly controller: AbortController;
+	readonly promise: Promise<SorobanDomainLookup>;
+	admitted: number;
+	active: number;
+}
+
 export class SorobanDomainResolver {
 	private readonly cache = new LRUCache<string, SorobanDomainLookup>({
 		max: 256,
 		ttlResolution: 0
 	});
-	private readonly pending = new Map<
-		string,
-		{ promise: Promise<SorobanDomainLookup>; waiters: number }
-	>();
+	private readonly pending = new Map<string, PendingLookup>();
+	private readonly agent: http.Agent;
 
-	constructor(private readonly rpcUrl: URL) {}
+	constructor(
+		private readonly rpcUrl: URL,
+		private readonly timeoutMs = LOOKUP_TIMEOUT_MS
+	) {
+		const Agent = rpcUrl.protocol === 'https:' ? https.Agent : http.Agent;
+		this.agent = new Agent({
+			keepAlive: true,
+			maxSockets: MAX_IN_FLIGHT,
+			maxTotalSockets: MAX_IN_FLIGHT,
+			maxFreeSockets: 1
+		});
+	}
 
-	async resolve(domain: ExactDomainName): Promise<SorobanDomainLookup> {
+	async resolve(
+		domain: ExactDomainName,
+		signal?: AbortSignal
+	): Promise<SorobanDomainLookup> {
+		signal?.throwIfAborted();
 		const cached = this.cache.get(domain.name);
 		if (cached) {
+			const now = Date.now();
 			if (
-				cached.status !== 'resolved' ||
-				cached.record.expiresAt * 1000 > Date.now()
+				now - cached.ledgerCloseTime * 1000 < SUCCESS_TTL_MS &&
+				(cached.status !== 'resolved' || cached.record.expiresAt * 1000 > now)
 			)
 				return cached;
 			this.cache.delete(domain.name);
 		}
-		const running = this.pending.get(domain.name);
-		if (running) {
-			if (running.waiters >= MAX_WAITERS_PER_NAME)
-				throw new SorobanDomainBusy();
-			running.waiters++;
-			return running.promise;
+		let running = this.pending.get(domain.name);
+		if (!running) {
+			if (this.pending.size >= MAX_IN_FLIGHT) throw new SorobanDomainBusy();
+			const controller = new AbortController();
+			const deadline = setTimeout(() => controller.abort(), this.timeoutMs);
+			const promise = this.read(domain, controller.signal).finally(() => {
+				clearTimeout(deadline);
+				this.pending.delete(domain.name);
+			});
+			running = { controller, promise, admitted: 0, active: 0 };
+			this.pending.set(domain.name, running);
 		}
-		if (this.pending.size >= MAX_IN_FLIGHT) throw new SorobanDomainBusy();
-		const promise = this.read(domain).finally(() =>
-			this.pending.delete(domain.name)
-		);
-		this.pending.set(domain.name, { promise, waiters: 1 });
-		return promise;
+		return this.waitForLookup(running, signal);
 	}
 
-	private async read(domain: ExactDomainName): Promise<SorobanDomainLookup> {
-		const network = await this.request('getNetwork');
+	private async waitForLookup(
+		lookup: PendingLookup,
+		signal?: AbortSignal
+	): Promise<SorobanDomainLookup> {
+		// Cap total subscriptions to this promise, including callers that disconnect.
+		if (
+			lookup.admitted >= MAX_WAITERS_PER_NAME ||
+			lookup.controller.signal.aborted
+		)
+			throw new SorobanDomainBusy();
+		lookup.admitted++;
+		lookup.active++;
+		let onAbort: (() => void) | undefined;
+		try {
+			return await new Promise((resolve, reject) => {
+				onAbort = () => reject(signal?.reason);
+				signal?.addEventListener('abort', onAbort, { once: true });
+				void lookup.promise.then(resolve, reject);
+			});
+		} finally {
+			if (onAbort) signal?.removeEventListener('abort', onAbort);
+			if (--lookup.active === 0) lookup.controller.abort();
+		}
+	}
+
+	private async read(
+		domain: ExactDomainName,
+		signal: AbortSignal
+	): Promise<SorobanDomainLookup> {
+		const network = await this.request(signal, 'getNetwork');
 		if (network.passphrase !== Networks.PUBLIC)
 			throw new Error('Registry RPC network mismatch');
 
@@ -96,7 +148,7 @@ export class SorobanDomainResolver {
 			)
 			.build()
 			.toXDR();
-		const simulation = await this.request('simulateTransaction', {
+		const simulation = await this.request(signal, 'simulateTransaction', {
 			transaction
 		});
 		const ledger = simulation.latestLedger;
@@ -138,7 +190,7 @@ export class SorobanDomainResolver {
 			);
 		}
 
-		const reply = await this.request('getLedgers', {
+		const reply = await this.request(signal, 'getLedgers', {
 			startLedger: ledger,
 			pagination: { limit: 1 }
 		});
@@ -156,7 +208,7 @@ export class SorobanDomainResolver {
 		if (
 			observedLedger.sequence !== ledger ||
 			!Number.isSafeInteger(closeTime) ||
-			age > SUCCESS_TTL_MS ||
+			age >= SUCCESS_TTL_MS ||
 			age < -5_000
 		)
 			throw new Error('Registry simulation ledger time unavailable or stale');
@@ -181,22 +233,30 @@ export class SorobanDomainResolver {
 			value.status === 'resolved'
 				? Math.min(SUCCESS_TTL_MS, expiresIn)
 				: NEGATIVE_TTL_MS;
-		this.cache.set(domain.name, value, { ttl });
+		this.cache.set(domain.name, value, {
+			ttl: Math.min(ttl, SUCCESS_TTL_MS - age)
+		});
 		return value;
 	}
 
 	private async request(
+		signal: AbortSignal,
 		method: 'getNetwork' | 'simulateTransaction' | 'getLedgers',
 		params?: object
 	): Promise<Record<string, unknown>> {
-		const reply = object(
-			await fetchProvenanceJson(this.rpcUrl, {
+		signal.throwIfAborted();
+		const value = await fetchProvenanceJson(
+			this.rpcUrl,
+			{
 				jsonrpc: '2.0',
 				id: 1,
 				method,
 				params
-			})
+			},
+			{ agent: this.agent, signal }
 		);
+		signal.throwIfAborted();
+		const reply = object(value);
 		if (reply.jsonrpc !== '2.0' || reply.id !== 1 || reply.error !== undefined)
 			throw new Error('Registry RPC request failed');
 		return object(reply.result);

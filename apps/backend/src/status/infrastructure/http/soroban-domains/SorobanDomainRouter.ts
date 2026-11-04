@@ -1,5 +1,9 @@
 import { Networks } from '@stellar/stellar-sdk';
 import express, { type Router } from 'express';
+import {
+	currentHubbleRequestSignal,
+	withHubbleRequestCancellation
+} from '../HubbleRequestCancellation.js';
 import { exactDomainName } from './SorobanDomainRecord.js';
 import {
 	SorobanDomainBusy,
@@ -37,8 +41,14 @@ export function sorobanDomainRouter(config: {
 		}
 		try {
 			if (!resolver) throw new Error('Registry RPC is unconfigured');
-			response.json(await resolver.resolve(domain));
+			const result = await withHubbleRequestCancellation(
+				request,
+				response,
+				() => resolver.resolve(domain, currentHubbleRequestSignal())
+			);
+			if (!response.destroyed) response.json(result);
 		} catch (error) {
+			if (response.destroyed) return;
 			const busy = error instanceof SorobanDomainBusy;
 			if (busy) response.setHeader('Retry-After', '5');
 			response.status(503).json({

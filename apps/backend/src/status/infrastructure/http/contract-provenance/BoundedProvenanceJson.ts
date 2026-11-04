@@ -79,8 +79,11 @@ function bodyBytes(body: unknown): Buffer | undefined {
 
 export async function fetchProvenanceJson(
 	url: URL,
-	body?: unknown
+	body?: unknown,
+	options: { readonly agent?: http.Agent; readonly signal?: AbortSignal } = {}
 ): Promise<unknown> {
+	const { agent, signal } = options;
+	signal?.throwIfAborted();
 	const payload = bodyBytes(body);
 	if (
 		(url.protocol !== 'http:' && url.protocol !== 'https:') ||
@@ -116,6 +119,7 @@ export async function fetchProvenanceJson(
 			if (settled) return;
 			settled = true;
 			if (timeout !== undefined) clearTimeout(timeout);
+			signal?.removeEventListener('abort', onAbort);
 			if (error !== undefined) {
 				response?.destroy();
 				request?.destroy();
@@ -124,6 +128,16 @@ export async function fetchProvenanceJson(
 				resolve(value);
 			}
 		};
+
+		const onAbort = (): void =>
+			finish(
+				new ProvenanceHttpError(
+					null,
+					'transport',
+					'Provenance request cancelled'
+				)
+			);
+		signal?.addEventListener('abort', onAbort, { once: true });
 
 		const requestOptions: RequestOptions = {
 			method: payload === undefined ? 'GET' : 'POST',
@@ -241,12 +255,12 @@ export async function fetchProvenanceJson(
 				url.protocol === 'https:'
 					? https.request(
 							url,
-							{ ...requestOptions, agent: httpsAgent },
+							{ ...requestOptions, agent: agent ?? httpsAgent },
 							handleResponse
 						)
 					: http.request(
 							url,
-							{ ...requestOptions, agent: httpAgent },
+							{ ...requestOptions, agent: agent ?? httpAgent },
 							handleResponse
 						);
 			request.once('error', () =>
