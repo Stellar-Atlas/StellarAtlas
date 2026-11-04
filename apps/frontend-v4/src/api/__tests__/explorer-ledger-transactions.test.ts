@@ -17,6 +17,16 @@ describe('ledger transaction navigation', () => {
 		for (const record of [{ ...row, ledger_sequence: 101 }, { ...row, successful: null }, { ...row, fee_charged: Number.MAX_SAFE_INTEGER + 1 }]) expect(() => parseLedgerTransactions('100', 0, page(record))).toThrow('invalid');
 		expect(() => buildLedgerTransactionsPath('100', 10001)).toThrow('Invalid');
 	});
+	it('does not infer continuation from a full page without a server next offset', () => {
+		const page = { dataset: 'history_transactions', rows: Array.from({ length: 25 }, (_, index) => ({
+			...row, transaction_hash: index.toString(16).padStart(64, '0')
+		})), limit: 25, offset: 25 };
+		const parsed = parseLedgerTransactions('100', 25, page);
+		expect(parsed.records).toHaveLength(25);
+		expect(parsed.nextOffset).toBeNull();
+		expect(parseLedgerTransactions('100', 25, { ...page, nextOffset: null }).nextOffset).toBeNull();
+		expect(parseLedgerTransactions('100', 25, { ...page, nextOffset: 50 }).nextOffset).toBe(50);
+	});
 	it('shares the transaction panel and exact ledger-bound offset without losing return context', () => {
 		const url = new URL(ledgerActivityHref('/explorer/ledgers/100', '?return_to=%2Fexplorer', '100', true, 25, '#activity'), 'http://fixture.invalid');
 		expect(readLedgerActivity(url.searchParams, '100')).toEqual({ open: true, offset: 25 });

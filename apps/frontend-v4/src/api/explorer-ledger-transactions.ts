@@ -28,7 +28,7 @@ export function parseLedgerTransactions(ledger: string, offset: number, value: u
 		if (typeof hash !== 'string' || !/^[a-f\d]{64}$/i.test(hash) || String(row.ledger_sequence) !== ledger || typeof row.account !== 'string' || !row.account || typeof row.successful !== 'boolean' || typeof row.operation_count !== 'number' || !Number.isSafeInteger(row.operation_count) || row.operation_count < 0 || !Number.isFinite(Date.parse(closedAt))) invalid();
 		return { hash, ledger, createdAt: closedAt, sourceAccount: row.account, successful: row.successful, operationCount: row.operation_count, feeCharged };
 	});
-	const nextOffset = data.nextOffset === undefined ? records.length === 25 ? offset + 25 : null : data.nextOffset;
+	const nextOffset = data.nextOffset === undefined ? null : data.nextOffset;
 	if (nextOffset !== null && nextOffset !== offset + 25) invalid();
 	return { records, limit: 25, offset, nextOffset };
 }
