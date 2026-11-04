@@ -11,6 +11,7 @@ import {
 	type BalanceObservationPage
 } from '../../api/explorer-balance-observations';
 import { useExplorerRequest } from './use-explorer-request';
+import { withExplorerRequestDeadline } from './explorer-request';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { BalanceObservationProvenance } from './explorer-balance-provenance';
 import { ObservedBalanceFlags } from './explorer-balance-flags';
@@ -84,20 +85,15 @@ function ObservationPanel({
 				controller.current?.abort();
 				const abort = new AbortController();
 				controller.current = abort;
-				const timeout = setTimeout(() => abort.abort(), 25000);
 				try {
 					return {
-						page: await fetchBalanceObservations(
-							kind,
-							identifier,
-							cursor,
-							abort.signal
+						page: await withExplorerRequestDeadline(abort, 25_000, () =>
+							fetchBalanceObservations(kind, identifier, cursor, abort.signal)
 						),
 						cursor,
 						history
 					};
 				} finally {
-					clearTimeout(timeout);
 					if (controller.current === abort) controller.current = null;
 				}
 			});
