@@ -29,7 +29,7 @@ import { ExplorerOperationTable } from './explorer-operation-table';
 import { ExplorerAccountObservation } from './explorer-account-observation';
 
 export function SearchResultView({
-	result = 'all'
+	result
 }: {
 	readonly result: ExplorerSearchResult;
 }): React.JSX.Element | null {
@@ -122,7 +122,7 @@ export function ContractView({
 
 export function RecentTransactionsView({
 	transactions,
-	result
+	result = 'all'
 }: {
 	readonly transactions: PublicRecentTransactions;
 	readonly result?: TransactionPageResult;

@@ -79,7 +79,8 @@ export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo, res
 			hasPrevious={Boolean(page?.records.length)} loadingMessage="Loading transactions…" />
 		{page && <>
 			{page.records.length ? (resultFilter === undefined
-				? <ExplorerTransactionTable transactions={page} returnTo={rowOrigin} />
+				? <ExplorerTransactionTable transactions={page} returnTo={rowOrigin}
+					caption={`Published transaction records for ledger ${ledger}. Dates are shown in your local time.`} />
 				: <ExplorerTransactionPageResults transactions={page} result={resultFilter}
 					caption="Published rows for this ledger · Times shown locally." returnTo={rowOrigin} />)
 				: !request.error && !request.loading && <p>No published transaction records returned for this page.</p>}

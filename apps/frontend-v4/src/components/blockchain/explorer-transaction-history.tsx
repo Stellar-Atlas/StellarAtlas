@@ -58,7 +58,7 @@ export function ExplorerTransactionHistory({ selection, search, result }: {
 					<button type="button" disabled={active.ledger === '4294967295'} onClick={() => navigate(String(Number(active.ledger) + 1))}>Next ledger →</button>
 				</div>
 				<LedgerTransactions key={active.ledger + ':' + active.offset} ledger={active.ledger} offset={active.offset}
-					detailReturnTo={transactionHistoryHref(search, active)}
+					detailReturnTo={'/explorer' + (search ? '?' + search : '')}
 					resultFilter={result}
 					onPage={offset => navigate(active.ledger, offset)} />
 			</>}
