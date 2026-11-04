@@ -35,11 +35,10 @@ describe('ExplorerTransactionTable', () => {
 		const html = renderToStaticMarkup(
 			<ExplorerTransactionTable
 				transactions={feed}
-				onInspect={() => undefined}
 			/>
 		);
 		expect(html).toContain('<table');
-		expect(html).toContain('scope="col">Source account');
+		expect(html).toContain('role="columnheader">Source account');
 		expect(html).toContain(
 			'/explorer/transactions/' + transaction.hash + '?ledger_sequence=12345678'
 		);
@@ -50,6 +49,10 @@ describe('ExplorerTransactionTable', () => {
 		expect(html).toContain('Failed');
 		expect(html).toContain('Latest available transaction records');
 		expect(html).toContain('data-label="Fee (XLM)"');
+		expect(html.match(/href="\/explorer\/transactions\//g)).toHaveLength(1);
+		expect(html).not.toContain('Inspect');
+		expect(html).toContain('<code>' + transaction.hash + '</code>');
+		expect(html).toContain('<code>' + transaction.sourceAccount + '</code>');
 		expect(html).toContain('dateTime="' + transaction.createdAt + '"');
 	});
 	it('caps rows at the returned limit without claiming a full chain inventory', () => {
@@ -60,7 +63,6 @@ describe('ExplorerTransactionTable', () => {
 					limit: 1,
 					records: [transaction, { ...transaction, hash: 'b'.repeat(64) }]
 				}}
-				onInspect={() => undefined}
 			/>
 		);
 		expect(html).toContain(transaction.hash);
@@ -70,7 +72,6 @@ describe('ExplorerTransactionTable', () => {
 		const html = renderToStaticMarkup(
 			<ExplorerTransactionTable
 				transactions={{ ...feed, records: [] }}
-				onInspect={() => undefined}
 			/>
 		);
 		expect(html).toContain('No transactions returned');
@@ -78,9 +79,20 @@ describe('ExplorerTransactionTable', () => {
 	});
 	it('preserves exact seven-place scaling and does not turn missing or invalid fees into zero', () => {
 		for (const [fee, shown] of [['100', '0.00001'], ['1', '0.0000001'], ['0', '0'], ['', '—'], ['unknown', '—']] as const) {
-			const html = renderToStaticMarkup(<ExplorerTransactionTable transactions={{ ...feed, records: [{ ...transaction, feeCharged: fee }] }} onInspect={() => undefined} />);
+			const html = renderToStaticMarkup(<ExplorerTransactionTable transactions={{ ...feed, records: [{ ...transaction, feeCharged: fee }] }} />);
 			expect(html).toContain(shown);
 			if (!/^\d+$/.test(fee)) expect(html).not.toContain(' stroops');
 		}
+	});
+
+	it('renders a single ledger-aware shareable transaction link with a validated return URL', () => {
+		const returnTo = '/explorer/ledgers/12345678?ledger_view=transactions&ledger_tx_offset=25&ledger_tx_for=12345678';
+		const markup = (origin: string) => renderToStaticMarkup(<ExplorerTransactionTable transactions={feed} returnTo={origin} />);
+		const href = markup(returnTo).match(/href="([^"]*\/transactions\/[^"]*)"/)?.[1]?.replaceAll('&amp;', '&');
+		expect(href).toBeDefined();
+		const url = new URL(href!, 'https://explorer.invalid');
+		expect(url.searchParams.get('ledger_sequence')).toBe(transaction.ledger);
+		expect(url.searchParams.get('return_to')).toBe(returnTo);
+		expect(markup('//untrusted.invalid')).not.toContain('return_to=');
 	});
 });

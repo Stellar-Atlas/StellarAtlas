@@ -1,7 +1,13 @@
 import {
 	sanitizeExplorerReturnTo,
+	withAssetCatalogueReturnTo,
 	withExplorerReturnTo
 } from '../explorer-return-context';
+
+const base = 'https://explorer.invalid';
+const activity = '/explorer/assets/USDC%3AGA?tab=transfers&asset_activity_after=page_2';
+const tx = '/explorer/transactions/' + 'a'.repeat(64) + '?ledger_sequence=121';
+const withRawReturn = (href: string, origin: string) => href + '&return_to=' + encodeURIComponent(origin);
 
 describe('explorer return context', () => {
 	it('allows an explicit collection journey without changing default collection links or nesting/external return paths', () => {
@@ -55,5 +61,52 @@ describe('explorer return context', () => {
 		).toBe('/explorer/contracts/C123');
 		const collection = '/explorer/contracts?limit=25';
 		expect(withExplorerReturnTo(collection, '/explorer')).toBe(collection);
+	});
+
+	it('allows one Transfers-to-catalogue hop and never carries an inner return chain', () => {
+		const catalogue = '/explorer/assets?symbol=USDC&cursor=page_3';
+		const fromCatalogue = withAssetCatalogueReturnTo(activity, withRawReturn(catalogue, '/explorer?search=old') + '#ignored');
+		expect(new URL(fromCatalogue, base).searchParams.get('return_to')).toBe(catalogue);
+		const destination = new URL(withExplorerReturnTo(tx, fromCatalogue), base);
+		expect(destination.searchParams.get('ledger_sequence')).toBe('121');
+		expect(sanitizeExplorerReturnTo(destination.searchParams.get('return_to'))).toBe(fromCatalogue);
+		expect(sanitizeExplorerReturnTo(withRawReturn(activity.replace('tab=transfers', 'tab=markets'), catalogue))).not.toContain('return_to');
+	});
+
+	it.each([
+		'https://evil.invalid/explorer/assets',
+		'//evil.invalid/explorer/assets',
+		'/explorer/assets/another',
+		'/explorer/assets?symbol=%0a',
+		'/explorer/assets?symbol=%zz',
+		'/explorer/assets?cursor=' + 'x'.repeat(4096)
+	])('does not carry unsafe or unrelated catalogue context (%#.0s)', (invalid) => {
+		expect(withAssetCatalogueReturnTo(activity, invalid)).toBe(activity);
+		const raw = withRawReturn(activity, invalid);
+		expect([activity, null]).toContain(sanitizeExplorerReturnTo(raw));
+	});
+
+	it('drops an ambiguous nested catalogue and falls back to catalogue before URL growth exceeds the bound', () => {
+		const catalogue = '/explorer/assets?symbol=USDC&cursor=' + 'x'.repeat(2048);
+		expect(sanitizeExplorerReturnTo(withRawReturn(withRawReturn(activity, catalogue), '/explorer/assets'))).toBe(activity);
+		const largeActivity = activity + 'y'.repeat(2048);
+		expect(withAssetCatalogueReturnTo(largeActivity, catalogue)).toBe(catalogue);
+		const almostFull = withAssetCatalogueReturnTo(activity + 'y'.repeat(1890), catalogue);
+		expect(new URL(almostFull, base).searchParams.get('return_to')).toBe(catalogue);
+		const destination = withExplorerReturnTo(tx, almostFull);
+		expect(destination.length).toBeLessThanOrEqual(4096);
+		expect(new URL(destination, base).searchParams.get('return_to')).toBe(catalogue);
+	});
+
+	it('bounds a catalogue return that was flattened before final destination encoding', () => {
+		const prefix = '/explorer/assets?symbol=USDC&market_context=';
+		const catalogue = prefix + 'x'.repeat(4090 - prefix.length);
+		const flattened = withAssetCatalogueReturnTo(activity, catalogue);
+		expect(flattened).toBe(catalogue);
+		expect(withExplorerReturnTo(tx, flattened)).toBe(tx);
+
+		// Unrelated flat return contexts keep their existing behavior.
+		const flat = catalogue.replace('/explorer/assets?', '/explorer/ledgers?');
+		expect(new URL(withExplorerReturnTo(tx, flat), base).searchParams.get('return_to')).toBe(flat);
 	});
 });

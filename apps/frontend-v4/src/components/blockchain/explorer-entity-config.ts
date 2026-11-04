@@ -138,6 +138,7 @@ export const entityColumns: Readonly<
 		['amount', 'Amount'],
 		['price', 'Price ratio'],
 		['deleted', 'State'],
+		['ledgerSequence', 'Ledger'],
 		['closedAt', 'Observed']
 	]
 };

@@ -7,14 +7,14 @@ import type {
 	PublicExplorerContract,
 	PublicExplorerLedger,
 	PublicExplorerLocalAccountChanges,
+	PublicRecentTransactions,
 	PublicTransactionLookup
 } from '@api/types';
 import type {
 	ExplorerAssetsResult,
 	ExplorerContractResult,
 	ExplorerOperationsResult,
-	ExplorerSearchResult,
-	ExplorerTransactionsResult
+	ExplorerSearchResult
 } from '../../app/actions/network-data';
 import {
 	formatContractReadiness,
@@ -120,35 +120,14 @@ export function ContractView({
 }
 
 export function RecentTransactionsView({
-	onInspect,
-	result
+	transactions
 }: {
-	readonly onInspect: (hash: string, ledger: string) => void;
-	readonly result: ExplorerTransactionsResult;
-}): React.JSX.Element | null {
-	if (result.message)
-		return <ExplorerState tone="warning" text={result.message} />;
-	if (!result.transactions)
-		return <ExplorerState tone="neutral" text="Loading recent transactions." />;
-
+	readonly transactions: PublicRecentTransactions;
+}): React.JSX.Element {
 	return (
 		<div className="explorer-transaction-feed">
-			<p className="explorer-state neutral">
-				{result.transactions.source === 'local_history'
-					? 'Source: StellarAtlas historical records.'
-					: 'Source: Stellar public API.'}
-			</p>
-			<ExplorerTransactionFeedStatus transactions={result.transactions} />
-			{result.transactions.truncated ? (
-				<ExplorerState
-					tone="neutral"
-					text={`Showing the latest ${result.transactions.records.length} transactions.`}
-				/>
-			) : null}
-			<ExplorerTransactionTable
-				onInspect={onInspect}
-				transactions={result.transactions}
-			/>
+			<ExplorerTransactionFeedStatus transactions={transactions} />
+			{transactions.records.length > 0 && <ExplorerTransactionTable transactions={transactions} />}
 		</div>
 	);
 }

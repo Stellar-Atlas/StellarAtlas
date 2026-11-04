@@ -12,6 +12,7 @@ const { ExplorerEntityNavigation } =
 	await import('../explorer-entity-navigation');
 const { ExplorerEntityTable, ExplorerEntityDetails } =
 	await import('../explorer-entity-table');
+const { ExplorerInvestigationScope } = await import('../explorer-investigation');
 describe('parsed explorer presentation', () => {
 	it('puts operation action, explicit result availability and ledger before secondary fields',()=>{
 		const html=renderToStaticMarkup(createElement(ExplorerEntityDetails,{collection:'operations',filters:{min_ledger:'100',max_ledger:'100'},row:{id:'429496729603',type:'change_trust',ledgerSequence:100,sourceAccount:'G'+'A'.repeat(55),details:null}}));
@@ -142,5 +143,35 @@ describe('parsed explorer presentation', () => {
 		expect(html).toContain('selling_asset=native');
 		expect(html).toContain('buying_asset=native');
 		expect(html).toContain('Offer history');
+	});
+	it('pins repeated offer observations to their own ledger and preserves the original seller results page', () => {
+		const seller = 'G' + 'A'.repeat(55);
+		const filters = { seller, min_ledger: '100', max_ledger: '150', limit: '25' };
+		const origin = '/explorer/offers?' + new URLSearchParams({ ...filters, offset: '25' });
+		const html = renderToStaticMarkup(createElement(ExplorerInvestigationScope, {
+			origin,
+			children: createElement(ExplorerEntityTable, {
+				collection: 'offers',
+				filters,
+				rows: [
+					{ id: '77', seller, ledgerSequence: 121 },
+					{ id: '77', seller, ledgerSequence: 120 },
+					{ id: '88', seller, ledgerSequence: null }
+				]
+			})
+		}));
+		const links = [...html.matchAll(/href="([^"]*\/explorer\/offers\/77[^"]*)"/g)]
+			.map((match) => new URL(match[1]!.replaceAll('&amp;', '&'), 'https://explorer.invalid'));
+		expect(links.map((link) => [...link.searchParams])).toEqual(
+			['121', '120'].map((ledger) => [
+				['min_ledger', ledger],
+				['max_ledger', ledger],
+				['return_to', origin]
+			])
+		);
+		expect(html).toContain('/explorer/ledgers/121?');
+		expect(html).toContain('/explorer/ledgers/120?');
+		expect(html).not.toContain('/explorer/offers/88');
+		expect(html).not.toContain('/explorer/ledgers/0');
 	});
 });

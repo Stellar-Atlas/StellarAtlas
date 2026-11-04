@@ -11,10 +11,11 @@ const { RecentTransactionsView } =
 import { ExplorerTransactionFeedStatus } from '../explorer-transaction-feed-status';
 
 describe('ExplorerTransactionFeedStatus', () => {
-	it('shows only the updated time for a fresh feed', () => {
+	it('shows the data-through time for a fresh feed without a delay warning', () => {
 		const html = render(feed());
 
-		expect(html).toContain('Updated');
+		expect(html).toContain('Data through');
+		expect(html).not.toContain('delayed');
 		expect(html).toContain('8/1/2026');
 		expect(html).not.toMatch(implementationCopy);
 	});
@@ -28,7 +29,7 @@ describe('ExplorerTransactionFeedStatus', () => {
 		);
 
 		expect(html).toContain('Transaction updates are delayed');
-		expect(html).toContain('Last updated');
+		expect(html).toContain('Data through');
 		expect(html).not.toMatch(implementationCopy);
 	});
 
@@ -40,7 +41,7 @@ describe('ExplorerTransactionFeedStatus', () => {
 			})
 		);
 
-		expect(html).toContain('Updated');
+		expect(html).toContain('Data through');
 		expect(html).not.toMatch(implementationCopy);
 	});
 
@@ -65,34 +66,22 @@ describe('ExplorerTransactionFeedStatus', () => {
 		'labels %s records without promising live data',
 		(source, label) => {
 			const html = renderToStaticMarkup(
-				<RecentTransactionsView
-					onInspect={() => undefined}
-					result={{
-						message: null,
-						status: 'loaded',
-						transactions: feed({ source })
-					}}
-				/>
+				<RecentTransactionsView transactions={feed({ source })} />
 			);
 
-			expect(html).toContain(`Source: ${label}.`);
+			expect(html).toContain(`Source: ${label}`);
+			expect(html).toContain('No transactions returned');
+			expect(html).not.toContain('<table');
 			expect(html).not.toContain('Live transactions');
 		}
 	);
 
 	it('describes live rows without claiming they came from an index', () => {
 		const html = renderToStaticMarkup(
-			<RecentTransactionsView
-				onInspect={() => undefined}
-				result={{
-					message: null,
-					status: 'loaded',
-					transactions: feed({ records: [transaction()], truncated: true })
-				}}
-			/>
+			<RecentTransactionsView transactions={feed({ records: [transaction(), transaction()], limit: 1, truncated: true })} />
 		);
 
-		expect(html).toContain('Showing the latest 1 transactions.');
+		expect(html).toContain('1 recent transaction shown');
 		expect(html).not.toMatch(/indexed rows|returned by this query/iu);
 	});
 });
