@@ -205,8 +205,12 @@
                         <td class="alert alert-warning"
                             style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 16px; vertical-align: top; color: #fff; font-weight: 500; text-align: center; border-radius: 3px 3px 0 0; background-color: #17a2b8; margin: 0; padding: 20px;"
                             align="center" bgcolor="#FF9F00" valign="top">
-                            Info: Event notifications are muted for 24H after occurring. Use the unmute link if you want
-                            to receive them again immediately
+                            <% if (networkEvents.length || organizationEvents.length || nodeEvents.some(event => !event.archiveIntegrity)) { %>
+                                <p>Network and availability notifications have a 24-hour cooldown. Use the Unmute link to request another alert.</p>
+                            <% } %>
+                            <% if (nodeEvents.some(event => event.archiveIntegrity)) { %>
+                                <p>A changed archive finding can alert sooner. An unchanged finding can alert again after a new observation more than 24 hours after the observation in the previous alert. Use the Unmute link to request another alert for an eligible finding.</p>
+                            <% } %>
                         </td>
                     </tr>
                 </table>

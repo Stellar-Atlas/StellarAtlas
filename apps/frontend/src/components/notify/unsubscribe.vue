@@ -6,8 +6,10 @@
         <div class="loader"></div>
       </div>
     </div>
-    <div>
-      <b-alert variant="success" show>Unsubscribed</b-alert>
+    <div v-else>
+      <b-alert variant="success" show>
+        Unsubscribed from all alerts. Your email address was removed.
+      </b-alert>
     </div>
   </div>
   <div v-else>

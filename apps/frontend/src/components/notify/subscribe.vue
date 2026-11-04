@@ -14,9 +14,14 @@
         @submit.prevent="onSubscribe"
         @reset="onReset"
       >
-        <b-alert variant="success" :show="requested"
-          >Request received, you will receive an email shortly.</b-alert
-        >
+        <b-alert variant="success" :show="requested === 'subscription'">
+          Request received. If you receive a confirmation email, follow its
+          link to activate or update alerts.
+        </b-alert>
+        <b-alert variant="success" :show="requested === 'unsubscribe'">
+          Request received. If you have a subscription, follow the link in the
+          email to stop all alerts and remove your address.
+        </b-alert>
         <b-alert variant="danger" :show="submitError"
           >Something went wrong, please try again later or contact
           support.</b-alert
@@ -25,7 +30,7 @@
           id="nodes-group"
           label="Node events"
           label-for="nodes-select"
-          description="Triggered when inactive, not validating or history archive not up-to-date for three consecutive updates or when history archive verification error is detected"
+          description="Node inactivity, missed validation or stale history can trigger alerts after three consecutive updates. Archive verification findings can trigger alerts when enabled."
         >
           <multiselect
             id="nodes-select"
@@ -115,7 +120,7 @@
           "
           @click="onUnsubscribe"
         >
-          Unsubscribe and remove email address
+          Request an unsubscribe link
         </button>
         <button class="btn btn-secondary ml-3" type="reset">Clear form</button>
       </b-form>
@@ -123,16 +128,23 @@
     <b-alert class="mt-5" variant="info" :show="true"
       ><ul>
         <li>
-          Events are triggered when they first occur. For example a node that is
-          down for three days, will only trigger one event at the start.
+          Network and availability events are triggered when they first occur.
+          For example, a node down for three days triggers one event at the start.
         </li>
         <li>
-          To prevent notification overload, notifications for a specific event
-          are muted (not sent) for 24H after they are first sent. You can
+          Notifications for a specific network or availability event are muted
+          for 24 hours after they are first sent. You can
           however unmute event notifications by following the link in the
           notification email. For example if you resolve a reported issue with
           your node, and wish to be notified immediately when the issue should
           reappear.
+        </li>
+        <li>
+          When archive verification alerts are enabled, the email links to the
+          archive verification details. A changed finding can alert sooner.
+          An unchanged finding can alert again after a new observation more
+          than 24 hours after the observation in the previous alert. Use the
+          email's Unmute link to request another alert for an eligible finding.
         </li>
         <li>
           This service is provided best effort. If network issues are reported,
@@ -196,7 +208,7 @@ const store = useStore();
 const network = store.network;
 
 const emailAddress = ref("");
-const requested = ref(false);
+const requested = ref<"subscription" | "unsubscribe" | null>(null);
 const consented = ref("not_accepted");
 const requesting = ref(false);
 const submitError = ref(false);
@@ -286,7 +298,7 @@ async function onSubscribe(event: Event) {
   validated.value = true;
   event.preventDefault();
   submitError.value = false;
-  requested.value = false;
+  requested.value = null;
   if (!emailAddressState.value || consented.value === "not_accepted") return;
   try {
     requesting.value = true;
@@ -306,8 +318,9 @@ async function onSubscribe(event: Event) {
     if (!response.ok) {
       requesting.value = false;
       submitError.value = true;
+      return;
     }
-    requested.value = true;
+    requested.value = "subscription";
     requesting.value = false;
     resetForm();
   } catch (e) {
@@ -319,7 +332,7 @@ async function onSubscribe(event: Event) {
 async function onUnsubscribe(event: Event) {
   event.preventDefault();
   submitError.value = false;
-  requested.value = false;
+  requested.value = null;
   if (!emailAddressState.value || consented.value === "not_accepted") return;
   try {
     requesting.value = true;
@@ -339,8 +352,9 @@ async function onUnsubscribe(event: Event) {
     if (!response.ok) {
       requesting.value = false;
       submitError.value = true;
+      return;
     }
-    requested.value = true;
+    requested.value = "unsubscribe";
     requesting.value = false;
     resetForm();
   } catch (e) {
