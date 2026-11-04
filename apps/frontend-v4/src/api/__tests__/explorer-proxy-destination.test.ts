@@ -78,6 +78,9 @@ it.each([
 	['http://10.12.0.2:8080/gateway/team-a/', 'http://10.12.0.2:8080/gateway/team-a'],
 	['http://127.0.0.1:3000/gateway///', 'http://127.0.0.1:3000/gateway'],
 	['https://API.INTERNAL.TEST:8443/gateway/team%20a/', 'https://api.internal.test:8443/gateway/team%20a'],
+	['http://atlas-api:8080/gateway', 'http://atlas-api:8080/gateway'],
+	['https://api.internal.test.:8443/gateway', 'https://api.internal.test.:8443/gateway'],
+	['https://api.internal.test:08443/gateway', 'https://api.internal.test:8443/gateway'],
 	['https://[fd00:0:0::1]:8443/gateway/', 'https://[fd00::1]:8443/gateway']
 ])('preserves a well-formed server API base: %s', async (base, expected) => {
 	if (base === undefined) delete process.env.STELLAR_ATLAS_PUBLIC_API_URL;
@@ -103,6 +106,10 @@ it.each([
 	'https://api.test\\gateway',
 	'https://api.\tinternal.test/gateway',
 	'https://api.test:99999/gateway',
+	'https://api..internal.test/gateway',
+	'https://./gateway',
+	'https://.api.internal.test/gateway',
+	'https://api.internal.test../gateway',
 	'http:127.0.0.1:3000',
 	'http://2130706433:3000',
 	'http://0x7f.0.0.1:3000',
