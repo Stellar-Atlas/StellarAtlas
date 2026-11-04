@@ -7,6 +7,8 @@ import { sanitizeExplorerReturnTo } from '../../api/explorer-return-context';
 import { ExplorerLink as Link, useExplorerReturnTo } from './explorer-investigation';
 import { adjacentLedgerHref, ledgerActivityHref, readLedgerActivity } from './ledger-activity-route';
 import { ExplorerTransactionTable } from './explorer-transaction-table';
+import { ExplorerTransactionPageResults } from './explorer-transaction-page-results';
+import type { TransactionPageResult } from './transaction-page-result';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { useExplorerRequest } from './use-explorer-request';
 import styles from './explorer-entity.module.css';
@@ -40,11 +42,12 @@ function LedgerActivity({ ledger }: { readonly ledger: string }): React.JSX.Elem
 	</section>;
 }
 
-export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo }: {
+export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo, resultFilter }: {
 	readonly ledger: string;
 	readonly offset: number;
 	readonly onPage: (offset: number) => void;
 	readonly detailReturnTo?: string;
+	readonly resultFilter?: TransactionPageResult;
 }): React.JSX.Element {
 	const request = useExplorerRequest<LedgerTransactionPage | null>(null, 'Transaction records could not be loaded.');
 	const controller = useRef<AbortController | null>(null);
@@ -61,22 +64,26 @@ export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo }: {
 	useEffect(() => { void load(); return () => controller.current?.abort(); }, [load]);
 	const page = request.result;
 	const nextOffset = page?.nextOffset ?? null;
+	const rowOrigin = detailReturnTo ?? returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '');
+	const pagination = (page || offset > 0) && <div className={styles.actions} role="group" aria-label="Transaction pages">
+		<span>Page {Math.floor(offset / 25) + 1}{page && page.records.length > 0
+			? ' · Rows ' + (offset + 1) + '–' + (offset + page.records.length) : ''}</span>
+		<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
+		<button disabled={request.loading || nextOffset === null || nextOffset > 10000} onClick={() => { if (nextOffset !== null) onPage(nextOffset); }}>Next transactions</button>
+	</div>;
 	return <section id="ledger-transactions" aria-label="Ledger transactions" aria-busy={request.loading}>
 		<h3>Transactions in ledger {ledger}</h3>
 		<p className={styles.muted}>Published records only. This endpoint does not confirm ledger coverage.</p>
-		<ExplorerRequestNotice loading={request.loading} error={request.error} onRetry={() => void load()} />
+		{pagination}
+		<ExplorerRequestNotice loading={request.loading} error={request.error} onRetry={() => void load()}
+			hasPrevious={Boolean(page?.records.length)} loadingMessage="Loading transactions…" />
 		{page && <>
-			{request.error && page.records.length > 0 && <p className={styles.muted}>Showing last loaded rows for this page.</p>}
-			{page.records.length ? <ExplorerTransactionTable transactions={page}
-				caption={`Published transaction records for ledger ${ledger}. Dates are shown in your local time.`}
-				returnTo={detailReturnTo ?? returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')} />
+			{page.records.length ? (resultFilter === undefined
+				? <ExplorerTransactionTable transactions={page} returnTo={rowOrigin} />
+				: <ExplorerTransactionPageResults transactions={page} result={resultFilter}
+					caption="Published rows for this ledger · Times shown locally." returnTo={rowOrigin} />)
 				: !request.error && !request.loading && <p>No published transaction records returned for this page.</p>}
 		</>}
-		{(page || offset > 0) && <div className={styles.actions}>
-			<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
-			<button disabled={request.loading || nextOffset === null || nextOffset > 10000} onClick={() => { if (nextOffset !== null) onPage(nextOffset); }}>Next transactions</button>
-			{page && <span>{page.records.length} returned</span>}
-		</div>}
 		{nextOffset !== null && nextOffset > 10000 && <p className={styles.muted}>Pagination limit reached.</p>}
 	</section>;
 }

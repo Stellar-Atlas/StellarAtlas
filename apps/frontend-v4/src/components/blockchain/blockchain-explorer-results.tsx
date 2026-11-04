@@ -22,13 +22,14 @@ import {
 	formatExplorerSource,
 	formatTransactionSource
 } from './blockchain-explorer-format';
-import { ExplorerTransactionTable } from './explorer-transaction-table';
+import { ExplorerTransactionPageResults } from './explorer-transaction-page-results';
+import type { TransactionPageResult } from './transaction-page-result';
 import { ExplorerTransactionFeedStatus } from './explorer-transaction-feed-status';
 import { ExplorerOperationTable } from './explorer-operation-table';
 import { ExplorerAccountObservation } from './explorer-account-observation';
 
 export function SearchResultView({
-	result
+	result = 'all'
 }: {
 	readonly result: ExplorerSearchResult;
 }): React.JSX.Element | null {
@@ -120,14 +121,17 @@ export function ContractView({
 }
 
 export function RecentTransactionsView({
-	transactions
+	transactions,
+	result
 }: {
 	readonly transactions: PublicRecentTransactions;
+	readonly result?: TransactionPageResult;
 }): React.JSX.Element {
 	return (
 		<div className="explorer-transaction-feed">
 			<ExplorerTransactionFeedStatus transactions={transactions} />
-			{transactions.records.length > 0 && <ExplorerTransactionTable transactions={transactions} />}
+			{transactions.records.length > 0 && <ExplorerTransactionPageResults
+				transactions={transactions} result={result} caption="Recent snapshot · Times shown locally." />}
 		</div>
 	);
 }

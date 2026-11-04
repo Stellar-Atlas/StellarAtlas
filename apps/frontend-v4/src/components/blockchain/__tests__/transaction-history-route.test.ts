@@ -1,6 +1,7 @@
 import { buildLedgerTransactionsPath, parseLedgerTransactions } from '../../../api/explorer-ledger-transactions';
 import { withExplorerReturnTo } from '../../../api/explorer-return-context';
 import { readTransactionHistory, transactionHistoryHref } from '../transaction-history-route';
+import { readTransactionPageResult, transactionPageResultQuery } from '../transaction-page-result';
 
 const base = 'https://atlas.invalid';
 const selection = { ledger: '100', offset: 25 };
@@ -36,4 +37,14 @@ it('uses the existing narrow row projection and rejects a non-page continuation'
 	expect(path.searchParams.get('limit')).toBe('25');
 	expect(path.searchParams.get('select')).not.toMatch(/envelope|meta/);
 	expect(() => parseLedgerTransactions('100', 25, { dataset: 'history_transactions', limit: 25, offset: 25, nextOffset: 26, rows: [] })).toThrow();
+});
+
+it('keeps the page result filter separate from the ledger and pagination request', () => {
+	const search = '?search=KALE&tx_ledger=100&tx_offset=25&tx_result=successful';
+	const changed = transactionPageResultQuery(search, 'failed');
+	expect(readTransactionPageResult(new URLSearchParams(changed))).toBe('failed');
+	expect(readTransactionHistory(new URLSearchParams(changed))).toEqual({ mode: 'ledger', ledger: '100', offset: 25 });
+	expect(transactionPageResultQuery(changed, 'all')).toBe('?search=KALE&tx_ledger=100&tx_offset=25');
+	for (const invalid of ['tx_result=failed&tx_result=successful', 'tx_result=network', 'tx_result=FAILED'])
+		expect(readTransactionPageResult(new URLSearchParams(invalid))).toBe('all');
 });

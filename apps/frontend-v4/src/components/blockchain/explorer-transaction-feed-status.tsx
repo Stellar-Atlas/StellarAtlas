@@ -13,7 +13,7 @@ export function ExplorerTransactionFeedStatus({
 	return (
 		<p className={`explorer-state ${tone} ${styles.feedStatus}`} role="status">
 			<strong>
-				{count === 0 ? 'No transactions returned' : `${count} recent transaction${count === 1 ? '' : 's'} shown`}
+				{count === 0 ? 'No transactions returned' : `${count} recent transaction${count === 1 ? '' : 's'} loaded`}
 			</strong>
 			{' · Source: '}{source}{' · '}{formatTransactionStatus(transactions)}
 		</p>

@@ -60,6 +60,7 @@
 	white-space: nowrap;
 	font-size: 0.78rem;
 }
+.compactHash { display: none; }
 .identifiers summary,
 .identifiers button {
 	border: 1px solid var(--border);
@@ -112,6 +113,8 @@
 	border-radius: 6px;
 	padding: 0.55rem 0.7rem;
 	min-block-size: 40px;
+	background: var(--panel);
+	color: inherit;
 }
 .historyControls button {
 	background: var(--button-secondary);
@@ -145,6 +148,41 @@
 .failed {
 	color: var(--state-warning-ink);
 	background: var(--state-warning-bg);
+}
+.pageResults {
+	display: grid;
+	gap: 0.7rem;
+	min-width: 0;
+}
+.resultFilters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.45rem;
+}
+.resultFilters > span {
+	color: var(--muted);
+	font-size: 0.79rem;
+	margin-inline-end: 0.25rem;
+}
+.resultFilters button {
+	color: inherit;
+	background: var(--surface-subtle);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	min-block-size: 36px;
+	padding-inline: 0.55rem;
+	font: inherit;
+	font-size: 0.8rem;
+	cursor: pointer;
+}
+.resultFilters button[aria-pressed='true'] {
+	border-color: var(--blue);
+	font-weight: 650;
+}
+.resultFilters button:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
 }
 @media (max-width: 800px) {
 	.container {
@@ -185,8 +223,28 @@
 		color: var(--muted);
 		font-size: 0.75rem;
 	}
-	.table td:first-child {
+	.table td:is(:first-child, :nth-child(2))::before {
+		content: none;
+	}
+	.table td:nth-child(2) {
+		justify-items: end;
+		align-content: start;
+		padding-top: 5px;
+	}
+	.table td:last-child {
 		grid-column: 1 / -1;
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.table tr:has(.identifiers[open]) td:first-child {
+		grid-column: 1 / -1;
+	}
+	.wideHash { display: none; }
+	.compactHash { display: inline; }
+	.resultFilters > span {
+		flex-basis: 100%;
 	}
 	.identifier {
 		white-space: normal;
@@ -220,6 +278,7 @@
 .finder[open] summary {
 	margin-bottom: 8px;
 }
+.finder .historyControls { margin-top: 0.4rem; }
 .finder summary:focus-visible,
 .table :is(a, summary, button):focus-visible {
 	outline: 2px solid var(--blue);
