@@ -16,6 +16,7 @@ type PressureGuard struct {
 	MaximumFullBasisPoints int
 	MaximumSomeBasisPoints int
 	MaximumInflight        int
+	SkipInflightLimit      bool
 	Log                    func(string, string)
 	read                   func(string) ([]byte, error)
 	wait                   func(context.Context) error
@@ -93,7 +94,7 @@ func (g *PressureGuard) reason(read func(string) ([]byte, error)) string {
 		}
 		count += value
 	}
-	if full > float64(g.MaximumFullBasisPoints) || some > float64(g.MaximumSomeBasisPoints) || count > g.MaximumInflight {
+	if full > float64(g.MaximumFullBasisPoints) || some > float64(g.MaximumSomeBasisPoints) || (!g.SkipInflightLimit && count > g.MaximumInflight) {
 		return fmt.Sprintf("I/O full=%.0fbp some=%.0fbp md0-inflight=%d", full, some, count)
 	}
 	return ""

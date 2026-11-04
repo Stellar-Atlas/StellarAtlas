@@ -13,6 +13,7 @@ import { NodeArchiveEvidenceRoute } from '@components/archive-scans/known-archiv
 import { NodeDetail } from '@components/nodes/node-detail';
 import { getNodeLabel, getOrganizationForNode } from '@domain/network';
 import { nodeRecordScopeLabels } from '@domain/known-network-scopes';
+import { radarValidatorUrl } from '@domain/radar-links';
 import { selectNodeSnapshot } from '@domain/select-node-snapshot';
 
 interface NodeDetailPageProps {
@@ -40,6 +41,8 @@ async function NodeDetailRouteContent({
 
 	if (!knownNode) notFound();
 	const organization = node ? getOrganizationForNode(network, node) : null;
+	const radarUrl =
+		knownNode.scope === 'current-validator' ? radarValidatorUrl(node) : null;
 	const archiveEvidence = (
 		<ArchiveEvidenceErrorBoundary title="Archive health">
 			<Suspense
@@ -61,7 +64,20 @@ async function NodeDetailRouteContent({
 				description="Node status, quorum relationships, and archive evidence."
 				eyebrow={`${network.name} · ${nodeRecordScopeLabels[knownNode.scope]}`}
 				title={node ? getNodeLabel(node) : knownNode.publicKey}
-				aside={<Link href="/nodes">← All nodes</Link>}
+				aside={
+					<>
+						<div>
+							<Link href="/nodes">← All nodes</Link>
+						</div>
+						{radarUrl && (
+							<div>
+								<a href={radarUrl} rel="noreferrer">
+									View on Radar
+								</a>
+							</div>
+						)}
+					</>
+				}
 			/>
 			<NodeDetail
 				archiveEvidence={archiveEvidence}

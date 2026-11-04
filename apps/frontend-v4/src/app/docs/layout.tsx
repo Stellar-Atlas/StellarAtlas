@@ -8,6 +8,7 @@ import {
 } from '../../components/docs/docs-catalog';
 import { collectDocsSearchItems } from '../../components/docs/docs-search-model';
 import { DeveloperDocsProvider } from '../../components/docs/developer-docs-provider';
+import { AtlasAnalytics } from '../../components/atlas-analytics';
 
 export default async function DeveloperLayout({
 	children
@@ -40,6 +41,7 @@ export default async function DeveloperLayout({
 					{ text: 'Network status', url: '/status' }
 				]}
 			>
+				<AtlasAnalytics event="docs" />
 				{children}
 			</DocsLayout>
 		</DeveloperDocsProvider>

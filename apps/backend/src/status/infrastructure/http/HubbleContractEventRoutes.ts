@@ -3,6 +3,7 @@ import type { HubbleWarehouse } from './HubbleWarehouseContracts.js';
 import type { HubbleContractEventInput } from './HubbleContractEventContracts.js';
 import { normalizeHubbleContractEventInput } from './HubbleContractEventValidation.js';
 import { withHubbleRequestCancellation } from './HubbleRequestCancellation.js';
+import { recordSuccessfulEventQuery } from './AtlasEventAnalytics.js';
 import {
 	HubbleWarehouseInputError,
 	HubbleWarehouseUnavailableError
@@ -26,7 +27,7 @@ const names: Readonly<Record<string, keyof HubbleContractEventInput>> = {
 };
 export function registerHubbleContractEventRoutes(
 	router: Router,
-	warehouse: HubbleWarehouse
+	warehouse: Pick<HubbleWarehouse, 'contractEvents'>
 ): void {
 	router.get(
 		'/contracts/:contractId/events',
@@ -43,7 +44,13 @@ export function registerHubbleContractEventRoutes(
 					response,
 					() => warehouse.contractEvents(input)
 				);
-				if (!response.destroyed) response.json(page);
+				if (!response.destroyed) {
+					response.once('finish', () => {
+						if (response.statusCode >= 200 && response.statusCode < 300)
+							recordSuccessfulEventQuery();
+					});
+					response.json(page);
+				}
 			} catch (error) {
 				if (response.destroyed) return;
 				if (error instanceof HubbleWarehouseInputError) {

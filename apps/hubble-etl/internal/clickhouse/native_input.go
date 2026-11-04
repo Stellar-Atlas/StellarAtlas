@@ -28,9 +28,12 @@ func encodeNativeRows(columns []schema.Column, rows []byte) ([]byte, error) {
 	for _, col := range columns {
 		known[col.Name] = struct{}{}
 	}
+	values := make([]any, len(columns))
+	defer clear(values)
+	var row map[string]json.RawMessage
 	decoder := json.NewDecoder(bytes.NewReader(rows))
 	for rowIndex := 0; ; rowIndex++ {
-		var row map[string]json.RawMessage
+		clear(row)
 		if err := decoder.Decode(&row); err == io.EOF {
 			break
 		} else if err != nil {
@@ -44,7 +47,6 @@ func encodeNativeRows(columns []schema.Column, rows []byte) ([]byte, error) {
 				return nil, fmt.Errorf("row %d has unknown column %s", rowIndex, name)
 			}
 		}
-		values := make([]any, len(columns))
 		for i, col := range columns {
 			value, err := nativeInputValue(row[col.Name], col.Type)
 			if err != nil {
