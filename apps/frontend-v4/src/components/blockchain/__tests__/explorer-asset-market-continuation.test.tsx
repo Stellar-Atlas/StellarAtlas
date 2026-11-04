@@ -29,6 +29,7 @@ jest.unstable_mockModule('../explorer-asset-workspace.module.css', () => ({ defa
 jest.unstable_mockModule('../explorer-pool-browser', () => ({ ExplorerPoolBrowser: () => null }));
 jest.unstable_mockModule('../explorer-asset-trade-table', () => ({ ExplorerAssetTradeTable: () => null }));
 const { ExplorerAssetMarkets } = await import('../explorer-asset-markets');
+const { ExplorerAssetMarketPairs } = await import('../explorer-asset-market-pairs');
 
 beforeEach(() => { nullStates = 0; });
 
@@ -64,5 +65,32 @@ it.each([
 		expect(back.searchParams.get('market_trade_max')).toBe('101');
 		expect(back.searchParams.has('return_to')).toBe(false);
 		expect(back.searchParams.get('holder_cursor')).toBe(new URLSearchParams(query).get('holder_cursor'));
+	}
+});
+
+it('offers one shortcut per observed counter asset and distinguishes identical codes', () => {
+	const native = { id: 'native' };
+	const one = { id: 'USD:G' + 'A'.repeat(55) };
+	const two = { id: 'USD:G' + 'B'.repeat(55) };
+	const trade = (sellingAsset: { id: string }, buyingAsset: { id: string }) => ({ sellingAsset, buyingAsset });
+	const html = renderToStaticMarkup(ReactActual.createElement(ExplorerAssetMarketPairs, {
+		asset: native.id,
+		origin: '/explorer/assets/native?tab=markets&market_trade_min=2&market_trade_max=98',
+		rows: [trade(one, native), trade(native, one), trade(native, two), trade(one, two),
+			trade(native, native), trade(native, { id: 'invalid' })],
+		window: page.window
+	}));
+	expect(html).toContain('From this trade preview');
+	expect(html).toContain('<code>' + one.id.split(':')[1] + '</code>');
+	expect(html).toContain('<code>' + two.id.split(':')[1] + '</code>');
+	const links = [...html.matchAll(/href="([^"]+)"/g)].map(match =>
+		new URL(match[1]!.replaceAll('&amp;', '&'), 'https://explorer.invalid'));
+	expect(links.map(url => url.searchParams.get('asset_b'))).toEqual([one.id, two.id]);
+	for (const url of links) {
+		expect(url.pathname).toBe('/explorer/markets');
+		expect(url.searchParams.get('asset_a')).toBe('native');
+		expect(url.searchParams.get('min_ledger')).toBe('99');
+		expect(url.searchParams.get('max_ledger')).toBe('101');
+		expect(url.searchParams.get('return_to')).toBe('/explorer/assets/native?tab=markets&market_trade_min=99&market_trade_max=101');
 	}
 });

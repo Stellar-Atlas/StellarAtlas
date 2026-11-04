@@ -213,6 +213,39 @@
 	flex-wrap: wrap;
 	gap: 0.75rem;
 }
+.observedPairs {
+	display: grid;
+	gap: 0.45rem;
+}
+.observedPairs h4,
+.observedPairs ul {
+	margin: 0;
+}
+.observedPairs ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	padding: 0;
+	list-style: none;
+}
+.observedPairs li {
+	min-width: 0;
+	max-width: 100%;
+}
+.observedPairs a {
+	display: grid;
+	gap: 0.2rem;
+	padding: 0.35rem 0.65rem;
+	border: 1px solid var(--border);
+	border-radius: 0.35rem;
+}
+.observedPairs code {
+	overflow-wrap: anywhere;
+}
+.observedPairs > span {
+	color: var(--muted);
+	font-size: 0.78rem;
+}
 .holderControls {
 	display: flex;
 	flex-wrap: wrap;
