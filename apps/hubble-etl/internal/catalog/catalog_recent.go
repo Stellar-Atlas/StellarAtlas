@@ -2,10 +2,10 @@ package catalog
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/stellar/go-stellar-sdk/network"
 )
 
 // LoadRecent loads a bounded newest-first window from the immutable catalog.
@@ -26,7 +26,8 @@ func LoadRecent(
 		return nil, fmt.Errorf("connect to immutable batch catalog: %w", err)
 	}
 	defer connection.Close(context.Background())
-	networkHash := sha256.Sum256([]byte(networkPassphrase))
+	// This public Stellar network ID is the existing catalog partition key, not a credential hash.
+	networkID := network.ID(networkPassphrase)
 	rows, err := connection.Query(ctx, `
 		with recent as materialized (
 			select id, start_ledger, end_ledger, ledger_count, network_passphrase_hash
@@ -47,7 +48,7 @@ func LoadRecent(
 			and dataset.network_passphrase_hash = batch.network_passphrase_hash
 		where dataset.dataset = 'ledger-close-meta'
 		order by batch.start_ledger desc, batch.id desc
-	`, networkHash[:], limit)
+	`, networkID[:], limit)
 	if err != nil {
 		return nil, fmt.Errorf("read recent immutable batch catalog: %w", err)
 	}

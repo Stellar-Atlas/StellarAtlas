@@ -17,6 +17,7 @@ import (
 )
 
 type Config struct {
+	// Endpoint comes from operator configuration, not query parameters or input rows.
 	Endpoint                  string
 	User                      string
 	Password                  string
@@ -67,8 +68,12 @@ var (
 func New(config Config) (*Client, error) {
 	endpoint, err := url.Parse(config.Endpoint)
 	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") ||
-		endpoint.Host == "" {
+		endpoint.Hostname() == "" || endpoint.User != nil || endpoint.Opaque != "" ||
+		strings.Contains(config.Endpoint, "#") {
 		return nil, fmt.Errorf("invalid ClickHouse endpoint")
+	}
+	if _, err := url.ParseQuery(endpoint.RawQuery); err != nil {
+		return nil, fmt.Errorf("invalid ClickHouse endpoint query")
 	}
 	if _, err := schema.DatabaseSQL(config.Database); err != nil {
 		return nil, err
@@ -80,16 +85,20 @@ func New(config Config) (*Client, error) {
 	if !identifierPattern.MatchString(storagePolicy) {
 		return nil, fmt.Errorf("invalid holder-index storage policy")
 	}
-	httpClient := config.HTTPClient
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 2 * time.Minute}
+	httpClient := http.Client{Timeout: 2 * time.Minute}
+	if config.HTTPClient != nil {
+		httpClient = *config.HTTPClient
+	}
+	// Never replay SQL, row data, or credentials to a redirect target.
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
 	}
 	return &Client{
 		endpoint:                  endpoint,
 		user:                      config.User,
 		password:                  config.Password,
 		database:                  config.Database,
-		http:                      httpClient,
+		http:                      &httpClient,
 		holderIndexEnabled:        config.HolderIndexEnabled,
 		holderIndexStoragePolicy:  storagePolicy,
 		singleCopyOperations:      config.SingleCopyOperations,
@@ -313,24 +322,25 @@ func (c *Client) executeTimed(ctx context.Context, query string, params url.Valu
 			finalErr = &RequestError{Err: finalErr}
 		}
 	}()
-	requestURL := *c.endpoint
-	values := requestURL.Query()
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.endpoint.String(),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+	// Attach payload values after parsing the trusted endpoint; no input can
+	// change the scheme, authority, or path.
+	values := request.URL.Query()
 	values.Set("query", query)
 	for key, entries := range params {
 		for _, entry := range entries {
 			values.Add(key, entry)
 		}
 	}
-	requestURL.RawQuery = values.Encode()
-	request, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		requestURL.String(),
-		bytes.NewReader(body),
-	)
-	if err != nil {
-		return nil, err
-	}
+	request.URL.RawQuery = values.Encode()
 	if c.user != "" {
 		request.SetBasicAuth(c.user, c.password)
 	}

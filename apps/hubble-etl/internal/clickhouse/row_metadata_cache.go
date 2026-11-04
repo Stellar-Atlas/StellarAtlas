@@ -41,14 +41,17 @@ func newRowMetadata(batchID, sourceSHA string, ingestedAt time.Time) (rowMetadat
 		return rowMetadata{}, err
 	}
 
-	prefix := make([]byte, 0, len(batch)+len(source)+48)
+	// Preallocate for a UUID, a hex SHA-256, and the fixed JSON keys. Append
+	// grows safely for longer escaped values without summing input lengths.
+	prefix := make([]byte, 0, 160)
 	prefix = append(prefix, `"_batch_id":`...)
 	prefix = append(prefix, batch...)
 	prefix = append(prefix, `,"_source_sha256":`...)
 	prefix = append(prefix, source...)
 	prefix = append(prefix, `,"_ledger_sequence":`...)
 
-	suffix := make([]byte, 0, len(timestamp)+22)
+	// Covers an RFC3339Nano timestamp with a numeric zone and the fixed key.
+	suffix := make([]byte, 0, 64)
 	suffix = append(suffix, `,"_ingested_at":`...)
 	suffix = append(suffix, timestamp...)
 	suffix = append(suffix, '}')

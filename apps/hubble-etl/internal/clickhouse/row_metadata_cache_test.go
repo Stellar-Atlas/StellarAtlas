@@ -53,6 +53,7 @@ func TestCachedRowMetadataMatchesLegacy(t *testing.T) {
 		{"empty", "batch", "sha", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), 0, 0, `{}`, ""},
 		{"nonempty", "batch", "sha", time.Date(2026, 1, 2, 3, 4, 5, 123456789, time.UTC), 7, 42, `{"a":1}`, ""},
 		{"html-unicode", "<tag>&\u2028", "雪/sha", time.Date(2026, 1, 2, 3, 4, 5, 120000000, zones), 1, 2, `{"text":"ok"}`, ""},
+		{"escaped-values-grow", strings.Repeat("<\"\x00", 512), strings.Repeat("雪&\\", 1024), time.Date(2026, 1, 2, 3, 4, 5, 123456789, zones), 9, 10, `{"n":1}`, ""},
 		{"invalid-utf8", invalidUTF8, invalidUTF8, time.Date(2026, 1, 2, 3, 4, 5, 1, zones), 2, 3, `{}`, ""},
 		{"fractional", "b", "s", time.Date(2026, 1, 2, 3, 4, 5, 1000000, time.UTC), 3, 4, `{"n":3}`, ""},
 		{"maxuint32-64", "b", "s", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), math.MaxUint32, math.MaxUint64, `{}`, ""},
