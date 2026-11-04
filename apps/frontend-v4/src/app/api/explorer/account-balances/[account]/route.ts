@@ -21,5 +21,5 @@ export async function GET(
 		(after !== null && !/^[A-Za-z0-9_-]{1,512}$/.test(after))) {
 		return Response.json({ error: 'Invalid account balance query.' }, { status: 400, headers: noStore });
 	}
-	return proxyExplorerJson(request, '/v1/analytics/accounts/' + account + '/balances?' + query, 'account balance', maxResponseBytes);
+	return proxyExplorerJson(request, 'account balance', account, query, maxResponseBytes);
 }

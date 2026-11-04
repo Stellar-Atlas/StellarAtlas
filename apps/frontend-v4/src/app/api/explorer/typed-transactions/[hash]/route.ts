@@ -27,5 +27,5 @@ export async function GET(
 		return Response.json({ error: 'Invalid typed transaction query.' }, { status: 400, headers: noStore });
 	}
 
-	return proxyExplorerJson(request, '/v1/analytics/transactions/' + hash + '?' + query, 'transaction', maxResponseBytes);
+	return proxyExplorerJson(request, 'transaction', hash, query, maxResponseBytes);
 }
