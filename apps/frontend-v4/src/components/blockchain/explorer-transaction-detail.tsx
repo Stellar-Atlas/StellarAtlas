@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, usePathname } from 'next/navigation';
-import { readTransactionActivityRoute, transactionActivityHref, transactionActivityKey, validActivityCursor, validLedger, type TransactionActivityRoute } from './transaction-activity-route';
+import { readTransactionActivityRoute, restoreTransactionRelation, transactionActivityHref, transactionActivityKey, transactionRelationPositionKey, validActivityCursor, validLedger, type TransactionActivityRoute } from './transaction-activity-route';
 import {
 	requestExplorerTransaction,
 	transactionRelations as relations,
@@ -149,10 +149,17 @@ function TransactionDetail({ hash, route }: {
 	const [busy, setBusy] = useState(false),
 		[error, setError] = useState<string | null>(null);
 	const [input, setInput] = useState(ledger);
-	const previousPages = useRef(new Map<string, TransactionActivityRoute>());
+	const previousPages = useRef(new Map<string, string | null>());
 	const [retry, setRetry] = useState(0);
 	const navigate = (selection: TransactionActivityRoute): void => {
 		window.history.pushState(null, '', transactionActivityHref(pathname, params.toString(), selection, hash, window.location.hash));
+	};
+	const previousControl = (relation: Relation) => {
+		const previous = previousPages.current.get(transactionRelationPositionKey(route, relation));
+		return <button key={relation} type="button" disabled={busy || !cursors[relation]}
+			onClick={() => navigate(restoreTransactionRelation(route, relation, previous))}>
+			{previous === undefined ? 'First' : 'Previous'} {relation}
+		</button>;
 	};
 	useEffect(() => {
 		let disposed = false;
@@ -248,6 +255,10 @@ function TransactionDetail({ hash, route }: {
 						<button type="button" onClick={() => setRetry((value) => value + 1)} disabled={busy}>Try again</button>
 					</p>
 				)}
+				{error && !data && relations.some(relation => cursors[relation]) &&
+					<div className={styles.actions} role="group" aria-label="Transaction activity page recovery">
+						{relations.filter(relation => cursors[relation]).map(previousControl)}
+					</div>}
 				{tx && Object.keys(tx).length > 0 && (
 					<dl className={styles.details}>
 						<dt>Ledger</dt>
@@ -311,7 +322,6 @@ function TransactionDetail({ hash, route }: {
 									? page.items.map(recordValue)
 									: [];
 							const next = entityText(page, 'nextCursor');
-							const previous = previousPages.current.get(relation + ':' + requestKey);
 							return (
 								<section key={relation} className={styles.panel}>
 									<h3>
@@ -335,19 +345,12 @@ function TransactionDetail({ hash, route }: {
 										<p>No published {relation} for this transaction.</p>
 									)}
 									<div className={styles.actions}>
-										<button
-											disabled={busy || !cursors[relation]}
-											onClick={() => {
-												navigate(previous ?? { ledger, cursors: { ...cursors, [relation]: undefined } });
-											}}
-										>
-												{previous ? 'Previous' : 'First'} {relation}
-										</button>
+										{previousControl(relation)}
 										<button
 											disabled={busy || !validActivityCursor(next)}
 											onClick={() => {
 												const selection = { ledger, cursors: { ...cursors, [relation]: next } };
-												previousPages.current.set(relation + ':' + transactionActivityKey(selection), route);
+												previousPages.current.set(transactionRelationPositionKey(selection, relation), cursors[relation] ?? null);
 												const oldest = previousPages.current.keys().next().value;
 												if (previousPages.current.size > 50 && oldest) previousPages.current.delete(oldest);
 												navigate(selection);

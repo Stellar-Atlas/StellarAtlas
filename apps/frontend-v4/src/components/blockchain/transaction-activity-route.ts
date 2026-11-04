@@ -1,4 +1,4 @@
-import { transactionRelations, type TransactionCursors } from '../../api/explorer-transaction';
+import { transactionRelations, type TransactionCursors, type TransactionRelation } from '../../api/explorer-transaction';
 
 export interface TransactionActivityRoute {
 	readonly ledger: string;
@@ -46,4 +46,19 @@ export function validActivityCursor(value: string | null | undefined): value is 
 
 export function transactionActivityKey(route: TransactionActivityRoute): string {
 	return JSON.stringify([route.ledger, ...transactionRelations.map((relation) => route.cursors[relation] ?? '')]);
+}
+
+export function transactionRelationPositionKey(route: TransactionActivityRoute, relation: TransactionRelation): string {
+	return JSON.stringify([route.ledger, relation, route.cursors[relation] ?? '']);
+}
+
+export function restoreTransactionRelation(
+	route: TransactionActivityRoute,
+	relation: TransactionRelation,
+	previous: string | null | undefined
+): TransactionActivityRoute {
+	const cursors = { ...route.cursors };
+	if (previous == null) delete cursors[relation];
+	else cursors[relation] = previous;
+	return { ...route, cursors };
 }
