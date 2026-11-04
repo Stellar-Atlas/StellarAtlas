@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { requestExplorerJson } from '../../api/explorer-analytics';
+import { withAssetCatalogueReturnTo } from '../../api/explorer-return-context';
 import type { TransferActivityPage } from '../../api/transfer-activity';
 import type { Asset } from './explorer-asset-types';
 import { assetActivityHref, assetActivityPath, parseAssetActivityPage, readAssetActivitySelection, type AssetActivitySelection } from './asset-activity-page';
@@ -59,9 +60,13 @@ export function useAssetTransferActivity(asset: Asset) {
 	const page=valid&&loaded?.key===requestKey?loaded.page:null;
 	const previous=previousPages.current.get(selectionKey), next=page?.nextCursor;
 	const originParams=new URLSearchParams(search);
+	const catalogue = originParams.getAll('return_to');
 	originParams.delete('return_to');
 	return {page,error:routeError??(failure?.key===requestKey?failure.message:null),busy:valid&&settled!==requestKey,before,cancel,
-		origin:page?assetActivityHref(pathname,originParams.toString(),asset,selection):pathname,
+		origin:page?withAssetCatalogueReturnTo(
+			assetActivityHref(pathname,originParams.toString(),asset,selection),
+			catalogue.length === 1 ? catalogue[0]! : null
+		):pathname,
 		retry:selection?()=>{clear();setAttempt(current=>current+1);}:null,
 		window:(before:number|undefined)=>change(before===asset.lastObservedLedger?null:{before,after:null}),
 		previous:valid&&after!==null&&previous!==undefined?()=>change({before,after:previous}):null,

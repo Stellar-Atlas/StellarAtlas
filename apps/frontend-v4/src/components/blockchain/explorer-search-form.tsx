@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { resolveExplorerSearch } from '../../api/explorer-search-route';
-import { withExplorerReturnTo } from '../../api/explorer-return-context';
+import { explorerSearchNavigation } from '../../api/explorer-search-route';
 
 const searchTypes = ['auto', 'transaction', 'account', 'ledger', 'operation', 'asset', 'contract', 'pool'] as const;
 
@@ -26,22 +25,18 @@ function SearchForm({ initialQuery, initialType }: {
 	return <>
 		<form className="explorer-search-form" onSubmit={(event) => {
 			event.preventDefault();
-			const route = resolveExplorerSearch(query, type);
-			if (!route) {
+			const navigation = explorerSearchNavigation(window.location.href, query, type);
+			if (!navigation) {
 				setError('Enter a valid identifier for the selected search type.');
 				return;
 			}
-			const current = new URL(window.location.href);
-			current.searchParams.set('search', query.trim());
-			current.searchParams.set('search_type', type);
-			const origin = current.pathname + current.search + current.hash;
 			// Save the submitted search in this history entry, not on every keystroke.
-			window.history.replaceState(null, '', origin);
-			router.push(withExplorerReturnTo(route, origin));
+			window.history.replaceState(null, '', navigation.origin);
+			router.push(navigation.destination);
 		}}>
 			<input aria-label="Explorer search" aria-invalid={error ? true : undefined}
 				aria-describedby={error ? 'explorer-search-error' : undefined}
-				placeholder="Hash, address, ledger, operation ID, or CODE:ISSUER"
+				placeholder="Hash, address, ledger, operation ID, or asset code"
 				maxLength={128} value={query} onChange={(event) => { setQuery(event.currentTarget.value); setError(null); }} />
 			<select aria-label="Search type" value={type}
 				onChange={(event) => { setType(event.currentTarget.value); setError(null); }}>
