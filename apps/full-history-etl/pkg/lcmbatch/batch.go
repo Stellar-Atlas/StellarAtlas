@@ -32,7 +32,7 @@ type Batch struct {
 	LastLedgerHash    xdr.Hash
 
 	decoded []byte
-	metas   xdr.LedgerCloseMetaBatchLedgerCloseMetasView
+	metas   []xdr.LedgerCloseMetaView
 }
 
 const maxXDRDepth = 1500 // Matches stellar-core and the SDK's zero-copy views.
@@ -61,13 +61,6 @@ func DecodeFile(path string, expectedStart, maximumEnd uint32, limits Limits) (*
 	view := xdr.LedgerCloseMetaBatchView(decoded)
 	if err := view.ValidateFull(); err != nil {
 		return nil, fmt.Errorf("validate LedgerCloseMetaBatch XDR: %w", err)
-	}
-	raw, err := view.Raw()
-	if err != nil {
-		return nil, fmt.Errorf("measure LedgerCloseMetaBatch XDR: %w", err)
-	}
-	if len(raw) != len(decoded) {
-		return nil, fmt.Errorf("LedgerCloseMetaBatch XDR has %d trailing bytes", len(decoded)-len(raw))
 	}
 
 	startView, err := view.StartSequence()
@@ -111,7 +104,30 @@ func DecodeFile(path string, expectedStart, maximumEnd uint32, limits Limits) (*
 	if expectedCount > limits.MaxLedgers {
 		return nil, fmt.Errorf("batch ledger count %d exceeds limit %d", expectedCount, limits.MaxLedgers)
 	}
-	links, err := validateMetaSequence(metas, start)
+	// SDK All trims each borrowed view to its exact wire extent in one walk.
+	// Keep decoded as the immutable backing owner until Close; never expose spans.
+	spans, err := metas.All()
+	if err != nil {
+		return nil, fmt.Errorf("locate ledger-close-meta spans: %w", err)
+	}
+	if len(spans) != int(count) {
+		return nil, fmt.Errorf("ledger-close-meta span count %d differs from %d", len(spans), count)
+	}
+	// Two uint32 sequence fields plus the XDR array-count prefix consume 12 bytes.
+	remaining := len(decoded) - 12
+	if remaining < 0 {
+		return nil, fmt.Errorf("LedgerCloseMetaBatch XDR is shorter than its header")
+	}
+	for _, span := range spans {
+		if len(span) > remaining {
+			return nil, fmt.Errorf("ledger-close-meta span exceeds remaining XDR bytes")
+		}
+		remaining -= len(span)
+	}
+	if remaining != 0 {
+		return nil, fmt.Errorf("LedgerCloseMetaBatch XDR has %d trailing bytes", remaining)
+	}
+	links, err := validateMetaSequence(spans, start)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +144,7 @@ func DecodeFile(path string, expectedStart, maximumEnd uint32, limits Limits) (*
 		FirstPreviousHash: links.firstPrevious,
 		LastLedgerHash:    links.last,
 		decoded:           decoded,
-		metas:             metas,
+		metas:             spans,
 	}, nil
 }
 
@@ -141,14 +157,9 @@ func (b *Batch) ForEach(maxMemoryBytes int64, fn func(xdr.LedgerCloseMeta) error
 		return fmt.Errorf("decoded memory limit must be positive")
 	}
 	index := 0
-	for metaView, viewErr := range b.metas.Iter() {
-		if viewErr != nil {
-			return fmt.Errorf("read ledger-close-meta %d: %w", index, viewErr)
-		}
-		raw, err := metaView.Raw()
-		if err != nil {
-			return fmt.Errorf("measure ledger-close-meta %d: %w", index, err)
-		}
+	for _, metaView := range b.metas {
+		// Only private SDK-trimmed spans enter this cache; no fat view is cast.
+		raw := []byte(metaView)
 		var meta xdr.LedgerCloseMeta
 		opts := xdr.DecodeOptions{MaxDepth: maxXDRDepth, MaxInputLen: len(raw), MaxMemoryBytes: maxMemoryBytes}
 		n, err := xdr.UnmarshalWithOptions(bytes.NewReader(raw), &meta, opts)
@@ -182,14 +193,11 @@ type sequenceLinks struct {
 	last          xdr.Hash
 }
 
-func validateMetaSequence(metas xdr.LedgerCloseMetaBatchLedgerCloseMetasView, start uint32) (sequenceLinks, error) {
+func validateMetaSequence(metas []xdr.LedgerCloseMetaView, start uint32) (sequenceLinks, error) {
 	var links sequenceLinks
 	var previousHash xdr.Hash
 	index := 0
-	for meta, viewErr := range metas.Iter() {
-		if viewErr != nil {
-			return links, fmt.Errorf("read ledger-close-meta %d: %w", index, viewErr)
-		}
+	for _, meta := range metas {
 		version, err := meta.V()
 		if err != nil {
 			return links, fmt.Errorf("read ledger-close-meta %d version: %w", index, err)

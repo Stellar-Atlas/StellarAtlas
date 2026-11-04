@@ -13,9 +13,14 @@ type Emitter interface {
 	Emit(context.Context, string, uint32, any) error
 }
 
+type virtualLedgerEmitter interface {
+	VirtualLedgerTransactions() bool
+}
+
 type Projector struct {
-	networkPassphrase string
-	emitter           Emitter
+	networkPassphrase         string
+	emitter                   Emitter
+	virtualLedgerTransactions bool
 }
 
 func New(networkPassphrase string, emitter Emitter) (*Projector, error) {
@@ -25,7 +30,11 @@ func New(networkPassphrase string, emitter Emitter) (*Projector, error) {
 	if emitter == nil {
 		return nil, fmt.Errorf("row emitter is required")
 	}
-	return &Projector{networkPassphrase: networkPassphrase, emitter: emitter}, nil
+	virtual := false
+	if emitter, ok := emitter.(virtualLedgerEmitter); ok {
+		virtual = emitter.VirtualLedgerTransactions()
+	}
+	return &Projector{networkPassphrase: networkPassphrase, emitter: emitter, virtualLedgerTransactions: virtual}, nil
 }
 
 func (p *Projector) ProcessLedger(
@@ -41,6 +50,9 @@ func (p *Projector) ProcessLedger(
 		return err
 	}
 	sequence := meta.LedgerSequence()
+	if p.virtualLedgerTransactions && meta.LedgerHeaderHistoryEntry().Ext.V != 0 {
+		return fmt.Errorf("virtual ledger_transactions requires LedgerHeaderHistoryEntry.Ext.V=0 at ledger %d", sequence)
+	}
 	historyLedger := input.HistoryArchiveLedgerFromLCM(meta)
 	ledger, err := transform.TransformLedger(historyLedger, meta)
 	if err != nil {
@@ -97,12 +109,15 @@ func (p *Projector) projectTransactions(
 		if err := p.emit(ctx, "history_transactions", sequence, transaction); err != nil {
 			return err
 		}
-		ledgerTransaction, err := transform.TransformLedgerTransaction(
-			item.Transaction,
-			item.LedgerHistory,
-		)
-		if err != nil {
-			return fmt.Errorf("transform ledger transaction at ledger %d: %w", sequence, err)
+		var ledgerTransaction any
+		if !p.virtualLedgerTransactions {
+			ledgerTransaction, err = transform.TransformLedgerTransaction(
+				item.Transaction,
+				item.LedgerHistory,
+			)
+			if err != nil {
+				return fmt.Errorf("transform ledger transaction at ledger %d: %w", sequence, err)
+			}
 		}
 		if err := p.emit(ctx, "ledger_transactions", sequence, ledgerTransaction); err != nil {
 			return err
