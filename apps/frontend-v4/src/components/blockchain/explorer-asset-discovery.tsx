@@ -12,6 +12,11 @@ import { AssetIdentityFilters } from './explorer-asset-identity-filters';
 import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 
+const observationFacets = [
+	['q', 'Search'], ['min_ledger', 'From ledger'], ['max_ledger', 'To ledger'],
+	['start_time', 'From time'], ['end_time', 'To time']
+] as const;
+
 export function ExplorerAssetDiscovery({ defaultQuery = '' }: { readonly defaultQuery?: string }): React.JSX.Element {
 	const pathname = usePathname(), params = useSearchParams(), search = params.toString();
 	const fallback = pathname === '/explorer/assets' ? '' : defaultQuery;
@@ -20,6 +25,8 @@ export function ExplorerAssetDiscovery({ defaultQuery = '' }: { readonly default
 		catch (failure) { return { selection: null, error: failure instanceof Error ? failure.message : 'Invalid asset search.' }; }
 	}, [search, fallback]);
 	const selection = route.selection, state = useAssetDiscoveryPage(selection), { page, busy } = state;
+	const applied = selection?.query;
+	const hasFilters = applied && Object.values(applied).some(Boolean);
 	const restored = useMemo(() => assetDiscoveryDraft(new URLSearchParams(search), fallback), [search, fallback]);
 	const [draft, setDraft] = useState<ExplorerFilters>(restored), [inputError, setInputError] = useState<string | null>(null);
 	useEffect(() => { setDraft(restored); setInputError(null); }, [restored]);
@@ -44,28 +51,48 @@ export function ExplorerAssetDiscovery({ defaultQuery = '' }: { readonly default
 			}
 		} catch (failure) { setInputError(failure instanceof Error ? failure.message : 'Invalid asset search.'); }
 	};
+	const removeFilter = (key: string) => {
+		if (applied) navigate({ query: { ...applied, [key]: '' }, cursor: null });
+	};
 	return <div className={styles.workspace}>
 		<ExplorerEntityNavigation active="assets" />
 		<section className={styles.panel} aria-label="Asset discovery" aria-busy={busy}>
 			<div><h2>Asset discovery</h2><p className={styles.muted}>Search by asset code, issuer or contract address.</p></div>
-			<form className={ui.search} onSubmit={event => { event.preventDefault(); navigate({ query: draft, cursor: null }); }}>
-				<input aria-label="Search assets" maxLength={2048} placeholder="Asset code, G-address, or C-address" value={draft.q ?? ''} onChange={event => setDraft({ ...draft, q: event.currentTarget.value })} />
-				<button disabled={busy} type="submit">Search assets</button>
-				{busy && <button type="button" onClick={state.cancel}>Cancel asset search</button>}
-			</form>
-			{selection && <AssetIdentityFilters query={selection.query} busy={busy} onRemove={key => navigate({ query: { ...selection.query, [key]: '' }, cursor: null })} />}
-			<details className={ui.filters}><summary>Observed range filters<span>Optional ledger and time bounds</span></summary>
-				<div className={styles.form}>
-					{(['min_ledger', 'max_ledger'] as const).map((key, index) => <label key={key}>{index === 0 ? 'From ledger' : 'To ledger'}<input type="number" min="1" max="4294967295" value={draft[key] ?? ''} onChange={event => setDraft({ ...draft, [key]: event.currentTarget.value })} /></label>)}
-					{(['start_time', 'end_time'] as const).map((key, index) => <label key={key}>{index === 0 ? 'From time' : 'To time'}<input type="datetime-local" value={localDate(draft[key] ?? '')} onChange={event => setDraft({ ...draft, [key]: isoDate(event.currentTarget.value) })} /></label>)}
+			<form className={styles.provenance} noValidate onSubmit={event => { event.preventDefault(); navigate({ query: draft, cursor: null }); }}>
+				<div className={ui.search}>
+					<input aria-label="Search assets" maxLength={2048} placeholder="Asset code, G-address, or C-address" value={draft.q ?? ''} onChange={event => setDraft({ ...draft, q: event.currentTarget.value })} />
+					<button disabled={busy} type="submit">Search assets</button>
+					{busy && <button type="button" onClick={state.cancel}>Cancel asset search</button>}
 				</div>
-				<div className={styles.actions}><button type="button" disabled={busy} onClick={() => navigate({ query: draft, cursor: null })}>Apply observed range</button><button type="button" disabled={busy} onClick={() => navigate({ query: {}, cursor: null })}>Clear filters</button></div>
-			</details>
+				<details className={ui.filters}><summary>Filters<span>Exact code, issuer, ledger or time</span></summary>
+					<div className={styles.form}>
+						<label>Exact asset code<input maxLength={2048} value={draft.symbol ?? ''} onChange={event => setDraft({ ...draft, symbol: event.currentTarget.value })} /></label>
+						<label>Issuer address<input maxLength={56} value={draft.issuer ?? ''} onChange={event => setDraft({ ...draft, issuer: event.currentTarget.value })} /></label>
+						{(['min_ledger', 'max_ledger'] as const).map((key, index) => <label key={key}>{index === 0 ? 'From ledger' : 'To ledger'}<input type="number" min="1" max="4294967295" value={draft[key] ?? ''} onChange={event => setDraft({ ...draft, [key]: event.currentTarget.value })} /></label>)}
+						{(['start_time', 'end_time'] as const).map((key, index) => <label key={key}>{index === 0 ? 'From time' : 'To time'}<input type="datetime-local" value={localDate(draft[key] ?? '')} onChange={event => setDraft({ ...draft, [key]: isoDate(event.currentTarget.value) })} /></label>)}
+					</div>
+					<div className={styles.actions}><button type="submit" disabled={busy}>Apply filters</button></div>
+				</details>
+			</form>
+			{(hasFilters || route.error) && <div className={styles.provenance} role="group" aria-label="Applied asset filters">
+				{applied && <>
+					<AssetIdentityFilters query={applied} busy={busy} onRemove={removeFilter} />
+					{observationFacets.map(([key, label]) => {
+						const value = applied[key];
+						if (!value) return null;
+						return <div key={key} className={styles.identityFilter}>
+							<span>{label}: {key === 'start_time' || key === 'end_time' ? <LocalDateTime dateTime={value} /> : value}</span>
+							<button type="button" disabled={busy} onClick={() => removeFilter(key)} aria-label={'Remove ' + label.toLowerCase() + ' filter'}>Remove</button>
+						</div>;
+					})}
+				</>}
+				<div className={styles.actions}><button type="button" disabled={busy} onClick={() => navigate({ query: {}, cursor: null })}>Clear all filters</button></div>
+			</div>}
 			{busy && <p role="status">Loading assets…</p>}
 			{error && <p role="alert" className={styles.error}>{error}{selection && <button type="button" disabled={busy} onClick={state.retry}>Retry assets</button>}</p>}
 			{page && <>
-				<p className={styles.muted}>{page.data.length} assets on this page{page.generatedAt && <> · catalog <LocalDateTime dateTime={page.generatedAt} /></>}</p>
-				{!page.catalogueReady && <p className={styles.muted}>Asset catalog is not available yet.</p>}
+				{(page.catalogueReady || page.data.length > 0) && <p className={styles.muted}>{page.data.length} {page.data.length === 1 ? 'asset' : 'assets'} on this page{page.generatedAt && <> · catalogue <LocalDateTime dateTime={page.generatedAt} /></>}</p>}
+				<p className={styles.muted}>{page.catalogueReady ? 'Published catalogue coverage may be incomplete.' : 'Asset catalogue is not available yet.'}</p>
 				{(page.catalogueReady || page.data.length > 0) && <ExplorerInvestigationScope origin={pathname + (search ? '?' + search : '')}><AssetTable assets={page.data} filters={selection?.query} /></ExplorerInvestigationScope>}
 			</>}
 			<div className={styles.actions}>
