@@ -72,7 +72,55 @@ it('rejects a raw path at the helper and keeps delimiters inside individual quer
 	expect(url.hash).toBe('');
 });
 
-it.each(['file:///etc/passwd', 'https://user:pass@api.test', 'https://api.test/?url=evil', 'https://api.test/#fragment'])(
+it.each([
+	[undefined, 'http://127.0.0.1:3000'],
+	['  http://localhost:3000  ', 'http://localhost:3000'],
+	['http://10.12.0.2:8080/gateway/team-a/', 'http://10.12.0.2:8080/gateway/team-a'],
+	['http://127.0.0.1:3000/gateway///', 'http://127.0.0.1:3000/gateway'],
+	['https://API.INTERNAL.TEST:8443/gateway/team%20a/', 'https://api.internal.test:8443/gateway/team%20a'],
+	['https://[fd00:0:0::1]:8443/gateway/', 'https://[fd00::1]:8443/gateway']
+])('preserves a well-formed server API base: %s', async (base, expected) => {
+	if (base === undefined) delete process.env.STELLAR_ATLAS_PUBLIC_API_URL;
+	else process.env.STELLAR_ATLAS_PUBLIC_API_URL = base;
+	const query = 'view=typed&limit=20';
+	const result = await getTransaction(new Request(requestBase + '?' + query), {
+		params: Promise.resolve({ hash })
+	});
+	expect(result.status).toBe(200);
+	expect(fetchMock).toHaveBeenCalledTimes(1);
+	expect(fetchMock.mock.calls[0]?.[0]).toBe(expected + '/v1/analytics/transactions/' + hash + '?' + query);
+});
+
+it.each([
+	'file:///etc/passwd',
+	'https://user:pass@api.test',
+	'https://@api.test',
+	'https://api.test/?url=evil',
+	'https://api.test/?',
+	'https://api.test/#fragment',
+	'https://api.test/#',
+	'https:////api.test/gateway',
+	'https://api.test\\gateway',
+	'https://api.\tinternal.test/gateway',
+	'https://api.test:99999/gateway',
+	'http:127.0.0.1:3000',
+	'http://2130706433:3000',
+	'http://0x7f.0.0.1:3000',
+	'http://0177.0.0.1:3000',
+	'http://127.1:3000',
+	'http://%31%32%37.0.0.1:3000',
+	'https://api.test/gateway/../private',
+	'https://api.test/gateway/%2e%2E/private',
+	'https://api.test/gateway/%2fprivate',
+	'https://api.test/gateway/%5cprivate',
+	'https://api.test/gateway/%252e%252e/private',
+	'https://api.test/gateway/%3fnext',
+	'https://api.test/gateway/%23next',
+	'https://api.test/gateway/%00private',
+	'https://api.test/gateway/%zz',
+	'https://api.test//gateway',
+	'https://api.test/gateway//private'
+])(
 	'fails closed for an invalid server API base: %s',
 	async (base) => {
 		process.env.STELLAR_ATLAS_PUBLIC_API_URL = base;
