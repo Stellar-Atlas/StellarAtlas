@@ -8,6 +8,7 @@ import { assetsAndIssuersGuide } from './developer-guide-assets-and-issuers';
 import { liveUpdatesGuide } from './developer-guide-live-updates';
 import { sdkPlanGuide } from './developer-guide-sdk-plan';
 import { contractVerificationGuide } from './developer-guide-contract-verification';
+import { saveRestPage } from './save-rest-page-example';
 export type {
 	DeveloperGuidePage,
 	DeveloperGuideSection
@@ -56,8 +57,7 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 							Each command below allows five seconds to connect and thirty
 							seconds for the whole request, without automatic retries. A client
 							timeout is a failed read, not evidence that rows are absent or that
-							server work stopped. Treat a file saved by a failed request as
-							incomplete; continue only after a successful response.
+							server work stopped. Continue only after a successful response.
 						</p>
 						<p>
 							For a wallet or token project, follow the{' '}
@@ -91,7 +91,22 @@ export const developerGuidePages: readonly DeveloperGuidePage[] = [
 				title: '2. Read payment operations',
 				content: (
 					<>
-						<Code>{`curl --fail-with-body --connect-timeout 5 --max-time 30 '${operationUrl}&offset=${operationInput.offset}' --output operations-page-1.json`}</Code>
+						<p>
+							Run this command in Bash with curl 7.84 or newer, jq and GNU
+							coreutils. It replaces <code>operations-page-1.json</code> after
+							a live HTTP success containing a JSON object. If it fails, any
+							existing file is from a previous run. Wait for a successful save
+							before using the file in step 3.
+						</p>
+						<Code>
+							{saveRestPage(
+								`${operationUrl.pathname}${operationUrl.search}&offset=${operationInput.offset}`,
+								'operations-page-1.json',
+								undefined,
+								30,
+								true
+							)}
+						</Code>
 						<p>
 							This two-ledger window is an example, not a promise of current
 							coverage. Replace it with a range from your catalog response. The

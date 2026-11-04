@@ -34,6 +34,18 @@ export function poolDetailHref(id: string, context: ExplorerFilters = {}): strin
 	return '/explorer/liquidity-pools/' + encodeURIComponent(id) + (query.size ? '?' + query : '');
 }
 
+export function poolRowDetailHref(id: string, ledger: unknown, deleted: unknown, context: ExplorerFilters): string | null {
+	if (!id) return null;
+	if (!hasPoolHistory(context)) return poolDetailHref(id, context);
+	const sequence = windowLedger(ledger);
+	if (!Number.isSafeInteger(sequence) || sequence < 2 || sequence > 4294967295) return null;
+	return poolDetailHref(id, {
+		min_ledger: String(sequence),
+		max_ledger: String(sequence),
+		deleted: typeof deleted === 'boolean' ? String(deleted) : context.deleted ?? ''
+	});
+}
+
 export function poolListHref(context: ExplorerFilters): string {
 	const query = poolContextQuery(context);
 	return '/explorer/liquidity-pools' + (query.size ? '?' + query : '');

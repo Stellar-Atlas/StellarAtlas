@@ -40,10 +40,11 @@ function LedgerActivity({ ledger }: { readonly ledger: string }): React.JSX.Elem
 	</section>;
 }
 
-function LedgerTransactions({ ledger, offset, onPage }: {
+export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo }: {
 	readonly ledger: string;
 	readonly offset: number;
 	readonly onPage: (offset: number) => void;
+	readonly detailReturnTo?: string;
 }): React.JSX.Element {
 	const request = useExplorerRequest<LedgerTransactionPage | null>(null, 'Transaction records could not be loaded.');
 	const controller = useRef<AbortController | null>(null);
@@ -62,13 +63,14 @@ function LedgerTransactions({ ledger, offset, onPage }: {
 	const nextOffset = page?.nextOffset ?? null;
 	return <section id="ledger-transactions" aria-label="Ledger transactions" aria-busy={request.loading}>
 		<h3>Transactions in ledger {ledger}</h3>
-		<p className={styles.muted}>Published records only; historical coverage may be incomplete.</p>
+		<p className={styles.muted}>Published records only. This endpoint does not confirm ledger coverage.</p>
 		<ExplorerRequestNotice loading={request.loading} error={request.error} onRetry={() => void load()} />
 		{page && <>
+			{request.error && page.records.length > 0 && <p className={styles.muted}>Showing last loaded rows for this page.</p>}
 			{page.records.length ? <ExplorerTransactionTable transactions={page}
 				caption={`Published transaction records for ledger ${ledger}. Dates are shown in your local time.`}
-				returnTo={returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')} />
-				: <p>No transaction records returned for this page.</p>}
+				returnTo={detailReturnTo ?? returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')} />
+				: !request.error && !request.loading && <p>No published transaction records returned for this page.</p>}
 		</>}
 		{(page || offset > 0) && <div className={styles.actions}>
 			<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
