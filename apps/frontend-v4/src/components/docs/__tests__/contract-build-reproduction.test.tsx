@@ -22,6 +22,23 @@ const sha256 = (value: Buffer): string =>
 	createHash('sha256').update(value).digest('hex');
 
 describe('controlled contract reproduction guide', () => {
+	it('renders a bounded real-contract lookup and separates it from the rebuild', () => {
+		const lookup = contractVerificationGuide.sections.find(
+			(section) => section.id === 'lookup-provenance'
+		);
+		const boundaries = contractVerificationGuide.sections.find(
+			(section) => section.id === 'verification-boundaries'
+		);
+		const html = renderToStaticMarkup(lookup?.content);
+		expect(html).toContain('curl -q --include --fail-with-body --connect-timeout 5 --max-time 60');
+		expect(html).toContain('/v1/contracts/CBQSUF57OYX4RIMCZV62DKN6JFOTEKPHIZASMJYOUOCNHGNG2P3XQLSE/provenance');
+		expect(html).toContain('f60d33ec57eecee04b52d048c1c079983ff1b3834c8195fea811b025fb889361');
+		expect(html).toContain('build.record.commit');
+		const copy = renderToStaticMarkup(boundaries?.content);
+		expect(copy).toContain('Build attested');
+		expect(copy).toContain('source-to-Wasm match');
+		expect(copy).toContain('href="#offline-reproduction"');
+	});
 	it('uses the accepted derived manifests without changing dependencies', () => {
 		expect(sha256(artifact('Cargo.toml'))).toBe(example.rootSha256);
 		expect(sha256(artifact('Cargo.lock'))).toBe(example.lockSha256);
