@@ -16,6 +16,7 @@ import styles from './explorer-entity.module.css';
 const InvestigationOrigin = createContext<{
 	origin: string | null;
 	returnTo: string | null;
+	pairDetailOrigin?: string | null;
 }>({ origin: null, returnTo: null });
 
 export function useExplorerReturnTo(): string | null {
@@ -41,6 +42,17 @@ export function ExplorerInvestigationScope({
 			{children}
 		</InvestigationOrigin.Provider>
 	);
+}
+
+/** Preserve pair paging for its record details without changing ordinary asset links. */
+export function ExplorerPairDetailScope({ origin, children }: {
+	readonly origin: string;
+	readonly children: ReactNode;
+}): React.JSX.Element {
+	const inherited = useContext(InvestigationOrigin);
+	return <InvestigationOrigin.Provider value={{ ...inherited, pairDetailOrigin: sanitizeExplorerReturnTo(origin) }}>
+		{children}
+	</InvestigationOrigin.Provider>;
 }
 
 /** One URL context per explorer, shared by all linked record components. */
@@ -85,6 +97,7 @@ export function ExplorerLink({
 	readonly href: string;
 	readonly collectionContext?: boolean;
 }): React.JSX.Element {
-	const { origin } = useContext(InvestigationOrigin);
-	return <a {...props} href={withExplorerReturnTo(href, origin, collectionContext)} />;
+	const { origin, pairDetailOrigin } = useContext(InvestigationOrigin);
+	const detail = /^\/explorer\/(?:trades|transactions|operations|liquidity-pools)\/[^/?#]+(?:[?#]|$)/.test(href);
+	return <a {...props} href={withExplorerReturnTo(href, detail ? pairDetailOrigin ?? origin : origin, collectionContext)} />;
 }

@@ -110,4 +110,22 @@ describe('explorer return context', () => {
 		const flat = catalogue.replace('/explorer/assets?', '/explorer/ledgers?');
 		expect(new URL(withExplorerReturnTo(tx, flat), base).searchParams.get('return_to')).toBe(flat);
 	});
+
+	it('preserves only the explicit pair → asset Markets → filtered catalogue chain', () => {
+		const catalogue = '/explorer/assets?symbol=USD&cursor=next';
+		const markets = '/explorer/assets/native?tab=markets&market_view=liquidity-pools&pool_offset=25';
+		const pair = '/explorer/markets?asset_a=native&asset_b=USD%3AGISSUER&a-to-b_offset=25&pool-a-b_offset=50';
+		const nested = withRawReturn(pair, withRawReturn(markets, withRawReturn(catalogue, '/explorer/ledgers')));
+		const expected = withRawReturn(pair, withRawReturn(markets, catalogue));
+		const detail = withExplorerReturnTo('/explorer/operations/801?min_ledger=4999', nested);
+		expect(new URL(detail, base).searchParams.get('return_to')).toBe(expected);
+		expect(sanitizeExplorerReturnTo(expected)).toBe(expected);
+		expect(sanitizeExplorerReturnTo(withRawReturn(pair, withRawReturn(pair, markets)))).toBe(pair);
+		expect(sanitizeExplorerReturnTo(withRawReturn(pair, markets.replace('tab=markets', 'tab=holders')))).toBe(pair);
+		expect(sanitizeExplorerReturnTo(withRawReturn(pair, '//evil.invalid/explorer/assets/native?tab=markets'))).toBe(pair);
+		const long = withRawReturn(pair, withRawReturn(markets, catalogue + '&q=' + 'x'.repeat(3500)));
+		const bounded = withExplorerReturnTo('/explorer/operations/' + '1'.repeat(500), long);
+		expect(bounded.length).toBeLessThanOrEqual(4096);
+		expect(new URL(bounded, base).searchParams.get('return_to')).toBe(pair);
+	});
 });

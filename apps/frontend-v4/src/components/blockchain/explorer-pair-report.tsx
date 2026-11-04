@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ExplorerLink as Link } from './explorer-investigation';
+import { useSearchParams } from 'next/navigation';
+import { ExplorerLink as Link, ExplorerPairDetailScope } from './explorer-investigation';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { PairReportSection } from './explorer-pair-report-section';
 import { ExplorerMarketHistory } from './explorer-market-history';
@@ -21,12 +22,18 @@ import styles from './explorer-entity.module.css';
 import ui from './explorer-pair-report.module.css';
 
 type Report = Awaited<ReturnType<typeof loadPairReport>>;
+function acceptedOffsets(report: Report, requested: Readonly<Record<PairReportLane, number>>) {
+	const offsets = { ...requested };
+	for (const lane of lanes) offsets[lane] = report.sections[lane].page?.offset ?? requested[lane];
+	return offsets;
+}
 
 export function ExplorerPairReport({
 	initialFilters
 }: {
 	readonly initialFilters: ExplorerFilters;
 }): React.JSX.Element {
+	const returnTargets = useSearchParams().getAll('return_to');
 	const [draft, setDraft] = useState<PairReportSelection>({
 		assetA: initialFilters.asset_a ?? '',
 		assetB: initialFilters.asset_b ?? '',
@@ -75,7 +82,7 @@ export function ExplorerPairReport({
 			window.history.replaceState(
 				null,
 				'',
-				reportHref(result.selection, initialOffsets.current, origins.length === 1 ? origins[0] : null)
+				reportHref(result.selection, acceptedOffsets(result, initialOffsets.current), origins.length === 1 ? origins[0] : null)
 			);
 		})()
 			.catch((cause: unknown) => {
@@ -261,19 +268,21 @@ export function ExplorerPairReport({
 				)}
 			</section>
 			{report && <ExplorerMarketHistory key={reportHref(report.selection)} selection={report.selection} />}
-			{report &&
-				lanes.map((lane) => (
+			{report && <ExplorerPairDetailScope origin={reportHref(report.selection,
+				acceptedOffsets(report, initialOffsets.current), returnTargets.length === 1 ? returnTargets[0] : null)}>
+				{lanes.map((lane) => (
 					<PairReportSection
 						key={reportHref(report.selection) + lane}
 						lane={lane}
 						selection={report.selection}
 						initial={report.sections[lane]}
 						initialOffset={initialOffsets.current[lane]}
-						onRecovered={(page) => setReport((current) => current?.selection === report.selection
+						onPage={(page) => setReport((current) => current?.selection === report.selection
 							? { ...current, sections: { ...current.sections, [lane]: { page } } }
 							: current)}
 					/>
 				))}
+			</ExplorerPairDetailScope>}
 		</div>
 	);
 }

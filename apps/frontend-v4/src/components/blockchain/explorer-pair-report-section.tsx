@@ -24,13 +24,13 @@ export function PairReportSection({
 	selection,
 	initial,
 	initialOffset,
-	onRecovered
+	onPage
 }: {
 	readonly lane: PairReportLane;
 	readonly selection: PairReportSelection;
 	readonly initial: PairReportSectionResult;
 	readonly initialOffset: number;
-	readonly onRecovered: (page: AnalyticsEntityPage) => void;
+	readonly onPage: (page: AnalyticsEntityPage) => void;
 }): React.JSX.Element {
 	const [page, setPage] = useState(initial.page),
 		[busy, setBusy] = useState(false);
@@ -70,8 +70,8 @@ export function PairReportSection({
 			)
 				throw new Error('The returned window did not match the report.');
 			if (page) setHistory((old) => previous ? old.slice(0, -1) : [...old, page.offset]);
-			else onRecovered(next);
 			setPage(next);
+			onPage(next);
 			const url = new URL(window.location.href);
 			if (next.offset) url.searchParams.set(lane + '_offset', String(next.offset));
 			else url.searchParams.delete(lane + '_offset');
