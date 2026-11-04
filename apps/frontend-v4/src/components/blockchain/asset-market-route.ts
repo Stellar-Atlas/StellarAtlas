@@ -1,4 +1,5 @@
-import { sanitizeExplorerReturnTo } from '../../api/explorer-return-context';
+import { sanitizeExplorerReturnTo, withExplorerReturnTo } from '../../api/explorer-return-context';
+import { validatePairReportSelection } from '../../api/explorer-pair-report';
 
 export interface AssetMarketRoute {
 	readonly view: 'trades' | 'liquidity-pools';
@@ -12,15 +13,43 @@ export function assetTradeSideHref(asset: string, side: 'sell' | 'buy', window: 
 		[side === 'sell' ? 'selling_asset' : 'buying_asset']: asset,
 		min_ledger: String(window.minLedger), max_ledger: String(window.maxLedger), limit: '25'
 	});
-	const returnTo = sanitizeExplorerReturnTo(origin);
-	if (returnTo) {
-		// Previous results can remain visible while a different URL window fails or loads.
-		const acceptedOrigin = new URL(returnTo, 'https://explorer-return.invalid');
-		acceptedOrigin.searchParams.set('market_trade_min', String(window.minLedger));
-		acceptedOrigin.searchParams.set('market_trade_max', String(window.maxLedger));
-		query.set('return_to', acceptedOrigin.pathname + '?' + acceptedOrigin.searchParams);
-	}
+	const returnTo = acceptedTradeOrigin(origin, window);
+	if (returnTo) query.set('return_to', returnTo);
 	return '/explorer/trades?' + query;
+}
+
+function acceptedTradeOrigin(origin: string, window: { readonly minLedger: number; readonly maxLedger: number }): string | null {
+	const returnTo = sanitizeExplorerReturnTo(origin);
+	if (returnTo === null) return null;
+	// Previous results can remain visible while a different URL window fails or loads.
+	const accepted = new URL(returnTo, 'https://explorer-return.invalid');
+	accepted.searchParams.set('market_trade_min', String(window.minLedger));
+	accepted.searchParams.set('market_trade_max', String(window.maxLedger));
+	return accepted.pathname + '?' + accepted.searchParams;
+}
+
+/** Use the inspected asset as base regardless of which way the observed trade ran. */
+export function assetPairReportHref(
+	asset: string,
+	selling: string,
+	buying: string,
+	window: { readonly minLedger: number; readonly maxLedger: number },
+	origin: string
+): string | null {
+	const counter = asset === selling ? buying : asset === buying ? selling : null;
+	if (counter === null) return null;
+	const minLedger = String(window.minLedger), maxLedger = String(window.maxLedger);
+	try {
+		const pair = validatePairReportSelection({
+			assetA: asset, assetB: counter, minLedger, maxLedger, limit: '25'
+		});
+		const query = new URLSearchParams({
+			asset_a: pair.assetA, asset_b: pair.assetB, min_ledger: minLedger, max_ledger: maxLedger
+		});
+		return withExplorerReturnTo('/explorer/markets?' + query, acceptedTradeOrigin(origin, window), true);
+	} catch {
+		return null;
+	}
 }
 type Query = Pick<URLSearchParams, 'get' | 'getAll'>;
 const rangeKeys = ['market_trade_min', 'market_trade_max'] as const;
