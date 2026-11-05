@@ -2,6 +2,16 @@ import {
 	fetchTransactionByHash,
 	type TransactionLookupDTO
 } from './HorizonLedgerClient.js';
+import {
+	fetchExplorerAccount,
+	type ExplorerAccountDTO
+} from './ExplorerAccountClient.js';
+
+export { fetchExplorerAccount };
+export type {
+	ExplorerAccountBalanceDTO,
+	ExplorerAccountDTO
+} from './ExplorerAccountClient.js';
 
 export type ExplorerSearchType =
 	'auto' | 'account' | 'asset' | 'contract' | 'ledger' | 'transaction';
@@ -14,22 +24,6 @@ export interface ExplorerLedgerDTO {
 	readonly sequence: string;
 	readonly source: 'horizon' | 'postgres_canonical';
 	readonly transactionCount: number | null;
-}
-
-export interface ExplorerAccountBalanceDTO {
-	readonly assetCode: string | null;
-	readonly assetIssuer: string | null;
-	readonly assetType: string;
-	readonly balance: string;
-}
-
-export interface ExplorerAccountDTO {
-	readonly accountId: string;
-	readonly balances: readonly ExplorerAccountBalanceDTO[];
-	readonly lastModifiedLedger: string | null;
-	readonly sequence: string;
-	readonly source: 'horizon';
-	readonly subentryCount: number;
 }
 
 export interface ExplorerAssetDTO {
@@ -114,22 +108,6 @@ interface HorizonLedgerRecord {
 	transaction_count?: number;
 }
 
-interface HorizonAccountRecord {
-	account_id?: string;
-	balances?: HorizonBalanceRecord[];
-	id?: string;
-	last_modified_ledger?: number;
-	sequence?: string;
-	subentry_count?: number;
-}
-
-interface HorizonBalanceRecord {
-	asset_code?: string;
-	asset_issuer?: string;
-	asset_type?: string;
-	balance?: string;
-}
-
 interface HorizonAssetRecord {
 	amount?: string;
 	asset_code?: string;
@@ -200,24 +178,6 @@ export const fetchExplorerLedger = async (
 
 	const record = (await response.json()) as HorizonLedgerRecord;
 	return mapLedger(record);
-};
-
-export const fetchExplorerAccount = async (
-	horizonUrl: string,
-	accountId: string
-): Promise<ExplorerAccountDTO | null> => {
-	const response = await fetch(
-		new URL(`accounts/${accountId}`, getBaseUrl(horizonUrl)),
-		{
-			headers: { Accept: 'application/json' },
-			signal: AbortSignal.timeout(8_000)
-		}
-	);
-	if (response.status === 404) return null;
-	if (!response.ok) throw new Error(`Horizon returned HTTP ${response.status}`);
-
-	const record = (await response.json()) as HorizonAccountRecord;
-	return mapAccount(record);
 };
 
 export const fetchExplorerAssets = async (
@@ -407,37 +367,6 @@ function mapLedger(record: HorizonLedgerRecord): ExplorerLedgerDTO {
 		sequence: record.sequence.toString(),
 		source: 'horizon',
 		transactionCount: record.transaction_count ?? null
-	};
-}
-
-function mapAccount(record: HorizonAccountRecord): ExplorerAccountDTO {
-	const accountId = record.account_id ?? record.id;
-	if (
-		typeof accountId !== 'string' ||
-		typeof record.sequence !== 'string' ||
-		typeof record.subentry_count !== 'number'
-	) {
-		throw new Error('Account record missing from Horizon response');
-	}
-	return {
-		accountId,
-		balances: (record.balances ?? []).map(mapBalance),
-		lastModifiedLedger:
-			typeof record.last_modified_ledger === 'number'
-				? record.last_modified_ledger.toString()
-				: null,
-		sequence: record.sequence,
-		source: 'horizon',
-		subentryCount: record.subentry_count
-	};
-}
-
-function mapBalance(record: HorizonBalanceRecord): ExplorerAccountBalanceDTO {
-	return {
-		assetCode: record.asset_code ?? null,
-		assetIssuer: record.asset_issuer ?? null,
-		assetType: record.asset_type ?? 'unknown',
-		balance: record.balance ?? '0'
 	};
 }
 

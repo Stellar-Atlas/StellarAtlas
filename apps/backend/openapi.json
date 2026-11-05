@@ -1037,7 +1037,7 @@
 		"/v1/explorer/accounts/{accountId}": {
 			"get": {
 				"summary": "Look up an account",
-				"description": "Returns account state from configured Horizon.",
+				"description": "Returns account state from configured Horizon. Classic account details can include exact balance evidence and a Latest-Ledger snapshot marker with optional same-ledger base reserve.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerAccount",
 				"parameters": [
@@ -11208,7 +11208,10 @@
 					"assetCode": { "type": "string", "nullable": true },
 					"assetIssuer": { "type": "string", "nullable": true },
 					"assetType": { "type": "string" },
-					"balance": { "type": "string" }
+					"balance": { "type": "string" },
+					"exact": {
+						"$ref": "#/components/schemas/ExplorerAccountBalanceExact"
+					}
 				}
 			},
 			"ExplorerAccount": {
@@ -11230,7 +11233,144 @@
 					"lastModifiedLedger": { "type": "string", "nullable": true },
 					"sequence": { "type": "string" },
 					"source": { "type": "string", "enum": ["horizon"] },
-					"subentryCount": { "type": "integer", "minimum": 0 }
+					"subentryCount": { "type": "integer", "minimum": 0 },
+					"accounting": {
+						"$ref": "#/components/schemas/ExplorerAccountAccounting"
+					}
+				}
+			},
+			"ExplorerAccountBalanceExact": {
+				"type": "object",
+				"description": "Classic native and trustline balances use nonnegative Int64 raw strings at scale seven. Null fields carry no usable evidence. Liquidity pool shares are separately identified.",
+				"required": [
+					"assetId",
+					"liquidityPoolId",
+					"balanceRaw",
+					"buyingLiabilities",
+					"buyingLiabilitiesRaw",
+					"sellingLiabilities",
+					"sellingLiabilitiesRaw",
+					"trustLineLimit",
+					"trustLineLimitRaw",
+					"isAuthorized",
+					"isAuthorizedToMaintainLiabilities",
+					"isClawbackEnabled",
+					"sponsor"
+				],
+				"properties": {
+					"assetId": {
+						"type": "string",
+						"nullable": true
+					},
+					"liquidityPoolId": {
+						"type": "string",
+						"nullable": true
+					},
+					"balanceRaw": {
+						"type": "string",
+						"nullable": true
+					},
+					"buyingLiabilities": {
+						"type": "string",
+						"nullable": true
+					},
+					"buyingLiabilitiesRaw": {
+						"type": "string",
+						"nullable": true
+					},
+					"sellingLiabilities": {
+						"type": "string",
+						"nullable": true
+					},
+					"sellingLiabilitiesRaw": {
+						"type": "string",
+						"nullable": true
+					},
+					"trustLineLimit": {
+						"type": "string",
+						"nullable": true
+					},
+					"trustLineLimitRaw": {
+						"type": "string",
+						"nullable": true
+					},
+					"isAuthorized": {
+						"type": "boolean",
+						"nullable": true
+					},
+					"isAuthorizedToMaintainLiabilities": {
+						"type": "boolean",
+						"nullable": true
+					},
+					"isClawbackEnabled": {
+						"type": "boolean",
+						"nullable": true
+					},
+					"sponsor": {
+						"type": "string",
+						"nullable": true
+					}
+				}
+			},
+			"ExplorerAccountAccounting": {
+				"type": "object",
+				"description": "Configured Horizon account snapshot. Latest-Ledger binds the snapshot. Base reserve is present only for the exact matching ledger from the same provider. Inventory completeness covers the classic balances returned by the account endpoint.",
+				"required": [
+					"scope",
+					"networkPassphrase",
+					"snapshotStatus",
+					"latestLedger",
+					"ledgerClosedAt",
+					"baseReserveRaw",
+					"baseReserveLedger",
+					"subentryCount",
+					"numSponsoring",
+					"numSponsored",
+					"balanceInventoryComplete"
+				],
+				"properties": {
+					"scope": {
+						"type": "string",
+						"enum": ["horizon_account_balances"]
+					},
+					"networkPassphrase": {
+						"type": "string"
+					},
+					"snapshotStatus": {
+						"type": "string",
+						"enum": ["ledger_bound", "ledger_unavailable"]
+					},
+					"latestLedger": {
+						"type": "string",
+						"nullable": true
+					},
+					"ledgerClosedAt": {
+						"type": "string",
+						"nullable": true
+					},
+					"baseReserveRaw": {
+						"type": "string",
+						"nullable": true
+					},
+					"baseReserveLedger": {
+						"type": "string",
+						"nullable": true
+					},
+					"subentryCount": {
+						"type": "string",
+						"nullable": true
+					},
+					"numSponsoring": {
+						"type": "string",
+						"nullable": true
+					},
+					"numSponsored": {
+						"type": "string",
+						"nullable": true
+					},
+					"balanceInventoryComplete": {
+						"type": "boolean"
+					}
 				}
 			},
 			"ExplorerAsset": {

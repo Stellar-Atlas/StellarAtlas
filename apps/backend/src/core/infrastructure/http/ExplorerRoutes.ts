@@ -87,6 +87,7 @@ export async function mountExplorerRoutes(
 			getExplorerLocalTransactions,
 			getExplorerRecentTransactions,
 			horizonUrl: config.horizonUrl.value,
+			networkPassphrase: config.networkConfig.networkPassphrase,
 			rpcUrl: config.rpcUrl?.value
 		})
 	);
