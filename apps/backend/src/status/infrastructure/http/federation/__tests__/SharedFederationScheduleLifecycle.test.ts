@@ -16,8 +16,10 @@ import { setTimeout } from 'node:timers/promises';
 import { ScheduledFederationProviderBudget } from '../FederationProviderBudget.js';
 import {
 	recoverFederationSchedule,
-	SharedFederationScheduleStore
+	SharedFederationScheduleStore,
+	syncFederationDirectory
 } from '../SharedFederationScheduleStore.js';
+import { fixtureDirectorySync } from './scheduleFixture.js';
 
 const workerSource = `
 	import { registerHooks } from 'node:module';
@@ -44,7 +46,8 @@ const workerSource = `
 	const [, directory, budgetUrl, storeUrl, mode] = process.argv;
 	const { ScheduledFederationProviderBudget } = await import(budgetUrl);
 	const { SharedFederationScheduleStore } = await import(storeUrl);
-	const budget = new ScheduledFederationProviderBudget(new SharedFederationScheduleStore(directory), () => 10000);
+	const sync = process.platform === 'win32' ? async () => {} : undefined;
+	const budget = new ScheduledFederationProviderBudget(new SharedFederationScheduleStore(directory, sync), () => 10000);
 	// Leave no referenced fixture handles after the callback returns.
 	void budget.run('provider.example', async () => {
 		await writeFile(join(directory, 'admitted'), '', { flag: 'wx' });
@@ -138,10 +141,14 @@ it('recovers a killed owner into a new generation without clearing the old lock 
 		const uncertain = join(old, 'federation-schedule.next');
 		await writeFile(uncertain, 'uncertain write', { flag: 'wx' });
 		await expect(
-			recoverFederationSchedule(old, replacement, true)
+			recoverFederationSchedule(old, replacement, true, fixtureDirectorySync)
 		).rejects.toThrow('Uncertain');
 		await unlink(uncertain);
-		await recoverFederationSchedule(old, replacement, true);
+		const recoverySync = jest.fn(
+			fixtureDirectorySync ?? syncFederationDirectory
+		);
+		await recoverFederationSchedule(old, replacement, true, recoverySync);
+		expect(recoverySync.mock.calls).toEqual([[replacement], [root]]);
 		expect(await readFile(join(old, lock), 'utf8')).toBe('fixture owner');
 		expect(await readFile(join(old, state), 'utf8')).toBe(oldState);
 		expect(
@@ -153,7 +160,7 @@ it('recovers a killed owner into a new generation without clearing the old lock 
 			body: Buffer.alloc(0)
 		}));
 		const budget = new ScheduledFederationProviderBudget(
-			new SharedFederationScheduleStore(replacement),
+			new SharedFederationScheduleStore(replacement, fixtureDirectorySync),
 			() => 10_000
 		);
 		for (let i = 0; i < 7; i++) await budget.run('provider.example', request);

@@ -5,6 +5,7 @@ import { setTimeout } from 'node:timers/promises';
 import type { SafeResponse } from '../../asset-metadata/safeHttp.js';
 import { ScheduledFederationProviderBudget } from '../FederationProviderBudget.js';
 import { SharedFederationScheduleStore } from '../SharedFederationScheduleStore.js';
+import { fixtureDirectorySync } from './scheduleFixture.js';
 
 const provider = 'shared.example';
 const stateFile = 'federation-schedule.json';
@@ -31,14 +32,71 @@ describe('shared federation schedule', () => {
 		await rmdir(directory);
 	});
 
+	it('waits for the directory durability barrier before starting the request', async () => {
+		let unlock!: () => void;
+		const barrier = new Promise<void>((resolve) => {
+			unlock = resolve;
+		});
+		let entered!: () => void;
+		const reachedBarrier = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const syncDirectory = jest.fn(async () => {
+			entered();
+			await barrier;
+		});
+		const budget = new ScheduledFederationProviderBudget(
+			new SharedFederationScheduleStore(directory, syncDirectory),
+			() => 10_000
+		);
+		const request = jest.fn(async () => reply(200));
+		const run = budget.run(provider, request);
+		try {
+			await Promise.race([reachedBarrier, run]);
+			expect(syncDirectory).toHaveBeenCalledWith(directory);
+			expect(
+				JSON.parse(await readFile(join(directory, stateFile), 'utf8'))
+			).toEqual([[provider, 70_000, 1, 1, 0, 0]]);
+			expect(request).not.toHaveBeenCalled();
+		} finally {
+			unlock();
+			await run;
+		}
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(syncDirectory).toHaveBeenCalledTimes(2);
+	});
+
+	it.each([1, 2])(
+		'leaves the schedule fenced after sync failure at barrier %s',
+		async (failureBarrier) => {
+			let calls = 0;
+			const syncDirectory = jest.fn(async () => {
+				if (++calls === failureBarrier) throw new Error('sync fixture failure');
+			});
+			const store = new SharedFederationScheduleStore(directory, syncDirectory);
+			const budget = new ScheduledFederationProviderBudget(store, () => 10_000);
+			const request = jest.fn(async () => reply(200));
+			await expect(budget.run(provider, request)).rejects.toThrow(
+				'sync fixture failure'
+			);
+			await expect(store.drain()).rejects.toThrow('requires recovery');
+			await expect(budget.run(provider, request)).rejects.toThrow(
+				'busy or needs recovery'
+			);
+			expect(request).toHaveBeenCalledTimes(failureBarrier - 1);
+			expect(syncDirectory).toHaveBeenCalledTimes(failureBarrier);
+			expect(await readFile(join(directory, lockFile), 'utf8')).toBe('');
+		}
+	);
+
 	it('enforces active and retry limits across independent owners of the same store', async () => {
 		const now = () => 10_000;
 		const one = new ScheduledFederationProviderBudget(
-			new SharedFederationScheduleStore(directory),
+			new SharedFederationScheduleStore(directory, fixtureDirectorySync),
 			now
 		);
 		const two = new ScheduledFederationProviderBudget(
-			new SharedFederationScheduleStore(directory),
+			new SharedFederationScheduleStore(directory, fixtureDirectorySync),
 			now
 		);
 		let release!: (value: SafeResponse) => void;
@@ -82,13 +140,13 @@ describe('shared federation schedule', () => {
 	it('keeps the request window across replacement budget instances', async () => {
 		const now = () => 10_000;
 		const one = new ScheduledFederationProviderBudget(
-			new SharedFederationScheduleStore(directory),
+			new SharedFederationScheduleStore(directory, fixtureDirectorySync),
 			now
 		);
 		for (let index = 0; index < 8; index++)
 			await one.run(provider, async () => reply(200));
 		const two = new ScheduledFederationProviderBudget(
-			new SharedFederationScheduleStore(directory),
+			new SharedFederationScheduleStore(directory, fixtureDirectorySync),
 			now
 		);
 		const request = jest.fn(async () => reply(200));
@@ -100,7 +158,7 @@ describe('shared federation schedule', () => {
 
 	it('completes once after contention outlasts the admission lock wait', async () => {
 		const budget = new ScheduledFederationProviderBudget(
-			new SharedFederationScheduleStore(directory),
+			new SharedFederationScheduleStore(directory, fixtureDirectorySync),
 			() => 10_000
 		);
 		let release!: (value: SafeResponse) => void;
@@ -141,7 +199,7 @@ describe('shared federation schedule', () => {
 	it('does not steal an abandoned lock or send a request when coordination is unavailable', async () => {
 		await writeFile(join(directory, lockFile), '', { flag: 'wx' });
 		const budget = new ScheduledFederationProviderBudget(
-			new SharedFederationScheduleStore(directory)
+			new SharedFederationScheduleStore(directory, fixtureDirectorySync)
 		);
 		const request = jest.fn(async () => reply(200));
 		await expect(budget.run(provider, request)).rejects.toThrow(
@@ -153,7 +211,10 @@ describe('shared federation schedule', () => {
 
 	it('lets the caller deadline end while metadata-only completion remains queued', async () => {
 		let now = 10_000;
-		const store = new SharedFederationScheduleStore(directory);
+		const store = new SharedFederationScheduleStore(
+			directory,
+			fixtureDirectorySync
+		);
 		const budget = new ScheduledFederationProviderBudget(store, () => now);
 		const controller = new AbortController();
 		let release!: (value: SafeResponse) => void;

@@ -1,12 +1,4 @@
-import {
-	lstat,
-	mkdir,
-	open,
-	realpath,
-	rename,
-	unlink,
-	writeFile
-} from 'node:fs/promises';
+import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { normalizeIssuerDomain } from '../issuer-domains/IssuerDomainCache.js';
@@ -16,13 +8,17 @@ import type {
 } from './FederationProviderBudget.js';
 
 const maxBytes = 96 * 1024;
+type SyncDirectory = (path: string) => Promise<void>;
 
 /** All cohosted processes must use the same operator-owned private local directory. */
 export class SharedFederationScheduleStore implements FederationScheduleStore {
 	private completions: Promise<unknown> = Promise.resolve();
-	private completionFailed = false;
+	private needsRecovery = false;
 
-	constructor(private readonly directory: string) {
+	constructor(
+		private readonly directory: string,
+		private readonly syncDirectory: SyncDirectory = syncFederationDirectory
+	) {
 		if (!isAbsolute(directory))
 			throw new Error('Federation schedule directory must be absolute');
 	}
@@ -34,15 +30,15 @@ export class SharedFederationScheduleStore implements FederationScheduleStore {
 		if (mode !== 'completion') return this.withLock(work, false);
 		const completion = this.completions.then(() => this.withLock(work, true));
 		this.completions = completion.catch(() => {
-			this.completionFailed = true;
+			this.needsRecovery = true;
 		});
 		return completion;
 	}
 
 	async drain(): Promise<void> {
 		await this.completions;
-		if (this.completionFailed)
-			throw new Error('Federation completion requires recovery');
+		if (this.needsRecovery)
+			throw new Error('Federation schedule requires recovery');
 	}
 
 	private async withLock<T>(
@@ -51,22 +47,29 @@ export class SharedFederationScheduleStore implements FederationScheduleStore {
 	): Promise<T> {
 		const lockPath = join(this.directory, 'federation-schedule.lock');
 		const lock = await acquire(lockPath, completion);
+		let writeUncertain = false;
 		try {
 			const statePath = join(this.directory, 'federation-schedule.json');
 			const schedules = await read(statePath);
 			const result = work(schedules);
+			const bytes = serialize(schedules);
 			const next = join(this.directory, 'federation-schedule.next');
-			await writeFile(next, serialize(schedules), { flag: 'wx', mode: 0o600 });
-			try {
-				await rename(next, statePath);
-			} catch (error) {
-				await unlink(next);
-				throw error;
-			}
+			writeUncertain = true;
+			await writeSyncedFile(next, bytes);
+			await rename(next, statePath);
+			await this.syncDirectory(this.directory);
+			writeUncertain = false;
 			return result;
 		} finally {
-			await lock.close();
-			await unlink(lockPath);
+			if (writeUncertain) this.needsRecovery = true;
+			try {
+				await lock.close();
+				// Preserve the lock if a write or barrier fails.
+				if (!writeUncertain) await unlink(lockPath);
+			} catch (error) {
+				this.needsRecovery = true;
+				throw error;
+			}
 		}
 	}
 }
@@ -95,7 +98,8 @@ export async function requireFederationScheduleDirectory(
 export async function recoverFederationSchedule(
 	oldPath: string,
 	replacementPath: string,
-	allOwnersStopped: true
+	allOwnersStopped: true,
+	syncDirectory: SyncDirectory = syncFederationDirectory
 ): Promise<void> {
 	if (allOwnersStopped !== true)
 		throw new Error('All federation owners must be stopped');
@@ -124,14 +128,35 @@ export async function recoverFederationSchedule(
 	const schedules = await read(statePath);
 	for (const schedule of schedules.values()) schedule.active = 0;
 	await mkdir(replacementPath, { mode: 0o700 });
-	await writeFile(
+	// Leave an incomplete replacement visibly fenced if a write or sync fails.
+	const recoveryLockPath = join(replacementPath, 'federation-schedule.lock');
+	await writeSyncedFile(recoveryLockPath, '');
+	await writeSyncedFile(
 		join(replacementPath, 'federation-schedule.json'),
-		serialize(schedules),
-		{
-			flag: 'wx',
-			mode: 0o600
-		}
+		serialize(schedules)
 	);
+	await syncDirectory(replacementPath);
+	await syncDirectory(dirname(replacementPath));
+	await unlink(recoveryLockPath);
+}
+
+export async function syncFederationDirectory(path: string): Promise<void> {
+	const directory = await open(path, 'r');
+	try {
+		await directory.sync();
+	} finally {
+		await directory.close();
+	}
+}
+
+async function writeSyncedFile(path: string, bytes: string): Promise<void> {
+	const file = await open(path, 'wx', 0o600);
+	try {
+		await file.writeFile(bytes, 'utf8');
+		await file.sync();
+	} finally {
+		await file.close();
+	}
 }
 
 function serialize(schedules: Map<string, FederationSchedule>): string {

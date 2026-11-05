@@ -9,7 +9,8 @@ import {
 } from './ReverseFederationResolver.js';
 import {
 	requireFederationScheduleDirectory,
-	SharedFederationScheduleStore
+	SharedFederationScheduleStore,
+	syncFederationDirectory
 } from './SharedFederationScheduleStore.js';
 
 const maxPending = 8;
@@ -21,6 +22,7 @@ type ReadAccount = GetExplorerLocalAccountChanges['execute'];
 type Network = 'mainnet' | 'testnet';
 type Lookup = ReverseFederationResolver['resolve'];
 type AccountFederationResult =
+	| { readonly status: 'indexed_evidence_insufficient' }
 	| Exclude<ReverseFederationResult, { status: 'display_only' }>
 	| (Extract<ReverseFederationResult, { status: 'display_only' }> & {
 			readonly observedLedger: string;
@@ -81,20 +83,21 @@ export class AccountFederationService {
 			if (this.closing) return { status: 'temporary_failure' };
 			if (indexed.status === 'unavailable')
 				return { status: 'temporary_failure' };
-			if (indexed.status !== 'available') return { status: 'unsupported' };
+			if (indexed.status !== 'available')
+				return { status: 'indexed_evidence_insufficient' };
 			const record = indexed.records[0];
 			const coverage = indexed.coverage;
 			if (
 				indexed.accountId !== accountId ||
 				!record ||
 				!coverage ||
-				record.deleted ||
 				record.accountFields.accountId !== accountId ||
-				!record.accountFields.homeDomain ||
 				record.coverage.batchId !== coverage.range.batchId ||
 				!this.recent(record.freshness.ledgerClosedAt) ||
 				!this.recent(coverage.freshness.latestCoveredLedgerClosedAt)
 			)
+				return { status: 'indexed_evidence_insufficient' };
+			if (record.deleted || !record.accountFields.homeDomain)
 				return { status: 'unsupported' };
 			const result = await this.lookup(
 				accountId,
@@ -128,6 +131,9 @@ export async function createAccountFederation(
 	let service: AccountFederationService | null = null;
 	if (schedulePath && network) {
 		const directory = await requireFederationScheduleDirectory(schedulePath);
+		await syncFederationDirectory(directory).catch(() => {
+			throw new Error('Federation scheduler requires directory sync support');
+		});
 		const store = new SharedFederationScheduleStore(directory);
 		const resolver = new ReverseFederationResolver(
 			new ScheduledFederationProviderBudget(store),

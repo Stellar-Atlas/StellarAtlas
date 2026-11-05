@@ -1,5 +1,5 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import https from 'node:https';
 import type { LookupAddress } from 'node:dns';
 
@@ -11,6 +11,44 @@ export interface SafeResponse {
 
 const requestTimeoutMs = 20_000;
 const maxRedirects = 3;
+
+// Exclude IANA special-purpose ranges, even their globally reachable anycast assignments.
+// https://www.iana.org/assignments/iana-ipv4-special-registry
+// https://www.iana.org/assignments/iana-ipv6-special-registry
+const specialUse = new BlockList();
+for (const [address, prefix] of [
+	['0.0.0.0', 8],
+	['10.0.0.0', 8],
+	['100.64.0.0', 10],
+	['127.0.0.0', 8],
+	['169.254.0.0', 16],
+	['172.16.0.0', 12],
+	['192.0.0.0', 24],
+	['192.0.2.0', 24],
+	['192.31.196.0', 24],
+	['192.52.193.0', 24],
+	['192.88.99.0', 24],
+	['192.168.0.0', 16],
+	['192.175.48.0', 24],
+	['198.18.0.0', 15],
+	['198.51.100.0', 24],
+	['203.0.113.0', 24],
+	['224.0.0.0', 4],
+	['240.0.0.0', 4]
+] as const)
+	specialUse.addSubnet(address, prefix, 'ipv4');
+
+const globalUnicastV6 = new BlockList();
+globalUnicastV6.addSubnet('2000::', 3, 'ipv6');
+for (const [address, prefix] of [
+	['2001::', 23],
+	['2001:db8::', 32],
+	['2002::', 16],
+	['2620:4f:8000::', 48],
+	['3ffe::', 16],
+	['3fff::', 20]
+] as const)
+	specialUse.addSubnet(address, prefix, 'ipv6');
 
 function parsePublicHttpsUrl(rawUrl: string): URL {
 	const url = new URL(rawUrl);
@@ -176,33 +214,11 @@ function isIp(value: string): boolean {
 }
 
 function isPublicAddress(value: string): boolean {
-	const host = value.toLowerCase();
-	if (isIP(host) === 6) {
-		if (host.startsWith('::ffff:')) return false;
-		const firstSegment = Number.parseInt(host.split(':')[0] || '0', 16);
-		return (
-			(firstSegment & 0xe000) === 0x2000 &&
-			!host.startsWith('2001:db8:') &&
-			firstSegment !== 0x2002 &&
-			!host.startsWith('2001:0:')
-		);
-	}
-	if (isIP(host) !== 4) return false;
-	const parts = host.split('.').map(Number);
-	if (parts.length !== 4 || parts.some((part) => part < 0 || part > 255))
-		return false;
-	const [a, b] = parts as [number, number, number, number];
-	return !(
-		a === 0 ||
-		a === 10 ||
-		a === 127 ||
-		a >= 224 ||
-		(a === 100 && b >= 64 && b <= 127) ||
-		(a === 169 && b === 254) ||
-		(a === 172 && b >= 16 && b <= 31) ||
-		(a === 192 && b === 168) ||
-		(a === 192 && b === 0) ||
-		(a === 198 && (b === 18 || b === 19)) ||
-		(a === 255 && b === 255)
+	const family = isIP(value);
+	if (family === 4) return !specialUse.check(value, 'ipv4');
+	return (
+		family === 6 &&
+		globalUnicastV6.check(value, 'ipv6') &&
+		!specialUse.check(value, 'ipv6')
 	);
 }

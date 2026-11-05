@@ -20,6 +20,7 @@ import {
 } from '../AccountFederationRouter.js';
 import { ScheduledFederationProviderBudget } from '../FederationProviderBudget.js';
 import { SharedFederationScheduleStore } from '../SharedFederationScheduleStore.js';
+import { fixtureDirectorySync } from './scheduleFixture.js';
 
 const now = () => Date.parse('2026-07-15T12:05:00.000Z');
 const path = '/v1/explorer/accounts/' + accountId + '/federation';
@@ -110,20 +111,36 @@ it('rejects caller-supplied network, domain and endpoint and skips HEAD', async 
 });
 
 it.each([
-	{ deleted: true, changeType: 2, changeTypeString: 'removed' },
-	{ homeDomain: '' },
-	{ latestLedgerClosedAt: new Date('2026-07-15T11:00:00Z') },
-	{ latestBatchId: '00000000-0000-8000-8000-000000000009' }
-])(
+	[
+		{ deleted: true, changeType: 2, changeTypeString: 'removed' },
+		'unsupported'
+	],
+	[{ homeDomain: '' }, 'unsupported'],
+	[
+		{ latestLedgerClosedAt: new Date('2026-07-15T11:00:00Z') },
+		'indexed_evidence_insufficient'
+	],
+	[
+		{ latestBatchId: '00000000-0000-8000-8000-000000000009' },
+		'indexed_evidence_insufficient'
+	],
+	[
+		{
+			observationLedgerClosedAt: new Date('2026-07-15T11:00:00Z'),
+			closedAtUnixMillis: String(Date.parse('2026-07-15T11:00:00Z'))
+		},
+		'indexed_evidence_insufficient'
+	]
+] as const)(
 	'skips federation when the latest indexed evidence is ineligible %#',
-	async (overrides) => {
+	async (overrides, status) => {
 		const { app, lookup } = fixture(indexed(overrides));
 		const result = await request(app)
 			.get(path)
 			.expect('Cache-Control', 'no-store')
 			.expect(200);
 		expect(result.body).toEqual({
-			status: 'unsupported',
+			status,
 			accountId,
 			network: 'mainnet'
 		});
@@ -170,6 +187,13 @@ it('accepts only configured local ownership and uses its server-selected network
 	).rejects.toThrow('must be absolute');
 	const directory = await mkdtemp(join(tmpdir(), 'atlas-federation-owner-'));
 	try {
+		if (process.platform === 'win32') {
+			await expect(
+				createAccountFederation(directory, Networks.TESTNET, read)
+			).rejects.toThrow('requires directory sync support');
+			expect(read).not.toHaveBeenCalled();
+			return;
+		}
 		const federation = await createAccountFederation(
 			directory,
 			Networks.TESTNET,
@@ -193,7 +217,10 @@ it('bounds graceful drain, reports unresolved ownership, and lets the lock owner
 	const directory = await mkdtemp(join(tmpdir(), 'atlas-federation-drain-'));
 	const lock = join(directory, 'federation-schedule.lock');
 	const state = join(directory, 'federation-schedule.json');
-	const store = new SharedFederationScheduleStore(directory);
+	const store = new SharedFederationScheduleStore(
+		directory,
+		fixtureDirectorySync
+	);
 	const budget = new ScheduledFederationProviderBudget(store, () => 10_000);
 	const lookup = jest.fn(async () => {
 		await budget.run('provider.example', async () => {
