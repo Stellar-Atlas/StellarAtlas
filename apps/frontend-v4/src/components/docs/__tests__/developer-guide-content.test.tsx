@@ -29,6 +29,30 @@ function render(slug: string): string {
 	);
 }
 describe('developer guides', () => {
+	it('explains current account evidence without changing the indexed quickstart', () => {
+		const page = getDeveloperGuidePage('assets-and-issuers');
+		expect(page?.sections.slice(0, 2).map(({ id }) => id)).toEqual([
+			'wallet-and-holders',
+			'account-balance-breakdown'
+		]);
+		const html = render('assets-and-issuers');
+		for (const text of [
+			'/v1/explorer/accounts/',
+			'/docs/api/getExplorerAccount',
+			'accounting.latestLedger',
+			'balances[].exact.balanceRaw',
+			'accounting.baseReserveLedger',
+			'base reserve × (2 + subentries + sponsoring − sponsored)',
+			'5.75 XLM before',
+			'zero-balance trustline can still have receive',
+			'Claimable balances and contract funds are separate positions',
+			'cacheOnly=true',
+			'scarcity and backing remain unverified',
+			'federation name is display-only'
+		])
+			expect(html).toContain(text);
+	});
+
 	it('adds offline local-file inspection without duplicating history discovery', () => {
 		const section = getDeveloperGuidePage('services')?.sections.find(
 			(value) => value.id === 'history-downloads'
