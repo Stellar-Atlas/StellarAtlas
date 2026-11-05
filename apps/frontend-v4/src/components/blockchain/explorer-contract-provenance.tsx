@@ -24,6 +24,12 @@ const labels: Record<string, string> = {
 function text(value: unknown): string {
 	return typeof value === 'string' ? value : '';
 }
+
+export function parseLedgerEvidence(value: unknown): 'configured_rpc_observation' | 'unspecified' | 'unknown' {
+	if (value === 'configured_rpc_observation') return value;
+	return value === undefined ? 'unspecified' : 'unknown';
+}
+
 function githubLink(value: unknown): string | null {
 	return typeof value === 'string' &&
 		/^https:\/\/github\.com\/[A-Za-z0-9_.\/-]+$/.test(value)
@@ -66,6 +72,7 @@ export function ExplorerContractProvenance({
 	const source = recordValue(build?.record);
 	const metadata = recordValue(value?.metadata);
 	const status = text(build?.status);
+	const ledgerEvidence = parseLedgerEvidence(value?.ledgerEvidence);
 	const commitUrl = githubLink(source?.sourceUrl);
 	const workflowUrl = githubLink(source?.workflowUrl);
 	const runUrl = githubLink(source?.runUrl);
@@ -110,6 +117,16 @@ export function ExplorerContractProvenance({
 								</>
 							)}
 						</dd>
+						{ledgerEvidence !== 'unspecified' && (
+							<>
+								<dt>Ledger evidence</dt>
+								<dd className={styles.muted}>
+									{ledgerEvidence === 'configured_rpc_observation'
+										? 'Configured RPC observation. Not an independent ledger-state proof.'
+										: 'Unrecognized ledger evidence. Do not treat it as a ledger-state proof.'}
+								</dd>
+							</>
+						)}
 						{text(value.wasmSha256) && (
 							<>
 								<dt>Wasm SHA-256</dt>
