@@ -11,12 +11,23 @@ it('counts only the supplied page, preserving future types and labeling unreport
 	]} />);
 	expect(first).toContain('aria-label="Operation types on this page"');
 	expect(first).toContain('<dt>payment</dt><dd>2</dd>');
-	expect(first).toContain('<dt>future op</dt><dd>1</dd>');
+	expect(first).toContain('<dt>future_op</dt><dd>1</dd>');
 	expect(first).toContain('<dt>Type not reported</dt><dd>3</dd>');
 	expect(first).not.toContain('soroban');
 
 	const next = renderToStaticMarkup(<ExplorerTransactionOperationMix rows={[{ type: 'set_options' }]} />);
-	expect(next).toContain('<dt>set options</dt><dd>1</dd>');
+	expect(next).toContain('<dt>set_options</dt><dd>1</dd>');
 	expect(next).not.toContain('payment');
 	expect(renderToStaticMarkup(<ExplorerTransactionOperationMix rows={[]} />)).toBe('');
+});
+
+it('renders the counted names without merging their labels or hiding underscore-only names', () => {
+	const html = renderToStaticMarkup(<ExplorerTransactionOperationMix rows={[
+		{ type: 'future_operation' }, { type: 'future_operation' },
+		{ type: 'future operation' }, { type: '_' }, { type: '__' }
+	]} />);
+	expect(html).toContain('<dt>future_operation</dt><dd>2</dd>');
+	expect(html).toContain('<dt>future operation</dt><dd>1</dd>');
+	expect(html).toContain('<dt>_</dt><dd>1</dd>');
+	expect(html).toContain('<dt>__</dt><dd>1</dd>');
 });

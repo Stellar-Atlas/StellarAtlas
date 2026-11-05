@@ -16,7 +16,7 @@ export function ExplorerTransactionOperationMix({
 			<dl aria-label="Operation types on this page">
 				{[...counts].sort((a, b) => b[1] - a[1]).map(([type, count]) => (
 					<div key={type === null ? 'unreported' : 'type:' + type}>
-						<dt>{type?.replaceAll('_', ' ') ?? 'Type not reported'}</dt>
+						<dt>{type ?? 'Type not reported'}</dt>
 						<dd>{count}</dd>
 					</div>
 				))}
