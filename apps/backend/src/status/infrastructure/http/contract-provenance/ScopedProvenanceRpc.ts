@@ -13,7 +13,28 @@ const MAX_LEDGER_AGE_MS = 30_000;
 const MAX_FUTURE_SKEW_MS = 5_000;
 const MAX_LEDGER_ADVANCE = 8;
 const MAX_ACTIVE_READS = 2;
+const OUTBOUND_WINDOW_MS = 10_000;
+const MAX_OUTBOUND_CALLS = 4;
+// Do not reuse a predecessor's remaining window on a non-overlapping restart.
+const outboundStartsAfter = performance.now() + OUTBOUND_WINDOW_MS;
+const outboundCalls: number[] = [];
 let activeReads = 0;
+
+function admitOutboundCall(): void {
+	const now = performance.now();
+	while (
+		outboundCalls[0] !== undefined &&
+		now - outboundCalls[0] >= OUTBOUND_WINDOW_MS
+	) {
+		outboundCalls.shift();
+	}
+	if (now < outboundStartsAfter || outboundCalls.length >= MAX_OUTBOUND_CALLS)
+		throw new ContractRpcUnavailable(
+			'Scoped provenance RPC rate budget exhausted'
+		);
+	// Charge attempts, including transport failures and provider errors.
+	outboundCalls.push(now);
+}
 
 export interface ScopedProvenanceRpc {
 	read(
@@ -51,6 +72,7 @@ export function scopedProvenanceRpc(
 				if (timeoutMs <= 0)
 					throw new Error('Scoped provenance RPC deadline expired');
 				const requestId = ++id;
+				admitOutboundCall();
 				const response = record(
 					await request(
 						endpoint,

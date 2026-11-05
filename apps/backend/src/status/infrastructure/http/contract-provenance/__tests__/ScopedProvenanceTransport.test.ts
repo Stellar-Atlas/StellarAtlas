@@ -2,6 +2,7 @@ import { Networks, StrKey } from '@stellar/stellar-sdk';
 import express from 'express';
 import { EventEmitter } from 'node:events';
 import https from 'node:https';
+import { performance } from 'node:perf_hooks';
 import { PassThrough } from 'node:stream';
 import request from 'supertest';
 import { contractProvenanceRouter } from '../ContractProvenanceRouter.js';
@@ -45,6 +46,11 @@ function transport(statusCode: number, chunks: Buffer[] = []) {
 	return { mock, observed };
 }
 
+let monotonicTime = performance.now();
+beforeEach(() => {
+	monotonicTime += 20_000;
+	mocks.spyOn(performance, 'now').mockImplementation(() => monotonicTime);
+});
 afterEach(() => mocks.restoreAllMocks());
 
 it.each([302, 429])(
@@ -111,6 +117,39 @@ it('does not open a connection for an invalid opt-in, even with a native URL', a
 	);
 	await request(app).get(path).expect(503);
 	expect(mock).not.toHaveBeenCalled();
+});
+
+it('fails closed before a fifth real transport attempt while preserving the native path', async () => {
+	const { observed, mock } = transport(429);
+	const scopedApp = express().use(
+		'/v1',
+		contractProvenanceRouter({
+			rpcUrl: native,
+			provenanceRpcUrl: upstream,
+			networkPassphrase: Networks.PUBLIC
+		})
+	);
+	for (let i = 0; i < 5; i++) {
+		const id = StrKey.encodeContract(new Uint8Array(32).fill(i));
+		const response = await request(scopedApp)
+			.get('/v1/contracts/' + id + '/provenance')
+			.expect(503);
+		expect(response.body.code).toBe('contract_evidence_unavailable');
+		expect(response.headers['cache-control']).toBe('no-store');
+	}
+	expect(mock).toHaveBeenCalledTimes(4);
+	expect(observed.map((call) => call.url)).toEqual(Array(4).fill(upstream));
+
+	const nativeApp = express().use(
+		'/v1',
+		contractProvenanceRouter({
+			rpcUrl: native,
+			networkPassphrase: Networks.PUBLIC
+		})
+	);
+	await request(nativeApp).get(path).expect(503);
+	expect(mock).toHaveBeenCalledTimes(5);
+	expect(observed[4]?.url).toBe(native);
 });
 
 it('rejects a chunked response beyond the configured byte bound and bounds outbound bytes', async () => {

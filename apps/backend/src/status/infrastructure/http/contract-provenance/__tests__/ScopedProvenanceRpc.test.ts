@@ -100,7 +100,12 @@ function fixture(
 	});
 }
 
-beforeEach(() => mocks.spyOn(Date, 'now').mockReturnValue(now));
+let monotonicTime = performance.now();
+beforeEach(() => {
+	monotonicTime += 20_000;
+	mocks.spyOn(Date, 'now').mockReturnValue(now);
+	mocks.spyOn(performance, 'now').mockImplementation(() => monotonicTime);
+});
 afterEach(() => mocks.restoreAllMocks());
 
 it('reads only the expected keys from the same fixed HTTPS endpoint within one budget', async () => {
@@ -255,10 +260,15 @@ it('does not publish a cached observation after the health close-time expiry', a
 		build: { status: 'metadata_missing' },
 		securityAudit: 'not_assessed'
 	});
+	await expect(service.get(contractId)).resolves.toMatchObject({
+		wasmSha256: hash
+	});
+	expect(request).toHaveBeenCalledTimes(4);
 	mocks.mocked(Date.now).mockReturnValue(now + 27_999);
 	await service.get(contractId);
 	expect(request).toHaveBeenCalledTimes(4);
 	mocks.mocked(Date.now).mockReturnValue(now + 28_000);
+	monotonicTime += 28_000;
 	await expect(service.get(contractId)).rejects.toBeInstanceOf(
 		ContractRpcUnavailable
 	);
@@ -287,16 +297,16 @@ it('shares a fail-fast, no-queue admission cap across adapter instances', async 
 		release({});
 		await Promise.allSettled([first, second]);
 	}
+	monotonicTime += 10_000;
 	await expect(
 		scopedProvenanceRpc(url, Networks.PUBLIC, request).read(contractId)
 	).resolves.toMatchObject({ wasmSha256: hash });
 });
 
 it('does not reset the overall deadline after an individual RPC call', async () => {
-	const clock = mocks.spyOn(performance, 'now').mockReturnValue(0);
 	const request = fixture();
 	request.mockImplementationOnce(async () => {
-		clock.mockReturnValue(8_000);
+		monotonicTime += 8_000;
 		return {
 			jsonrpc: '2.0',
 			id: 1,
@@ -307,4 +317,64 @@ it('does not reset the overall deadline after an individual RPC call', async () 
 		scopedProvenanceRpc(url, Networks.PUBLIC, request).read(contractId)
 	).rejects.toBeInstanceOf(ContractRpcUnavailable);
 	expect(request).toHaveBeenCalledTimes(1);
+});
+
+it('holds a replacement process for the prior process window before sending any call', async () => {
+	await mocks.isolateModulesAsync(async () => {
+		const { scopedProvenanceRpc: freshReader } =
+			await import('../ScopedProvenanceRpc.js');
+		const request = fixture();
+		const reader = freshReader(url, Networks.PUBLIC, request);
+		monotonicTime += 9_999;
+		await expect(reader.read(contractId)).rejects.toThrow(
+			'RPC evidence is unavailable'
+		);
+		expect(request).not.toHaveBeenCalled();
+		monotonicTime++;
+		await expect(reader.read(contractId)).resolves.toMatchObject({
+			wasmSha256: hash
+		});
+		expect(request).toHaveBeenCalledTimes(4);
+	});
+});
+
+it('shares a rolling monotonic attempt budget across readers and counts provider errors', async () => {
+	const request = fixture({ envelope: { error: { code: -32000 } } });
+	const readers = [
+		scopedProvenanceRpc(url, Networks.PUBLIC, request),
+		scopedProvenanceRpc(
+			'https://other.example.invalid/stellar',
+			Networks.PUBLIC,
+			request
+		)
+	];
+	const start = monotonicTime;
+	for (let i = 0; i < 4; i++) {
+		monotonicTime = start + i * 1_000;
+		await expect(
+			readers[i % 2]!.read(StrKey.encodeContract(new Uint8Array(32).fill(i)))
+		).rejects.toBeInstanceOf(ContractRpcUnavailable);
+	}
+	expect(request).toHaveBeenCalledTimes(4);
+	monotonicTime = start + 9_999;
+	mocks.mocked(Date.now).mockReturnValue(now + 86_400_000);
+	await expect(readers[0]!.read(contractId)).rejects.toBeInstanceOf(
+		ContractRpcUnavailable
+	);
+	expect(request).toHaveBeenCalledTimes(4);
+	monotonicTime++;
+	mocks.mocked(Date.now).mockReturnValue(now - 86_400_000);
+	await expect(readers[1]!.read(contractId)).rejects.toBeInstanceOf(
+		ContractRpcUnavailable
+	);
+	expect(request).toHaveBeenCalledTimes(5);
+	await expect(readers[0]!.read(contractId)).rejects.toBeInstanceOf(
+		ContractRpcUnavailable
+	);
+	expect(request).toHaveBeenCalledTimes(5);
+	monotonicTime += 1_000;
+	await expect(readers[0]!.read(contractId)).rejects.toBeInstanceOf(
+		ContractRpcUnavailable
+	);
+	expect(request).toHaveBeenCalledTimes(6);
 });
