@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import * as ReactActual from 'react';
 import { HookHarness } from './asset-workspace-hook-harness';
 
 type ElementLike = {
@@ -24,6 +25,7 @@ const request = jest.fn(async (path: string) => {
 	}] };
 });
 jest.unstable_mockModule('react', () => ({
+	...ReactActual,
 	useEffect: hooks.useEffect, useRef: hooks.useRef, useState: hooks.useState,
 	useCallback: <T,>(fn: T, dependencies: readonly unknown[]) => hooks.useMemo(() => fn, dependencies)
 }));
@@ -35,7 +37,7 @@ jest.unstable_mockModule('../explorer-transaction-table', () => ({ ExplorerTrans
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 const analytics = await import('../../../api/explorer-analytics');
 jest.unstable_mockModule('../../../api/explorer-analytics', () => ({ ...analytics, requestExplorerJson: request }));
-const { ExplorerLedgerActivity } = await import('../explorer-ledger-activity');
+const { ExplorerLedgerActivity, LedgerTransactions } = await import('../explorer-ledger-activity');
 
 function find(node: unknown, test: (element: ElementLike) => boolean): ElementLike | undefined {
 	if (Array.isArray(node)) return node.map(child => find(child, test)).find(Boolean);
@@ -96,4 +98,24 @@ it('supplies the ledger activity query as the return URL when opened directly', 
 	route.searchParams.delete('return_to');
 	renderPage(); await settle();
 	expect(find(renderPage(), item => 'transactions' in item.props)?.props.returnTo).toBe(route.pathname + route.search);
+});
+
+it('places the same bounded page action after the Transactions table and does not prefetch', async () => {
+	const onPage = jest.fn();
+	const render = () => hooks.render(() => LedgerTransactions({ ledger: '100', offset: 0, onPage, resultFilter: 'failed' }));
+	render();
+	await settle();
+	const tree = render();
+	const sections = (tree.props.children as unknown[]).flat(Infinity) as (ElementLike | false | null)[];
+	const endIndex = sections.findIndex(item => item && item.props['aria-label'] === 'Transaction pages after results');
+	const resultsIndex = sections.findIndex(item => item && find(item, node => 'transactions' in node.props));
+	expect(resultsIndex).toBeGreaterThanOrEqual(0);
+	expect(endIndex).toBeGreaterThan(resultsIndex);
+	const end = sections[endIndex];
+	expect(control(end, 'Previous transactions')?.props.disabled).toBe(true);
+	expect(request).toHaveBeenCalledTimes(1);
+	expect(onPage).not.toHaveBeenCalled();
+	activate(control(end, 'Next transactions'));
+	expect(onPage).toHaveBeenCalledWith(25);
+	expect(request).toHaveBeenCalledTimes(1);
 });
