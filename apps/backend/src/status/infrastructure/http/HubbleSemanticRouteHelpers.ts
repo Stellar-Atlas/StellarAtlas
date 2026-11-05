@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { currentHubbleRequestSignal } from './HubbleRequestCancellation.js';
 import {
 	HubbleWarehouseInputError,
 	HubbleWarehouseUnavailableError
@@ -292,10 +293,15 @@ export async function semanticSend(
 	response: Response,
 	action: () => Promise<unknown>
 ): Promise<void> {
+	const canSend = () =>
+		!response.destroyed && !currentHubbleRequestSignal()?.aborted;
+	if (!canSend()) return;
 	try {
 		response.setHeader('Cache-Control', 'no-store');
-		response.status(200).json(await action());
+		const result = await action();
+		if (canSend()) response.status(200).json(result);
 	} catch (error) {
+		if (!canSend()) return;
 		if (error instanceof HubbleSemanticNotFoundError) {
 			response.status(404).json({
 				code: 'hubble_record_not_found',

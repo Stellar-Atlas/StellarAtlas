@@ -1,6 +1,10 @@
 import { queryHubbleAggregate } from './HubbleAggregateQuery.js';
 import { hubbleDatasetRowCount } from './HubbleDatasetRowCount.js';
-import { queryHubbleAccountBalances } from './HubbleAccountBalanceQuery.js';
+import {
+	queryValidatedHubbleAccountBalances,
+	validateHubbleAccountBalanceInput
+} from './HubbleAccountBalanceQuery.js';
+import { HubbleAccountBalanceFlights } from './HubbleAccountBalanceFlights.js';
 import { UnavailableHubbleWarehouse } from './HubbleUnavailableWarehouse.js';
 import type {
 	HubbleAccountBalanceInput,
@@ -8,7 +12,10 @@ import type {
 } from './HubbleAccountBalanceContracts.js';
 import { queryHubbleContractEvents } from './HubbleContractEventQuery.js';
 import { normalizeHubbleContractEventInput } from './HubbleContractEventValidation.js';
-import { currentHubbleRequestSignal } from './HubbleRequestCancellation.js';
+import {
+	currentHubbleRequestSignal,
+	withoutHubbleRequestCancellation
+} from './HubbleRequestCancellation.js';
 import type {
 	HubbleContractEventInput,
 	HubbleContractEventPage
@@ -57,17 +64,15 @@ import type {
 } from './HubbleTransferContracts.js';
 import { queryHubbleAccountTransactions } from './HubbleAccountTransactionQuery.js';
 import { HubbleWarehouseCache } from './HubbleWarehouseCache.js';
+import { createHubbleWarehouseTransport } from './HubbleWarehouseTransport.js';
 import type {
 	HubbleAccountTransactionQuery,
 	HubbleAssetHolderPage,
 	HubbleAssetHolderQuery,
+	HubblePreparedParameter as QueryParameter,
 	HubbleSemanticPage,
 	HubbleSemanticQueryExecutor
 } from './HubbleSemanticWarehouse.js';
-
-interface ClickHouseResponse<T> {
-	readonly data?: readonly T[];
-}
 
 interface ClickHouseColumnRow {
 	readonly name: string;
@@ -100,12 +105,6 @@ interface HubbleWarehouseClientConfig {
 	readonly user?: string;
 }
 
-interface QueryParameter {
-	readonly name: string;
-	readonly type: string;
-	readonly value: string;
-}
-
 const identifierPattern = /^[a-z][a-z0-9_]*$/;
 const columnIdentifierPattern = /^[a-z_][a-z0-9_]*$/;
 const officialSchemaSource =
@@ -126,12 +125,11 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 			);
 		}
 	}
-	private readonly authorization: string | undefined;
 	private readonly database: string;
-	private readonly endpoint: URL;
-	private readonly fetchImplementation: typeof fetch;
+	private readonly execute: ReturnType<typeof createHubbleWarehouseTransport>;
 	private readonly maximumRows: number;
 	private readonly cache = new HubbleWarehouseCache();
+	private readonly accountBalanceFlights = new HubbleAccountBalanceFlights();
 
 	constructor(config: HubbleWarehouseClientConfig) {
 		const endpoint = new URL(config.endpoint);
@@ -158,27 +156,32 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 				'Hubble API maximum rows must be between 1 and 10000'
 			);
 		}
-		this.endpoint = endpoint;
 		this.database = database;
-		this.fetchImplementation = config.fetch ?? globalThis.fetch;
 		this.maximumRows = maximumRows;
-		this.authorization =
+		const authorization =
 			config.user === undefined || config.user === ''
 				? undefined
 				: 'Basic ' +
 					Buffer.from(config.user + ':' + (config.password ?? '')).toString(
 						'base64'
 					);
+		this.execute = createHubbleWarehouseTransport(
+			endpoint,
+			config.fetch ?? globalThis.fetch,
+			authorization
+		);
 	}
 	async catalog(force = false): Promise<HubbleCatalog> {
-		return this.cache.catalog(force, () => this.readCatalog());
+		return this.cache.catalog(force, () =>
+			withoutHubbleRequestCancellation(() => this.readCatalog())
+		);
 	}
 
-	readModelExecutor(): HubbleSemanticQueryExecutor {
+	readModelExecutor(queryId?: string): HubbleSemanticQueryExecutor {
 		return {
 			database: this.database,
 			execute: (sql, parameters, timeoutMs) =>
-				this.execute(sql, parameters, timeoutMs),
+				this.execute(sql, parameters, timeoutMs, queryId),
 			maximumRows: this.maximumRows
 		};
 	}
@@ -232,10 +235,27 @@ export class ClickHouseHubbleWarehouse implements HubbleWarehouse {
 	async accountBalances(
 		input: HubbleAccountBalanceInput
 	): Promise<HubbleAccountBalancePage> {
-		return queryHubbleAccountBalances(
-			this.readModelExecutor(),
+		const validated = validateHubbleAccountBalanceInput(
 			input,
-			await this.catalog()
+			this.maximumRows
+		);
+		const key = JSON.stringify([
+			this.database,
+			validated.account,
+			validated.after,
+			validated.limit
+		]);
+		return this.accountBalanceFlights.run(
+			key,
+			currentHubbleRequestSignal(),
+			(queryId) =>
+				withoutHubbleRequestCancellation(async () =>
+					queryValidatedHubbleAccountBalances(
+						this.readModelExecutor(queryId),
+						validated,
+						await this.catalog()
+					)
+				)
 		);
 	}
 	async query(input: HubbleQuery): Promise<HubbleQueryResult> {
@@ -419,59 +439,6 @@ FORMAT JSON`,
 			},
 			officialSchemaSource
 		};
-	}
-
-	private async execute<T>(
-		sql: string,
-		parameters: readonly QueryParameter[],
-		timeoutMs = 100_000
-	): Promise<ClickHouseResponse<T>> {
-		const url = new URL(this.endpoint);
-		url.searchParams.set('query', sql);
-		for (const parameter of parameters) {
-			url.searchParams.set('param_' + parameter.name, parameter.value);
-		}
-		const headers: Record<string, string> = {
-			Accept: 'application/json'
-		};
-		if (this.authorization !== undefined) {
-			headers.Authorization = this.authorization;
-		}
-		try {
-			const response = await this.fetchImplementation(url, {
-				headers,
-				method: 'POST',
-				signal:
-					currentHubbleRequestSignal() === undefined
-						? AbortSignal.timeout(timeoutMs)
-						: AbortSignal.any([
-								AbortSignal.timeout(timeoutMs),
-								currentHubbleRequestSignal()!
-							])
-			});
-			const body = await response.text();
-			if (!response.ok) {
-				throw new HubbleWarehouseUnavailableError(
-					'ClickHouse returned HTTP ' +
-						response.status +
-						': ' +
-						body.slice(0, 512)
-				);
-			}
-			const parsed: unknown = JSON.parse(body);
-			if (parsed === null || typeof parsed !== 'object') {
-				throw new HubbleWarehouseUnavailableError(
-					'ClickHouse returned an invalid JSON response'
-				);
-			}
-			return parsed as ClickHouseResponse<T>;
-		} catch (error) {
-			if (error instanceof HubbleWarehouseUnavailableError) throw error;
-			throw new HubbleWarehouseUnavailableError(
-				'Hubble ClickHouse query failed',
-				{ cause: error }
-			);
-		}
 	}
 }
 
