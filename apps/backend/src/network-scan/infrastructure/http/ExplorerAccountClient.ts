@@ -127,8 +127,16 @@ export async function fetchExplorerAccount(
 	)
 		throw new Error('Account record missing from Horizon response');
 
-	if (classicDetail && (id !== accountId || !Array.isArray(record.balances)))
-		throw new Error('Horizon account identity or balance inventory is invalid');
+	if (
+		classicDetail &&
+		(id !== accountId ||
+			uint32(record.subentry_count) === null ||
+			!/^(?:0|[1-9]\d{0,18})$/.test(record.sequence) ||
+			BigInt(record.sequence) > maximumInt64 ||
+			!Array.isArray(record.balances) ||
+			!record.balances.every(isClassicBalanceRecord))
+	)
+		throw new Error('Horizon account detail is invalid');
 
 	const balances = (record.balances ?? []).map((row) =>
 		mapBalance(row, classicDetail)
@@ -171,7 +179,7 @@ export async function fetchExplorerAccount(
 			ledgerClosedAt: ledger?.closedAt ?? null,
 			baseReserveRaw: ledger?.baseReserveRaw ?? null,
 			baseReserveLedger: ledger?.baseReserveRaw != null ? latestLedger : null,
-			subentryCount: uint32(record.subentry_count)?.toString() ?? null,
+			subentryCount: record.subentry_count.toString(),
 			numSponsoring: uint32(record.num_sponsoring)?.toString() ?? null,
 			numSponsored: uint32(record.num_sponsored)?.toString() ?? null,
 			balanceInventoryComplete
@@ -202,18 +210,32 @@ async function fetchAccountLedger(
 		};
 		if (signal.aborted || uint32(ledger.sequence)?.toString() !== sequence)
 			return null;
-		const closedAt = ledger.closed_at;
 		return {
-			closedAt:
-				typeof closedAt === 'string' && Number.isFinite(Date.parse(closedAt))
-					? closedAt
-					: null,
+			closedAt: parseLedgerClosedAt(ledger.closed_at),
 			baseReserveRaw: uint32(ledger.base_reserve_in_stroops)?.toString() ?? null
 		};
 	} catch {
 		// The account inputs can remain useful when the matching ledger is unavailable.
 		return null;
 	}
+}
+
+function parseLedgerClosedAt(value: unknown): string | null {
+	if (
+		typeof value !== 'string' ||
+		!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(
+			value
+		)
+	)
+		return null;
+
+	// Validate the calendar and clock before applying the explicit offset.
+	const wallTime = value.slice(0, 19);
+	const wallTimeAsUtc = new Date(wallTime + 'Z');
+	return Number.isFinite(wallTimeAsUtc.valueOf()) &&
+		wallTimeAsUtc.toISOString().slice(0, 19) === wallTime
+		? value
+		: null;
 }
 
 function parseLatestLedger(
@@ -267,6 +289,17 @@ function mapBalance(
 			sponsor: classicAddress(row.sponsor)
 		}
 	};
+}
+
+function isClassicBalanceRecord(row: HorizonBalanceRecord): boolean {
+	return (
+		row != null &&
+		typeof row.asset_type === 'string' &&
+		row.asset_type.length > 0 &&
+		typeof row.balance === 'string' &&
+		(row.asset_code == null || typeof row.asset_code === 'string') &&
+		(row.asset_issuer == null || typeof row.asset_issuer === 'string')
+	);
 }
 
 function assetId(

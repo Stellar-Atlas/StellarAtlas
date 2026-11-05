@@ -59,11 +59,12 @@ function accountResponse(
 
 function ledgerResponse(
 	sequence = Number(snapshot),
-	reserve: unknown = 5_000_000
+	reserve: unknown = 5_000_000,
+	closedAt: unknown = ledgerClosedAt
 ): Response {
 	return Response.json({
 		sequence,
-		closed_at: ledgerClosedAt,
+		closed_at: closedAt,
 		base_reserve_in_stroops: reserve
 	});
 }
@@ -309,6 +310,89 @@ it('distinguishes Horizon account absence from malformed, unrelated or failed pr
 	}
 	expect(fetch).toHaveBeenCalledTimes(5);
 });
+
+it.each([
+	['negative subentry count', { subentry_count: -1 }],
+	['fractional subentry count', { subentry_count: 0.5 }],
+	['overflowing subentry count', { subentry_count: 4294967296 }],
+	['missing subentry count', { subentry_count: undefined }],
+	['nonnumeric sequence', { sequence: 'bad-sequence' }],
+	['negative sequence', { sequence: '-1' }],
+	['overflowing sequence', { sequence: '9223372036854775808' }],
+	['numeric asset type', { balances: [{ ...native, asset_type: 3 }] }],
+	['numeric asset code', { balances: [{ ...credit, asset_code: 3 }] }],
+	['numeric asset issuer', { balances: [{ ...credit, asset_issuer: 3 }] }],
+	['numeric balance', { balances: [{ ...native, balance: 3 }] }]
+] as const)(
+	'rejects malformed required account evidence before reading a ledger (%s)',
+	async (_name, override) => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(accountResponse({ ...account, ...override }));
+		await request(buildTestApp())
+			.get(route)
+			.expect(502)
+			.expect('Cache-Control', 'no-store')
+			.expect({ error: 'Account lookup unavailable' });
+		expect(fetch).toHaveBeenCalledTimes(1);
+	}
+);
+
+it('keeps classic detail wire validation out of the legacy finder', async () => {
+	const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+		accountResponse({
+			...account,
+			subentry_count: -0.5,
+			sequence: 'legacy-sequence'
+		})
+	);
+	const response = await request(buildTestApp())
+		.get('/v1/explorer/search')
+		.query({ query: accountId, type: 'account' })
+		.expect(200);
+	expect(response.body.result).toMatchObject({
+		subentryCount: -0.5,
+		sequence: 'legacy-sequence'
+	});
+	expect(response.body.result.accounting).toBeUndefined();
+	expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+	['2026', null],
+	['2026-11-05', null],
+	['2026-11-05T21:50:00', null],
+	['2026-02-29T21:50:00Z', null],
+	['2026-04-31T21:50:00+02:00', null],
+	['2026-11-05T24:00:00Z', null],
+	['2026-11-05T21:50:00+25:00', null],
+	['2024-02-29T21:50:00.123456789+02:30', '2024-02-29T21:50:00.123456789+02:30']
+] as const)(
+	'validates optional ledger time independently of matched reserve (%s)',
+	async (closedAt, expected) => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(
+				accountResponse({ ...account, subentry_count: 0, sequence: '0' })
+			)
+			.mockResolvedValueOnce(
+				ledgerResponse(Number(snapshot), 5_000_000, closedAt)
+			);
+		const response = await request(buildTestApp()).get(route).expect(200);
+		expect(response.body).toMatchObject({
+			subentryCount: 0,
+			sequence: '0',
+			accounting: {
+				subentryCount: '0',
+				ledgerClosedAt: expected,
+				baseReserveRaw: '5000000',
+				baseReserveLedger: snapshot,
+				balanceInventoryComplete: true
+			}
+		});
+		expect(fetch).toHaveBeenCalledTimes(2);
+	}
+);
 
 it('shares caller cancellation with the in-progress exact ledger read', async () => {
 	const controller = new AbortController();
