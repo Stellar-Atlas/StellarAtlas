@@ -1,6 +1,7 @@
 import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
 import { graphqlExamples } from './graphql-request';
 import { balanceObservationPath } from '../../api/explorer-balance-observations';
+import { saveRestPage } from './save-rest-page-example';
 
 const kale = graphqlExamples.holders.variables.asset;
 const wallet = graphqlExamples.balances.variables.account;
@@ -9,30 +10,6 @@ const holderPath = balanceObservationPath('holders', kale, null, {
 	sort: graphqlExamples.holders.variables.input.sort,
 	order: graphqlExamples.holders.variables.input.order
 });
-
-function saveObservationPage(path: string, firstPage: string, next = false) {
-	const file = next ? firstPage.replace('.json', '-next.json') : firstPage;
-	const cursor = next
-		? `  after=$(jq -er '.nextCursor | strings | select(length > 0)' './${firstPage}') || exit
-`
-		: '';
-	const query = next ? ' --get --data-urlencode "after=$after"' : '';
-	return `(
-  trap - EXIT INT TERM
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-${cursor}  temporary=$(mktemp './${file}.partial.XXXXXX') || exit
-  trap 'rm -f -- "$temporary"' EXIT
-  status=$(curl -q --fail-with-body --connect-timeout 5 --max-time 30 \\
-    --write-out '%{http_code}:%header{x-stellaratlas-fallback}' \\
-    '${api}${path}'${query} --output "$temporary") || exit
-  if [[ $status != 2[0-9][0-9]: ]]; then
-    printf '%s\\n' "Expected a live HTTP success, got $status" >&2
-    exit 22
-  fi
-  mv -fT -- "$temporary" './${file}'
-)`;
-}
 
 export const assetsAndIssuersGuide: DeveloperGuidePage = {
 	slug: 'assets-and-issuers',
@@ -65,7 +42,7 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						</li>
 						<li>
 							<p>Read one page of the wallet’s balance observations.</p>
-							<Code>{saveObservationPage(walletPath, 'wallet-balances.json')}</Code>
+							<Code>{saveRestPage(walletPath, 'wallet-balances.json')}</Code>
 							<p>
 								Inspect <code>balances</code>, matching <code>asset</code> to
 								the full KALE identity. The sample wallet is independent of the
@@ -79,7 +56,7 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						</li>
 						<li>
 							<p>Read KALE holders, largest observed balance first.</p>
-							<Code>{saveObservationPage(holderPath, 'kale-holders.json')}</Code>
+							<Code>{saveRestPage(holderPath, 'kale-holders.json')}</Code>
 							<p>
 								Read <code>holders</code> as this page’s positive-balance
 								observations. Its length is not the total holder count; inspect{' '}
@@ -113,8 +90,8 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						command to save a separate second page. A missing, null or unusable
 						cursor stops the command before it sends a request.
 					</p>
-					<Code>{saveObservationPage(walletPath, 'wallet-balances.json', true)}</Code>
-					<Code>{saveObservationPage(holderPath, 'kale-holders.json', true)}</Code>
+					<Code>{saveRestPage(walletPath, 'wallet-balances-next.json', 'wallet-balances.json')}</Code>
+					<Code>{saveRestPage(holderPath, 'kale-holders-next.json', 'kale-holders.json')}</Code>
 					<p>
 						Keep the same account or asset, limit, sort and order. Stop on{' '}
 						<code>nextCursor: null</code>; never exchange discovery, balance and

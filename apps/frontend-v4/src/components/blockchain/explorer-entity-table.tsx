@@ -50,6 +50,19 @@ function Field({
 	readonly filters: ExplorerFilters;
 }): React.JSX.Element {
 	const text = entityText(row, field);
+	if (field === 'id' && collection === 'offers') {
+		const ledger = entityText(row, 'ledgerSequence');
+		if (!validObservationLedger(ledger)) return <>{text || '—'}</>;
+		// An offer may have several historical observations in the results.
+		// The return context keeps the list window; detail needs the clicked ledger.
+		return (
+			<EntityLink
+				collection="offers"
+				id={text}
+				filters={{ min_ledger: ledger, max_ledger: ledger }}
+			/>
+		);
+	}
 	if (field === 'id')
 		return (
 			<EntityLink
@@ -142,13 +155,13 @@ function Field({
 		);
 	}
 	if (field === 'ledgerSequence')
-		return (
+		return validObservationLedger(text) ? (
 			<EntityLink
 				collection="ledgers"
 				id={text}
 				label={Number(text).toLocaleString('en-US')}
 			/>
-		);
+		) : <>—</>;
 	if (field === 'type' && collection === 'operations')
 		return (
 			<>
@@ -157,6 +170,11 @@ function Field({
 			</>
 		);
 	return <>{text || '—'}</>;
+}
+function validObservationLedger(value: string): boolean {
+	const sequence = Number(value);
+	return Number.isSafeInteger(sequence) && sequence > 0 &&
+		sequence <= 2_147_483_647 && String(sequence) === value;
 }
 export function ExplorerEntityTable({
 	collection,

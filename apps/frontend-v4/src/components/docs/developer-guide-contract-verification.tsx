@@ -1,6 +1,12 @@
 import { api, Code, type DeveloperGuidePage } from './developer-guide-elements';
-import { contractEventExample } from '../blockchain/contract-event-query';
 import { contractReproductionSection } from './developer-guide-contract-reproduction';
+
+const reflectorContract =
+	'CBQSUF57OYX4RIMCZV62DKN6JFOTEKPHIZASMJYOUOCNHGNG2P3XQLSE';
+const reflectorDigest =
+	'f60d33ec57eecee04b52d048c1c079983ff1b3834c8195fea811b025fb889361';
+const reflectorCommit = 'ac9740f12a50a81c1b96d1e8d929a6066d2d00a8';
+const reflectorRepo = 'https://github.com/reflector-network/reflector-dao-contract';
 
 const outcomes = [
 	[
@@ -58,12 +64,23 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 						<a href="/docs/api/getContractBuildProvenance">
 							provenance endpoint
 						</a>
-						. This checks signed build provenance; it does not rebuild the
-						source. The shared example address below is not a promise of a
-						verified build.
+						. This checks signed build provenance. Use the Reflector DAO
+						Mainnet contract below as a reference with a published attestation.
 					</p>
-					<Code>{`curl --include --fail-with-body --connect-timeout 5 --max-time 60 \\
-  '${api}/v1/contracts/${contractEventExample.contract_id}/provenance'`}</Code>
+					<Code>{`curl -q --include --fail-with-body --connect-timeout 5 --max-time 60 \\
+  '${api}/v1/contracts/${reflectorContract}/provenance'`}</Code>
+					<p>
+						The{' '}
+						<a href={`${reflectorRepo}/releases/tag/v1.1.0_reflector-dao-contract_cli22.0.1`}>
+							Reflector DAO v1.1.0 release
+						</a>{' '}
+						has Wasm SHA-256 <code>{reflectorDigest}</code> and an attestation
+						for <a href={`${reflectorRepo}/tree/${reflectorCommit}`}>source commit {reflectorCommit}</a>.
+						Compare the response’s <code>wasmSha256</code> before using that
+						reference. For the same digest, a verified result should name that
+						commit in <code>build.record.commit</code>. The contract can be
+						upgraded and the lookup can return an unresolved result.
+					</p>
 					<p>
 						Replace the address with your contract. Save{' '}
 						<code>networkPassphrase</code>, <code>observedLedger</code>,{' '}
@@ -180,10 +197,12 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 						developer-supplied claims.
 					</p>
 					<p>
-						A verified signature establishes accepted build provenance for the
-						observed Wasm. It does not establish an independently reproduced
-						build, safe contract behavior, a security audit or a ledger-state
-						inclusion proof. <code>securityAudit</code> remains{' '}
+						<strong>Build attested</strong> means the provenance check accepted
+						the signed build for the observed Wasm. For a source-to-Wasm match,
+						rebuild with pinned inputs and compare the complete output bytes.
+						The <a href="#offline-reproduction">offline recipe below</a> uses
+						a separate historical fixture. Contract safety and ledger-state
+						inclusion require separate evidence. <code>securityAudit</code> remains{' '}
 						<code>not_assessed</code>.
 					</p>
 				</>

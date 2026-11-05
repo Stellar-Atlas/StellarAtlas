@@ -155,13 +155,20 @@ it('fails closed before a fifth real transport attempt while preserving the nati
 it('rejects a chunked response beyond the configured byte bound and bounds outbound bytes', async () => {
 	const { mock } = transport(200, [Buffer.alloc(8192), Buffer.alloc(8193)]);
 	const url = new URL(upstream);
+	const agent = new https.Agent();
 	await expect(
 		fetchProvenanceJson(
 			url,
 			{},
-			{ maxResponseBytes: 16 * 1024, timeoutMs: 2000 }
+			{
+				agent,
+				signal: new AbortController().signal,
+				maxResponseBytes: 16 * 1024,
+				timeoutMs: 2000
+			}
 		)
 	).rejects.toThrow('response exceeds size limit');
+	expect(mock.mock.calls[0]?.[1]).toMatchObject({ agent });
 	expect(mock).toHaveBeenCalledTimes(1);
 	await expect(
 		fetchProvenanceJson(url, { oversized: 'x'.repeat(16 * 1024) })
@@ -169,33 +176,45 @@ it('rejects a chunked response beyond the configured byte bound and bounds outbo
 	expect(mock).toHaveBeenCalledTimes(1);
 });
 
-it('destroys a hung request when the remaining deadline expires', async () => {
-	mocks.useFakeTimers();
-	const destroy = mocks.fn();
-	const outbound = Object.assign(new EventEmitter(), {
-		write: mocks.fn(),
-		end: mocks.fn(),
-		destroy
-	});
-	mocks
-		.spyOn(https, 'request')
-		.mockReturnValue(outbound as unknown as ReturnType<typeof https.request>);
-	try {
-		const pending = fetchProvenanceJson(
-			new URL(upstream),
-			{},
-			{
-				maxResponseBytes: 16 * 1024,
-				timeoutMs: 30
-			}
-		);
-		const assertion = expect(pending).rejects.toThrow('request timed out');
-		mocks.advanceTimersByTime(29);
-		expect(destroy).not.toHaveBeenCalled();
-		mocks.advanceTimersByTime(1);
-		await assertion;
-		expect(destroy).toHaveBeenCalledTimes(1);
-	} finally {
-		mocks.useRealTimers();
+it.each(['cancelled', 'timed out'])(
+	'destroys a hung request when %s with combined options',
+	async (reason) => {
+		mocks.useFakeTimers();
+		const agent = new https.Agent();
+		const controller = new AbortController();
+		const destroy = mocks.fn();
+		const outbound = Object.assign(new EventEmitter(), {
+			write: mocks.fn(),
+			end: mocks.fn(),
+			destroy
+		});
+		const transport = mocks
+			.spyOn(https, 'request')
+			.mockReturnValue(outbound as unknown as ReturnType<typeof https.request>);
+		try {
+			const pending = fetchProvenanceJson(
+				new URL(upstream),
+				{},
+				{
+					agent,
+					signal: controller.signal,
+					maxResponseBytes: 16 * 1024,
+					timeoutMs: 30
+				}
+			);
+			expect(transport.mock.calls[0]?.[1]).toMatchObject({ agent });
+			const assertion = expect(pending).rejects.toThrow('request ' + reason);
+			mocks.advanceTimersByTime(29);
+			expect(destroy).not.toHaveBeenCalled();
+			if (reason === 'cancelled') controller.abort();
+			else mocks.advanceTimersByTime(1);
+			await assertion;
+			mocks.advanceTimersByTime(30);
+			controller.abort();
+			expect(destroy).toHaveBeenCalledTimes(1);
+		} finally {
+			agent.destroy();
+			mocks.useRealTimers();
+		}
 	}
-});
+);

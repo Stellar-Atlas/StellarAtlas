@@ -12,6 +12,7 @@ const origin = '/explorer?search_type=ledger&search=100';
 const initial = '/explorer/ledgers/100?' + new URLSearchParams({ return_to: origin, ledger_view: 'transactions' }) + '#activity';
 let route = new URL(initial, base);
 let currentKey: string | null = null;
+let inheritedOrigin: string | null = origin;
 const request = jest.fn(async (path: string) => {
 	const offset = Number(new URL(path, base).searchParams.get('offset'));
 	if (offset === 25) throw new Error('Synthetic next-page failure');
@@ -29,7 +30,7 @@ jest.unstable_mockModule('react', () => ({
 jest.unstable_mockModule('next/navigation', () => ({
 	usePathname: () => route.pathname, useSearchParams: () => route.searchParams, useRouter: () => ({ push: jest.fn() })
 }));
-jest.unstable_mockModule('../explorer-investigation', () => ({ ExplorerLink: () => null, useExplorerReturnTo: () => origin }));
+jest.unstable_mockModule('../explorer-investigation', () => ({ ExplorerLink: () => null, useExplorerReturnTo: () => inheritedOrigin }));
 jest.unstable_mockModule('../explorer-transaction-table', () => ({ ExplorerTransactionTable: () => null }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 const analytics = await import('../../../api/explorer-analytics');
@@ -61,7 +62,7 @@ const activate = (item: ElementLike | undefined) => {
 };
 
 beforeEach(() => {
-	route = new URL(initial, base); currentKey = null; request.mockClear();
+	route = new URL(initial, base); currentKey = null; inheritedOrigin = origin; request.mockClear();
 	Object.defineProperty(globalThis, 'window', { configurable: true, value: {
 		get location() { return route; },
 		history: { pushState: (_state: unknown, _title: string, href: string) => { route = new URL(href, base); } }
@@ -83,8 +84,16 @@ it('recovers the previous ledger page after a failed continuation without showin
 	expect(route.pathname + route.search + route.hash).toBe(initial);
 	renderPage(); await settle();
 	expect(find(renderPage(), item => 'transactions' in item.props)).toBeDefined();
+	expect(find(renderPage(), item => 'transactions' in item.props)?.props.returnTo).toBe(origin);
 	expect(request.mock.calls.map(([path]) => {
 		const params = new URL(path, base).searchParams;
 		return [params.get('ledger_sequence'), params.get('limit'), params.get('offset')];
 	})).toEqual([['100','25','0'],['100','25','25'],['100','25','0']]);
+});
+
+it('supplies the ledger activity query as the return URL when opened directly', async () => {
+	inheritedOrigin = null;
+	route.searchParams.delete('return_to');
+	renderPage(); await settle();
+	expect(find(renderPage(), item => 'transactions' in item.props)?.props.returnTo).toBe(route.pathname + route.search);
 });

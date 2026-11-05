@@ -1,9 +1,9 @@
 'use client';
 import { useCallback, useEffect, useRef } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { buildEntityHref, requestExplorerJson } from '../../api/explorer-analytics';
 import { buildLedgerTransactionsPath, parseLedgerTransactions, validLedgerSequence, type LedgerTransactionPage } from '../../api/explorer-ledger-transactions';
-import { sanitizeExplorerReturnTo, withExplorerReturnTo } from '../../api/explorer-return-context';
+import { sanitizeExplorerReturnTo } from '../../api/explorer-return-context';
 import { ExplorerLink as Link, useExplorerReturnTo } from './explorer-investigation';
 import { adjacentLedgerHref, ledgerActivityHref, readLedgerActivity } from './ledger-activity-route';
 import { ExplorerTransactionTable } from './explorer-transaction-table';
@@ -40,14 +40,14 @@ function LedgerActivity({ ledger }: { readonly ledger: string }): React.JSX.Elem
 	</section>;
 }
 
-function LedgerTransactions({ ledger, offset, onPage }: {
+export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo }: {
 	readonly ledger: string;
 	readonly offset: number;
 	readonly onPage: (offset: number) => void;
+	readonly detailReturnTo?: string;
 }): React.JSX.Element {
 	const request = useExplorerRequest<LedgerTransactionPage | null>(null, 'Transaction records could not be loaded.');
 	const controller = useRef<AbortController | null>(null);
-	const router = useRouter();
 	const pathname = usePathname();
 	const params = useSearchParams();
 	const returnTo = useExplorerReturnTo();
@@ -63,13 +63,14 @@ function LedgerTransactions({ ledger, offset, onPage }: {
 	const nextOffset = page?.nextOffset ?? null;
 	return <section id="ledger-transactions" aria-label="Ledger transactions" aria-busy={request.loading}>
 		<h3>Transactions in ledger {ledger}</h3>
-		<p className={styles.muted}>Published records only; historical coverage may be incomplete.</p>
+		<p className={styles.muted}>Published records only. This endpoint does not confirm ledger coverage.</p>
 		<ExplorerRequestNotice loading={request.loading} error={request.error} onRetry={() => void load()} />
 		{page && <>
+			{request.error && page.records.length > 0 && <p className={styles.muted}>Showing last loaded rows for this page.</p>}
 			{page.records.length ? <ExplorerTransactionTable transactions={page}
 				caption={`Published transaction records for ledger ${ledger}. Dates are shown in your local time.`}
-				onInspect={(hash, sequence) => router.push(withExplorerReturnTo(buildEntityHref('transactions', hash, { ledger_sequence: sequence }), returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')))} />
-				: <p>No transaction records returned for this page.</p>}
+				returnTo={detailReturnTo ?? returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '')} />
+				: !request.error && !request.loading && <p>No published transaction records returned for this page.</p>}
 		</>}
 		{(page || offset > 0) && <div className={styles.actions}>
 			<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>

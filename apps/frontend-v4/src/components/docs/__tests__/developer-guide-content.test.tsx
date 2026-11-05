@@ -7,6 +7,7 @@ import {
 	getDeveloperGuidePage
 } from '../developer-guide-content';
 import { graphqlAnalyticsExamples } from '../graphql-analytics-examples';
+import { saveRestPage } from '../save-rest-page-example';
 import { contractEventExample } from '../../blockchain/contract-event-query';
 import { contractActivityPath } from '../../../api/explorer-contract-activity';
 
@@ -59,8 +60,13 @@ describe('developer guides', () => {
 		},
 		{
 			id: 'fetch-operations',
-			command:
-				"curl --fail-with-body --connect-timeout 5 --max-time 30 'https://api.stellaratlas.io/v1/operations?min_ledger=63490364&max_ledger=63490365&type=payment&limit=10&offset=0' --output operations-page-1.json"
+			command: saveRestPage(
+				'/v1/operations?min_ledger=63490364&max_ledger=63490365&type=payment&limit=10&offset=0',
+				'operations-page-1.json',
+				undefined,
+				30,
+				true
+			)
 		},
 		{
 			id: 'follow-results',
@@ -84,14 +90,15 @@ curl --fail-with-body --connect-timeout 5 --max-time 30 --get 'https://api.stell
 		);
 		expect(command).not.toContain('--retry');
 	});
-	it('explains local deadline and incomplete-file boundaries', () => {
+	it('explains local deadline and saved-page boundaries', () => {
 		const html = render('quickstart');
 		for (const text of [
 			'five seconds to connect and thirty seconds for the whole request',
 			'without automatic retries',
 			'not evidence that rows are absent or that server work stopped',
-			'Treat a file saved by a failed request as incomplete',
-			'continue only after a successful response'
+			'existing file is from a previous run',
+			'before using the file in step 3',
+			'Continue only after a successful response'
 		])
 			expect(html).toContain(text);
 	});
@@ -197,8 +204,10 @@ curl --fail-with-body --connect-timeout 5 --max-time 30 --get 'https://api.stell
 		expect(html.split(path)).toHaveLength(3);
 		for (const text of [
 			'page-1.json',
+			'page-2.json',
 			'summary.total',
-			'nextCursor // empty',
+			'nextCursor | strings',
+			'curl -q --fail-with-body --connect-timeout 5 --max-time 70',
 			'--data-urlencode',
 			'after=$after',
 			'/docs/querying',

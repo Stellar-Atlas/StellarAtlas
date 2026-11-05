@@ -136,6 +136,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1077.0
         version: 3.1077.0
+      '@noble/hashes':
+        specifier: 2.2.0
+        version: 2.2.0
       '@sentry/node':
         specifier: ^7.119.1
         version: 7.120.3

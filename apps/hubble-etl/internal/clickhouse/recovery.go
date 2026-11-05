@@ -23,10 +23,25 @@ type batchRowStats struct {
 // An INSERT acknowledgement is not proof of rows: orphan dedup records can ACK
 // missing data, so this gate must run before publishing recovery completion.
 func (c *Client) VerifyBatchRows(ctx context.Context, identity BatchIdentity, expected map[string]uint64) error {
+	return c.verifyBatchRows(ctx, identity, expected, schema.Datasets(), 30)
+}
+
+// Both canonical projections have a leading ledger primary key. Keep ordinary
+// publication checks bounded to these two sources rather than scanning every
+// asset/account-ordered dataset in a million-ledger partition per new batch.
+func (c *Client) VerifyCanonicalTransactionRows(ctx context.Context, identity BatchIdentity, expected map[string]uint64) error {
+	transactions, _ := schema.Lookup("history_transactions")
+	ledgers, _ := schema.Lookup("history_ledgers")
+	// A narrow publication read can encounter a cold or congested storage path.
+	// Keep its identity checks intact without applying the recovery-scan deadline.
+	return c.verifyBatchRows(ctx, identity, expected, []schema.Dataset{transactions, ledgers}, 120)
+}
+
+func (c *Client) verifyBatchRows(ctx context.Context, identity BatchIdentity, expected map[string]uint64, datasets []schema.Dataset, maximumSeconds int) error {
 	if !uuidPattern.MatchString(identity.ID) || !digestPattern.MatchString(identity.SourceSHA256) || identity.StartLedger == 0 || identity.EndLedger < identity.StartLedger {
 		return fmt.Errorf("invalid immutable batch identity")
 	}
-	for _, dataset := range schema.Datasets() {
+	for _, dataset := range datasets {
 		want := uint64(0)
 		if expected != nil {
 			var ok bool
@@ -35,11 +50,15 @@ func (c *Client) VerifyBatchRows(ctx context.Context, identity BatchIdentity, ex
 				return fmt.Errorf("missing expected count for %s", dataset.Name)
 			}
 		}
+		physicalDataset := dataset
+		if c.virtualLedgerTransactions && dataset.Name == "ledger_transactions" {
+			physicalDataset, _ = schema.Lookup("history_transactions")
+		}
 		query := "SELECT count() AS rows, uniqExact(_row_number) AS distinct_rows," +
 			" min(_row_number) AS min_row, max(_row_number) AS max_row," +
-			" countIf(_source_sha256 != {digest:String}) AS wrong_source FROM " + quoted(c.database) + "." + quoted(dataset.Name) +
-			" PREWHERE " + batchLedgerPredicate(dataset) + " WHERE _batch_id={batch:UUID}" +
-			" SETTINGS max_threads=1,max_execution_time=30,max_memory_usage=200000000,output_format_json_quote_64bit_integers=1 FORMAT JSONEachRow"
+			" countIf(_source_sha256 != {digest:String}) AS wrong_source FROM " + quoted(c.database) + "." + quoted(physicalDataset.Name) +
+			" PREWHERE " + batchLedgerPredicate(physicalDataset) + " WHERE _batch_id={batch:UUID}" +
+			" SETTINGS max_threads=1,max_execution_time=" + strconv.Itoa(maximumSeconds) + ",max_memory_usage=200000000,output_format_json_quote_64bit_integers=1 FORMAT JSONEachRow"
 		body, err := c.execute(ctx, query, url.Values{
 			"param_batch": {identity.ID}, "param_digest": {identity.SourceSHA256},
 			"param_start": {strconv.FormatUint(uint64(identity.StartLedger), 10)}, "param_end": {strconv.FormatUint(uint64(identity.EndLedger), 10)},

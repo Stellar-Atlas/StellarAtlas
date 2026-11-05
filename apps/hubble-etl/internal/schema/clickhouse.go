@@ -77,6 +77,8 @@ func IngestionTableSQL(database string) (string, error) {
 	end_ledger UInt32,
 	ledger_count UInt32,
 	row_count UInt64,
+	expected_dataset_rows Map(String, UInt64) DEFAULT map(),
+	projection_contract LowCardinality(String) DEFAULT '',
 	status Enum8('started' = 1, 'complete' = 2, 'failed' = 3),
 	error String,
 	updated_at DateTime64(6, 'UTC')
@@ -96,7 +98,15 @@ func TableSQL(database string, dataset Dataset) (string, error) {
 	definitions := make([]string, 0, len(columns))
 	for _, column := range columns {
 		available[column.Name] = struct{}{}
-		definitions = append(definitions, "\t"+quote(column.Name)+" "+column.Type)
+		definition := "\t" + quote(column.Name) + " " + column.Type
+		if dataset.Name == "history_transactions" && column.Type == "String" {
+			switch column.Name {
+			case "tx_meta", "tx_envelope", "tx_fee_meta", "tx_result":
+				// New-table policy only: never rewrite/materialize existing parts.
+				definition += " CODEC(ZSTD(1))"
+			}
+		}
+		definitions = append(definitions, definition)
 	}
 	order := append([]string(nil), dataset.OrderBy...)
 	order = append(order, "_batch_id", "_row_number")

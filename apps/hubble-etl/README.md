@@ -9,6 +9,12 @@ LCM batches into the existing ClickHouse warehouse. The shared I/O pressure
 guard, immutable source-digest checks, and completed-batch deduplication apply
 to every batch, including a priority batch.
 
+The importer and warehouse maintenance commands connect directly to
+`CLICKHOUSE_URL`; they do not inherit forward proxies from `HTTP_PROXY` or
+`HTTPS_PROXY` and do not follow redirects. Set the URL to a directly reachable
+HTTP(S) endpoint, which may be loopback, private, or a reverse proxy explicitly
+serving ClickHouse at that URL.
+
 ## Warehouse readiness admission
 
 Both workers share one cached readiness gate. It resolves the ingestion manifest

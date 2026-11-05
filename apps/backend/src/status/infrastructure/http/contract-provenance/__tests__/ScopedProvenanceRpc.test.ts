@@ -139,7 +139,7 @@ it('reads only the expected keys from the same fixed HTTPS endpoint within one b
 	]);
 	for (const [, , limits] of request.mock.calls)
 		expect(limits?.timeoutMs).toBeLessThanOrEqual(8_000);
-	expect(code![2]!.timeoutMs).toBeLessThanOrEqual(network![2]!.timeoutMs);
+	expect(code![2]!.timeoutMs).toBeLessThanOrEqual(network![2]!.timeoutMs!);
 });
 
 it.each([

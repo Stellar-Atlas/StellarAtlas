@@ -71,6 +71,14 @@ export class AssetCatalogue {
 		assets: readonly AssetObservation[];
 	}> {
 		await this.load();
+		return this.cachedIssuerObservationsSnapshot();
+	}
+
+	/** Read only the snapshot already materialized by the existing catalogue. */
+	cachedIssuerObservationsSnapshot(): {
+		generatedAt: string | null;
+		assets: readonly AssetObservation[];
+	} {
 		return {
 			generatedAt: this.snapshot?.generatedAt ?? null,
 			assets: this.snapshot?.assets ?? []

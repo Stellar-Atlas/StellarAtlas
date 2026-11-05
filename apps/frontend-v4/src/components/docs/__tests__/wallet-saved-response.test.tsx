@@ -21,7 +21,11 @@ const html = renderToStaticMarkup(section.content);
 const eventSection = contractEventsGuide.sections.find(
 	(value) => value.id === 'request-events'
 );
-if (!eventSection) throw new Error('Missing contract event request');
+const eventContinuation = contractEventsGuide.sections.find(
+	(value) => value.id === 'paginate-events'
+);
+if (!eventSection || !eventContinuation)
+	throw new Error('Missing contract event request or continuation');
 const decode = (text: string): string =>
 	text.replace(
 		/&(?:amp|lt|gt|quot|#x27);/g,
@@ -35,7 +39,11 @@ const decode = (text: string): string =>
 			})[entity] ?? entity
 	);
 const commands = [
-	...(html + renderToStaticMarkup(eventSection.content)).matchAll(
+	...(
+		html +
+		renderToStaticMarkup(eventSection.content) +
+		renderToStaticMarkup(eventContinuation.content)
+	).matchAll(
 		/<pre\b[^>]*><code\b[^>]*>([\s\S]*?)<\/code>/g
 	)
 ]
@@ -63,6 +71,10 @@ const fakeCurl = `curl() {
  return "$EXIT_CODE"
 }
 jq() {
+ if [ "$1" = -es ]; then
+  [ "$2" = 'length == 1 and (.[0] | type == "object")' ] && [ -f "$3" ]
+  return
+ fi
  [ "$1" = -er ] && [ "$2" = '.nextCursor | strings | select(length > 0)' ] || return 2
  local page
  IFS= read -r page < "$3" || return 2
@@ -78,17 +90,18 @@ const saved =
 
 const firstPage = '{"nextCursor":"opaque+/="}\n';
 function seedFirstPage(directory: string, filename: string) {
-	if (filename.endsWith('-next.json')) {
-		writeFileSync(
-			join(directory, filename.replace('-next.json', '.json')),
-			firstPage
-		);
-	}
+	const previous = previousFile(filename);
+	if (previous) writeFileSync(join(directory, previous), firstPage);
+}
+function previousFile(filename: string): string | undefined {
+	if (filename === 'page-2.json') return 'page-1.json';
+	if (filename.endsWith('-next.json')) return filename.replace('-next.json', '.json');
+	return undefined;
 }
 
 describe('saved wallet, holder and event responses', () => {
-	it('publishes five guarded save commands and distinguishes retained data from a fresh response', () => {
-		expect(commands).toHaveLength(5);
+	it('publishes six guarded save commands and distinguishes retained data from a fresh response', () => {
+		expect(commands).toHaveLength(6);
 		for (const text of [
 			'refresh is unavailable',
 			'not an empty',
@@ -147,18 +160,17 @@ describe('saved wallet, holder and event responses', () => {
 					expect(readFileSync(join(directory, filename), 'utf8')).toBe(
 						status === 0 ? body : saved
 					);
-					if (/^(wallet-balances|kale-holders)(-next)?\.json$/.test(filename)) {
-						const args = readFileSync(join(directory, 'curl-args'), 'utf8');
-						expect(args.split('\n')[0]).toBe('-q');
-					}
-					if (filename.endsWith('-next.json')) {
+					const args = readFileSync(join(directory, 'curl-args'), 'utf8');
+					expect(args.split('\n')[0]).toBe('-q');
+					const previous = previousFile(filename);
+					if (previous) {
 						expect(
 							readFileSync(
-								join(directory, filename.replace('-next.json', '.json')),
+								join(directory, previous),
 								'utf8'
 							)
 						).toBe(firstPage);
-						expect(readFileSync(join(directory, 'curl-args'), 'utf8')).toContain(
+						expect(args).toContain(
 							'--data-urlencode\nafter=opaque+/=\n'
 						);
 					}

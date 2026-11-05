@@ -9,6 +9,9 @@ const normalizedApiBaseUrl = apiBaseUrl.endsWith('/')
 const publicDataApiBaseUrl = 'https://api.stellaratlas.io';
 
 const nextConfig: NextConfig = {
+	// Keep deployment skew protection, but opt into Next's normal per-build ID.
+	// Replicas must use the same compiled output, including its persisted BUILD_ID.
+	generateBuildId: () => null,
 	distDir: process.env.NEXT_DIST_DIR ?? '.next-production',
 	// Build-time only: large reference pages need room for cold shared-storage reads.
 	staticPageGenerationTimeout: 180,

@@ -240,9 +240,11 @@ export class AssetMetadataService {
 			current = await this.readIssuer(homeDomain);
 			if (current && !this.needsRefresh(current)) return current;
 			const headers: Record<string, string> = {};
-			if (current?.etag) headers['if-none-match'] = current.etag;
-			if (current?.lastModified)
-				headers['if-modified-since'] = current.lastModified;
+			// An ordinary refresh of a legacy cache record must capture ACCOUNTS.
+			if (current?.accounts !== undefined) {
+				if (current.etag) headers['if-none-match'] = current.etag;
+				if (current.lastModified) headers['if-modified-since'] = current.lastModified;
+			}
 			await assertCacheSpace(this.options.cacheRoot, tomlMaxBytes);
 			const response = await this.requestImpl(
 				issuerTomlUrl(homeDomain),
@@ -273,6 +275,7 @@ export class AssetMetadataService {
 				homeDomain,
 				tomlUrl: issuerTomlUrl(homeDomain),
 				networkPassphrase: this.options.networkPassphrase,
+				accounts: parsed.accounts,
 				currencies: parsed.currencies,
 				fields: parsed.fields,
 				fetchedAt: at,

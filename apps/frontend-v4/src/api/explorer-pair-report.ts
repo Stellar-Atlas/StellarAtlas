@@ -4,6 +4,7 @@ import {
 	requestExplorerJson,
 	type AnalyticsEntityPage
 } from './explorer-analytics';
+import { withExplorerReturnTo } from './explorer-return-context';
 
 export interface PairReportSelection {
 	assetA: string;
@@ -14,6 +15,21 @@ export interface PairReportSelection {
 }
 
 export type PairReportLane = 'a-to-b' | 'b-to-a' | 'pool-a-b' | 'pool-b-a';
+export const pairReportLanes: readonly PairReportLane[] = ['a-to-b', 'b-to-a', 'pool-a-b', 'pool-b-a'];
+
+export function pairReportHref(
+	selection: PairReportSelection,
+	offsets: Partial<Readonly<Record<PairReportLane, number>>> = {},
+	returnTo?: string | null
+): string {
+	const params = new URLSearchParams({
+		asset_a: selection.assetA, asset_b: selection.assetB,
+		min_ledger: selection.minLedger ?? '', max_ledger: selection.maxLedger ?? '', limit: selection.limit
+	});
+	for (const lane of pairReportLanes)
+		if (offsets[lane]) params.set(lane + '_offset', String(offsets[lane]));
+	return withExplorerReturnTo('/explorer/markets?' + params, returnTo, true);
+}
 
 const assetPattern = /^[A-Za-z0-9]{1,12}:G[A-Z2-7]{55}$/;
 

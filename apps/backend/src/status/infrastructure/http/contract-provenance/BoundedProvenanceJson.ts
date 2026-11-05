@@ -80,15 +80,22 @@ function bodyBytes(body: unknown): Buffer | undefined {
 export async function fetchProvenanceJson(
 	url: URL,
 	body?: unknown,
-	limits?: { readonly timeoutMs: number; readonly maxResponseBytes: number }
+	options: {
+		readonly agent?: http.Agent;
+		readonly signal?: AbortSignal;
+		readonly timeoutMs?: number;
+		readonly maxResponseBytes?: number;
+	} = {}
 ): Promise<unknown> {
+	const { agent, signal } = options;
+	signal?.throwIfAborted();
 	const payload = bodyBytes(body);
 	const timeoutMs = Math.min(
-		limits?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+		options.timeoutMs ?? REQUEST_TIMEOUT_MS,
 		REQUEST_TIMEOUT_MS
 	);
 	const maxResponseBytes = Math.min(
-		limits?.maxResponseBytes ?? MAX_RESPONSE_BYTES,
+		options.maxResponseBytes ?? MAX_RESPONSE_BYTES,
 		MAX_RESPONSE_BYTES
 	);
 	if (
@@ -125,6 +132,7 @@ export async function fetchProvenanceJson(
 			if (settled) return;
 			settled = true;
 			if (timeout !== undefined) clearTimeout(timeout);
+			signal?.removeEventListener('abort', onAbort);
 			if (error !== undefined) {
 				response?.destroy();
 				request?.destroy();
@@ -133,6 +141,16 @@ export async function fetchProvenanceJson(
 				resolve(value);
 			}
 		};
+
+		const onAbort = (): void =>
+			finish(
+				new ProvenanceHttpError(
+					null,
+					'transport',
+					'Provenance request cancelled'
+				)
+			);
+		signal?.addEventListener('abort', onAbort, { once: true });
 
 		const requestOptions: RequestOptions = {
 			method: payload === undefined ? 'GET' : 'POST',
@@ -250,12 +268,12 @@ export async function fetchProvenanceJson(
 				url.protocol === 'https:'
 					? https.request(
 							url,
-							{ ...requestOptions, agent: httpsAgent },
+							{ ...requestOptions, agent: agent ?? httpsAgent },
 							handleResponse
 						)
 					: http.request(
 							url,
-							{ ...requestOptions, agent: httpAgent },
+							{ ...requestOptions, agent: agent ?? httpAgent },
 							handleResponse
 						);
 			request.once('error', () =>
