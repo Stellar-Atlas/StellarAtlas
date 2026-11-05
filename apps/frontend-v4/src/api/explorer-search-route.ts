@@ -1,6 +1,7 @@
 import { buildEntityHref, type ExplorerFilters } from './explorer-analytics';
 import { withExplorerReturnTo } from './explorer-return-context';
 import { isContractAccount } from '../domain/classic-account';
+import { issuerDomainHref, normalizeIssuerDomain } from './issuer-domain';
 
 export function decodeExplorerIdentifier(value: string): string | null {
 	try {
@@ -90,6 +91,10 @@ export function resolveExplorerSearch(
 	type = 'auto'
 ): string | null {
 	const value = query.trim();
+	if (type === 'issuer-domain') {
+		const domain = normalizeIssuerDomain(value);
+		return domain ? issuerDomainHref(domain) : null;
+	}
 	if (!value || value.length > 128) return null;
 	const symbol = /^[A-Za-z0-9]{1,12}$/.test(value);
 	if (
@@ -146,6 +151,10 @@ export function explorerSearchNavigation(href: string, query: string, type: stri
 	current.searchParams.set('search', query.trim());
 	current.searchParams.set('search_type', type);
 	const origin = current.pathname + current.search + current.hash;
+	if (type === 'issuer-domain') {
+		const back = '/explorer?' + new URLSearchParams({ search: query.trim(), search_type: type });
+		return { origin, destination: withExplorerReturnTo(route, back, true) };
+	}
 	return {
 		origin,
 		destination: withExplorerReturnTo(route, origin, route.startsWith('/explorer/assets?'))

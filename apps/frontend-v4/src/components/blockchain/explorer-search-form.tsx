@@ -3,14 +3,16 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { explorerSearchNavigation } from '../../api/explorer-search-route';
+import { ISSUER_DOMAIN_MAX_INPUT } from '../../api/issuer-domain';
 
-const searchTypes = ['auto', 'transaction', 'account', 'ledger', 'operation', 'asset', 'contract', 'pool'] as const;
+const searchTypes = ['auto', 'transaction', 'account', 'ledger', 'operation', 'asset', 'contract', 'pool', 'issuer-domain'] as const;
+const inputLimit = (type: string): number => type === 'issuer-domain' ? ISSUER_DOMAIN_MAX_INPUT : 128;
 
 export function ExplorerSearchForm(): React.JSX.Element {
 	const params = useSearchParams();
-	const query = params.get('search')?.slice(0, 128) ?? '';
 	const selected = params.get('search_type');
 	const type = searchTypes.find((value) => value === selected) ?? 'auto';
+	const query = params.get('search')?.slice(0, inputLimit(type)) ?? '';
 	return <SearchForm key={`${type}:${query}`} initialQuery={query} initialType={type} />;
 }
 
@@ -27,7 +29,8 @@ function SearchForm({ initialQuery, initialType }: {
 			event.preventDefault();
 			const navigation = explorerSearchNavigation(window.location.href, query, type);
 			if (!navigation) {
-				setError('Enter a valid identifier for the selected search type.');
+				setError(type === 'issuer-domain' ? 'Enter a DNS hostname, such as example.org.' :
+					'Enter a valid identifier for the selected search type.');
 				return;
 			}
 			// Save the submitted search in this history entry, not on every keystroke.
@@ -36,12 +39,13 @@ function SearchForm({ initialQuery, initialType }: {
 		}}>
 			<input aria-label="Explorer search" aria-invalid={error ? true : undefined}
 				aria-describedby={error ? 'explorer-search-error' : undefined}
-				placeholder="Hash, address, ledger, operation ID, or asset code"
-				maxLength={128} value={query} onChange={(event) => { setQuery(event.currentTarget.value); setError(null); }} />
+				placeholder={type === 'issuer-domain' ? 'example.org' : 'Hash, address, ledger, operation ID, or asset code'}
+				maxLength={inputLimit(type)} value={query} onChange={(event) => { setQuery(event.currentTarget.value); setError(null); }} />
 			<select aria-label="Search type" value={type}
 				onChange={(event) => { setType(event.currentTarget.value); setError(null); }}>
 				{searchTypes.map((value) => <option key={value} value={value}>
-					{value === 'auto' ? 'Detect automatically' : value === 'pool' ? 'Liquidity pool' : value}
+					{value === 'auto' ? 'Detect automatically' : value === 'pool' ? 'Liquidity pool' :
+						value === 'issuer-domain' ? 'Issuer domain' : value}
 				</option>)}
 			</select>
 			<button type="submit" disabled={!query.trim()}>Search</button>
