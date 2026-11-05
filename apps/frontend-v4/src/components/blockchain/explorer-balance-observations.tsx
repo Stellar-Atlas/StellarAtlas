@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { readWalletCursor, validWalletCursor, walletBalanceHref } from './wallet-balance-route';
 import { ExplorerLink as Link } from './explorer-investigation';
 import { buildEntityHref } from '../../api/explorer-analytics';
+import { classicAssetIdentity } from '../../api/explorer-current-account';
 import {
 	fetchBalanceObservations,
 	type BalanceObservationKind,
@@ -15,6 +16,7 @@ import { withExplorerRequestDeadline } from './explorer-request';
 import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { BalanceObservationProvenance } from './explorer-balance-provenance';
 import { ObservedBalanceFlags } from './explorer-balance-flags';
+import { AccountAssetIdentity } from './explorer-account-asset-identity';
 import { formatAtomic } from './explorer-format-values';
 import { formatObservedAmount, observedTrustlineLimit, ObservedAmountSource } from './explorer-observed-amount';
 import styles from './explorer-entity.module.css';
@@ -222,10 +224,12 @@ export function BalanceObservationResults({
 							</tr>
 						</thead>
 						<tbody>
-							{page.rows.map((row) => (
+							{page.rows.map((row) => {
+								const asset = kind === 'balances' ? classicAssetIdentity(row.id) : null;
+								return (
 								<tr key={row.id}>
 									<td data-label={label}>
-										<Link
+										{asset ? <AccountAssetIdentity asset={asset} /> : <Link
 											className={styles.hash}
 											href={buildEntityHref(
 												kind === 'balances' ? 'assets' : 'accounts',
@@ -233,7 +237,7 @@ export function BalanceObservationResults({
 											)}
 										>
 											{row.id === 'native' ? 'XLM (native)' : row.id}
-										</Link>
+										</Link>}
 										{kind === 'balances' && <ObservedBalanceFlags evidence={row} />}
 									</td>
 									<td data-label="Observed balance">
@@ -270,7 +274,8 @@ export function BalanceObservationResults({
 										</div>
 									</td>
 								</tr>
-							))}
+								);
+							})}
 						</tbody>
 					</table>
 				</div>

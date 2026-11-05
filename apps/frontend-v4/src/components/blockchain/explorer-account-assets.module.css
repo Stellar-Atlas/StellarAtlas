@@ -1,0 +1,25 @@
+.identity {
+	display: flex;
+	gap: 0.55rem;
+	align-items: flex-start;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.identity > div { min-width: 0; }
+.identity small { display: block; color: var(--muted); font-size: 0.74rem; }
+.identity img, .mark {
+	width: 28px;
+	height: 28px;
+	flex: none;
+	border-radius: 50%;
+	object-fit: contain;
+}
+.mark {
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--border);
+	color: var(--muted);
+	font-weight: 600;
+}
+.amount { font-variant-numeric: tabular-nums; }
+.context { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }

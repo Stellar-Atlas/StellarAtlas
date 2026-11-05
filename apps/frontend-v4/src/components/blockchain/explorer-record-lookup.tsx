@@ -14,7 +14,7 @@ import {
 	buildAnalyticsLedgerPath,
 	parseAnalyticsLedgerLookup
 } from '../../api/explorer-record-lookup';
-import { ExplorerBalanceObservations } from './explorer-balance-observations';
+import { ExplorerAccountAssets } from './explorer-account-assets';
 import { ExplorerLedgerActivity } from './explorer-ledger-activity';
 import { ExplorerAccountRelations } from './explorer-account-relations';
 import { isClassicAccount, isContractAccount } from '../../domain/classic-account';
@@ -143,12 +143,7 @@ function RecordLookup({
 				{collection === 'accounts' && <ExplorerAccountRelations account={identifier} />}
 			</section>
 			{collection === 'accounts' && (
-				<ExplorerBalanceObservations
-					key={identifier}
-					autoLoad
-					kind="balances"
-					identifier={identifier}
-				/>
+				<ExplorerAccountAssets key={identifier} account={identifier} />
 			)}
 		</div>
 	);

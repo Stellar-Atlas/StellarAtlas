@@ -3,7 +3,8 @@ export const noStore = { 'cache-control': 'no-store', 'x-content-type-options': 
 
 const routes = {
 	transaction: ['/v1/analytics/transactions/', ''],
-	'account balance': ['/v1/analytics/accounts/', '/balances']
+	'account balance': ['/v1/analytics/accounts/', '/balances'],
+	'current account': ['/horizon/accounts/', '']
 } as const;
 
 function configuredExplorerApiBase(): URL {
@@ -38,7 +39,8 @@ export async function proxyExplorerJson(
 	query: URLSearchParams,
 	maxResponseBytes: number
 ): Promise<Response> {
-	const deadline = AbortSignal.timeout(deadlineMs);
+	const timeout = resource === 'current account' ? 12_000 : deadlineMs;
+	const deadline = AbortSignal.timeout(timeout);
 	const signal = AbortSignal.any([request.signal, deadline]);
 	try {
 		const target = configuredExplorerApiBase();
@@ -86,7 +88,7 @@ export async function proxyExplorerJson(
 		const timedOut = deadline.aborted && !request.signal.aborted;
 		return Response.json({
 			error: timedOut
-				? `The explorer did not receive ${resource === 'transaction' ? 'a transaction' : 'an account balance'} response within 65 seconds.`
+				? `The explorer did not receive ${resource === 'transaction' ? 'a transaction' : 'an ' + resource} response within ${timeout / 1000} seconds.`
 				: `The explorer could not reach the ${resource} service.`
 		}, { status: timedOut ? 504 : 502, headers: noStore });
 	}
