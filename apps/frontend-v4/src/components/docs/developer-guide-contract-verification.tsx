@@ -84,10 +84,18 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 					<p>
 						Replace the address with your contract. Save{' '}
 						<code>networkPassphrase</code>, <code>observedLedger</code>,{' '}
-						<code>checkedAt</code>, <code>wasmSha256</code> and{' '}
-						<code>build.status</code> together. The ledger records an RPC
-						observation, not a guarantee of the current network head. An upgrade
-						can change the executable and digest.
+						<code>checkedAt</code>, <code>wasmSha256</code>,{' '}
+						<code>build.status</code> and <code>ledgerEvidence</code> (if present)
+						together. The observed ledger may not be the current network head.
+						An upgrade can change the executable and digest.
+					</p>
+					<p>
+						<code>ledgerEvidence</code> set to{' '}
+						<code>configured_rpc_observation</code> identifies a configured RPC
+						observation, not an independent ledger-state proof. Native responses
+						may omit this field. An absent or unrecognized value does not
+						establish independent proof. Read <code>build.status</code> separately
+						for the attestation outcome.
 					</p>
 				</>
 			)
@@ -133,8 +141,8 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 						</li>
 						<li>
 							After publication, repeat the lookup and inspect the returned
-							status. Results are cached: contract observations can be retained
-							for one minute and build outcomes for up to thirty minutes.
+							status. Native contract observations can be retained for one minute,
+							and build outcomes for up to thirty minutes.
 							Repeated requests do not force a fresh build check.
 						</li>
 					</ol>

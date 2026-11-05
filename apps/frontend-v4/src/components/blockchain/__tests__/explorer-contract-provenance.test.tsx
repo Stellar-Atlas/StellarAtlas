@@ -81,7 +81,7 @@ jest.unstable_mockModule('../../local-date-time', () => ({
 	LocalDateTime: ({ dateTime }: { dateTime: string }) =>
 		ReactActual.createElement('time', null, dateTime)
 }));
-const { ExplorerContractProvenance } =
+const { ExplorerContractProvenance, parseLedgerEvidence } =
 	await import('../explorer-contract-provenance');
 const hash = 'a'.repeat(64),
 	commit = 'b'.repeat(40);
@@ -143,6 +143,14 @@ beforeEach(() => {
 });
 afterEach(() => cleanup?.());
 describe('synthetic contract provenance interaction journey', () => {
+	it('parses the exact marker and conservatively distinguishes absent and unexpected values', () => {
+		expect(parseLedgerEvidence('configured_rpc_observation')).toBe('configured_rpc_observation');
+		expect(parseLedgerEvidence(undefined)).toBe('unspecified');
+		for (const marker of [null, {}, 'CONFIGURED_RPC_OBSERVATION', 'independent_proof']) {
+			expect(parseLedgerEvidence(marker)).toBe('unknown');
+		}
+	});
+
 	it.each([
 		['verified', 'Build attested'],
 		['invalid', 'Build verification failed'],
@@ -164,6 +172,7 @@ describe('synthetic contract provenance interaction journey', () => {
 		);
 		expect(html).toContain(label);
 		expect(html).toContain(hash);
+		expect(html).not.toContain('Ledger evidence');
 		if (status === 'verified') {
 			expect(html).toContain(commit);
 			expect(html).toContain('not a security audit');
@@ -174,6 +183,40 @@ describe('synthetic contract provenance interaction journey', () => {
 		render();
 		effects();
 		expect(request).toHaveBeenCalledTimes(1);
+	});
+	it.each([
+		['verified', 'Build attested'],
+		['invalid', 'Build verification failed'],
+		['unavailable', 'Build check unavailable']
+	])('attributes the observation without changing the %s build verdict', async (status, label) => {
+		request.mockResolvedValue({
+			...evidence(status),
+			ledgerEvidence: 'configured_rpc_observation',
+			rpcUrl: 'https://private.invalid/rpc'
+		});
+		render();
+		click('Check build');
+		render();
+		effects();
+		await settled();
+		const html = render();
+		expect(html).toContain('Configured RPC observation. Not an independent ledger-state proof.');
+		expect(html).toContain(label);
+		expect(html).not.toContain('private.invalid');
+		expect(html.includes(commit)).toBe(status === 'verified');
+	});
+	it('does not echo an unrecognized ledger evidence value or use it as proof', async () => {
+		const marker = 'https://private.invalid/claimed-ledger-proof';
+		request.mockResolvedValue({ ...evidence(), ledgerEvidence: marker });
+		render();
+		click('Check build');
+		render();
+		effects();
+		await settled();
+		const html = render();
+		expect(html).toContain('Unrecognized ledger evidence. Do not treat it as a ledger-state proof.');
+		expect(html).not.toContain(marker);
+		expect(html).toContain('Build attested');
 	});
 	it('offers one manual Retry after transport error instead of automatic retries', async () => {
 		request
