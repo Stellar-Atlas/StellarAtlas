@@ -21,8 +21,8 @@ const payload = {
 	coverage: { minLedger: 100, maxLedger: 120, firstSourceTime: 1_800, lastSourceTime: 2_550,
 		ledgerRangeComplete: false, timeRangeComplete: false, status: 'partial', emptyBuckets: 'omitted' }
 };
-const render = (value: unknown) => renderToStaticMarkup(createElement(MarketHistoryContent, {
-	selection: pair, history: parseMarketHistory(value, pair)
+const render = (value: unknown, selection = pair) => renderToStaticMarkup(createElement(MarketHistoryContent, {
+	selection, history: parseMarketHistory(value, selection)
 }));
 
 it('pins a single aggregate path to the loaded report and starts with no chart or request', () => {
@@ -68,4 +68,15 @@ it('keeps no-trade and unpublished windows distinct and rejects mislabeled or co
 		{ ...payload, candles: [{ ...observation, close: 'Infinity' }] },
 		{ ...payload, coverage: { ...payload.coverage, maxLedger: 121 } }
 	]) expect(() => parseMarketHistory(invalid, pair)).toThrow('Invalid price and volume response.');
+});
+
+it('labels a native base and classic quote without accepting missing identifiers', () => {
+	const reversed = { ...pair, assetA: pair.assetB, assetB: pair.assetA };
+	const html = render({ ...payload, base: reversed.assetA, quote: reversed.assetB }, reversed);
+	expect(html).toContain('KALE per XLM');
+	expect(html).not.toContain(issuer);
+	for (const incomplete of [{ ...pair, assetA: '' }, { ...pair, assetB: '' }]) {
+		expect(() => marketHistoryPath(incomplete)).toThrow();
+		expect(() => parseMarketHistory(payload, incomplete)).toThrow();
+	}
 });
