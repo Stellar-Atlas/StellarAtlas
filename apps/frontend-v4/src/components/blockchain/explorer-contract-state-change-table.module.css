@@ -103,6 +103,15 @@
 	color: var(--muted);
 	font-size: 0.8rem;
 }
+.pageSummary {
+	margin: 0.5rem 0;
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+.deletion {
+	color: var(--yellow);
+	font-weight: 600;
+}
 .warning {
 	color: var(--yellow);
 }

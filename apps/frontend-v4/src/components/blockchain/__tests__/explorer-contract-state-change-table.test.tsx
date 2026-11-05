@@ -127,4 +127,29 @@ describe('ExplorerContractStateChangeTable', () => {
 		expect(html).toContain('Empty map');
 		expect(html).toContain('No value');
 	});
+
+	it('counts only explicit deletions on this page and distinguishes missing and void values', () => {
+		const html = renderToStaticMarkup(createElement(ExplorerContractStateChangeTable, {
+			rows: [
+				{ id: 'deleted', deleted: true, val_decoded: null },
+				{ id: 'missing', deleted: false, val_decoded: null },
+				{ id: 'void', val_decoded: 'void' },
+				{ id: 'bad-flag', deleted: 'true' }
+			]
+		}));
+		expect(html).toContain('1 deletion on this page');
+		expect(html.match(/Deletion recorded/g)).toHaveLength(1);
+		expect(html.match(/Not recorded/g)).toHaveLength(2);
+		expect(html).toContain('No value');
+	});
+
+	it('keeps the exact value and raw evidence when a deletion row includes a payload', () => {
+		const html = renderToStaticMarkup(createElement(ExplorerContractStateDetails, {
+			row: { deleted: true, val_decoded: { u128: '340282366920938463463374607431768211455' } },
+			onClose: () => undefined
+		}));
+		expect(html).toContain('State deletion');
+		expect(html).toContain('340282366920938463463374607431768211455');
+		expect(html).toContain('Original record');
+	});
 });
