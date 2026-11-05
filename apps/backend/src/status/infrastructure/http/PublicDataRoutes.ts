@@ -5,6 +5,7 @@ import { hubbleWarehouseRouter } from './HubbleWarehouseRouter.js';
 import { hubbleWarehouseGraphqlHandler } from './HubbleWarehouseGraphql.js';
 import { publicGoodsRouter, type PublicGoodsRouterConfig } from './PublicGoodsRouter.js';
 import { createPublicGoodsReadinessReader } from './PublicGoodsReadinessReader.js';
+import { sorobanDomainRouter } from './soroban-domains/SorobanDomainRouter.js';
 
 interface PublicDataRouteConfig {
 	readonly warehouse: PublicGoodsRouterConfig['warehouse'];
@@ -15,6 +16,10 @@ interface PublicDataRouteConfig {
 
 export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfig): void {
 	app.use('/v1/analytics', hubbleWarehouseRouter({ warehouse: config.warehouse }));
+	app.use('/v1', sorobanDomainRouter({
+		rpcUrl: process.env.STELLAR_RPC_URL,
+		networkPassphrase: config.networkPassphrase
+	}));
 	app.use('/v1', assetResourceRouter({
 		warehouse: config.warehouse,
 		networkPassphrase: config.networkPassphrase

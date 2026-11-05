@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { afterEach, expect, it, jest } from '@jest/globals';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as explorerAnalytics from '../../../api/explorer-analytics';
@@ -20,7 +20,7 @@ const asset = { id, kind: 'classic' as const, code: 'KALE', issuer, lastObserved
 const hooks = new HookHarness();
 let location = new URL('/explorer', site);
 const closedAt = '2026-11-04T00:00:00Z';
-const request = jest.fn(async (_path: string) => ({
+const request = jest.fn(async (_path: string, _signal: AbortSignal) => ({
 	transfers: [{
 		id: 'fixture', ledgerSequence: 121, closedAt, transactionHash: hash,
 		transactionId: '1', operationId: null, from: issuer, to: otherIssuer, toMuxed: null,
@@ -35,7 +35,8 @@ jest.unstable_mockModule('react', () => ({
 }));
 jest.unstable_mockModule('next/navigation', () => ({
 	usePathname: () => location.pathname,
-	useSearchParams: () => location.searchParams
+	useSearchParams: () => location.searchParams,
+	useRouter: () => ({ push: jest.fn() })
 }));
 jest.unstable_mockModule('../../../api/explorer-analytics', () => ({ ...explorerAnalytics, requestExplorerJson: request }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
@@ -43,6 +44,7 @@ jest.unstable_mockModule('../explorer-asset-workspace.module.css', () => ({ defa
 const { ExplorerInvestigation, ExplorerInvestigationScope } = await import('../explorer-investigation');
 const { AssetTable } = await import('../explorer-asset-views');
 const { ExplorerAssetTabs } = await import('../explorer-asset-tabs');
+const { ExplorerSearchForm } = await import('../explorer-search-form');
 
 afterEach(() => {
 	hooks.reset();
@@ -136,4 +138,48 @@ it('keeps exact identifiers and only routes a C-address to assets when explicitl
 	expect(resolveExplorerSearch('121', 'asset')).toBe('/explorer/assets?symbol=121');
 	expect(resolveExplorerSearch('kale')).toBe('/explorer/assets?symbol=kale');
 	expect(resolveExplorerSearch('KALE/USDC')).toBeNull();
+});
+
+it('opens a canonical Soroban Domains lookup and restores the selected finder mode from rendered Back', () => {
+	const start = new URL('/explorer', site);
+	start.searchParams.set('noise', 'x'.repeat(4090));
+	start.searchParams.set('return_to', '//outside.invalid');
+	const name = 'Treasury.Addresses.MATE.XLM';
+	const search = explorerSearchNavigation(start.href, ' ' + name + ' ', 'soroban-domain')!;
+	location = new URL(search.destination, site);
+	expect(location.pathname).toBe('/explorer/soroban-domains');
+	expect(location.searchParams.get('name')).toBe('treasury.addresses.mate.xlm');
+	expect(search.destination.length).toBeLessThan(256);
+	const back = links(renderToStaticMarkup(createElement(ExplorerInvestigation, { children: null })))[0]!;
+	expect(back.pathname).toBe('/explorer');
+	expect(Object.fromEntries(back.searchParams)).toEqual({ search: name, search_type: 'soroban-domain' });
+	location = back;
+	const form = hooks.render(() => renderToStaticMarkup(createElement(ExplorerSearchForm)));
+	expect(form).toContain('<option value="soroban-domain" selected="">Soroban Domains (.xlm)</option>');
+	expect(form).toContain('placeholder="example.xlm"');
+	expect(form).toContain('value="' + name + '"');
+});
+
+it('keeps .xlm protocol lookup explicit and rejects other namespaces and unsupported labels', () => {
+	expect(resolveExplorerSearch('mate.xlm')).toBeNull();
+	expect(resolveExplorerSearch('mate.xlm', 'asset')).toBeNull();
+	for (const query of ['mate.com', 'https://mate.xlm', 'mate..xlm', 'máte.xlm', 'a.b.c.d.e.xlm', issuer]) {
+		expect(resolveExplorerSearch(query, 'soroban-domain')).toBeNull();
+	}
+});
+
+it('offers both domain modes and uses only the selected namespace and input limit', () => {
+	const hostname = ['a'.repeat(63), 'b'.repeat(63), 'c'.repeat(63), 'd'.repeat(61)].join('.') + '.';
+	const result = explorerSearchNavigation(site + '/explorer', hostname, 'issuer-domain')!;
+	location = new URL(result.destination, site);
+	expect(location.pathname).toBe('/explorer/issuers/by-domain');
+	expect(location.searchParams.get('domain')).toBe(hostname.slice(0, -1));
+	location = new URL(location.searchParams.get('return_to')!, site);
+	const form = hooks.render(() => renderToStaticMarkup(createElement(ExplorerSearchForm)));
+	expect(form).toContain('<option value="issuer-domain" selected="">Issuer domain</option>');
+	expect(form).toContain('<option value="soroban-domain">Soroban Domains (.xlm)</option>');
+	expect(form).toContain('maxLength="254"');
+	expect(form).toContain('value="' + hostname + '"');
+	expect(resolveExplorerSearch(hostname, 'soroban-domain')).toBeNull();
+	expect(resolveExplorerSearch('mate.xlm', 'issuer-domain')).toBeNull();
 });
