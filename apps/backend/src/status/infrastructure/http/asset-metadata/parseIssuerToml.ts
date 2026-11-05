@@ -1,9 +1,11 @@
 import * as toml from 'toml';
+import { StrKey } from '@stellar/stellar-sdk';
 import type { CurrencyEntry } from './types.js';
 
-const reserved = new Set(['CURRENCIES', 'NETWORK_PASSPHRASE']);
+const reserved = new Set(['ACCOUNTS', 'CURRENCIES', 'NETWORK_PASSPHRASE']);
 
 export interface ParsedIssuerToml {
+	readonly accounts: readonly string[];
 	readonly currencies: readonly CurrencyEntry[];
 	readonly fields: Readonly<Record<string, string>>;
 	readonly networkPassphrase: string | null;
@@ -36,6 +38,15 @@ export function parseIssuerToml(source: string): ParsedIssuerToml {
 		}
 	}
 	return {
+		accounts: [
+			...new Set(
+				(Array.isArray(parsed.ACCOUNTS) ? parsed.ACCOUNTS : []).filter(
+					(account): account is string =>
+						typeof account === 'string' &&
+						StrKey.isValidEd25519PublicKey(account)
+				)
+			)
+		],
 		currencies,
 		fields,
 		networkPassphrase: toText(parsed.NETWORK_PASSPHRASE)
