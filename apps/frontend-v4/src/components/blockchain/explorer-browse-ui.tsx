@@ -33,16 +33,20 @@ export function ExplorerBrowseNavigation({
 export function ExplorerRequestNotice({
 	error,
 	loading,
-	onRetry
+	onRetry,
+	hasPrevious,
+	loadingMessage
 }: {
 	readonly error: string | null;
 	readonly loading: boolean;
 	readonly onRetry: () => void;
+	readonly hasPrevious?: boolean;
+	readonly loadingMessage?: string;
 }): React.JSX.Element | null {
 	if (loading)
 		return (
 			<p className="explorer-state neutral" role="status">
-				Loading data. Previous results remain visible.
+				{(loadingMessage ?? 'Loading data.') + (hasPrevious !== false ? ' Previous results remain visible.' : '')}
 			</p>
 		);
 	if (error === null) return null;
@@ -51,7 +55,8 @@ export function ExplorerRequestNotice({
 			className="explorer-state warning explorer-request-notice"
 			role="alert"
 		>
-			<span>{error} Previous results remain visible when available.</span>
+			<span>{error + (hasPrevious === undefined ? ' Previous results remain visible when available.' :
+				hasPrevious ? ' Showing last loaded rows for this page.' : '')}</span>
 			<button className="inspect-action" onClick={onRetry} type="button">
 				Try again
 			</button>

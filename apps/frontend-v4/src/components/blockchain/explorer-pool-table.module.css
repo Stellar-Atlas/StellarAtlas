@@ -51,6 +51,11 @@
 	gap: 0.4rem;
 	white-space: nowrap;
 }
+.pairReport {
+	display: inline-block;
+	margin-top: 0.3rem;
+	font-size: 0.75rem;
+}
 .asset {
 	display: inline-flex;
 	align-items: center;

@@ -75,16 +75,20 @@ export function ExplorerTransactionTable({
 					{transactions.records.slice(0, transactions.limit).map((tx) => {
 						const href = buildEntityHref('transactions', tx.hash, { ledger_sequence: tx.ledger });
 						const displayHash = formatTransactionHash(tx.hash);
-						const label = 'Open transaction ' + displayHash;
+						const label = 'Open transaction ' + tx.hash;
+						const hashText = <>
+							<span className={styles.wideHash}>{displayHash}</span>
+							<span className={styles.compactHash}>{tx.hash.length > 16 ? tx.hash.slice(0, 7) + '…' + tx.hash.slice(-6) : tx.hash}</span>
+						</>;
 						const displayAccount = tx.sourceAccount.slice(0, 6) + '…' + tx.sourceAccount.slice(-5);
 						return (
 							<tr key={tx.hash} role="row">
 								<td data-label="Transaction" role="cell">
 									<div className={styles.hash}>
 										{returnTo ? (
-											<a className={styles.identifier} aria-label={label} href={withExplorerReturnTo(href, returnTo)}>{displayHash}</a>
+											<a className={styles.identifier} aria-label={label} title={tx.hash} href={withExplorerReturnTo(href, returnTo)}>{hashText}</a>
 										) : (
-											<ExplorerLink className={styles.identifier} aria-label={label} href={href}>{displayHash}</ExplorerLink>
+											<ExplorerLink className={styles.identifier} aria-label={label} title={tx.hash} href={href}>{hashText}</ExplorerLink>
 										)}
 										<details className={styles.identifiers}>
 											<summary aria-label={'IDs for ' + displayHash}>IDs</summary>
@@ -125,7 +129,8 @@ export function ExplorerTransactionTable({
 									<ExplorerLink
 										className={styles.identifier}
 										href={buildEntityHref('accounts', tx.sourceAccount)}
-										aria-label={'Source account ' + displayAccount}
+										aria-label={'Source account ' + tx.sourceAccount}
+										title={tx.sourceAccount}
 									>
 										{displayAccount}
 									</ExplorerLink>

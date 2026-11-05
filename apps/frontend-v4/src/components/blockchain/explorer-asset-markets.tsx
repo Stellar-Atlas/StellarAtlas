@@ -16,14 +16,14 @@ import styles from './explorer-entity.module.css';
 import ui from './explorer-asset-workspace.module.css';
 import { ExplorerPoolBrowser } from './explorer-pool-browser';
 import { ExplorerAssetTradeTable } from './explorer-asset-trade-table';
+import { ExplorerAssetMarketPairs } from './explorer-asset-market-pairs';
 import { assetMarketRouteHref, assetTradeSideHref, defaultAssetMarketRoute, readAssetMarketRoute, type AssetMarketRoute } from './asset-market-route';
 
 type View = 'trades' | 'liquidity-pools';
 type Result = {
 	assetId: string;
 	rows: readonly EntityRecord[];
-	pages: readonly AnalyticsEntityPage[];
-	view: View;
+	pages: readonly [AnalyticsEntityPage, AnalyticsEntityPage];
 };
 
 /** Shows published observations, not an asserted current market inventory. */
@@ -59,31 +59,23 @@ export function ExplorerAssetMarkets({
 		const current = ++generation.current;
 		setBusy(true);
 		setError(null);
-		const sides =
-			selection.view === 'trades'
-				? ['selling_asset', 'buying_asset']
-				: ['asset_a', 'asset_b'];
-		void Promise.all(
-			sides.map(async (side) => {
-				const params = new URLSearchParams({
-					view: 'typed',
-					[side]: asset.id,
-					min_ledger: selection.min,
-					max_ledger: selection.max,
-					limit: '25'
-				});
-				if (selection.view === 'liquidity-pools')
-					params.set('deleted', 'false');
-				return parseEntityPage(
-					await requestExplorerJson(
-						'/v1/' + selection.view + '?' + params,
-						abort.signal
-					)
-				);
-			})
-		)
+		const loadSide = async (side: 'selling_asset' | 'buying_asset') => {
+			const params = new URLSearchParams({
+				view: 'typed',
+				[side]: asset.id,
+				min_ledger: selection.min,
+				max_ledger: selection.max,
+				limit: '25'
+			});
+			return parseEntityPage(await requestExplorerJson('/v1/trades?' + params, abort.signal));
+		};
+		void Promise.all([loadSide('selling_asset'), loadSide('buying_asset')])
 			.then((pages) => {
 				if (abort.signal.aborted || current !== generation.current) return;
+				if (pages[0].window.minLedger !== pages[1].window.minLedger ||
+					pages[0].window.maxLedger !== pages[1].window.maxLedger) {
+					throw new Error('Trade sides returned different ledger ranges. Try again.');
+				}
 				const seen = new Set<string>();
 				const rows = pages
 					.flatMap((page) => page.rows)
@@ -99,7 +91,7 @@ export function ExplorerAssetMarkets({
 						return true;
 					})
 					.sort((a, b) => Number(b.ledgerSequence) - Number(a.ledgerSequence));
-				setResult({ assetId: asset.id, rows, pages, view: selection.view });
+				setResult({ assetId: asset.id, rows, pages });
 			})
 			.catch((cause: unknown) => {
 				if (!abort.signal.aborted)
@@ -186,7 +178,7 @@ export function ExplorerAssetMarkets({
 					<div className={ui.holderSummary}>
 						<span>{result.rows.length} observations in preview</span>
 						<span title="Returned trade window; the latest default is anchored to the asset’s last observed ledger, not a live-market watermark.">
-							Trade ledgers {result.pages[0]!.window.minLedger.toLocaleString('en-US')}–{result.pages[0]!.window.maxLedger.toLocaleString('en-US')}
+							Trade ledgers {result.pages[0].window.minLedger.toLocaleString('en-US')}–{result.pages[0].window.maxLedger.toLocaleString('en-US')}
 						</span>
 						<span>
 							{result.pages.some((page) => page.coverageStatus !== 'complete')
@@ -194,6 +186,7 @@ export function ExplorerAssetMarkets({
 								: 'Selected range indexed'}
 						</span>
 					</div>
+					<ExplorerAssetMarketPairs asset={asset.id} origin={origin} rows={result.rows} window={result.pages[0].window} />
 					<p className={styles.muted}>
 						Preview: up to 25 trades per side. Browse either side for more.
 					</p>
@@ -207,7 +200,7 @@ export function ExplorerAssetMarkets({
 							</Link>
 						))}
 					</div>
-					<ExplorerAssetTradeTable asset={asset.id} origin={origin} rows={result.rows} window={result.pages[0]!.window} />
+					<ExplorerAssetTradeTable asset={asset.id} origin={origin} rows={result.rows} window={result.pages[0].window} />
 					<p className={styles.muted} title="Parsed trade amounts are floating-point observations, not exact raw-unit amounts.">Amounts: source Float64 precision.</p>
 					{result.rows.length === 0 && (
 						<p className={styles.muted}>No observations in this range.</p>

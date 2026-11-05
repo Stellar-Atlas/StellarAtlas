@@ -1,4 +1,5 @@
 import type { EntityRecord, ExplorerFilters } from '../../api/explorer-analytics';
+import { pairReportHref, validatePairReportSelection, type PairReportSelection } from '../../api/explorer-pair-report';
 
 const keys = ['min_ledger', 'max_ledger', 'start_time', 'end_time', 'deleted'] as const;
 const windowLedger = (value: unknown): number => typeof value === 'number' ? value
@@ -49,4 +50,22 @@ export function poolRowDetailHref(id: string, ledger: unknown, deleted: unknown,
 export function poolListHref(context: ExplorerFilters): string {
 	const query = poolContextQuery(context);
 	return '/explorer/liquidity-pools' + (query.size ? '?' + query : '');
+}
+
+/** Link a known pool pair without treating reserves as a history query or a trade. */
+export function poolPairReportHref(asset: string, a: string, b: string, origin: string, historicalWindow?: EntityRecord): string | null {
+	const counter = asset === a ? b : asset === b ? a : null;
+	if (!counter) return null;
+	let bounds: Pick<PairReportSelection, 'minLedger' | 'maxLedger'> = {};
+	if (historicalWindow) {
+		const min = windowLedger(historicalWindow.minLedger), max = windowLedger(historicalWindow.maxLedger);
+		if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || min < 2 || max > 4294967295 ||
+			min > max || max - min > 2047) return null;
+		bounds = { minLedger: String(min), maxLedger: String(max) };
+	}
+	try {
+		return pairReportHref(validatePairReportSelection({ assetA: asset, assetB: counter, limit: '25', ...bounds }), {}, origin);
+	} catch {
+		return null;
+	}
 }

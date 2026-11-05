@@ -81,8 +81,16 @@ describe('ExplorerTransactionFeedStatus', () => {
 			<RecentTransactionsView transactions={feed({ records: [transaction(), transaction()], limit: 1, truncated: true })} />
 		);
 
-		expect(html).toContain('1 recent transaction shown');
+	expect(html).toContain('1 recent transaction loaded');
 		expect(html).not.toMatch(/indexed rows|returned by this query/iu);
+	});
+
+	it('reports an empty filtered page without changing loaded counts or claiming no data', () => {
+		const html = renderToStaticMarkup(<RecentTransactionsView transactions={feed({ records: [{ ...transaction(), successful: true }] })} result="failed" />);
+		expect(html).toContain('1 recent transaction loaded');
+		expect(html).toContain('No failed transactions on this page.');
+		expect(html).not.toContain('No transactions returned');
+		expect(html).not.toContain('<table');
 	});
 });
 

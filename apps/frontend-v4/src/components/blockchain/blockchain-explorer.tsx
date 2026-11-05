@@ -9,12 +9,14 @@ import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerSearchForm } from './explorer-search-form';
 import { ExplorerTransactionHistory } from './explorer-transaction-history';
 import { readTransactionHistory } from './transaction-history-route';
+import { readTransactionPageResult, type TransactionPageResult } from './transaction-page-result';
 import styles from './explorer-transaction-table.module.css';
 
 export function BlockchainExplorer(): React.JSX.Element {
 	const params = useSearchParams();
 	const search = params.get('search');
 	const history = readTransactionHistory(params);
+	const result = readTransactionPageResult(params);
 	return (
 		<section className="blockchain-explorer-workspace">
 			<ExplorerEntityNavigation active="transactions" />
@@ -22,13 +24,13 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<summary>Find by hash, address, ledger or asset</summary>
 				<ExplorerSearchForm />
 			</details>
-			<ExplorerTransactionHistory key={history.mode === 'ledger' ? history.ledger : history.mode} selection={history} search={params.toString()} />
-			{history.mode === 'recent' && <RecentTransactions />}
+			<ExplorerTransactionHistory key={history.mode === 'ledger' ? history.ledger : history.mode} selection={history} search={params.toString()} result={result} />
+			{history.mode === 'recent' && <RecentTransactions result={result} />}
 		</section>
 	);
 }
 
-function RecentTransactions(): React.JSX.Element {
+function RecentTransactions({ result }: { readonly result: TransactionPageResult }): React.JSX.Element {
 	const feed = useExplorerRequest(
 		initialExplorerTransactions,
 		'Could not load transactions.'
@@ -51,10 +53,6 @@ function RecentTransactions(): React.JSX.Element {
 				<div className="panel-heading explorer-feed-heading">
 					<div>
 						<h2>Recent transactions</h2>
-						<span>
-							Open a record to inspect its operations, events and related
-							accounts.
-						</span>
 					</div>
 					<button disabled={feed.loading} onClick={() => void refresh()}>
 						Refresh
@@ -70,7 +68,7 @@ function RecentTransactions(): React.JSX.Element {
 						{hasRows ? 'Refreshing transactions. Last loaded transactions remain visible.' : 'Loading recent transactions…'}
 					</p>
 				)}
-				{transactions && ((!feed.error && !feed.loading) || hasRows) && <RecentTransactionsView transactions={transactions} />}
+				{transactions && ((!feed.error && !feed.loading) || hasRows) && <RecentTransactionsView transactions={transactions} result={result} />}
 			</section>
 	);
 }

@@ -16,6 +16,10 @@ export interface PairReportSelection {
 
 export type PairReportLane = 'a-to-b' | 'b-to-a' | 'pool-a-b' | 'pool-b-a';
 export const pairReportLanes: readonly PairReportLane[] = ['a-to-b', 'b-to-a', 'pool-a-b', 'pool-b-a'];
+export const pairReportMaxOffset = 10_000;
+export type PairReportSectionResult =
+	| { readonly page: AnalyticsEntityPage; readonly error?: never }
+	| { readonly page?: never; readonly error: string };
 
 export function pairReportHref(
 	selection: PairReportSelection,
@@ -101,8 +105,8 @@ export function pairReportApiPath(
 	offset = 0
 ): string {
 	const selected = validatePairReportSelection(selection);
-	if (!Number.isSafeInteger(offset) || offset < 0) {
-		throw new Error('Offset must be a non-negative safe integer.');
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset > pairReportMaxOffset) {
+		throw new Error('Offset must be between 0 and 10,000.');
 	}
 
 	const isPool = lane === 'pool-a-b' || lane === 'pool-b-a';
@@ -156,51 +160,54 @@ export async function loadPairReport(
 	offsets: Partial<Readonly<Record<PairReportLane, number>>> = {}
 ): Promise<{
 	selection: PairReportSelection;
-	pages: Readonly<Record<PairReportLane, AnalyticsEntityPage>>;
+	sections: Readonly<Record<PairReportLane, PairReportSectionResult>>;
 }> {
 	const selected = validatePairReportSelection(selection);
-	throwIfAborted(signal);
-	const first = parseEntityPage(
-		await requestJson(
-			pairReportApiPath(selected, 'a-to-b', offsets['a-to-b']),
-			signal
-		)
-	);
-	const pinnedSelection: PairReportSelection = {
-		...selected,
-		minLedger: String(first.window.minLedger),
-		maxLedger: String(first.window.maxLedger)
+	const load = async (
+		lane: PairReportLane,
+		scope: PairReportSelection,
+		pinned?: AnalyticsEntityPage['window']
+	): Promise<PairReportSectionResult> => {
+		throwIfAborted(signal);
+		try {
+			const raw = await requestJson(pairReportApiPath(scope, lane, offsets[lane]), signal);
+			throwIfAborted(signal);
+			const page = pinned ? parsePinnedPage(raw, pinned.minLedger, pinned.maxLedger) : parseEntityPage(raw);
+			if (!pinned) {
+				const { minLedger, maxLedger } = page.window;
+				if (minLedger < 2 || maxLedger > 4294967295 || maxLedger - minLedger > 2047)
+					throw new Error('The data service did not return a bounded ledger window.');
+			}
+			return { page };
+		} catch (cause: unknown) {
+			throwIfAborted(signal);
+			return { error: cause instanceof Error ? cause.message : 'This section is unavailable.' };
+		}
 	};
-	const { minLedger, maxLedger } = first.window;
-
-	throwIfAborted(signal);
+	const forwardTrades = await load('a-to-b', selected);
+	// The other trade is already part of the report; use it as the anchor only
+	// when the normal anchor failed. Do not query pool lanes without a valid range.
+	const fallback = forwardTrades.page ? null : await load('b-to-a', selected);
+	const pinned = (forwardTrades.page ?? fallback?.page)?.window;
+	if (!pinned) throw new Error(forwardTrades.error ?? 'Trade ledger window unavailable.');
+	const pinnedSelection = {
+		...selected,
+		minLedger: String(pinned.minLedger),
+		maxLedger: String(pinned.maxLedger)
+	};
 	const [reverseTrades, forwardPools] = await Promise.all([
-		requestJson(
-			pairReportApiPath(pinnedSelection, 'b-to-a', offsets['b-to-a']),
-			signal
-		),
-		requestJson(
-			pairReportApiPath(pinnedSelection, 'pool-a-b', offsets['pool-a-b']),
-			signal
-		)
+		fallback ?? load('b-to-a', pinnedSelection, pinned),
+		load('pool-a-b', pinnedSelection, pinned)
 	]);
-	const reversePage = parsePinnedPage(reverseTrades, minLedger, maxLedger);
-	const forwardPoolPage = parsePinnedPage(forwardPools, minLedger, maxLedger);
-
-	throwIfAborted(signal);
-	const reversePools = await requestJson(
-		pairReportApiPath(pinnedSelection, 'pool-b-a', offsets['pool-b-a']),
-		signal
-	);
-	const reversePoolPage = parsePinnedPage(reversePools, minLedger, maxLedger);
+	const reversePools = await load('pool-b-a', pinnedSelection, pinned);
 
 	return {
 		selection: pinnedSelection,
-		pages: {
-			'a-to-b': first,
-			'b-to-a': reversePage,
-			'pool-a-b': forwardPoolPage,
-			'pool-b-a': reversePoolPage
+		sections: {
+			'a-to-b': forwardTrades,
+			'b-to-a': reverseTrades,
+			'pool-a-b': forwardPools,
+			'pool-b-a': reversePools
 		}
 	};
 }

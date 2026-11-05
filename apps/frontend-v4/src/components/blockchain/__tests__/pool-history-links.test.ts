@@ -1,4 +1,4 @@
-import { hasPoolHistory, poolContextFromRequest, poolDetailHref, poolListHref } from '../pool-history-links';
+import { hasPoolHistory, poolContextFromRequest, poolDetailHref, poolListHref, poolPairReportHref } from '../pool-history-links';
 import { withExplorerReturnTo } from '../../../api/explorer-return-context';
 
 describe('pool historical links', () => {
@@ -25,5 +25,20 @@ describe('pool historical links', () => {
 		expect(poolDetailHref('pool-id')).toBe('/explorer/liquidity-pools/pool-id');
 		expect(hasPoolHistory({ deleted: 'false' })).toBe(false);
 		expect(poolListHref({ after: 'opaque', order: 'desc' })).toBe('/explorer/liquidity-pools');
+	});
+	it('opens only known asset pairs with the accepted pool range and exact return controls', () => {
+		const counter = 'USD:G' + 'A'.repeat(55);
+		const origin = '/explorer/assets/native?tab=markets&market_view=liquidity-pools&pool_mode=history&pool_offset=25';
+		const latest = new URL(poolPairReportHref('native', counter, 'native', origin)!, 'https://explorer.invalid');
+		expect(latest.searchParams.get('asset_a')).toBe('native');
+		expect(latest.searchParams.get('asset_b')).toBe(counter);
+		expect(latest.searchParams.get('min_ledger')).toBe('');
+		const historical = new URL(poolPairReportHref('native', 'native', counter, origin, { minLedger: 100, maxLedger: 150 })!, latest);
+		expect(historical.searchParams.get('min_ledger')).toBe('100');
+		expect(historical.searchParams.get('max_ledger')).toBe('150');
+		expect(historical.searchParams.get('return_to')).toBe(origin);
+		expect(poolPairReportHref('native', 'native', counter, origin, { minLedger: 100, maxLedger: 2148 })).toBeNull();
+		expect(poolPairReportHref('native', 'native', counter, origin, {})).toBeNull();
+		expect(poolPairReportHref('native', counter, 'EUR:G' + 'B'.repeat(55), origin)).toBeNull();
 	});
 });

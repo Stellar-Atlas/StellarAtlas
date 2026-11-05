@@ -10,7 +10,9 @@ import {
 } from '../../api/explorer-analytics';
 import {
 	pairReportApiPath,
+	pairReportMaxOffset,
 	type PairReportLane,
+	type PairReportSectionResult,
 	type PairReportSelection
 } from '../../api/explorer-pair-report';
 import styles from './explorer-entity.module.css';
@@ -21,20 +23,24 @@ const symbol = (asset: string): string =>
 export function PairReportSection({
 	lane,
 	selection,
-	initialPage
+	initial,
+	initialOffset,
+	onPage
 }: {
 	readonly lane: PairReportLane;
 	readonly selection: PairReportSelection;
-	readonly initialPage: AnalyticsEntityPage;
+	readonly initial: PairReportSectionResult;
+	readonly initialOffset: number;
+	readonly onPage: (page: AnalyticsEntityPage) => void;
 }): React.JSX.Element {
-	const [page, setPage] = useState(initialPage),
+	const [page, setPage] = useState(initial.page),
 		[busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(initial.error ?? null);
 	const [history, setHistory] = useState<number[]>([]);
 	const abort = useRef<AbortController | null>(null);
 	useEffect(() => () => abort.current?.abort(), []);
 	const pool = lane.startsWith('pool');
-	const distinctPools = pool ? new Set(page.rows.map((row) => entityText(row, 'id'))).size : 0;
+	const distinctPools = pool && page ? new Set(page.rows.map((row) => entityText(row, 'id'))).size : 0;
 	const reversed = lane === 'b-to-a' || lane === 'pool-b-a';
 	const a = reversed ? selection.assetB : selection.assetA,
 		b = reversed ? selection.assetA : selection.assetB;
@@ -64,12 +70,12 @@ export function PairReportSection({
 				String(next.window.maxLedger) !== selection.maxLedger
 			)
 				throw new Error('The returned window did not match the report.');
-			setHistory((old) =>
-				previous ? old.slice(0, -1) : [...old, page.offset]
-			);
+			if (page) setHistory((old) => previous ? old.slice(0, -1) : [...old, page.offset]);
 			setPage(next);
+			onPage(next);
 			const url = new URL(window.location.href);
-			url.searchParams.set(lane + '_offset', String(next.offset));
+			if (next.offset) url.searchParams.set(lane + '_offset', String(next.offset));
+			else url.searchParams.delete(lane + '_offset');
 			window.history.replaceState(null, '', url.pathname + url.search);
 		} catch (cause: unknown) {
 			if (!current.signal.aborted)
@@ -78,6 +84,19 @@ export function PairReportSection({
 			if (!current.signal.aborted) setBusy(false);
 		}
 	};
+	if (!page) return (
+		<section className={styles.panel} aria-label={title} aria-busy={busy}>
+			<h3>{title}</h3>
+			{error && <p role="alert" className={styles.error}>{error}</p>}
+			<div className={styles.actions}>
+				<button type="button" disabled={busy} onClick={() => void load(initialOffset, false)}>
+					Retry this section
+				</button>
+				{busy && <span role="status">Loading…</span>}
+			</div>
+		</section>
+	);
+	const beyondLimit = page.nextOffset !== null && page.nextOffset > pairReportMaxOffset;
 	return (
 		<section className={styles.panel} aria-label={title} aria-busy={busy}>
 			<div className={ui.heading}>
@@ -96,7 +115,7 @@ export function PairReportSection({
 			<div className={styles.status}>
 				<span>
 					{page.rows.length} {pool ? 'observation' : 'trade'}{page.rows.length === 1 ? '' : 's'} shown
-					{page.nextOffset !== null ? ' · More available' : ''}
+					{beyondLimit ? ' · Narrow the ledger range for more' : page.nextOffset !== null ? ' · More available' : ''}
 				</span>
 				{pool && (
 					<span>
@@ -137,7 +156,7 @@ export function PairReportSection({
 					Previous
 				</button>
 				<button
-					disabled={busy || page.nextOffset === null}
+					disabled={busy || page.nextOffset === null || beyondLimit}
 					onClick={() => void load(page.nextOffset ?? 0, false)}
 				>
 					Next

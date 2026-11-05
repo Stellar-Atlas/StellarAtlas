@@ -56,6 +56,7 @@ describe('explorer pair report API helper', () => {
 		expect(poolReverse.searchParams.get('min_ledger')).toBe('100');
 		expect(poolReverse.searchParams.get('max_ledger')).toBe('120');
 		expect(poolReverse.searchParams.has('include_deleted')).toBe(false);
+		expect(() => pairReportApiPath(selected, 'pool-b-a', 10_001)).toThrow('10,000');
 	});
 
 	it('pins all follow-up pages to the first returned window with at most two concurrent requests', async () => {
@@ -83,7 +84,7 @@ describe('explorer pair report API helper', () => {
 		);
 		expect(result.selection.minLedger).toBe('500');
 		expect(result.selection.maxLedger).toBe('520');
-		expect(Object.keys(result.pages)).toEqual([
+		expect(Object.keys(result.sections)).toEqual([
 			'a-to-b',
 			'b-to-a',
 			'pool-a-b',
@@ -96,6 +97,19 @@ describe('explorer pair report API helper', () => {
 			expect(url.searchParams.get('min_ledger')).toBe('500');
 			expect(url.searchParams.get('max_ledger')).toBe('520');
 		}
+	});
+
+	it('retains pinned trades and the other pool lane after a single pool failure', async () => {
+		const requestJson = async (path: string) => {
+			const url = new URL(path, 'https://example.test');
+			if (url.searchParams.get('asset_a') === assetA) throw new Error('Fixture pool unavailable');
+			return page(500, 520, url.pathname.split('/').at(-1)!);
+		};
+		const result = await loadPairReport(selection(), new AbortController().signal, requestJson);
+		expect(result.sections['pool-a-b']).toEqual({ error: 'Fixture pool unavailable' });
+		expect(result.sections['a-to-b'].page?.entity).toBe('trades');
+		expect(result.sections['b-to-a'].page?.entity).toBe('trades');
+		expect(result.sections['pool-b-a'].page?.entity).toBe('liquidity-pools');
 	});
 
 	it('normalizes native assets and rejects invalid identities or ledger selections', () => {
@@ -116,6 +130,34 @@ describe('explorer pair report API helper', () => {
 		expect(() =>
 			validatePairReportSelection(selection({ limit: '5' }))
 		).toThrow('Limit must be');
+	});
+
+	it('uses the reverse trade as the only fallback anchor and never opens pool queries without a valid range', async () => {
+		for (const reverseAvailable of [true, false]) {
+			const requests: URL[] = [];
+			const requestJson = async (path: string) => {
+				const url = new URL(path, 'https://example.test');
+				requests.push(url);
+				if (requests.length === 1) throw new Error('Forward trades unavailable');
+				if (!reverseAvailable) return page(2, 5000, 'trades');
+				return page(500, 520, url.pathname.split('/').at(-1)!);
+			};
+			const report = loadPairReport(selection(), new AbortController().signal, requestJson);
+			if (reverseAvailable) {
+				const result = await report;
+				expect(result.sections['a-to-b']).toEqual({ error: 'Forward trades unavailable' });
+				expect(result.sections['b-to-a'].page?.entity).toBe('trades');
+				expect(requests).toHaveLength(4);
+				expect(requests[1]?.searchParams.get('selling_asset')).toBe(assetB);
+				for (const pool of requests.slice(2)) {
+					expect(pool.searchParams.get('min_ledger')).toBe('500');
+					expect(pool.searchParams.get('max_ledger')).toBe('520');
+				}
+			} else {
+				await expect(report).rejects.toThrow('Forward trades unavailable');
+				expect(requests).toHaveLength(2);
+			}
+		}
 	});
 
 	it('does not start the next request after cancellation', async () => {

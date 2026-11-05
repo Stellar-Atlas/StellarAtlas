@@ -14,7 +14,7 @@ const utc = new Intl.DateTimeFormat('en-GB', {
 });
 const compactAmount = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 8 });
 const axisAmount = (value: number) => value < 1e-6 || value >= 1e9 ? value.toExponential(3) : compactAmount.format(value);
-const assetCode = (id: string) => id === 'native' ? 'XLM' : (id.split(':', 1)[0] ?? id);
+const assetCode = (id: string): string => id === 'native' ? 'XLM' : (id.split(':', 1)[0] ?? id);
 const timeText = (seconds: number) => utc.format(seconds * 1000);
 function UtcTime({ seconds }: { readonly seconds: number }): React.JSX.Element {
 	return <time dateTime={new Date(seconds * 1000).toISOString()}>{timeText(seconds)}</time>;

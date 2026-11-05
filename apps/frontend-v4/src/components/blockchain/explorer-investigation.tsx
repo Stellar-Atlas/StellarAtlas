@@ -16,6 +16,7 @@ import styles from './explorer-entity.module.css';
 const InvestigationOrigin = createContext<{
 	origin: string | null;
 	returnTo: string | null;
+	pairDetailOrigin?: string | null;
 }>({ origin: null, returnTo: null });
 
 export function useExplorerReturnTo(): string | null {
@@ -43,6 +44,17 @@ export function ExplorerInvestigationScope({
 	);
 }
 
+/** Preserve pair paging for its record details without changing ordinary asset links. */
+export function ExplorerPairDetailScope({ origin, children }: {
+	readonly origin: string;
+	readonly children: ReactNode;
+}): React.JSX.Element {
+	const inherited = useContext(InvestigationOrigin);
+	return <InvestigationOrigin.Provider value={{ ...inherited, pairDetailOrigin: sanitizeExplorerReturnTo(origin) }}>
+		{children}
+	</InvestigationOrigin.Provider>;
+}
+
 /** One URL context per explorer, shared by all linked record components. */
 export function ExplorerInvestigation({
 	children
@@ -52,6 +64,7 @@ export function ExplorerInvestigation({
 	const pathname = usePathname();
 	const params = useSearchParams();
 	const returnTo = sanitizeExplorerReturnTo(params.get('return_to'));
+	const returnPath = returnTo ? new URL(returnTo, 'https://explorer.invalid').pathname : '';
 	const origin =
 		returnTo ??
 		sanitizeExplorerReturnTo(
@@ -63,9 +76,8 @@ export function ExplorerInvestigation({
 				<div className={`shell ${styles.returnBar}`}>
 					<a href={returnTo}>
 						←{' '}
-						{new URL(returnTo, 'https://explorer.invalid').pathname
-							.split('/')
-							.filter(Boolean).length > 2
+						{returnPath === '/explorer/markets' ? 'Back to pair report'
+							: returnPath.split('/').filter(Boolean).length > 2
 							? 'Back to investigation'
 							: 'Back to results'}
 					</a>
@@ -85,6 +97,8 @@ export function ExplorerLink({
 	readonly href: string;
 	readonly collectionContext?: boolean;
 }): React.JSX.Element {
-	const { origin } = useContext(InvestigationOrigin);
-	return <a {...props} href={withExplorerReturnTo(href, origin, collectionContext)} />;
+	const { origin, pairDetailOrigin } = useContext(InvestigationOrigin);
+	const pairOrigin = pairDetailOrigin && /^\/explorer\/(?:trades|transactions|operations|liquidity-pools)\/[^/?#]+(?:[?#]|$)/.test(href)
+		? pairDetailOrigin : origin;
+	return <a {...props} href={withExplorerReturnTo(href, pairOrigin, collectionContext)} />;
 }

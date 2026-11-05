@@ -14,8 +14,7 @@ export function assetTradeSideHref(asset: string, side: 'sell' | 'buy', window: 
 		min_ledger: String(window.minLedger), max_ledger: String(window.maxLedger), limit: '25'
 	});
 	const returnTo = acceptedTradeOrigin(origin, window);
-	if (returnTo) query.set('return_to', returnTo);
-	return '/explorer/trades?' + query;
+	return withExplorerReturnTo('/explorer/trades?' + query, returnTo, true);
 }
 
 function acceptedTradeOrigin(origin: string, window: { readonly minLedger: number; readonly maxLedger: number }): string | null {

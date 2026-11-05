@@ -127,6 +127,11 @@ function PoolBrowser({
 		return () => abort.abort();
 	}, [path, historical, version, sort, order]);
 	const matchesQuery = page?.requestPath === path;
+	// Return context can change without changing the data request. Keep the
+	// accepted origin only for rows from a different (previous) query.
+	const displayedOrigin = page && (matchesQuery
+		? poolBrowserHref(pathname, queryString, route, embedded)
+		: page.origin);
 	const reserveAsset = asset || filters.asset;
 	const refresh = () => {
 		if (position) navigate({ ...route, position: '' });
@@ -207,8 +212,8 @@ function PoolBrowser({
 						</button>
 					</p>
 				)}
-				{page && (
-					<ExplorerInvestigationScope origin={page.origin}>
+				{page && displayedOrigin !== null && (
+					<ExplorerInvestigationScope origin={displayedOrigin}>
 					{matchesQuery && !busy && !error && !page.historical && reserveAsset &&
 						<ExplorerPoolReserveChart asset={reserveAsset} rows={page.rows} />}
 					<ExplorerPoolTable
@@ -216,6 +221,9 @@ function PoolBrowser({
 						sort={page.sort}
 						order={page.order}
 						context={page.historical ? poolContextFromRequest(page.requestPath, page.window) : undefined}
+						pairReport={embedded && asset ? {
+							asset, origin: displayedOrigin, ...(page.historical ? { historicalWindow: page.window } : {})
+						} : undefined}
 						onSort={(key) => {
 							navigate({ ...route, sort: key, order: page.sort === key && page.order === 'desc' ? 'asc' : 'desc', position: '' });
 						}}

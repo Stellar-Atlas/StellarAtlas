@@ -34,10 +34,10 @@ function relativeExplorerPath(url: URL): string {
 	return `${url.pathname}${url.search}`;
 }
 
-function isAssetActivity(url: URL): boolean {
+function isAssetInvestigation(url: URL): boolean {
 	const tabs = url.searchParams.getAll('tab');
 	return /^\/explorer\/assets\/[^/]+$/.test(url.pathname) &&
-		tabs.length === 1 && tabs[0] === 'transfers';
+		tabs.length === 1 && (tabs[0] === 'transfers' || tabs[0] === 'markets');
 }
 
 function assetCatalogueReturnTo(value: string | null): string | null {
@@ -48,9 +48,19 @@ function assetCatalogueReturnTo(value: string | null): string | null {
 }
 
 function nestedAssetCatalogue(url: URL): string | null {
-	if (!isAssetActivity(url)) return null;
+	if (!isAssetInvestigation(url)) return null;
 	const values = url.searchParams.getAll('return_to');
 	return values.length === 1 ? assetCatalogueReturnTo(values[0]!) : null;
+}
+
+/** A detail can return through one pair report, one asset Markets tab and one catalogue. */
+function nestedPairAsset(url: URL): string | null {
+	if (url.pathname !== '/explorer/markets') return null;
+	const values = url.searchParams.getAll('return_to');
+	if (values.length !== 1) return null;
+	const asset = explorerUrl(values[0]!);
+	if (!asset || !isAssetInvestigation(asset) || asset.searchParams.get('tab') !== 'markets') return null;
+	return sanitizeExplorerReturnTo(values[0]);
 }
 
 function attachReturnTo(url: URL, origin: string): string {
@@ -66,7 +76,7 @@ export function withAssetCatalogueReturnTo(
 	const catalogue = assetCatalogueReturnTo(origin);
 	if (catalogue === null) return activity;
 	const url = explorerUrl(activity);
-	if (url === null || !isAssetActivity(url)) return catalogue;
+	if (url === null || !isAssetInvestigation(url)) return catalogue;
 	relativeExplorerPath(url);
 	const nested = attachReturnTo(url, catalogue);
 	return nested.length <= MAX_RETURN_TO_LENGTH ? nested : catalogue;
@@ -78,12 +88,14 @@ export function sanitizeExplorerReturnTo(
 	if (value == null) return null;
 	const url = explorerUrl(value);
 	if (url === null) return null;
-	const catalogue = nestedAssetCatalogue(url);
+	const pairAsset = nestedPairAsset(url);
+	const catalogue = pairAsset === null ? nestedAssetCatalogue(url) : null;
 	const path = relativeExplorerPath(url);
 	if (path.length > MAX_RETURN_TO_LENGTH) return null;
-	if (catalogue === null) return path;
-	const nested = attachReturnTo(url, catalogue);
-	return nested.length <= MAX_RETURN_TO_LENGTH ? nested : catalogue;
+	const parent = pairAsset ?? catalogue;
+	if (parent === null) return path;
+	const nested = attachReturnTo(url, parent);
+	return nested.length <= MAX_RETURN_TO_LENGTH ? nested : catalogue ?? path;
 }
 
 export function withExplorerReturnTo(
@@ -112,6 +124,11 @@ export function withExplorerReturnTo(
 	const linked = attachReturnTo(destinationUrl, sanitizedOrigin);
 	if (linked.length <= MAX_RETURN_TO_LENGTH) return linked;
 	const originUrl = new URL(sanitizedOrigin, EXPLORER_BASE);
+	if (originUrl.pathname === '/explorer/markets') {
+		// If an encoded nested origin cannot fit, prefer Back to the exact pair page.
+		const pairOnly = attachReturnTo(destinationUrl, relativeExplorerPath(originUrl));
+		return pairOnly.length <= MAX_RETURN_TO_LENGTH ? pairOnly : cleanDestination;
+	}
 	// A catalogue fallback may already be flat before the destination is encoded.
 	if (originUrl.pathname === ASSET_CATALOGUE_PATH) return cleanDestination;
 	const catalogue = nestedAssetCatalogue(originUrl);
