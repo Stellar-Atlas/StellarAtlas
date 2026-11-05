@@ -2,6 +2,7 @@ import {
 	readOpenApiRecord,
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
+import { issuerDomainOpenApiPath } from './IssuerDomainOpenApi.js';
 
 const nullableString = { type: 'string', nullable: true };
 const timestamp = { type: 'string', format: 'date-time', nullable: true };
@@ -409,6 +410,7 @@ export function withAssetResourceOpenApiPaths(
 		}
 	);
 	const issuer = parameter('issuer', 'Checksum-valid issuer G address.');
+	paths['/v1/issuer-domains/{domain}'] = issuerDomainOpenApiPath;
 	paths['/v1/issuers'] = get(
 		'listIssuerResources',
 		'Discover issuers',
