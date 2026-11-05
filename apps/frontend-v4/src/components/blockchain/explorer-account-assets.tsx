@@ -127,7 +127,11 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 				<tbody>{visible.map(row => {
 					const breakdown = currentAccountBreakdown(row, value.snapshot);
 					return <tr key={row.id}>
-					<td data-label="Asset"><CurrentAsset row={row} metadata={metadata[row.id]} /></td>
+					<td data-label="Asset">
+						<CurrentAsset row={row} metadata={metadata[row.id]} />
+						{row.kind === 'credit' && <div className={assets.context}>Issuer clawback: {row.clawbackEnabled === true
+							? 'Enabled' : row.clawbackEnabled === false ? 'Not enabled' : 'Not reported'}</div>}
+					</td>
 					<td data-label="Total balance" className={assets.amount}>{formatAtomic(row.balance.toString(), 7)}</td>
 					{view === 'trustlines' ? <>
 						<td data-label="Limit & receive headroom" className={assets.amount}>

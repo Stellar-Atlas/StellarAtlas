@@ -9,7 +9,7 @@ const maxAmount = 9_223_372_036_854_775_807n;
 export type ClassicAssetIdentity = { readonly id: string; readonly code: string; readonly issuer: string };
 export type CurrentBalance = (
 	| { readonly kind: 'native'; readonly id: 'native' }
-	| ({ readonly kind: 'credit' } & ClassicAssetIdentity)
+	| ({ readonly kind: 'credit'; readonly clawbackEnabled: boolean | null } & ClassicAssetIdentity)
 	| { readonly kind: 'pool'; readonly id: string }
 ) & {
 	readonly balance: bigint;
@@ -63,7 +63,8 @@ function typedBalance(value: unknown): CurrentBalance | null {
 	if ((row.assetType === 'credit_alphanum4' || row.assetType === 'credit_alphanum12') && typeof exact.assetId === 'string') {
 		const asset = classicAssetIdentity(exact.assetId);
 		if (asset && row.assetCode === asset.code && row.assetIssuer === asset.issuer)
-			return { kind: 'credit', ...asset, ...shared };
+			return { kind: 'credit', ...asset, ...shared,
+				clawbackEnabled: typeof exact.isClawbackEnabled === 'boolean' ? exact.isClawbackEnabled : null };
 	}
 	return null;
 }

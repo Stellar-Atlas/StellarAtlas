@@ -95,6 +95,21 @@ it('requires matching ledger and exact weighted sponsorship evidence for native 
 	});
 });
 
+it('shows Horizon issuer clawback capability without treating it as a spendability restriction', () => {
+	const common = { isAuthorized: true, sellingLiabilitiesRaw: '1' };
+	const current = parseCurrentAccount(account, accountBody([
+		nativeRow('100000000'),
+		creditRow('YES', '10000001', { ...common, isClawbackEnabled: true }),
+		creditRow('NO', '10000001', { ...common, isClawbackEnabled: false }),
+		creditRow('UNK', '10000001', { ...common, isClawbackEnabled: null })
+	]));
+	expect(current.balances.slice(1).map(row => row.kind === 'credit' && row.clawbackEnabled)).toEqual([true, false, null]);
+	expect(current.balances.slice(1).map(row => currentAccountBreakdown(row, current.snapshot).available))
+		.toEqual([10000000n, 10000000n, 10000000n]);
+	const html = renderToStaticMarkup(<CurrentAccountInventory value={current} />).replaceAll('<!-- -->', '');
+	for (const state of ['Enabled', 'Not enabled', 'Not reported']) expect(html).toContain('Issuer clawback: ' + state);
+});
+
 it('binds exact fields and reserve to a public-network Latest-Ledger, and marks a stale snapshot', () => {
 	const accounting = {
 		scope: 'horizon_account_balances', networkPassphrase: publicNetworkPassphrase, snapshotStatus: 'ledger_bound',
