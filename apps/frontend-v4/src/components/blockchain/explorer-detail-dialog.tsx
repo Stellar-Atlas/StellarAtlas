@@ -24,7 +24,10 @@ export function ExplorerDetailDialog({
 		};
 	}, []);
 	return (
-		<dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId} onCancel={onClose} onClose={onClose}>
+		<dialog ref={dialog} className={styles.dialog} aria-labelledby={titleId} onCancel={(event) => {
+			event.preventDefault();
+			onClose();
+		}}>
 			<header className={styles.heading}>
 				<h3 id={titleId}>{title}</h3>
 				<button type="button" autoFocus onClick={onClose}>Close</button>

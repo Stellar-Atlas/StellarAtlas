@@ -66,11 +66,15 @@ export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo, res
 	const page = request.result;
 	const nextOffset = page?.nextOffset ?? null;
 	const rowOrigin = detailReturnTo ?? returnTo ?? (pathname ?? buildEntityHref('ledgers', ledger)) + (params?.size ? '?' + params.toString() : '');
+	const canAdvance = nextOffset !== null && nextOffset <= 10000;
+	const pagingButtons = <>
+		<button type="button" disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
+		<button type="button" disabled={request.loading || !canAdvance} onClick={() => { if (canAdvance) onPage(nextOffset); }}>Next transactions</button>
+	</>;
 	const pagination = (page || offset > 0) && <div className={styles.actions} role="group" aria-label="Transaction pages">
 		<span>Page {Math.floor(offset / 25) + 1}{page && page.records.length > 0
 			? ' · Rows ' + (offset + 1) + '–' + (offset + page.records.length) : ''}</span>
-		<button disabled={request.loading || offset === 0} onClick={() => onPage(Math.max(0, offset - 25))}>Previous transactions</button>
-		<button disabled={request.loading || nextOffset === null || nextOffset > 10000} onClick={() => { if (nextOffset !== null) onPage(nextOffset); }}>Next transactions</button>
+		{pagingButtons}
 	</div>;
 	return <section id="ledger-transactions" aria-label="Ledger transactions" aria-busy={request.loading}>
 		<h3 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>Transactions in ledger {ledger}</h3>
@@ -86,6 +90,10 @@ export function LedgerTransactions({ ledger, offset, onPage, detailReturnTo, res
 					caption="Published rows for this ledger · Times shown locally." returnTo={rowOrigin} />)
 				: !request.error && !request.loading && <p>No published transaction records returned for this page.</p>}
 		</>}
+		{resultFilter !== undefined && !!page?.records.length && (offset > 0 || canAdvance) &&
+			<div className={styles.actions} role="group" aria-label="Transaction pages after results">
+				{pagingButtons}
+			</div>}
 		{nextOffset !== null && nextOffset > 10000 && <p className={styles.muted}>Pagination limit reached.</p>}
 	</section>;
 }

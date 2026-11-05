@@ -125,6 +125,85 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 			)
 		},
 		{
+			id: 'account-balance-breakdown',
+			title: 'Understand current account balances',
+			content: (
+				<>
+					<p>
+						The current account view reads classic balances from the configured
+						Horizon provider. Its ledger can lag the network tip. The indexed
+						balances in the quickstart above come from imported observations
+						with separate coverage and precision. If the current provider fails,
+						keep those observations labelled separately. A failed read or an
+						unavailable amount is different from a reported zero.
+					</p>
+					<Code>{`curl -q --fail-with-body --connect-timeout 5 --max-time 70 '${api}/v1/explorer/accounts/${wallet}'`}</Code>
+					<p>
+						See the <a href="/docs/api/getExplorerAccount">account API reference</a>.
+						Bind the response to the requested account and network. Use{' '}
+						<code>accounting.latestLedger</code> and, when available,{' '}
+						<code>accounting.ledgerClosedAt</code> for the provider snapshot.{' '}
+						<code>lastModifiedLedger</code> describes the account’s last change.
+						If the provider snapshot ledger is unavailable, leave freshness
+						unconfirmed. Keep <code>balances[].exact.balanceRaw</code> and raw
+						liability amounts as integer strings at scale seven, or use exact
+						integer arithmetic. Treat null fields as missing evidence. The{' '}
+						<code>balanceInventoryComplete</code> flag applies to the classic
+						balance inventory and can be true while optional liability or
+						authorization fields are missing.
+					</p>
+					<ul>
+						<li>
+							<strong>Offer commitments.</strong> Selling liabilities reserve
+							part of the held balance for open offers. For a fully authorized
+							issued-asset trustline, subtract those commitments from the balance
+							to calculate availability. Buying liabilities reserve capacity to
+							receive the asset and do not reduce the held balance.
+						</li>
+						<li>
+							<strong>Native reserve.</strong> For XLM, also subtract the minimum
+							reserve. Calculate it as{' '}
+							<code>base reserve × (2 + subentries + sponsoring − sponsored)</code>.
+							Use <code>accounting.baseReserveRaw</code> only when{' '}
+							<code>accounting.baseReserveLedger</code> matches the snapshot
+							ledger and all counts are available. For example, 10 XLM with 1.25
+							XLM committed to selling and a 3 XLM reserve leaves 5.75 XLM before
+							fees. If reserve evidence is missing, show the known balance and
+							commitments and leave native availability uncalculated.
+						</li>
+						<li>
+							<strong>Receive headroom.</strong> For a fully authorized issued
+							trustline, subtract the balance and buying liabilities from the
+							trustline limit. A zero-balance trustline can still have receive
+							headroom. Keep authorization restrictions visible, including
+							authorization only to maintain liabilities. Missing inputs and
+							shortfalls need their own states.
+						</li>
+					</ul>
+					<p>
+						Claimable balances and contract funds are separate positions.
+						Display them only with their own evidence. The principal in a
+						claimable balance has already left the source balance, and reserve
+						sponsorship is already included in the account counts. Avoid
+						deducting either twice. A classic balance shown through a Stellar
+						Asset Contract is the same holding. Liquidity-pool shares are share
+						positions, with withdrawal rules separate from wallet availability.
+					</p>
+					<p>
+						Cached logos and collectible labels come from issuer metadata
+						matched to the full asset identity. Use <code>cacheOnly=true</code>{' '}
+						on the asset metadata batch route for an already-cached lookup that
+						does not queue a refresh. An uncached logo can appear as a monogram.
+						A collectible link or NFT-backing declaration is a
+						publisher claim. Trustline evidence shows the quantity held, while
+						scarcity and backing remain unverified. A federation name is
+						display-only. Keep the full G-address primary and verify payment
+						details separately.
+					</p>
+				</>
+			)
+		},
+		{
 			id: 'asset-identifiers',
 			title: 'Use an asset identity, not a ticker alone',
 			content: (

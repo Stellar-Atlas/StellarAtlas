@@ -19,14 +19,19 @@ function identity(row: EntityRecord) {
 	};
 }
 
+function recordedValue(row: EntityRecord): unknown {
+	return row.val_decoded ?? row.val ?? row.value;
+}
+
 export function ExplorerContractStateDetails({
 	row, onClose
 }: { readonly row: EntityRecord; readonly onClose: () => void }): React.JSX.Element {
 	const { ledger, transaction, timestamp } = identity(row);
 	const key = decodeContractEventValue(row.key_decoded ?? row.key);
-	const value = decodeContractEventValue(row.val_decoded ?? row.val ?? row.value);
+	const rawValue = recordedValue(row);
+	const deleted = row.deleted === true;
 	return (
-		<ExplorerDetailDialog title="State change" onClose={onClose}>
+		<ExplorerDetailDialog title={deleted ? 'State deletion' : 'State change'} onClose={onClose}>
 			<dl className={styles.identity}>
 				{ledger && <div><dt>Ledger</dt><dd><Link href={buildEntityHref('ledgers', ledger)}>{formatAtomic(ledger, 0)}</Link></dd></div>}
 				{timestamp && <div><dt>Time</dt><dd><LocalDateTime dateTime={normalizeWarehouseTimestamp(timestamp)} /></dd></div>}
@@ -35,7 +40,9 @@ export function ExplorerContractStateDetails({
 			<h4>Key</h4>
 			<StateKey value={key} ledger={ledger} />
 			<h4>Recorded value</h4>
-			<StateValue value={value} ledger={ledger} />
+			{rawValue == null
+				? <p className={styles.muted}>No value recorded.</p>
+				: <StateValue value={decodeContractEventValue(rawValue)} ledger={ledger} />}
 			<details className={styles.raw}>
 				<summary>Original record</summary>
 				<pre>{JSON.stringify(row, null, 2)}</pre>
@@ -49,8 +56,10 @@ export function ExplorerContractStateChangeTable({
 }: { readonly rows: readonly EntityRecord[] }): React.JSX.Element {
 	const [selected, setSelected] = useState<EntityRecord | null>(null);
 	const hasTransactions = rows.some(row => entityText(row, 'transaction_hash') !== '');
+	const deletions = rows.reduce((count, row) => count + (row.deleted === true ? 1 : 0), 0);
 	return (
 		<>
+			{deletions > 0 && <p className={styles.pageSummary}>{deletions} {deletions === 1 ? 'deletion' : 'deletions'} on this page</p>}
 			<div className={styles.scroll}>
 				<table className={styles.table} data-transactions={hasTransactions} aria-label="Contract state changes">
 					<colgroup><col className={styles.ledgerColumn} /><col className={styles.keyColumn} /><col className={styles.valueColumn} />{hasTransactions && <col className={styles.transactionColumn} />}<col className={styles.actionColumn} /></colgroup>
@@ -61,12 +70,17 @@ export function ExplorerContractStateChangeTable({
 							// Preview decoding stays bounded; only an explicitly opened record
 							// mounts the full nested values and original-record serialization.
 							const key = decodeContractEventValue(row.key_decoded ?? row.key, { maxNodes: 128, maxDepth: 16 });
-							const value = decodeContractEventValue(row.val_decoded ?? row.val ?? row.value, { maxNodes: 128, maxDepth: 16 });
+							const deleted = row.deleted === true;
+							const rawValue = recordedValue(row);
 							return (
 								<tr key={entityText(row, 'id') || `${ledger}:${index}`}>
 									<td><strong>{ledger ? <Link className={styles.reference} href={buildEntityHref('ledgers', ledger)}>{formatAtomic(ledger, 0)}</Link> : 'Not reported'}</strong>{timestamp && <LocalDateTime dateTime={normalizeWarehouseTimestamp(timestamp)} />}</td>
 									<td><ContractValuePreview value={key} ledger={ledger} kind="key" /></td>
-									<td><ContractValuePreview value={value} ledger={ledger} /></td>
+									<td>{deleted
+										? <span className={styles.deletion}>Deletion recorded</span>
+										: rawValue == null
+											? <span className={styles.muted}>Not recorded</span>
+											: <ContractValuePreview value={decodeContractEventValue(rawValue, { maxNodes: 128, maxDepth: 16 })} ledger={ledger} />}</td>
 									{hasTransactions && <td>{transaction ? <Link className={styles.reference} href={buildEntityHref('transactions', transaction, ledger ? { ledger_sequence: ledger } : {})}><code className={styles.transaction}>{transaction}</code></Link> : <span className={styles.muted}>Not recorded</span>}</td>}
 									<td><button className={styles.detailsButton} type="button" aria-haspopup="dialog" aria-label={`State change details${ledger ? ' at ledger ' + ledger : ''}, row ${index + 1}`} onClick={() => setSelected(row)}>Details</button></td>
 								</tr>

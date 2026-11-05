@@ -13,6 +13,7 @@ jest.unstable_mockModule('next/navigation', () => ({
 	useSearchParams: () => search
 }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
+jest.unstable_mockModule('../explorer-account-assets.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-balance-observations', () => ({ ExplorerBalanceObservations: balanceMount }));
 jest.unstable_mockModule('../blockchain-explorer-results', () => ({ SearchResultView: () => null }));
 jest.unstable_mockModule('../explorer-ledger-activity', () => ({ ExplorerLedgerActivity: ({ ledger }: { ledger: string }) => createElement('p', null, 'Ledger activity ' + ledger) }));
@@ -45,13 +46,24 @@ it('offers only the existing contract-detail destination, preserving return cont
 	expect(render('accounts', contract)).not.toContain('evil.invalid');
 });
 
-it('retains the valid G-account balance mount and existing classic/issuer actions', () => {
+it('uses current-account balances by default and preserves existing classic/issuer actions', () => {
 	const html = render('accounts', account);
-	expect(balanceMount).toHaveBeenCalledTimes(1); expect(html).toContain('Balance panel ' + account);
-	expect(balanceMount.mock.calls[0]?.[0]).toMatchObject({ identifier: account, autoLoad: true, kind: 'balances' });
+	expect(balanceMount).not.toHaveBeenCalled();
+	expect(html).toContain('Horizon account balances');
+	expect(html.match(/>Federation name<\/h2>/g)).toHaveLength(1);
+	expect(html).toContain('Indexed observations');
 	expect(html).toContain('source_account=' + account); expect(html).toContain('seller=' + account); expect(html).toContain('buyer=' + account);
 	expect(html).toContain('/explorer/issuers/' + account); expect(html).toContain('Observed issued assets');
 	expect(html).not.toContain('Invalid account address');
+});
+
+it('restores an indexed wallet continuation without mounting the current account lane', () => {
+	search.set('wallet_for', account);
+	search.set('wallet_after', 'opaque');
+	const html = render('accounts', account);
+	expect(balanceMount).toHaveBeenCalledTimes(1); expect(html).toContain('Balance panel ' + account);
+	expect(balanceMount.mock.calls[0]?.[0]).toMatchObject({ identifier: account, autoLoad: true, kind: 'balances' });
+	expect(html).not.toContain('Horizon account balances');
 });
 
 it('leaves ledger lookup behavior outside the account guard', () => {
