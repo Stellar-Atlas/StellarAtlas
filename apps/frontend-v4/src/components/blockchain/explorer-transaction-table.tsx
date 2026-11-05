@@ -16,10 +16,12 @@ import { formatAtomic } from './explorer-format-values';
 export function ExplorerTransactionTable({
 	transactions,
 	returnTo,
+	jumpPrefix,
 	caption = 'Latest available transaction records. Dates are shown in your local time.'
 }: {
 	readonly transactions: Pick<PublicRecentTransactions, 'records' | 'limit'>;
 	readonly returnTo?: string;
+	readonly jumpPrefix?: string;
 	readonly caption?: string;
 }): React.JSX.Element {
 	const [copiedHash, setCopiedHash] = useState<string | null>(null);
@@ -76,6 +78,7 @@ export function ExplorerTransactionTable({
 						const href = buildEntityHref('transactions', tx.hash, { ledger_sequence: tx.ledger });
 						const displayHash = formatTransactionHash(tx.hash);
 						const label = 'Open transaction ' + tx.hash;
+						const jumpId = jumpPrefix ? jumpPrefix + '-' + tx.hash : undefined;
 						const hashText = <>
 							<span className={styles.wideHash}>{displayHash}</span>
 							<span className={styles.compactHash}>{tx.hash.length > 16 ? tx.hash.slice(0, 7) + '…' + tx.hash.slice(-6) : tx.hash}</span>
@@ -86,9 +89,9 @@ export function ExplorerTransactionTable({
 								<td data-label="Transaction" role="cell">
 									<div className={styles.hash}>
 										{returnTo ? (
-											<a className={styles.identifier} aria-label={label} title={tx.hash} href={withExplorerReturnTo(href, returnTo)}>{hashText}</a>
+											<a id={jumpId} className={styles.identifier} aria-label={label} title={tx.hash} href={withExplorerReturnTo(href, returnTo)}>{hashText}</a>
 										) : (
-											<ExplorerLink className={styles.identifier} aria-label={label} title={tx.hash} href={href}>{hashText}</ExplorerLink>
+											<ExplorerLink id={jumpId} className={styles.identifier} aria-label={label} title={tx.hash} href={href}>{hashText}</ExplorerLink>
 										)}
 										<details className={styles.identifiers}>
 											<summary aria-label={'IDs for ' + displayHash}>IDs</summary>

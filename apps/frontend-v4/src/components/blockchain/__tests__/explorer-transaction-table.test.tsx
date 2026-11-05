@@ -10,6 +10,8 @@ jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 }));
 const { ExplorerTransactionTable } =
 	await import('../explorer-transaction-table');
+const { ExplorerTransactionPageResults } =
+	await import('../explorer-transaction-page-results');
 const transaction = {
 	hash: 'a'.repeat(64),
 	ledger: '12345678',
@@ -76,6 +78,29 @@ describe('ExplorerTransactionTable', () => {
 		);
 		expect(html).toContain('No transactions returned');
 		expect(html).not.toContain('<table');
+	});
+	it('summarizes only shown, bounded rows and maps each ledger to an existing transaction link', () => {
+		const firstHash = 'b'.repeat(64);
+		const rows = [
+			{ ...transaction, hash: firstHash },
+			{ ...transaction, hash: 'c'.repeat(64) },
+			{ ...transaction, hash: 'd'.repeat(64), ledger: '12345677', successful: true },
+			{ ...transaction, hash: 'e'.repeat(64), ledger: '12345676', successful: true }
+		];
+		const markup = (result: 'all' | 'failed') => renderToStaticMarkup(
+			<ExplorerTransactionPageResults transactions={{ records: rows, limit: 3 }} result={result} caption="Loaded page" />
+		);
+		const all = markup('all');
+		expect(all).toContain('Jump to ledger on this page');
+		expect(all).toContain('12,345,678 · 2 transactions');
+		expect(all).toContain('12,345,677 · 1 transaction');
+		expect(all).not.toContain('12,345,676');
+		expect(all).toMatch(new RegExp('<a id="[^"]+-' + firstHash + '"[^>]+href="/explorer/transactions/' + firstHash));
+		expect(all).toContain('900,719,925.4740993');
+		const failed = markup('failed');
+		expect(failed).not.toContain('Jump to ledger');
+		expect(failed).not.toContain('12345677');
+		expect(failed).toContain('<table');
 	});
 	it('preserves exact seven-place scaling and does not turn missing or invalid fees into zero', () => {
 		for (const [fee, shown] of [['100', '0.00001'], ['1', '0.0000001'], ['0', '0'], ['', '—'], ['unknown', '—']] as const) {

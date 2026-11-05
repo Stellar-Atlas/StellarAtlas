@@ -184,6 +184,34 @@
 	outline: 2px solid var(--blue);
 	outline-offset: 2px;
 }
+.ledgerJump {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.5rem;
+	min-inline-size: 0;
+}
+.ledgerJump label { color: var(--muted); font-size: 0.8rem; }
+.ledgerJump :is(select, button) {
+	color: inherit;
+	background: var(--surface-subtle);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	font: inherit;
+	font-size: 0.85rem;
+	min-block-size: 44px;
+	min-inline-size: 0;
+	max-inline-size: 100%;
+	padding-inline: 0.55rem;
+}
+.ledgerJump button { cursor: pointer; }
+.ledgerJump :is(select, button):focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+@media (max-width: 540px) {
+	.ledgerJump label { flex-basis: 100%; }
+}
 @media (max-width: 800px) {
 	.container {
 		overflow: visible;
