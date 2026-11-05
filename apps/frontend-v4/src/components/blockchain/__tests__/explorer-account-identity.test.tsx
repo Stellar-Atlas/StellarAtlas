@@ -14,6 +14,7 @@ jest.unstable_mockModule('next/navigation', () => ({
 }));
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-account-assets.module.css', () => ({ default: {} }));
+jest.unstable_mockModule('../explorer-claimable-positions.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-balance-observations', () => ({ ExplorerBalanceObservations: balanceMount }));
 jest.unstable_mockModule('../blockchain-explorer-results', () => ({ SearchResultView: () => null }));
 jest.unstable_mockModule('../explorer-ledger-activity', () => ({ ExplorerLedgerActivity: ({ ledger }: { ledger: string }) => createElement('p', null, 'Ledger activity ' + ledger) }));
