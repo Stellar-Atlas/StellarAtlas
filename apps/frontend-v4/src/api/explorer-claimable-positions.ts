@@ -114,8 +114,13 @@ export function parseClaimablePage(account: string, role: ClaimableRole, payload
 	let duplicate = false;
 	for (const candidate of row.positions) {
 		const item = position(candidate, account, role, ledger);
-		if (unique.has(item.id)) duplicate = true;
-		else unique.set(item.id, item);
+		const previous = unique.get(item.id);
+		if (previous) {
+			// The typed projection fixes key order and normalizes roles and exact amounts.
+			// Do not pick a winner if two rows disagree about the same position.
+			if (JSON.stringify(previous) !== JSON.stringify(item)) invalid();
+			duplicate = true;
+		} else unique.set(item.id, item);
 	}
 	return { latestLedger: ledger, partial: duplicate || row.pageStatus === 'partial', positions: [...unique.values()], nextCursor: row.nextCursor };
 }

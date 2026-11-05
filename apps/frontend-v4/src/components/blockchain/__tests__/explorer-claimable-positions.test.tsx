@@ -22,11 +22,28 @@ const payload = {
 	latestLedger: '101', snapshotStatus: 'ledger_bound', pageStatus: 'available', positions: [claim], nextCursor: 'page_2'
 };
 
-it('keeps exact principal and both roles, de-duplicates IDs, and preserves competing conditions', () => {
-	const page = parseClaimablePage(account, 'claimant', { ...payload, positions: [claim, claim] });
+it('keeps exact principal and both roles, de-duplicates identical IDs, and preserves competing conditions', () => {
+	const page = parseClaimablePage(account, 'claimant', { ...payload, positions: [claim, structuredClone(claim)] });
 	expect(page).toMatchObject({ latestLedger: '101', partial: true, nextCursor: 'page_2' });
 	expect(page.positions).toHaveLength(1);
 	expect(page.positions[0]).toMatchObject({ amountRaw: claim.amountRaw, roles: claim.roles, claimants: claim.claimants });
+});
+
+it('rejects conflicting repeats in either order even when each record is valid on its own', () => {
+	const first = { ...claim, amount: '1.0000000', amountRaw: '10000000' };
+	const changes = [
+		{ amount: '2.0000000', amountRaw: '20000000' },
+		{ sponsor: other, roles: ['claimant'] },
+		{ claimants: [claim.claimants[0], { destination: other, predicate: { type: 'before_relative_time', seconds: '60' } }] },
+		{ lastModifiedLedger: '99' },
+		{ lastModifiedAt: '2026-11-05T21:01:00Z' }
+	];
+	for (const change of changes) {
+		const second = { ...first, ...change };
+		expect(parseClaimablePage(account, 'claimant', { ...payload, positions: [second] }).positions).toHaveLength(1);
+		for (const positions of [[first, second], [second, first]])
+			expect(() => parseClaimablePage(account, 'claimant', { ...payload, positions })).toThrow('Invalid claimable positions');
+	}
 });
 
 it('rejects contradictory scope, principal, role, and snapshot evidence', () => {
