@@ -56,6 +56,7 @@ export function assetResourceRouter(config: AssetResourceConfig): Router {
 	router.use(
 		contractProvenanceRouter({
 			rpcUrl: config.rpcUrl ?? process.env.STELLAR_RPC_URL,
+			provenanceRpcUrl: process.env.STELLAR_PROVENANCE_RPC_URL,
 			networkPassphrase: config.networkPassphrase
 		})
 	);

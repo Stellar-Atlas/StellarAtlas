@@ -13,6 +13,7 @@ import {
 } from './ContractBuildAttestation.js';
 import { readContractCode, ContractRpcUnavailable } from './ContractRpcCode.js';
 import { readContractWasmMetadata } from './ContractWasmMetadata.js';
+import type { ScopedProvenanceRpc } from './ScopedProvenanceRpc.js';
 
 export type BuildStatus =
 	| 'verified'
@@ -28,6 +29,7 @@ export interface ContractProvenance {
 	readonly contractId: string;
 	readonly networkPassphrase: string;
 	readonly observedLedger: number;
+	readonly ledgerEvidence?: 'configured_rpc_observation';
 	readonly instanceModifiedLedger: number | null;
 	readonly checkedAt: string;
 	readonly executable: 'wasm' | 'stellar_asset' | 'not_found';
@@ -57,13 +59,14 @@ export class ContractProvenanceService {
 	>();
 	constructor(
 		private readonly rpcUrl: URL | undefined,
-		private readonly networkPassphrase: string
+		private readonly networkPassphrase: string,
+		private readonly scopedRpc?: ScopedProvenanceRpc
 	) {}
 
 	async get(contractId: string): Promise<ContractProvenance> {
 		if (!StrKey.isValidContract(contractId))
 			throw new Error('Invalid contract address');
-		if (!this.rpcUrl)
+		if (!this.rpcUrl && !this.scopedRpc)
 			throw new ContractRpcUnavailable('Contract RPC is not configured');
 		const existing = this.cache.get(contractId);
 		if (existing && existing.expires > Date.now()) return existing.value;
@@ -72,8 +75,14 @@ export class ContractProvenanceService {
 		if (this.pending.size >= 2)
 			throw new ProvenanceBusy('Build verification is busy');
 		const job = this.load(contractId)
-			.then((value) => {
-				this.remember(this.cache, contractId, value, 60_000);
+			.then(({ value, freshUntil }) => {
+				const now = Date.now();
+				const expires = Math.min(now + 60_000, freshUntil ?? Infinity);
+				if (expires <= now)
+					throw new ContractRpcUnavailable(
+						'Scoped provenance RPC evidence expired'
+					);
+				this.remember(this.cache, contractId, value, expires);
 				return value;
 			})
 			.finally(() => this.pending.delete(contractId));
@@ -81,8 +90,12 @@ export class ContractProvenanceService {
 		return job;
 	}
 
-	private async load(contractId: string): Promise<ContractProvenance> {
-		const observation = await readContractCode(this.rpcUrl!, contractId);
+	private async load(
+		contractId: string
+	): Promise<{ value: ContractProvenance; freshUntil?: number }> {
+		const scoped = await this.scopedRpc?.read(contractId);
+		const observation =
+			scoped ?? (await readContractCode(this.rpcUrl!, contractId));
 		let metadata: ContractProvenance['metadata'] = {
 			sourceRepository: null,
 			homeDomain: null
@@ -122,16 +135,22 @@ export class ContractProvenanceService {
 			}
 		}
 		return {
-			contractId,
-			networkPassphrase: this.networkPassphrase,
-			observedLedger: observation.ledger,
-			instanceModifiedLedger: observation.modifiedLedger || null,
-			checkedAt: new Date().toISOString(),
-			executable: observation.executable,
-			wasmSha256: observation.wasmSha256,
-			metadata,
-			build,
-			securityAudit: 'not_assessed'
+			freshUntil: scoped?.freshUntil,
+			value: {
+				contractId,
+				networkPassphrase: this.networkPassphrase,
+				observedLedger: observation.ledger,
+				...(scoped
+					? ({ ledgerEvidence: 'configured_rpc_observation' } as const)
+					: {}),
+				instanceModifiedLedger: observation.modifiedLedger || null,
+				checkedAt: new Date().toISOString(),
+				executable: observation.executable,
+				wasmSha256: observation.wasmSha256,
+				metadata,
+				build,
+				securityAudit: 'not_assessed'
+			}
 		};
 	}
 
@@ -202,7 +221,7 @@ export class ContractProvenanceService {
 			this.builds,
 			key,
 			value,
-			value.status === 'unavailable' ? 30_000 : 30 * 60_000
+			Date.now() + (value.status === 'unavailable' ? 30_000 : 30 * 60_000)
 		);
 		return value;
 	}
@@ -211,10 +230,10 @@ export class ContractProvenanceService {
 		cache: Map<string, { expires: number; value: T }>,
 		key: string,
 		value: T,
-		ttl: number
+		expires: number
 	): void {
 		cache.delete(key);
 		if (cache.size >= 256) cache.delete(cache.keys().next().value!);
-		cache.set(key, { expires: Date.now() + ttl, value });
+		cache.set(key, { expires, value });
 	}
 }

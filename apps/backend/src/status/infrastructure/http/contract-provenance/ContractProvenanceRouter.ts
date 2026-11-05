@@ -4,14 +4,21 @@ import {
 	ContractProvenanceService,
 	ProvenanceBusy
 } from './ContractProvenanceService.js';
+import { scopedProvenanceRpc } from './ScopedProvenanceRpc.js';
 
 export function contractProvenanceRouter(config: {
 	readonly rpcUrl?: string;
+	readonly provenanceRpcUrl?: string;
 	readonly networkPassphrase: string;
 }): Router {
+	const scoped =
+		config.provenanceRpcUrl === undefined
+			? undefined
+			: scopedProvenanceRpc(config.provenanceRpcUrl, config.networkPassphrase);
 	const service = new ContractProvenanceService(
-		config.rpcUrl ? new URL(config.rpcUrl) : undefined,
-		config.networkPassphrase
+		!scoped && config.rpcUrl ? new URL(config.rpcUrl) : undefined,
+		config.networkPassphrase,
+		scoped
 	);
 	const router = express.Router();
 	router.get('/contracts/:contractId/provenance', async (request, response) => {
@@ -25,7 +32,10 @@ export function contractProvenanceRouter(config: {
 		}
 		try {
 			const result = await service.get(contractId);
-			response.setHeader('Cache-Control', 'public, max-age=30');
+			response.setHeader(
+				'Cache-Control',
+				scoped ? 'no-store' : 'public, max-age=30'
+			);
 			response.json(result);
 		} catch (error) {
 			response.setHeader('Cache-Control', 'no-store');

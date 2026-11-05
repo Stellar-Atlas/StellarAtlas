@@ -79,9 +79,18 @@ function bodyBytes(body: unknown): Buffer | undefined {
 
 export async function fetchProvenanceJson(
 	url: URL,
-	body?: unknown
+	body?: unknown,
+	limits?: { readonly timeoutMs: number; readonly maxResponseBytes: number }
 ): Promise<unknown> {
 	const payload = bodyBytes(body);
+	const timeoutMs = Math.min(
+		limits?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+		REQUEST_TIMEOUT_MS
+	);
+	const maxResponseBytes = Math.min(
+		limits?.maxResponseBytes ?? MAX_RESPONSE_BYTES,
+		MAX_RESPONSE_BYTES
+	);
 	if (
 		(url.protocol !== 'http:' && url.protocol !== 'https:') ||
 		url.hostname.length === 0 ||
@@ -138,7 +147,7 @@ export async function fetchProvenanceJson(
 					'Provenance request timed out'
 				)
 			);
-		}, REQUEST_TIMEOUT_MS);
+		}, timeoutMs);
 
 		try {
 			const handleResponse = (incoming: IncomingMessage): void => {
@@ -171,7 +180,7 @@ export async function fetchProvenanceJson(
 				if (
 					contentLength !== undefined &&
 					/^\d+$/.test(contentLength) &&
-					Number(contentLength) > MAX_RESPONSE_BYTES
+					Number(contentLength) > maxResponseBytes
 				) {
 					finish(
 						new ProvenanceHttpError(
@@ -189,7 +198,7 @@ export async function fetchProvenanceJson(
 					if (settled) return;
 					const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
 					receivedBytes += buffer.byteLength;
-					if (receivedBytes > MAX_RESPONSE_BYTES) {
+					if (receivedBytes > maxResponseBytes) {
 						finish(
 							new ProvenanceHttpError(
 								null,
