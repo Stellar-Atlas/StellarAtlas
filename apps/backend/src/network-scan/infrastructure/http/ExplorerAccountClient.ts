@@ -1,4 +1,12 @@
-import { StrKey } from '@stellar/stellar-sdk';
+import {
+	amount,
+	classicAddress,
+	horizonAccountTimeoutMs,
+	maximumInt64,
+	parseHorizonTimestamp,
+	parseLatestLedger,
+	uint32
+} from './HorizonAccountFields.js';
 
 export interface ExplorerAccountBalanceDTO {
 	readonly assetCode: string | null;
@@ -80,9 +88,6 @@ interface AccountDetailOptions {
 }
 
 const searchTimeoutMs = 8_000;
-const currentAccountTimeoutMs = 65_000;
-const maximumUInt32 = 0xffff_ffff;
-const maximumInt64 = 0x7fff_ffff_ffff_ffffn;
 
 export async function fetchExplorerAccount(
 	horizonUrl: string,
@@ -91,7 +96,7 @@ export async function fetchExplorerAccount(
 ): Promise<ExplorerAccountDTO | null> {
 	const classicDetail = detail !== undefined && accountId.startsWith('G');
 	const timeout = AbortSignal.timeout(
-		classicDetail ? currentAccountTimeoutMs : searchTimeoutMs
+		classicDetail ? horizonAccountTimeoutMs : searchTimeoutMs
 	);
 	const signal = detail ? AbortSignal.any([detail.signal, timeout]) : timeout;
 	const base = horizonUrl.endsWith('/') ? horizonUrl : horizonUrl + '/';
@@ -211,42 +216,13 @@ async function fetchAccountLedger(
 		if (signal.aborted || uint32(ledger.sequence)?.toString() !== sequence)
 			return null;
 		return {
-			closedAt: parseLedgerClosedAt(ledger.closed_at),
+			closedAt: parseHorizonTimestamp(ledger.closed_at),
 			baseReserveRaw: uint32(ledger.base_reserve_in_stroops)?.toString() ?? null
 		};
 	} catch {
 		// The account inputs can remain useful when the matching ledger is unavailable.
 		return null;
 	}
-}
-
-function parseLedgerClosedAt(value: unknown): string | null {
-	if (
-		typeof value !== 'string' ||
-		!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(
-			value
-		)
-	)
-		return null;
-
-	// Validate the calendar and clock before applying the explicit offset.
-	const wallTime = value.slice(0, 19);
-	const wallTimeAsUtc = new Date(wallTime + 'Z');
-	return Number.isFinite(wallTimeAsUtc.valueOf()) &&
-		wallTimeAsUtc.toISOString().slice(0, 19) === wallTime
-		? value
-		: null;
-}
-
-function parseLatestLedger(
-	value: string | null,
-	modified: number | null
-): string | null {
-	if (!value || !/^[1-9]\d{0,9}$/.test(value)) return null;
-	const sequence = uint32(Number(value));
-	return sequence !== null && (modified === null || sequence >= modified)
-		? value
-		: null;
 }
 
 function mapBalance(
@@ -321,34 +297,6 @@ function assetId(
 		: null;
 }
 
-function amount(value: unknown): { decimal: string; raw: string } | null {
-	if (
-		typeof value !== 'string' ||
-		!/^(?:0|[1-9]\d{0,11})(?:\.\d{1,7})?$/.test(value)
-	)
-		return null;
-	const [whole = '', fraction = ''] = value.split('.');
-	const raw = BigInt(whole + fraction.padEnd(7, '0'));
-	return raw <= maximumInt64 ? { decimal: value, raw: raw.toString() } : null;
-}
-
-function uint32(value: unknown): number | null {
-	return typeof value === 'number' &&
-		Number.isInteger(value) &&
-		value >= 0 &&
-		value <= maximumUInt32
-		? value
-		: null;
-}
-
 function flag(value: unknown): boolean | null {
 	return typeof value === 'boolean' ? value : null;
-}
-
-function classicAddress(value: unknown): string | null {
-	return typeof value === 'string' &&
-		value.length === 56 &&
-		StrKey.isValidEd25519PublicKey(value)
-		? value
-		: null;
 }

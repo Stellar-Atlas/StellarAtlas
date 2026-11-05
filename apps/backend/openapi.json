@@ -1063,6 +1063,79 @@
 				}
 			}
 		},
+		"/v1/explorer/accounts/{accountId}/claimable-positions": {
+			"get": {
+				"summary": "List claimable positions for an account",
+				"description": "Returns one bounded claimant or sponsor page from the configured Horizon provider. Positions are separate from held balances. Claimant predicates are not evaluated, and sponsor is a reserve role. A full page can have a continuation cursor even when the next page is empty.",
+				"tags": [
+					"Explorer"
+				],
+				"operationId": "getExplorerClaimablePositions",
+				"parameters": [
+					{
+						"name": "accountId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"pattern": "^G[A-Z2-7]{55}$"
+						}
+					},
+					{
+						"name": "role",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"claimant",
+								"sponsor"
+							]
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 25,
+							"default": 25
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"description": "Opaque continuation for the same account, role and configured network.",
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "One bounded position page",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerClaimablePositionsPage"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid account, role, page limit or continuation cursor"
+					},
+					"501": {
+						"description": "Provider does not support the endpoint"
+					},
+					"502": {
+						"description": "Provider or response unavailable"
+					}
+				}
+			}
+		},
 		"/v1/explorer/accounts/{accountId}/observations": {
 			"get": {
 				"summary": "Look up proof-gated account observations",
@@ -11372,6 +11445,244 @@
 						"type": "boolean"
 					}
 				}
+			},
+			"ExplorerClaimablePositionsPage": {
+				"type": "object",
+				"description": "One page of provider evidence. An unbound or partial page cannot establish a complete inventory. Successive pages may refer to different ledgers.",
+				"required": [
+					"source",
+					"accountId",
+					"networkPassphrase",
+					"role",
+					"latestLedger",
+					"snapshotStatus",
+					"pageStatus",
+					"positions",
+					"nextCursor"
+				],
+				"properties": {
+					"source": {
+						"type": "string",
+						"enum": [
+							"horizon"
+						]
+					},
+					"accountId": {
+						"type": "string"
+					},
+					"networkPassphrase": {
+						"type": "string"
+					},
+					"role": {
+						"type": "string",
+						"enum": [
+							"claimant",
+							"sponsor"
+						]
+					},
+					"latestLedger": {
+						"type": "string",
+						"nullable": true
+					},
+					"snapshotStatus": {
+						"type": "string",
+						"enum": [
+							"ledger_bound",
+							"ledger_unavailable"
+						]
+					},
+					"pageStatus": {
+						"type": "string",
+						"enum": [
+							"available",
+							"partial"
+						]
+					},
+					"positions": {
+						"type": "array",
+						"maxItems": 25,
+						"items": {
+							"$ref": "#/components/schemas/ExplorerClaimablePosition"
+						}
+					},
+					"nextCursor": {
+						"type": "string",
+						"nullable": true
+					}
+				}
+			},
+			"ExplorerClaimablePosition": {
+				"type": "object",
+				"description": "The amount is claimable principal at scale seven and lies outside held or spendable balance. Sponsorship identifies who covers reserves. A claimant match carries unevaluated conditions.",
+				"required": [
+					"id",
+					"assetId",
+					"amount",
+					"amountRaw",
+					"sponsor",
+					"roles",
+					"claimants",
+					"lastModifiedLedger",
+					"lastModifiedAt"
+				],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"assetId": {
+						"type": "string"
+					},
+					"amount": {
+						"type": "string"
+					},
+					"amountRaw": {
+						"type": "string"
+					},
+					"sponsor": {
+						"type": "string",
+						"nullable": true
+					},
+					"roles": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 2,
+						"items": {
+							"type": "string",
+							"enum": [
+								"claimant",
+								"sponsor"
+							]
+						}
+					},
+					"claimants": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 10,
+						"items": {
+							"type": "object",
+							"required": [
+								"destination",
+								"predicate"
+							],
+							"properties": {
+								"destination": {
+									"type": "string"
+								},
+								"predicate": {
+									"$ref": "#/components/schemas/ExplorerClaimablePredicate"
+								}
+							}
+						}
+					},
+					"lastModifiedLedger": {
+						"type": "string"
+					},
+					"lastModifiedAt": {
+						"type": "string",
+						"nullable": true
+					}
+				}
+			},
+			"ExplorerClaimablePredicate": {
+				"oneOf": [
+					{
+						"type": "object",
+						"required": [
+							"type"
+						],
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"unconditional"
+								]
+							}
+						}
+					},
+					{
+						"type": "object",
+						"required": [
+							"type",
+							"predicates"
+						],
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"and",
+									"or"
+								]
+							},
+							"predicates": {
+								"type": "array",
+								"minItems": 2,
+								"maxItems": 2,
+								"items": {
+									"$ref": "#/components/schemas/ExplorerClaimablePredicate"
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"required": [
+							"type",
+							"predicate"
+						],
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"not"
+								]
+							},
+							"predicate": {
+								"$ref": "#/components/schemas/ExplorerClaimablePredicate"
+							}
+						}
+					},
+					{
+						"type": "object",
+						"required": [
+							"type",
+							"epochSeconds",
+							"isoTime"
+						],
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"before_absolute_time"
+								]
+							},
+							"epochSeconds": {
+								"type": "string"
+							},
+							"isoTime": {
+								"type": "string",
+								"nullable": true
+							}
+						}
+					},
+					{
+						"type": "object",
+						"required": [
+							"type",
+							"seconds"
+						],
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"before_relative_time"
+								]
+							},
+							"seconds": {
+								"type": "string"
+							}
+						}
+					}
+				]
 			},
 			"ExplorerAsset": {
 				"type": "object",

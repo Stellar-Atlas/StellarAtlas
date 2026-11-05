@@ -48,6 +48,10 @@ const publicOperations = new Map<string, string>([
 	['getDataQualityStatus', 'get /v1/status/data-quality'],
 	['getExplorerAccount', 'get /v1/explorer/accounts/{accountId}'],
 	[
+		'getExplorerClaimablePositions',
+		'get /v1/explorer/accounts/{accountId}/claimable-positions'
+	],
+	[
 		'getExplorerAccountObservations',
 		'get /v1/explorer/accounts/{accountId}/observations'
 	],

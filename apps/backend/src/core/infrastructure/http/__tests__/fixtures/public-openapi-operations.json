@@ -79,6 +79,7 @@
   "get /v1/datasets/{dataset}/schema getParsedDatasetSchema",
   "get /v1/day-statistics getNetworkDayStatistics",
   "get /v1/explorer/accounts/{accountId} getExplorerAccount",
+  "get /v1/explorer/accounts/{accountId}/claimable-positions getExplorerClaimablePositions",
   "get /v1/explorer/accounts/{accountId}/observations getExplorerAccountObservations",
   "get /v1/explorer/assets getExplorerAssets",
   "get /v1/explorer/contracts/{contractId} getExplorerContract",

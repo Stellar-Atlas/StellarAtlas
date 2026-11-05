@@ -13,6 +13,7 @@ import {
 import { fetchTransactionByHash } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
 import { createExplorerLocalOperationHandler } from './ExplorerLocalOperationHandler.js';
+import { createExplorerClaimablePositionsHandler } from './ExplorerClaimablePositions.js';
 import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { GetExplorerLocalAccountChanges } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
@@ -226,6 +227,11 @@ export const blockchainExplorerRouter = (
 				.json({ error: 'Account observation lookup unavailable' });
 		}
 	});
+
+	router.get(
+		'/accounts/:accountId/claimable-positions',
+		createExplorerClaimablePositionsHandler(config)
+	);
 
 	router.get('/accounts/:accountId', async (req, res) => {
 		const accountId = req.params.accountId.trim();
