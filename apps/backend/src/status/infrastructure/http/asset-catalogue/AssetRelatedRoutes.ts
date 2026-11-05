@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from 'express';
-import type { AssetMetadata } from '../asset-metadata/types.js';
+import type { AssetMetadata, CachedAssetMetadata } from '../asset-metadata/types.js';
 import type { AssetCatalogue } from './AssetCatalogue.js';
-import type { AssetIdentity } from './AssetIdentity.js';
+import { classicAsset, type AssetIdentity } from './AssetIdentity.js';
 import { assetReferenceInfo } from './AssetReferenceRegistry.js';
 
 export type AssetRelatedMetadata = Pick<
@@ -22,11 +22,17 @@ type ResolvableCatalogue = Pick<AssetCatalogue, 'resolve' | 'search'>;
 export function registerAssetRelatedRoutes(
 	router: Router,
 	catalogue: ResolvableCatalogue,
-	metadataLoader: AssetMetadataLoader
+	metadataLoader: AssetMetadataLoader,
+	cacheOnly: {
+		readonly networkPassphrase: string;
+		readonly load: (code: string, issuer: string) => Promise<CachedAssetMetadata>;
+	}
 ): void {
 	router.get('/asset-metadata', (request, response) =>
 		send(response, async () => {
-			assertOnlyQuery(request, ['assets']);
+			assertOnlyQuery(request, ['assets', 'cacheOnly']);
+			const mode = singleQuery(request, 'cacheOnly', false);
+			if (mode !== undefined && mode !== 'true') invalid('cacheOnly must be true');
 			const raw = singleQuery(request, 'assets');
 			if (raw.length > 8192) invalid('assets query is too long');
 			let parsed: unknown;
@@ -40,6 +46,17 @@ export function registerAssetRelatedRoutes(
 			const references = [
 				...new Set((parsed as readonly unknown[]).map(assetReference))
 			];
+			if (mode === 'true') {
+				const identities = references.map((reference) =>
+					exactClassic(reference, cacheOnly.networkPassphrase)
+				);
+				const assets = await mapConcurrent(identities, 4, async (asset) => ({
+					...asset,
+					...(await cacheOnly.load(asset.code, asset.issuer)),
+					...referenceFields(asset)
+				}));
+				return { assets };
+			}
 			const resolved = await mapConcurrent(references, 4, async (reference) => {
 				const value = await catalogue.resolve(reference);
 				if (typeof value === 'string')
@@ -97,6 +114,18 @@ export function registerAssetRelatedRoutes(
 			};
 		})
 	);
+}
+
+function exactClassic(reference: string, networkPassphrase: string) {
+	const [code, issuer, extra] = reference.split(':');
+	if (code && issuer && extra === undefined) {
+		try {
+			return { ...classicAsset(code, issuer, networkPassphrase), code, issuer };
+		} catch {
+			// A malformed identity is a request error, without catalogue lookup.
+		}
+	}
+	invalid('Cache-only metadata requires a canonical classic CODE:ISSUER');
 }
 
 function referenceFields(asset: AssetIdentity): {

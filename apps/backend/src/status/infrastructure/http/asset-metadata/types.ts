@@ -31,6 +31,20 @@ export interface AssetMetadata {
 	readonly error: string | null;
 }
 
+export type CachedAssetMetadata = Pick<
+	AssetMetadata,
+	| 'name'
+	| 'homeDomain'
+	| 'tomlUrl'
+	| 'fetchedAt'
+	| 'logoUrl'
+	| 'issuerCollectible'
+> & {
+	readonly status: 'ready' | 'unavailable';
+	readonly logoStatus: 'ready' | 'unavailable';
+	readonly cacheStatus: 'hit' | 'miss';
+};
+
 export interface IssuerMetadata {
 	readonly homeDomain: string;
 	readonly tomlUrl: string;

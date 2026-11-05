@@ -172,6 +172,11 @@ const assetMetadataBatch = {
 					tomlUrl: nullableString,
 					fetchedAt: timestamp,
 					issuerCollectible,
+					cacheStatus: {
+						type: 'string',
+						enum: ['hit', 'miss'],
+						description: 'Present for cacheOnly=true. A metadata hit may have no cached logo.'
+					},
 					referenceIdentity: nullableString,
 					source: nullableString
 				}
@@ -385,12 +390,17 @@ export function withAssetResourceOpenApiPaths(
 	paths['/v1/asset-metadata'] = get(
 		'listAssetMetadataBatch',
 		'Read metadata for several assets',
-		'Reads cached or pending issuer-published metadata for up to 16 exact asset references. Pass assets as a JSON-encoded string array; ambiguous symbols are rejected. TOML fields are publisher claims, not verified facts.',
+		'Reads cached or pending issuer-published metadata for up to 16 asset references. With cacheOnly=true, pass canonical classic CODE:ISSUER IDs. This mode returns hit or miss for each identity without triggering any issuer or logo fetch. TOML fields are publisher claims.',
 		[
 			filter(
 				'assets',
 				{ type: 'string', maxLength: 8192 },
 				'JSON-encoded array of up to 16 asset references.'
+			),
+			filter(
+				'cacheOnly',
+				{ type: 'string', enum: ['true'] },
+				'Opt in to read-only cache lookup without catalogue resolution or background refresh.'
 			)
 		],
 		assetMetadataBatch,

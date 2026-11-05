@@ -60,6 +60,73 @@ describe('asset metadata pipeline', () => {
 		if (root) await rm(root, { recursive: true, force: true });
 	});
 
+	test('cache-only reads never resolve, refresh or fetch a missing logo', async () => {
+		root = await mkdtemp(join(tmpdir(), 'asset-metadata-'));
+		const code = 'ART';
+		const assetIssuer = 'GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE';
+		const image = 'https://issuer.example/logo.png';
+		const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+		const filename = createHash('sha256').update(png).digest('hex') + '.png';
+		let now = Date.now();
+		const resolveIssuerHomeDomain = jest.fn(async () => 'issuer.example');
+		const requestImpl = jest.fn(async (url: string) =>
+			url === image
+				? { status: 200, headers: {}, body: png }
+				: ok(`[[CURRENCIES]]
+code = "${code}"
+issuer = "${assetIssuer}"
+name = "An example"
+url = "https://issuer.example/collectible"
+image = "${image}"
+`)
+		);
+		const options = {
+			cacheRoot: root,
+			networkPassphrase: 'test-network',
+			resolveIssuerHomeDomain,
+			requestImpl,
+			now: () => now
+		};
+		const service = new AssetMetadataService(options);
+		await expect(service.getCachedClassicMetadata(code, assetIssuer)).resolves.toMatchObject({
+			cacheStatus: 'miss', name: null, logoUrl: null
+		});
+		expect(resolveIssuerHomeDomain).not.toHaveBeenCalled();
+		expect(requestImpl).not.toHaveBeenCalled();
+
+		// Populate through the ordinary path before checking a fresh process.
+		await service.ensureAssetMetadata({ id: 'ART', code, issuer: assetIssuer });
+		expect(resolveIssuerHomeDomain).toHaveBeenCalledTimes(1);
+		expect(requestImpl).toHaveBeenCalledTimes(2);
+		resolveIssuerHomeDomain.mockClear();
+		requestImpl.mockClear();
+		const reader = new AssetMetadataService(options);
+		const first = await reader.getCachedClassicMetadata(code, assetIssuer);
+		expect(first).toMatchObject({
+			cacheStatus: 'hit',
+			name: 'An example',
+			logoStatus: 'ready',
+			logoUrl: '/v1/asset-logos/' + filename,
+			issuerCollectible: { kind: 'sep39-collectible-link' }
+		});
+		expect(first).not.toHaveProperty('fields');
+		now += 25 * 60 * 60 * 1000;
+		await rm(join(reader.getCachedLogoDirectory(), filename));
+		await expect(reader.getCachedClassicMetadata(code, assetIssuer)).resolves.toMatchObject({
+			cacheStatus: 'hit', logoStatus: 'unavailable', logoUrl: null, fetchedAt: first.fetchedAt
+		});
+		await expect(reader.getCachedClassicMetadata('OTHER', assetIssuer)).resolves.toMatchObject({
+			cacheStatus: 'miss'
+		});
+		const otherNetwork = new AssetMetadataService({ ...options, networkPassphrase: 'other-network' });
+		await expect(otherNetwork.getCachedClassicMetadata(code, assetIssuer)).resolves.toMatchObject({
+			cacheStatus: 'miss'
+		});
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		expect(resolveIssuerHomeDomain).not.toHaveBeenCalled();
+		expect(requestImpl).not.toHaveBeenCalled();
+	});
+
 	test('attributes a collectible link only to an unambiguous exact classic row and never fetches it', async () => {
 		root = await mkdtemp(join(tmpdir(), 'asset-metadata-'));
 		const row = (code: string) => `[[CURRENCIES]]
