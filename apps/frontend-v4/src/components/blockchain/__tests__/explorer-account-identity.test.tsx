@@ -50,6 +50,7 @@ it('uses current-account balances by default and preserves existing classic/issu
 	const html = render('accounts', account);
 	expect(balanceMount).not.toHaveBeenCalled();
 	expect(html).toContain('Current account balances');
+	expect(html.match(/>Federation name<\/h2>/g)).toHaveLength(1);
 	expect(html).toContain('Indexed observations');
 	expect(html).toContain('source_account=' + account); expect(html).toContain('seller=' + account); expect(html).toContain('buyer=' + account);
 	expect(html).toContain('/explorer/issuers/' + account); expect(html).toContain('Observed issued assets');
