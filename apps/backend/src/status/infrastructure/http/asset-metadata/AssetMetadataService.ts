@@ -1,5 +1,6 @@
 import {
 	findCurrency,
+	issuerCollectibleClaim,
 	detectLogoExtension,
 	unavailable,
 	pending,
@@ -17,7 +18,7 @@ import {
 	type PersistedIssuer
 } from './AssetMetadataValues.js';
 import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseIssuerToml } from './parseIssuerToml.js';
 import { requestPublicHttps } from './safeHttp.js';
@@ -27,6 +28,7 @@ import type {
 	AssetMetadata,
 	AssetMetadataInput,
 	AssetMetadataServiceOptions,
+	CachedAssetMetadata,
 	CurrencyEntry,
 	IssuerMetadata
 } from './types.js';
@@ -77,6 +79,59 @@ export class AssetMetadataService {
 		return this.homeDomains.getCachedAll();
 	}
 
+	public async getCachedClassicMetadata(
+		code: string,
+		issuer: string
+	): Promise<CachedAssetMetadata> {
+		const homeDomain = await this.homeDomains.getCached(issuer);
+		const cached = homeDomain ? await this.readIssuer(homeDomain) : null;
+		const matches = cached?.currencies.filter(
+			(row) => row.code === code && row.issuer === issuer
+		);
+		const currency = matches?.length === 1 ? matches[0] : undefined;
+		if (!cached || !currency)
+			return {
+				cacheStatus: 'miss',
+				status: 'unavailable',
+				name: null,
+				homeDomain,
+				tomlUrl: cached?.tomlUrl ?? null,
+				fetchedAt: cached?.fetchedAt ?? null,
+				logoUrl: null,
+				logoStatus: 'unavailable'
+			};
+
+		const logoKey = currency.image ? this.logoKey(currency.image) : null;
+		const logoFile = logoKey
+			? cached.logoFiles[logoKey] ?? (await this.readLogoIndex(logoKey))
+			: undefined;
+		const logoUrl =
+			logoFile && (await this.hasCachedRaster(logoFile))
+				? this.staticLogoUrl(logoFile)
+				: null;
+		return {
+			cacheStatus: 'hit',
+			status: 'ready',
+			name: currency.name ?? currency.fields.display_name ?? null,
+			homeDomain,
+			tomlUrl: cached.tomlUrl,
+			fetchedAt: cached.fetchedAt,
+			logoUrl,
+			logoStatus: logoUrl ? 'ready' : 'unavailable',
+			issuerCollectible: issuerCollectibleClaim(currency.fields)
+		};
+	}
+
+	private async hasCachedRaster(filename: string): Promise<boolean> {
+		if (!/^[a-f0-9]{64}\.(?:png|jpg|webp|gif)$/.test(filename)) return false;
+		try {
+			const file = await lstat(join(this.getCachedLogoDirectory(), filename));
+			return file.isFile() && file.size > 0 && file.size <= logoMaxBytes;
+		} catch {
+			return false;
+		}
+	}
+
 	public async getAssetMetadata(
 		input: AssetMetadataInput
 	): Promise<AssetMetadata> {
@@ -109,7 +164,17 @@ export class AssetMetadataService {
 			const result = await this.mapAsset(input.id, homeDomain, cached, match);
 			if (this.needsRefresh(cached))
 				void this.enqueueIssuerRefresh(homeDomain).catch(() => undefined);
-			return result;
+			const claim =
+				code &&
+				issuer &&
+				match.code === code &&
+				match.issuer === issuer &&
+				cached.currencies.filter(
+					(row) => row.code === code && row.issuer === issuer
+				).length === 1
+					? issuerCollectibleClaim(match.fields)
+					: undefined;
+			return claim ? { ...result, issuerCollectible: claim } : result;
 		}
 		if (cached && !this.needsRefresh(cached)) {
 			return {

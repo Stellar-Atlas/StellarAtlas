@@ -1,6 +1,12 @@
 import type { SafeResponse } from './safeHttp.js';
 export type AssetMetadataStatus = 'pending' | 'ready' | 'unavailable';
 
+export interface IssuerCollectibleClaim {
+	readonly kind: 'sep39-collectible-link' | 'sep1-nft-backed';
+	readonly source: 'issuer-toml';
+	readonly scarcity: 'unverified';
+}
+
 export interface AssetMetadataInput {
 	readonly id: string;
 	readonly code?: string;
@@ -19,10 +25,25 @@ export interface AssetMetadata {
 	readonly logoUrl: string | null;
 	/** Unverified scalar claims copied from the exact issuer-provided CURRENCIES entry. */
 	readonly fields?: Readonly<Record<string, string>>;
+	readonly issuerCollectible?: IssuerCollectibleClaim;
 	readonly organization: Readonly<Record<string, string>>;
 	readonly fetchedAt: string | null;
 	readonly error: string | null;
 }
+
+export type CachedAssetMetadata = Pick<
+	AssetMetadata,
+	| 'name'
+	| 'homeDomain'
+	| 'tomlUrl'
+	| 'fetchedAt'
+	| 'logoUrl'
+	| 'issuerCollectible'
+> & {
+	readonly status: 'ready' | 'unavailable';
+	readonly logoStatus: 'ready' | 'unavailable';
+	readonly cacheStatus: 'hit' | 'miss';
+};
 
 export interface IssuerMetadata {
 	readonly accounts?: readonly string[];

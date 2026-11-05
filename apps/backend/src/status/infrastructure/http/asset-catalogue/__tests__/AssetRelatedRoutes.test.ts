@@ -26,10 +26,30 @@ test('asset metadata deduplicates canonical identities and similar assets exclud
 		name: 'Kale',
 		logoUrl: '/v1/asset-logos/abc.png',
 		logoStatus: 'ready' as const,
-		homeDomain: 'kale.io'
+		homeDomain: 'kale.io',
+		issuerCollectible: {
+			kind: 'sep39-collectible-link' as const,
+			source: 'issuer-toml' as const,
+			scarcity: 'unverified' as const
+		},
+		tomlUrl: 'https://kale.io/.well-known/stellar.toml',
+		fetchedAt: '2026-10-13T00:00:00.000Z'
 	}));
 	const router = express.Router();
-	registerAssetRelatedRoutes(router, catalogue, metadataLoader);
+	const cacheLoad = jest.fn(async () => ({
+		cacheStatus: 'miss' as const,
+		status: 'unavailable' as const,
+		name: null,
+		homeDomain: null,
+		tomlUrl: null,
+		fetchedAt: null,
+		logoUrl: null,
+		logoStatus: 'unavailable' as const
+	}));
+	registerAssetRelatedRoutes(router, catalogue, metadataLoader, {
+		networkPassphrase: Networks.PUBLIC,
+		load: cacheLoad
+	});
 	const app = express();
 	app.use('/v1', router);
 
@@ -43,12 +63,48 @@ test('asset metadata deduplicates canonical identities and similar assets exclud
 				id: asset.id,
 				status: 'ready',
 				homeDomain: 'kale.io',
+				issuerCollectible: {
+					kind: 'sep39-collectible-link',
+					source: 'issuer-toml',
+					scarcity: 'unverified'
+				},
+				tomlUrl: 'https://kale.io/.well-known/stellar.toml',
+				fetchedAt: '2026-10-13T00:00:00.000Z',
 				referenceIdentity: asset.id,
 				source: 'https://github.com/kalepail/kale-sc'
 			});
 		});
 	expect(resolve).toHaveBeenCalledTimes(2);
 	expect(metadataLoader).toHaveBeenCalledTimes(1);
+
+	await request(app)
+		.get('/v1/asset-metadata')
+		.query({ cacheOnly: 'true', assets: JSON.stringify([asset.id, asset.id, similar.id]) })
+		.expect(200)
+		.expect(({ body }) => {
+			expect(body.assets).toHaveLength(2);
+			expect(body.assets[0]).toMatchObject({
+				id: asset.id,
+				contractId: asset.contractId,
+				cacheStatus: 'miss',
+				status: 'unavailable',
+				logoUrl: null
+			});
+			expect(body.assets[1].id).toBe(similar.id);
+		});
+	expect(cacheLoad.mock.calls).toHaveLength(2);
+	expect(cacheLoad).toHaveBeenCalledWith('KALE', issuer);
+	expect(cacheLoad).toHaveBeenCalledWith('KALE', secondIssuer);
+	expect(resolve).toHaveBeenCalledTimes(2);
+	expect(metadataLoader).toHaveBeenCalledTimes(1);
+
+	for (const refs of [[asset.id, 'KALE'], [asset.contractId], Array(17).fill(asset.id)]) {
+		await request(app)
+			.get('/v1/asset-metadata')
+			.query({ cacheOnly: 'true', assets: JSON.stringify(refs) })
+			.expect(400);
+	}
+	expect(cacheLoad.mock.calls).toHaveLength(2);
 
 	await request(app)
 		.get('/v1/assets/' + encodeURIComponent(asset.id) + '/similar?limit=1')

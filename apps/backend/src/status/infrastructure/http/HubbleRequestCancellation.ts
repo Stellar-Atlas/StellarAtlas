@@ -1,10 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-const requestSignal = new AsyncLocalStorage<AbortSignal>();
+const requestSignal = new AsyncLocalStorage<AbortSignal | undefined>();
 
 export function currentHubbleRequestSignal(): AbortSignal | undefined {
 	return requestSignal.getStore();
+}
+
+export function withoutHubbleRequestCancellation<T>(work: () => T): T {
+	return requestSignal.run(undefined, work);
 }
 
 export async function withHubbleRequestCancellation<T>(
