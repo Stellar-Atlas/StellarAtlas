@@ -76,11 +76,16 @@ it('offers one shortcut per observed counter asset and distinguishes identical c
 	const html = renderToStaticMarkup(ReactActual.createElement(ExplorerAssetMarketPairs, {
 		asset: native.id,
 		origin: '/explorer/assets/native?tab=markets&market_trade_min=2&market_trade_max=98',
-		rows: [trade(one, native), trade(native, one), trade(native, two), trade(one, two),
+		rows: [trade(one, native), trade(native, one), trade(one, native), trade(native, two), trade(one, two),
 			trade(native, native), trade(native, { id: 'invalid' })],
 		window: page.window
 	}));
 	expect(html).toContain('From this trade preview');
+	const cards = [...html.matchAll(/<li>(.*?)<\/li>/g)].map(match => match[1]);
+	expect(cards[0]).toContain('1 sell trade · 2 buy trades');
+	expect(cards[1]).toContain('1 sell trade · 0 buy trades');
+	expect(cards[0]).toContain('aria-hidden="true"');
+	expect(cards[1]).toContain('inline-size:100%');
 	expect(html).toContain('<code>' + one.id.split(':')[1] + '</code>');
 	expect(html).toContain('<code>' + two.id.split(':')[1] + '</code>');
 	const links = [...html.matchAll(/href="([^"]+)"/g)].map(match =>
