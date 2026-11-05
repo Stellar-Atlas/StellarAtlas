@@ -17,6 +17,7 @@ import { ExplorerRequestNotice } from './explorer-browse-ui';
 import { BalanceObservationProvenance } from './explorer-balance-provenance';
 import { ObservedBalanceFlags } from './explorer-balance-flags';
 import { AccountAssetIdentity } from './explorer-account-asset-identity';
+import { useWalletAssetMetadata } from './explorer-wallet-metadata';
 import { formatAtomic } from './explorer-format-values';
 import { formatObservedAmount, observedTrustlineLimit, ObservedAmountSource } from './explorer-observed-amount';
 import styles from './explorer-entity.module.css';
@@ -198,6 +199,7 @@ export function BalanceObservationResults({
 	readonly showProvenance?: boolean;
 }): React.JSX.Element {
 	const label = kind === 'balances' ? 'Asset' : 'Account';
+	const metadata = useWalletAssetMetadata(kind === 'balances' ? page.rows.map(row => row.id) : []);
 	return (
 		<>
 			{showProvenance && <BalanceObservationProvenance kind={kind} page={page} />}
@@ -229,7 +231,7 @@ export function BalanceObservationResults({
 								return (
 								<tr key={row.id}>
 									<td data-label={label}>
-										{asset ? <AccountAssetIdentity asset={asset} /> : <Link
+										{asset ? <AccountAssetIdentity asset={asset} metadata={metadata[asset.id]} /> : <Link
 											className={styles.hash}
 											href={buildEntityHref(
 												kind === 'balances' ? 'assets' : 'accounts',

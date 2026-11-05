@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { buildEntityHref } from '../../api/explorer-analytics';
+import { buildEntityHref, type EntityRecord } from '../../api/explorer-analytics';
 import { fetchCurrentAccount, type CurrentAccount, type CurrentBalance } from '../../api/explorer-current-account';
 import { LocalDateTime } from '../local-date-time';
 import { AccountAssetIdentity } from './explorer-account-asset-identity';
@@ -13,6 +13,7 @@ import { formatAtomic } from './explorer-format-values';
 import { withExplorerRequestDeadline } from './explorer-request';
 import { useExplorerRequest } from './use-explorer-request';
 import { readWalletCursor } from './wallet-balance-route';
+import { useWalletAssetMetadata } from './explorer-wallet-metadata';
 import styles from './explorer-entity.module.css';
 import assets from './explorer-account-assets.module.css';
 
@@ -88,6 +89,7 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 	const rows = value.balances.filter(row => view === 'trustlines' ? row.kind !== 'native' : row.kind === 'native' || row.balance > 0n);
 	const offset = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1)) * pageSize;
 	const visible = rows.slice(offset, offset + pageSize);
+	const metadata = useWalletAssetMetadata(visible.filter(row => row.kind === 'credit').map(row => row.id));
 	return <>
 		{value.lastModifiedLedger !== null && <p className={assets.context}>Account entry last changed in ledger{' '}
 			<Link href={buildEntityHref('ledgers', String(value.lastModifiedLedger))}>{formatAtomic(String(value.lastModifiedLedger), 0)}</Link>.
@@ -105,7 +107,7 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 				<tbody>{visible.map(row => {
 					const breakdown = currentAccountBreakdown(row);
 					return <tr key={row.id}>
-					<td data-label="Asset"><CurrentAsset row={row} /></td>
+					<td data-label="Asset"><CurrentAsset row={row} metadata={metadata[row.id]} /></td>
 					<td data-label="Total balance" className={assets.amount}>{formatAtomic(row.balance.toString(), 7)}</td>
 					{view === 'trustlines' ? <>
 						<td data-label="Limit & receive headroom" className={assets.amount}>
@@ -145,8 +147,8 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 	</>;
 }
 
-function CurrentAsset({ row }: { readonly row: CurrentBalance }): React.JSX.Element {
-	if (row.kind === 'credit') return <AccountAssetIdentity asset={row} />;
+function CurrentAsset({ row, metadata }: { readonly row: CurrentBalance; readonly metadata?: EntityRecord }): React.JSX.Element {
+	if (row.kind === 'credit') return <AccountAssetIdentity asset={row} metadata={metadata} />;
 	return row.kind === 'native'
 		? <div className={assets.identity}><span className={assets.mark} aria-hidden="true">X</span><Link href={buildEntityHref('assets', 'native')}>XLM</Link></div>
 		: <div className={assets.identity}><Link href={buildEntityHref('liquidity-pools', row.id)}>Liquidity pool shares</Link></div>;
