@@ -1,5 +1,6 @@
 import {
 	findCurrency,
+	issuerCollectibleClaim,
 	detectLogoExtension,
 	unavailable,
 	pending,
@@ -109,7 +110,17 @@ export class AssetMetadataService {
 			const result = await this.mapAsset(input.id, homeDomain, cached, match);
 			if (this.needsRefresh(cached))
 				void this.enqueueIssuerRefresh(homeDomain).catch(() => undefined);
-			return result;
+			const claim =
+				code &&
+				issuer &&
+				match.code === code &&
+				match.issuer === issuer &&
+				cached.currencies.filter(
+					(row) => row.code === code && row.issuer === issuer
+				).length === 1
+					? issuerCollectibleClaim(match.fields)
+					: undefined;
+			return claim ? { ...result, issuerCollectible: claim } : result;
 		}
 		if (cached && !this.needsRefresh(cached)) {
 			return {

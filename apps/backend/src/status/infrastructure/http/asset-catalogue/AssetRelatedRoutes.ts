@@ -6,8 +6,13 @@ import { assetReferenceInfo } from './AssetReferenceRegistry.js';
 
 export type AssetRelatedMetadata = Pick<
 	AssetMetadata,
-	'status' | 'name' | 'logoUrl' | 'logoStatus' | 'homeDomain'
->;
+	| 'status'
+	| 'name'
+	| 'logoUrl'
+	| 'logoStatus'
+	| 'homeDomain'
+	| 'issuerCollectible'
+> & Partial<Pick<AssetMetadata, 'tomlUrl' | 'fetchedAt'>>;
 export type AssetMetadataLoader = (
 	asset: AssetIdentity
 ) => Promise<AssetRelatedMetadata>;

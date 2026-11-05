@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import { AssetMetadataService } from '../AssetMetadataService.js';
 import { parseIssuerToml } from '../parseIssuerToml.js';
 import { validatePublicHttpsUrl } from '../safeHttp.js';
-import { assertCacheSpace, removeExpiredLock } from '../AssetMetadataValues.js';
+import {
+	assertCacheSpace,
+	issuerCollectibleClaim,
+	removeExpiredLock
+} from '../AssetMetadataValues.js';
 import type { SafeResponse } from '../safeHttp.js';
 
 const issuer = `G${'A'.repeat(55)}`;
@@ -54,6 +58,59 @@ describe('asset metadata pipeline', () => {
 	let root: string;
 	afterEach(async () => {
 		if (root) await rm(root, { recursive: true, force: true });
+	});
+
+	test('attributes a collectible link only to an unambiguous exact classic row and never fetches it', async () => {
+		root = await mkdtemp(join(tmpdir(), 'asset-metadata-'));
+		const row = (code: string) => `[[CURRENCIES]]
+code = "${code}"
+issuer = "${issuer}"
+url = "https://metadata.example/nft"
+fixed_number = 20
+display_decimals = 0
+`;
+		const requestImpl = jest.fn(async () =>
+			ok(row('ART') + row('AMBIG') + row('AMBIG'))
+		);
+		const service = new AssetMetadataService({
+			cacheRoot: root,
+			networkPassphrase: 'test-network',
+			resolveIssuerHomeDomain: async () => 'issuer.example',
+			requestImpl
+		});
+		await expect(
+			service.ensureAssetMetadata({ id: 'art', code: 'ART', issuer })
+		).resolves.toMatchObject({
+			issuerCollectible: {
+				kind: 'sep39-collectible-link',
+				source: 'issuer-toml',
+				scarcity: 'unverified'
+			},
+			tomlUrl: 'https://issuer.example/.well-known/stellar.toml',
+			fetchedAt: expect.any(String)
+		});
+		const ambiguous = await service.getAssetMetadata({ id: 'ambig', code: 'AMBIG', issuer });
+		expect(ambiguous.status).toBe('ready');
+		expect(ambiguous).not.toHaveProperty('issuerCollectible');
+		expect(requestImpl).toHaveBeenCalledTimes(1);
+	});
+
+	test('distinguishes backing claims and rejects supply-only or unsafe link hints', () => {
+		expect(
+			issuerCollectibleClaim({ is_asset_anchored: 'true', anchor_asset_type: 'nft' })
+		).toEqual({ kind: 'sep1-nft-backed', source: 'issuer-toml', scarcity: 'unverified' });
+		expect(
+			issuerCollectibleClaim({ url: 'ipfs://example-cid/item', url_sha256: 'A'.repeat(64) })?.kind
+		).toBe('sep39-collectible-link');
+		const rejected: Record<string, string>[] = [
+			{ fixed_number: '1', display_decimals: '0', image: 'https://issuer.example/art.png' },
+			{ anchor_asset_type: 'nft' },
+			{ url: 'javascript:alert(1)' },
+			{ url: 'https://user:secret@example.test/item' },
+			{ url: 'https://example.test/item', url_sha256: 'invalid' }
+		];
+		for (const fields of rejected)
+			expect(issuerCollectibleClaim(fields)).toBeUndefined();
 	});
 
 	test('parses multiple currencies and exact code/issuer lookup', async () => {

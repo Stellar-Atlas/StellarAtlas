@@ -27,6 +27,16 @@ const asset = {
 		lastObservedAt: timestamp
 	}
 };
+const issuerCollectible = {
+	type: 'object',
+	description: 'Attributable issuer declaration. Ownership, scarcity and backing are unverified.',
+	required: ['kind', 'source', 'scarcity'],
+	properties: {
+		kind: { type: 'string', enum: ['sep39-collectible-link', 'sep1-nft-backed'] },
+		source: { type: 'string', enum: ['issuer-toml'] },
+		scarcity: { type: 'string', enum: ['unverified'] }
+	}
+};
 const metadata = {
 	type: 'object',
 	required: [
@@ -66,6 +76,7 @@ const metadata = {
 			description:
 				'Scalar fields from the exact issuer/asset CURRENCIES entry, preserved as publisher data.'
 		},
+		issuerCollectible,
 		fetchedAt: timestamp,
 		error: nullableString
 	}
@@ -158,6 +169,9 @@ const assetMetadataBatch = {
 						enum: ['pending', 'ready', 'unavailable']
 					},
 					homeDomain: nullableString,
+					tomlUrl: nullableString,
+					fetchedAt: timestamp,
+					issuerCollectible,
 					referenceIdentity: nullableString,
 					source: nullableString
 				}

@@ -26,7 +26,14 @@ test('asset metadata deduplicates canonical identities and similar assets exclud
 		name: 'Kale',
 		logoUrl: '/v1/asset-logos/abc.png',
 		logoStatus: 'ready' as const,
-		homeDomain: 'kale.io'
+		homeDomain: 'kale.io',
+		issuerCollectible: {
+			kind: 'sep39-collectible-link' as const,
+			source: 'issuer-toml' as const,
+			scarcity: 'unverified' as const
+		},
+		tomlUrl: 'https://kale.io/.well-known/stellar.toml',
+		fetchedAt: '2026-10-13T00:00:00.000Z'
 	}));
 	const router = express.Router();
 	registerAssetRelatedRoutes(router, catalogue, metadataLoader);
@@ -43,6 +50,13 @@ test('asset metadata deduplicates canonical identities and similar assets exclud
 				id: asset.id,
 				status: 'ready',
 				homeDomain: 'kale.io',
+				issuerCollectible: {
+					kind: 'sep39-collectible-link',
+					source: 'issuer-toml',
+					scarcity: 'unverified'
+				},
+				tomlUrl: 'https://kale.io/.well-known/stellar.toml',
+				fetchedAt: '2026-10-13T00:00:00.000Z',
 				referenceIdentity: asset.id,
 				source: 'https://github.com/kalepail/kale-sc'
 			});
