@@ -80,10 +80,12 @@ it('offers one shortcut per observed counter asset and distinguishes identical c
 			trade(native, native), trade(native, { id: 'invalid' })],
 		window: page.window
 	}));
-	expect(html).toContain('From this trade preview');
+	expect(html).toContain('Loaded preview only.');
+	expect(html).toContain('Counts show which recorded side contains the selected asset.');
+	expect(html).toContain('Every trade has both sides. These counts measure neither volume nor buying or selling pressure.');
 	const cards = [...html.matchAll(/<li>(.*?)<\/li>/g)].map(match => match[1]);
-	expect(cards[0]).toContain('1 sell trade · 2 buy trades');
-	expect(cards[1]).toContain('1 sell trade · 0 buy trades');
+	expect(cards[0]).toContain('Recorded selling side: 1 · Recorded buying side: 2');
+	expect(cards[1]).toContain('Recorded selling side: 1 · Recorded buying side: 0');
 	expect(cards[0]).toContain('aria-hidden="true"');
 	expect(cards[1]).toContain('inline-size:100%');
 	expect(html).toContain('<code>' + one.id.split(':')[1] + '</code>');
