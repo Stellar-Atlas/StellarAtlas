@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseCurrentAccount } from '../../../api/explorer-current-account';
+import { currentAccountBreakdown } from '../explorer-current-account-breakdown';
 
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-account-assets.module.css', () => ({ default: {} }));
@@ -38,4 +39,25 @@ it('uses cached same-origin images only, explicitly attributes the name, and lin
 	expect(html.replaceAll('<!-- -->', '')).toContain('Issuer name: Issuer text');
 	expect(html).toContain('/explorer/accounts/' + issuer);
 	expect(renderToStaticMarkup(<AccountAssetIdentity asset={asset} metadata={{ logoUrl: '//third-party.invalid/logo' }} />)).not.toContain('<img');
+});
+
+it('subtracts only sell offers from authorized issued balances, never fabricating XLM reserve', () => {
+	const current = parseCurrentAccount(account, { account_id: account, balances: [
+		{ asset_type: 'native', balance: '10', selling_liabilities: '1.25' },
+		{ ...credit, balance: '8.0000001', selling_liabilities: '1.25', buying_liabilities: '0.5',
+			limit: '10', is_authorized: true }
+	] });
+	const [native, issued] = current.balances;
+	expect(currentAccountBreakdown(native!)).toEqual({
+		available: null, heldForOffers: 12500000n, offerShortfall: 0n, receiveHeadroom: null
+	});
+	expect(currentAccountBreakdown(issued!)).toEqual({
+		available: 67500001n, heldForOffers: 12500000n, offerShortfall: 0n, receiveHeadroom: 14999999n
+	});
+	expect(currentAccountBreakdown({ ...issued!, authorization: 'liabilities-only' }).available).toBeNull();
+	expect(currentAccountBreakdown({ ...issued!, selling: null }).available).toBeNull();
+	expect(currentAccountBreakdown({ ...issued!, balance: 1n }).offerShortfall).toBe(12499999n);
+	const html = renderToStaticMarkup(<CurrentAccountInventory value={current} />);
+	expect(html).toContain('6.7500001');
+	expect(html).toContain('Minimum XLM reserve not calculated');
 });

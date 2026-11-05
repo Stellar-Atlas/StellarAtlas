@@ -6,6 +6,7 @@ import { buildEntityHref } from '../../api/explorer-analytics';
 import { fetchCurrentAccount, type CurrentAccount, type CurrentBalance } from '../../api/explorer-current-account';
 import { LocalDateTime } from '../local-date-time';
 import { AccountAssetIdentity } from './explorer-account-asset-identity';
+import { currentAccountBreakdown } from './explorer-current-account-breakdown';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import { ExplorerLink as Link } from './explorer-investigation';
 import { formatAtomic } from './explorer-format-values';
@@ -52,15 +53,18 @@ function CurrentAccountPanel({ account }: { readonly account: string }): React.J
 		if (inFlight.current !== null) return;
 		const abort = new AbortController();
 		inFlight.current = abort;
-		void request.run(() => withExplorerRequestDeadline(abort, 15_000, async () => ({
+		void request.run(() => withExplorerRequestDeadline(abort, 70_000, async () => ({
 			value: await fetchCurrentAccount(account, abort.signal), fetchedAt: new Date().toISOString()
 		}))).finally(() => {
 			if (inFlight.current === abort) inFlight.current = null;
 		});
 	}, [account, request.run]);
 	useEffect(() => {
-		load();
+		let disposed = false;
+		// Let a discarded Strict Mode mount exit before launching its request.
+		queueMicrotask(() => { if (!disposed) load(); });
 		return () => {
+			disposed = true;
 			inFlight.current?.abort();
 			inFlight.current = null;
 		};
@@ -95,19 +99,44 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 		{!rows.length ? <p>{view === 'trustlines' ? 'No trustlines reported by Horizon.' : 'No asset balances reported by Horizon.'}</p>
 			: <div className={styles.tableWrap}><table className={styles.table} aria-label={view === 'trustlines' ? 'Current trustlines' : 'Current assets'}>
 				<thead><tr><th scope="col">Asset</th><th scope="col">Total balance</th>
-					{view === 'trustlines' && <><th scope="col">Limit</th><th scope="col">Authorization &amp; sponsor</th></>}
+					{view === 'trustlines' ? <><th scope="col">Limit &amp; receive headroom</th><th scope="col">Authorization &amp; sponsor</th></>
+						: <><th scope="col">Available</th><th scope="col">Commitments</th></>}
 				</tr></thead>
-				<tbody>{visible.map(row => <tr key={row.id}>
+				<tbody>{visible.map(row => {
+					const breakdown = currentAccountBreakdown(row);
+					return <tr key={row.id}>
 					<td data-label="Asset"><CurrentAsset row={row} /></td>
 					<td data-label="Total balance" className={assets.amount}>{formatAtomic(row.balance.toString(), 7)}</td>
-					{view === 'trustlines' && <>
-						<td data-label="Limit" className={assets.amount}>{row.limit === null ? 'Not reported' : formatAtomic(row.limit.toString(), 7)}</td>
+					{view === 'trustlines' ? <>
+						<td data-label="Limit & receive headroom" className={assets.amount}>
+							{row.limit === null ? 'Limit not reported' : formatAtomic(row.limit.toString(), 7)}
+							{row.kind === 'credit' && <>
+								{row.buying !== null && <div className={assets.context}>Buy offers: {formatAtomic(row.buying.toString(), 7)}</div>}
+								{breakdown.receiveHeadroom !== null && <div className={assets.context}>Receive headroom: {formatAtomic(breakdown.receiveHeadroom.toString(), 7)}</div>}
+							</>}
+						</td>
 						<td data-label="Authorization & sponsor">{row.kind === 'credit' ? authorization[row.authorization] : 'Pool-share trustline'}
 							{row.sponsor && <div className={assets.context}>Sponsor: <Link href={buildEntityHref('accounts', row.sponsor)}>{row.sponsor}</Link></div>}
 						</td>
+					</> : <>
+						<td data-label="Available" className={assets.amount}>{breakdown.available !== null
+							? formatAtomic(breakdown.available.toString(), 7)
+							: row.kind === 'credit' && (row.authorization === 'restricted' || row.authorization === 'liabilities-only')
+								? 'Restricted' : 'Not calculated'}</td>
+						<td data-label="Commitments" className={assets.amount}>
+							{breakdown.heldForOffers === null ? (row.kind === 'pool' ? 'Not calculated' : 'Sell offers not reported')
+								: <>Held for sell offers: {formatAtomic(breakdown.heldForOffers.toString(), 7)}</>}
+							{breakdown.offerShortfall !== null && breakdown.offerShortfall > 0n &&
+								<div className={assets.context}>Sell-offer shortfall: {formatAtomic(breakdown.offerShortfall.toString(), 7)}</div>}
+							{row.kind === 'native' && <div className={assets.context}>Minimum XLM reserve not calculated</div>}
+						</td>
 					</>}
-				</tr>)}</tbody>
+					</tr>;
+				})}</tbody>
 			</table></div>}
+		{view === 'assets' && rows.length > 0 && <p className={assets.context}>
+			Available is calculated for authorized issued assets after sell offers. It does not account for transaction fees.
+		</p>}
 		{rows.length > pageSize && <div className={styles.actions} role="group" aria-label="Current account pages">
 			<button type="button" disabled={offset === 0} onClick={() => setPage(offset / pageSize - 1)}>Previous</button>
 			<button type="button" disabled={offset + pageSize >= rows.length} onClick={() => setPage(offset / pageSize + 1)}>Next</button>

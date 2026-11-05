@@ -39,8 +39,7 @@ export async function proxyExplorerJson(
 	query: URLSearchParams,
 	maxResponseBytes: number
 ): Promise<Response> {
-	const timeout = resource === 'current account' ? 12_000 : deadlineMs;
-	const deadline = AbortSignal.timeout(timeout);
+	const deadline = AbortSignal.timeout(deadlineMs);
 	const signal = AbortSignal.any([request.signal, deadline]);
 	try {
 		const target = configuredExplorerApiBase();
@@ -88,7 +87,7 @@ export async function proxyExplorerJson(
 		const timedOut = deadline.aborted && !request.signal.aborted;
 		return Response.json({
 			error: timedOut
-				? `The explorer did not receive ${resource === 'transaction' ? 'a transaction' : 'an ' + resource} response within ${timeout / 1000} seconds.`
+				? `The explorer did not receive ${resource === 'transaction' ? 'a transaction' : 'an ' + resource} response within ${deadlineMs / 1000} seconds.`
 				: `The explorer could not reach the ${resource} service.`
 		}, { status: timedOut ? 504 : 502, headers: noStore });
 	}
