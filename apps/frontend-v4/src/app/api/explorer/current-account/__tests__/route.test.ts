@@ -8,17 +8,17 @@ it('forwards just one checksum-valid account to the configured API and rejects w
 	const configured = process.env.STELLAR_ATLAS_PUBLIC_API_URL;
 	process.env.STELLAR_ATLAS_PUBLIC_API_URL = 'http://127.0.0.1:3099';
 	const upstream = jest.spyOn(globalThis, 'fetch').mockImplementation(async () =>
-		Response.json({ account_id: account, balances: [] }));
+		Response.json({ accountId: account, balances: [] }));
 	const timeout = jest.spyOn(AbortSignal, 'timeout');
 	try {
 		const params = Promise.resolve({ account });
 		const response = await GET(new Request(path + account), { params });
 		expect(response.status).toBe(200);
 		expect(response.headers.get('cache-control')).toBe('no-store');
-		expect(await response.json()).toEqual({ account_id: account, balances: [] });
+		expect(await response.json()).toEqual({ accountId: account, balances: [] });
 		expect(upstream).toHaveBeenCalledTimes(1);
 		expect(timeout).toHaveBeenCalledWith(65_000);
-		expect(upstream).toHaveBeenCalledWith('http://127.0.0.1:3099/horizon/accounts/' + account,
+		expect(upstream).toHaveBeenCalledWith('http://127.0.0.1:3099/v1/explorer/accounts/' + account,
 			expect.objectContaining({ cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal) }));
 		expect((await GET(new Request(path + account + '?limit=100'), { params })).status).toBe(400);
 		const malformed = 'G' + 'A'.repeat(55);

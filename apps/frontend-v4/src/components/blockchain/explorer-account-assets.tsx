@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { buildEntityHref, type EntityRecord } from '../../api/explorer-analytics';
 import { fetchCurrentAccount, type CurrentAccount, type CurrentBalance } from '../../api/explorer-current-account';
+import { currentAccountFreshness, type CurrentAccountSnapshot } from '../../api/explorer-current-account-snapshot';
 import { LocalDateTime } from '../local-date-time';
 import { AccountAssetIdentity } from './explorer-account-asset-identity';
 import { currentAccountBreakdown } from './explorer-current-account-breakdown';
@@ -70,9 +71,9 @@ function CurrentAccountPanel({ account }: { readonly account: string }): React.J
 			inFlight.current = null;
 		};
 	}, [load]);
-	return <section className={styles.panel} aria-label="Current account balances" aria-busy={request.loading}>
-		<h2>Current account balances</h2>
-		<p className={assets.context}>Latest from the configured Stellar Horizon service · Classic account only</p>
+	return <section className={styles.panel} aria-label="Horizon account balances" aria-busy={request.loading}>
+		<h2>Horizon account balances</h2>
+		<p className={assets.context}>Configured Stellar Horizon service · Classic account only</p>
 		<div className={styles.actions}>
 			<button type="button" disabled={request.loading} onClick={load}>Refresh current account</button>
 		</div>
@@ -80,8 +81,26 @@ function CurrentAccountPanel({ account }: { readonly account: string }): React.J
 		{request.error && <p role="alert">{request.error}{request.result ? ' Showing the last successful response.' : ''}</p>}
 		{request.result && <p className={assets.context}>Fetched <LocalDateTime dateTime={request.result.fetchedAt} /></p>}
 		{request.result?.value === null && <p>Account not found by Horizon.</p>}
-		{request.result?.value && <CurrentAccountInventory value={request.result.value} />}
+		{request.result?.value && <>
+			<AccountSnapshotEvidence snapshot={request.result.value.snapshot} fetchedAt={request.result.fetchedAt} />
+			<CurrentAccountInventory value={request.result.value} />
+		</>}
 	</section>;
+}
+
+export function AccountSnapshotEvidence({ snapshot, fetchedAt }: {
+	readonly snapshot: CurrentAccountSnapshot; readonly fetchedAt: string;
+}): React.JSX.Element {
+	const freshness = currentAccountFreshness(snapshot.closedAt, Date.parse(fetchedAt));
+	return <div className={assets.context}>
+		{snapshot.latestLedger === null ? <p>Horizon did not report an as-of ledger.</p> : <p>
+			As of ledger <Link href={buildEntityHref('ledgers', snapshot.latestLedger)}>{formatAtomic(snapshot.latestLedger, 0)}</Link>
+			{snapshot.closedAt && <> · <LocalDateTime dateTime={snapshot.closedAt} /></>}
+		</p>}
+		{freshness === 'stale' && <p className="explorer-state warning" role="status">Horizon snapshot was over 5 minutes old when fetched. These balances are not current.</p>}
+		{freshness === 'unknown' && <p>Snapshot freshness is not known.</p>}
+		{!snapshot.inventoryComplete && <p>Only the exact rows Horizon reported are shown. Inventory completeness is not established.</p>}
+	</div>;
 }
 
 export function CurrentAccountInventory({ value }: { readonly value: CurrentAccount }): React.JSX.Element {
@@ -98,14 +117,15 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 			{(['assets', 'trustlines'] as const).map(mode => <button key={mode} type="button" aria-pressed={mode === view}
 				onClick={() => { setView(mode); setPage(0); }}>{mode === 'assets' ? 'Assets' : 'Trustlines'}</button>)}
 		</div>
-		{!rows.length ? <p>{view === 'trustlines' ? 'No trustlines reported by Horizon.' : 'No asset balances reported by Horizon.'}</p>
+		{!rows.length ? <p>{!value.snapshot.inventoryComplete ? 'No exact rows to display in this view.'
+			: view === 'trustlines' ? 'No trustlines reported by Horizon.' : 'No asset balances reported by Horizon.'}</p>
 			: <div className={styles.tableWrap}><table className={styles.table} aria-label={view === 'trustlines' ? 'Current trustlines' : 'Current assets'}>
 				<thead><tr><th scope="col">Asset</th><th scope="col">Total balance</th>
 					{view === 'trustlines' ? <><th scope="col">Limit &amp; receive headroom</th><th scope="col">Authorization &amp; sponsor</th></>
 						: <><th scope="col">Available</th><th scope="col">Commitments</th></>}
 				</tr></thead>
 				<tbody>{visible.map(row => {
-					const breakdown = currentAccountBreakdown(row);
+					const breakdown = currentAccountBreakdown(row, value.snapshot);
 					return <tr key={row.id}>
 					<td data-label="Asset"><CurrentAsset row={row} metadata={metadata[row.id]} /></td>
 					<td data-label="Total balance" className={assets.amount}>{formatAtomic(row.balance.toString(), 7)}</td>
@@ -126,18 +146,25 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 							: row.kind === 'credit' && (row.authorization === 'restricted' || row.authorization === 'liabilities-only')
 								? 'Restricted' : 'Not calculated'}</td>
 						<td data-label="Commitments" className={assets.amount}>
-							{breakdown.heldForOffers === null ? (row.kind === 'pool' ? 'Not calculated' : 'Sell offers not reported')
+							{row.kind === 'native' && <div>{breakdown.minimumReserve === null ? 'Minimum XLM reserve not calculated'
+								: <>
+									Minimum XLM reserve: {formatAtomic(breakdown.minimumReserve.toString(), 7)}
+									<ReserveInputs snapshot={value.snapshot} />
+								</>}</div>}
+							{breakdown.heldForOffers === null ? (row.kind === 'pool' ? 'Not calculated' : row.selling === null
+								? 'Sell offers not reported' : <>Reported sell offers: {formatAtomic(row.selling.toString(), 7)}</>)
 								: <>Held for sell offers: {formatAtomic(breakdown.heldForOffers.toString(), 7)}</>}
+							{breakdown.reserveShortfall !== null && breakdown.reserveShortfall > 0n &&
+								<div className={assets.context}>Reserve shortfall: {formatAtomic(breakdown.reserveShortfall.toString(), 7)}</div>}
 							{breakdown.offerShortfall !== null && breakdown.offerShortfall > 0n &&
 								<div className={assets.context}>Sell-offer shortfall: {formatAtomic(breakdown.offerShortfall.toString(), 7)}</div>}
-							{row.kind === 'native' && <div className={assets.context}>Minimum XLM reserve not calculated</div>}
 						</td>
 					</>}
 					</tr>;
 				})}</tbody>
 			</table></div>}
 		{view === 'assets' && rows.length > 0 && <p className={assets.context}>
-			Available is calculated for authorized issued assets after sell offers. It does not account for transaction fees.
+			Available excludes sell offers and, for XLM, the minimum reserve when known. It does not account for transaction fees.
 		</p>}
 		{rows.length > pageSize && <div className={styles.actions} role="group" aria-label="Current account pages">
 			<button type="button" disabled={offset === 0} onClick={() => setPage(offset / pageSize - 1)}>Previous</button>
@@ -145,6 +172,17 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 			<span>{offset + 1}–{offset + visible.length} of {rows.length}</span>
 		</div>}
 	</>;
+}
+
+function ReserveInputs({ snapshot }: { readonly snapshot: CurrentAccountSnapshot }): React.JSX.Element | null {
+	const { baseReserve, subentries, sponsoring, sponsored } = snapshot;
+	if (baseReserve === null || subentries === null || sponsoring === null || sponsored === null) return null;
+	return <details className={assets.context}>
+		<summary>Reserve breakdown</summary>
+		<div>Base reserve: {formatAtomic(baseReserve.toString(), 7)} XLM per unit</div>
+		<div>Account: 2 units · Subentries: {formatAtomic(subentries.toString(), 0)}</div>
+		<div>Sponsoring: +{formatAtomic(sponsoring.toString(), 0)} · Sponsored: −{formatAtomic(sponsored.toString(), 0)}</div>
+	</details>;
 }
 
 function CurrentAsset({ row, metadata }: { readonly row: CurrentBalance; readonly metadata?: EntityRecord }): React.JSX.Element {

@@ -4,7 +4,7 @@ export const noStore = { 'cache-control': 'no-store', 'x-content-type-options': 
 const routes = {
 	transaction: ['/v1/analytics/transactions/', ''],
 	'account balance': ['/v1/analytics/accounts/', '/balances'],
-	'current account': ['/horizon/accounts/', '']
+	'current account': ['/v1/explorer/accounts/', '']
 } as const;
 
 function configuredExplorerApiBase(): URL {

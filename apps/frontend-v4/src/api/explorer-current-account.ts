@@ -1,5 +1,6 @@
 import { recordValue } from './explorer-analytics';
 import { isClassicAccount } from '../domain/classic-account';
+import { currentLedgerSequence, parseCurrentAccountSnapshot, type CurrentAccountSnapshot } from './explorer-current-account-snapshot';
 
 const responseLimit = 2 * 1024 * 1024;
 const maximumRows = 2_048;
@@ -22,6 +23,7 @@ export type CurrentBalance = (
 export interface CurrentAccount {
 	readonly balances: readonly CurrentBalance[];
 	readonly lastModifiedLedger: number | null;
+	readonly snapshot: CurrentAccountSnapshot;
 }
 
 export function classicAssetIdentity(id: string): ClassicAssetIdentity | null {
@@ -35,51 +37,55 @@ function invalid(): never {
 	throw new Error('Invalid current account response');
 }
 
-/** Horizon supplies decimal strings. Convert to stroops without using Number. */
-function amount(value: unknown): bigint | null {
-	if (value === undefined || value === null) return null;
-	if (typeof value !== 'string' || !/^\d{1,13}(?:\.\d{1,7})?$/.test(value)) invalid();
-	const [whole, fraction = ''] = value.split('.');
-	const raw = BigInt(whole! + fraction.padEnd(7, '0'));
-	return raw <= maxAmount ? raw : invalid();
+function rawAmount(value: unknown): bigint | null {
+	if (typeof value !== 'string' || !/^(0|[1-9]\d{0,18})$/.test(value)) return null;
+	const parsed = BigInt(value);
+	return parsed <= maxAmount ? parsed : null;
+}
+
+function typedBalance(value: unknown): CurrentBalance | null {
+	const row = recordValue(value), exact = recordValue(row.exact);
+	const balance = rawAmount(exact.balanceRaw);
+	if (balance === null) return null;
+	const shared = {
+		balance, buying: rawAmount(exact.buyingLiabilitiesRaw), selling: rawAmount(exact.sellingLiabilitiesRaw),
+		limit: rawAmount(exact.trustLineLimitRaw),
+		authorization: exact.isAuthorized === true ? 'authorized'
+			: exact.isAuthorizedToMaintainLiabilities === true ? 'liabilities-only'
+			: exact.isAuthorized === false ? 'restricted' : 'unknown',
+		sponsor: typeof exact.sponsor === 'string' && isClassicAccount(exact.sponsor) ? exact.sponsor : null
+	} as const;
+	if (row.assetType === 'native' && exact.assetId === 'native')
+		return { kind: 'native', id: 'native', ...shared };
+	if (row.assetType === 'liquidity_pool_shares' && typeof exact.liquidityPoolId === 'string' &&
+		/^[a-f0-9]{64}$/.test(exact.liquidityPoolId) && exact.assetId === 'liquidity_pool_shares:' + exact.liquidityPoolId)
+		return { kind: 'pool', id: exact.liquidityPoolId, ...shared };
+	if ((row.assetType === 'credit_alphanum4' || row.assetType === 'credit_alphanum12') && typeof exact.assetId === 'string') {
+		const asset = classicAssetIdentity(exact.assetId);
+		if (asset && row.assetCode === asset.code && row.assetIssuer === asset.issuer)
+			return { kind: 'credit', ...asset, ...shared };
+	}
+	return null;
 }
 
 export function parseCurrentAccount(account: string, payload: unknown): CurrentAccount {
 	const data = recordValue(payload);
-	if (!isClassicAccount(account) || data.account_id !== account ||
+	if (!isClassicAccount(account) || data.accountId !== account || data.source !== 'horizon' ||
 		!Array.isArray(data.balances) || data.balances.length > maximumRows) invalid();
+	const modified = currentLedgerSequence(data.lastModifiedLedger);
+	if (data.lastModifiedLedger !== null && modified === null) invalid();
+	const snapshot = parseCurrentAccountSnapshot(data.accounting, modified);
+	const balances: CurrentBalance[] = [];
 	const ids = new Set<string>();
-	const balances = data.balances.map((item): CurrentBalance => {
-		const row = recordValue(item);
-		const balance = amount(row.balance);
-		if (balance === null) invalid();
-		const shared = {
-			balance, buying: amount(row.buying_liabilities), selling: amount(row.selling_liabilities),
-			limit: amount(row.limit),
-			authorization: row.is_authorized === true ? 'authorized'
-				: row.is_authorized_to_maintain_liabilities === true ? 'liabilities-only'
-				: row.is_authorized === false ? 'restricted' : 'unknown',
-			sponsor: typeof row.sponsor === 'string' && isClassicAccount(row.sponsor) ? row.sponsor : null
-		} as const;
-		let result: CurrentBalance;
-		if (row.asset_type === 'native') result = { kind: 'native', id: 'native', ...shared };
-		else if (row.asset_type === 'liquidity_pool_shares' &&
-			typeof row.liquidity_pool_id === 'string' && /^[a-f0-9]{64}$/.test(row.liquidity_pool_id))
-			result = { kind: 'pool', id: row.liquidity_pool_id, ...shared };
-		else if (row.asset_type === 'credit_alphanum4' || row.asset_type === 'credit_alphanum12') {
-			const identity = typeof row.asset_code === 'string' && typeof row.asset_issuer === 'string'
-				? classicAssetIdentity(row.asset_code + ':' + row.asset_issuer) : null;
-			if (!identity) invalid();
-			result = { kind: 'credit', ...identity, ...shared };
-		} else invalid();
-		if (ids.has(result.id)) invalid();
-		ids.add(result.id);
-		return result;
-	});
-	if (!ids.has('native')) invalid();
-	const ledger = data.last_modified_ledger;
-	return { balances, lastModifiedLedger: typeof ledger === 'number' && Number.isInteger(ledger) &&
-		ledger > 0 && ledger <= 4294967295 ? ledger : null };
+	for (const candidate of data.balances) {
+		const row = typedBalance(candidate);
+		if (!row) continue;
+		if (ids.has(row.id)) invalid();
+		ids.add(row.id);
+		balances.push(row);
+	}
+	if (snapshot.inventoryComplete && (!ids.has('native') || balances.length !== data.balances.length)) invalid();
+	return { balances, lastModifiedLedger: modified === null ? null : Number(modified), snapshot };
 }
 
 export async function fetchCurrentAccount(account: string, signal: AbortSignal): Promise<CurrentAccount | null> {
@@ -116,7 +122,7 @@ export async function fetchCurrentAccount(account: string, signal: AbortSignal):
 	const payload: unknown = JSON.parse(text);
 	if (response.status === 404) {
 		const problem = recordValue(payload);
-		if (problem.status !== 404 || problem.type !== 'https://stellar.org/horizon-errors/not_found') invalid();
+		if (problem.error !== 'Account not found') invalid();
 		return null;
 	}
 	if (response.status !== 200) invalid();
