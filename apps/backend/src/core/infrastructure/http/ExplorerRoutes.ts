@@ -17,12 +17,13 @@ import { GetExplorerRecentTransactions } from '@network-scan/use-cases/get-explo
 import { fetchRecentTransactions } from '@network-scan/infrastructure/http/HorizonLedgerClient.js';
 import { hubbleWarehouseFromEnvironment } from '../../../status/infrastructure/http/HubbleWarehouseClient.js';
 import { fetchParsedRecentTransactions } from '@network-scan/use-cases/get-explorer-recent-transactions/ParsedRecentTransactions.js';
+import { createAccountFederation } from '../../../status/infrastructure/http/federation/AccountFederationRouter.js';
 
-export function mountExplorerRoutes(
+export async function mountExplorerRoutes(
 	api: express.Express,
 	kernel: Kernel,
 	config: Config
-): void {
+): Promise<() => Promise<boolean>> {
 	const getExplorerLocalTransactions = kernel.container.get(
 		GetExplorerLocalTransactions
 	);
@@ -41,6 +42,12 @@ export function mountExplorerRoutes(
 	const getExplorerLocalAccountChanges = kernel.container.get(
 		GetExplorerLocalAccountChanges
 	);
+	const federation = await createAccountFederation(
+		process.env.FEDERATION_SCHEDULE_DIRECTORY,
+		config.networkConfig.networkPassphrase,
+		(query) => getExplorerLocalAccountChanges.execute(query)
+	);
+	api.use('/v1/explorer', federation.router);
 	api.get(
 		'/v1/transactions/:hash',
 		createExplorerTransactionLookupHandler({
@@ -83,4 +90,5 @@ export function mountExplorerRoutes(
 			rpcUrl: config.rpcUrl?.value
 		})
 	);
+	return federation.drain;
 }

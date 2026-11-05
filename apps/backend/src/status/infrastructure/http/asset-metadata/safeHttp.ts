@@ -12,7 +12,7 @@ export interface SafeResponse {
 const requestTimeoutMs = 20_000;
 const maxRedirects = 3;
 
-export async function validatePublicHttpsUrl(rawUrl: string): Promise<URL> {
+function parsePublicHttpsUrl(rawUrl: string): URL {
 	const url = new URL(rawUrl);
 	if (
 		url.protocol !== 'https:' ||
@@ -26,29 +26,42 @@ export async function validatePublicHttpsUrl(rawUrl: string): Promise<URL> {
 	if (!host || host === 'localhost' || host.endsWith('.localhost')) {
 		throw new Error('Private host is not allowed');
 	}
-	const addresses = isIp(host)
-		? [{ address: host, family: host.includes(':') ? 6 : 4 }]
-		: await lookup(host, { all: true, verbatim: true });
-	if (
-		addresses.length === 0 ||
-		addresses.some((address) => !isPublicAddress(address.address))
-	) {
-		throw new Error('URL resolves to a non-public address');
-	}
+	return url;
+}
+
+export async function validatePublicHttpsUrl(rawUrl: string): Promise<URL> {
+	const url = parsePublicHttpsUrl(rawUrl);
+	await resolvePublic(url.hostname.replace(/^\[|\]$/g, ''));
 	return url;
 }
 
 export async function requestPublicHttps(
 	rawUrl: string,
 	headers: Readonly<Record<string, string>>,
-	maxBytes: number
+	maxBytes: number,
+	options: {
+		readonly signal?: AbortSignal;
+		readonly followRedirects?: boolean;
+	} = {}
 ): Promise<SafeResponse> {
 	let currentUrl = rawUrl;
 	for (let redirects = 0; redirects <= maxRedirects; redirects++) {
-		const url = await validatePublicHttpsUrl(currentUrl);
-		const addresses = await resolvePublic(url.hostname.replace(/^\[|\]$/g, ''));
-		const response = await requestOnce(url, headers, addresses, maxBytes);
-		if (![301, 302, 303, 307, 308].includes(response.status)) {
+		const url = parsePublicHttpsUrl(currentUrl);
+		const addresses = await resolvePublic(
+			url.hostname.replace(/^\[|\]$/g, ''),
+			options.signal
+		);
+		const response = await requestOnce(
+			url,
+			headers,
+			addresses,
+			maxBytes,
+			options.signal
+		);
+		if (
+			options.followRedirects === false ||
+			![301, 302, 303, 307, 308].includes(response.status)
+		) {
 			return response;
 		}
 		const location = response.headers.location;
@@ -60,10 +73,14 @@ export async function requestPublicHttps(
 	throw new Error('Too many upstream redirects');
 }
 
-async function resolvePublic(host: string): Promise<readonly LookupAddress[]> {
+async function resolvePublic(
+	host: string,
+	signal?: AbortSignal
+): Promise<readonly LookupAddress[]> {
+	signal?.throwIfAborted();
 	const addresses = isIp(host)
 		? [{ address: host, family: host.includes(':') ? 6 : 4 }]
-		: await lookup(host, { all: true, verbatim: true });
+		: await lookupWithDeadline(host, signal);
 	if (
 		addresses.length === 0 ||
 		addresses.some((value) => !isPublicAddress(value.address))
@@ -73,11 +90,27 @@ async function resolvePublic(host: string): Promise<readonly LookupAddress[]> {
 	return addresses;
 }
 
+async function lookupWithDeadline(host: string, signal?: AbortSignal) {
+	const pending = lookup(host, { all: true, verbatim: true });
+	if (!signal) return pending;
+	let abort!: () => void;
+	const interrupted = new Promise<never>((_resolve, reject) => {
+		abort = () => reject(signal.reason);
+		signal.addEventListener('abort', abort, { once: true });
+	});
+	try {
+		return await Promise.race([pending, interrupted]);
+	} finally {
+		signal.removeEventListener('abort', abort);
+	}
+}
+
 function requestOnce(
 	url: URL,
 	headers: Readonly<Record<string, string>>,
 	addresses: readonly LookupAddress[],
-	maxBytes: number
+	maxBytes: number,
+	signal?: AbortSignal
 ): Promise<SafeResponse> {
 	return new Promise((resolve, reject) => {
 		const pinned = addresses[0]!;
@@ -92,6 +125,7 @@ function requestOnce(
 			{
 				headers: { 'user-agent': 'StellarAtlas-AssetMetadata/1.0', ...headers },
 				agent,
+				signal,
 				servername: url.hostname
 			},
 			(response) => {
