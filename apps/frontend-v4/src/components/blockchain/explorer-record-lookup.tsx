@@ -15,6 +15,7 @@ import {
 	parseAnalyticsLedgerLookup
 } from '../../api/explorer-record-lookup';
 import { ExplorerAccountAssets } from './explorer-account-assets';
+import { ExplorerClaimablePositions } from './explorer-claimable-positions';
 import { ExplorerAccountFederation } from './explorer-account-federation';
 import { ExplorerLedgerActivity } from './explorer-ledger-activity';
 import { ExplorerAccountRelations } from './explorer-account-relations';
@@ -23,10 +24,12 @@ import styles from './explorer-entity.module.css';
 
 export function ExplorerRecordLookup({
 	collection,
-	identifier
+	identifier,
+	claimablePositionsEnabled = false
 }: {
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
+	readonly claimablePositionsEnabled?: boolean;
 }): React.JSX.Element {
 	if (collection === 'accounts' && !isClassicAccount(identifier)) {
 		const contract = isContractAccount(identifier);
@@ -44,15 +47,18 @@ export function ExplorerRecordLookup({
 			</section>
 		</div>;
 	}
-	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier} />;
+	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier}
+		claimablePositionsEnabled={claimablePositionsEnabled} />;
 }
 
 function RecordLookup({
 	collection,
-	identifier
+	identifier,
+	claimablePositionsEnabled
 }: {
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
+	readonly claimablePositionsEnabled: boolean;
 }): React.JSX.Element {
 	const search = useExplorerRequest(
 		initialExplorerSearch,
@@ -147,6 +153,7 @@ function RecordLookup({
 			{collection === 'accounts' && (
 				<ExplorerAccountAssets key={identifier} account={identifier} />
 			)}
+			{collection === 'accounts' && claimablePositionsEnabled && <ExplorerClaimablePositions account={identifier} />}
 		</div>
 	);
 }

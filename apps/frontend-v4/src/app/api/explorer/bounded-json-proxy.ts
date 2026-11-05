@@ -4,7 +4,8 @@ export const noStore = { 'cache-control': 'no-store', 'x-content-type-options': 
 const routes = {
 	transaction: ['/v1/analytics/transactions/', ''],
 	'account balance': ['/v1/analytics/accounts/', '/balances'],
-	'current account': ['/v1/explorer/accounts/', '']
+	'current account': ['/v1/explorer/accounts/', ''],
+	'account claimable positions': ['/v1/explorer/accounts/', '/claimable-positions']
 } as const;
 
 function configuredExplorerApiBase(): URL {
@@ -87,7 +88,9 @@ export async function proxyExplorerJson(
 		const timedOut = deadline.aborted && !request.signal.aborted;
 		return Response.json({
 			error: timedOut
-				? `The explorer did not receive ${resource === 'transaction' ? 'a transaction' : 'an ' + resource} response within ${deadlineMs / 1000} seconds.`
+				? resource === 'account claimable positions'
+					? `The claimable positions service did not respond within ${deadlineMs / 1000} seconds.`
+					: `The explorer did not receive ${resource === 'transaction' ? 'a transaction' : 'an ' + resource} response within ${deadlineMs / 1000} seconds.`
 				: `The explorer could not reach the ${resource} service.`
 		}, { status: timedOut ? 504 : 502, headers: noStore });
 	}

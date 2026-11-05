@@ -1,0 +1,29 @@
+.list, .claimants {
+	display: grid;
+	gap: .65rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.position {
+	display: grid;
+	gap: .4rem;
+	padding: .75rem;
+	border: 1px solid var(--border);
+	border-radius: .45rem;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: .45rem 1rem;
+}
+.summary > strong { font-variant-numeric: tabular-nums; }
+.details { font-size: .85rem; }
+.details summary { cursor: pointer; width: fit-content; }
+.details summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.details > :not(summary) { margin-block-start: .45rem; }
+.content:not([hidden]) { display: grid; gap: .75rem; min-width: 0; }
