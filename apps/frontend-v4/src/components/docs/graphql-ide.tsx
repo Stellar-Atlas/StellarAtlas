@@ -28,6 +28,38 @@ interface PageLink {
 	variables: string;
 }
 
+interface LiveModel {
+	getVersionId(): number;
+}
+type ModelRevision = readonly [LiveModel, number];
+
+function readQueryModel(root: HTMLElement | null): ModelRevision | undefined {
+	// GraphiQL 5.4 exposes its lazily loaded Monaco instance on the client.
+	// Scope its public editor/model APIs to this wrapper and fail closed if unavailable.
+	const monaco = (globalThis as typeof globalThis & {
+		__MONACO?: {
+			editor?: {
+				getEditors?(): readonly {
+					getDomNode(): HTMLElement | null;
+					getModel(): LiveModel | null;
+				}[];
+			};
+		};
+	}).__MONACO;
+	if (!root) return;
+	for (const editor of monaco?.editor?.getEditors?.() ?? []) {
+		const node = editor.getDomNode();
+		const model = editor.getModel();
+		if (
+			node &&
+			root.contains(node) &&
+			model &&
+			node.closest('[aria-label="Operation Editor"]')
+		)
+			return [model, model.getVersionId()];
+	}
+}
+
 export default function GraphqlIde(): React.JSX.Element {
 	const initial = graphqlExamples.transfers;
 	const [draft, setDraft] = useState<EditorDraft>({
@@ -48,6 +80,9 @@ export default function GraphqlIde(): React.JSX.Element {
 	>({});
 	const editor = useRef<PageLink>(draft);
 	const actionRevision = useRef(0);
+	const editorRoot = useRef<HTMLDivElement>(null);
+	const executionQuery = useRef<ModelRevision | undefined>(undefined);
+	const responseRevision = useRef<number | undefined>(undefined);
 	const history = useRef<PageLink[]>([]);
 	const lastResult = useRef<PageLink | null>(null);
 	const navigation = useRef<'next' | 'previous' | null>(null);
@@ -72,10 +107,15 @@ export default function GraphqlIde(): React.JSX.Element {
 				(errors ? ' · GraphQL errors returned (see response)' : '')
 		);
 		// The response still goes to GraphiQL, but only the current draft can use its actions.
-		if (result.actionRevision !== actionRevision.current) return;
+		if (
+			result.actionRevision !== actionRevision.current ||
+			!executionQueryMatches()
+		)
+			return;
 		setNext(null);
 		setRelated({});
 		if (result.status < 200 || result.status >= 300 || errors) return;
+		responseRevision.current = result.actionRevision;
 		const current = { query: result.query, variables: result.variables };
 		if (navigation.current === 'previous') history.current.pop();
 		else if (navigation.current === 'next' && lastResult.current)
@@ -109,7 +149,10 @@ export default function GraphqlIde(): React.JSX.Element {
 	});
 	const [transport] = useState(() =>
 		createGraphqlIdeTransport({
-			beginDataExecution: () => ++actionRevision.current,
+			beginDataExecution: () => {
+				executionQuery.current = readQueryModel(editorRoot.current);
+				return ++actionRevision.current;
+			},
 			onBusy: (value) => {
 				if (mounted.current) setBusy(value);
 			},
@@ -127,6 +170,28 @@ export default function GraphqlIde(): React.JSX.Element {
 			transport.dispose();
 		};
 	}, [transport]);
+
+	function executionQueryMatches(): boolean {
+		const executed = executionQuery.current;
+		const current = readQueryModel(editorRoot.current);
+		return Boolean(
+			executed &&
+				current &&
+				executed[0] === current[0] &&
+				executed[1] === current[1]
+		);
+	}
+
+	function loadResponsePage(
+		link: PageLink,
+		direction: 'next' | 'previous'
+	): void {
+		if (
+			responseRevision.current === actionRevision.current &&
+			executionQueryMatches()
+		)
+			load(link, direction);
+	}
 
 	function load(link: PageLink, direction: 'next' | 'previous' | null): void {
 		actionRevision.current++;
@@ -225,7 +290,7 @@ export default function GraphqlIde(): React.JSX.Element {
 					{copyStatus}
 				</p>
 			)}
-			<div className={styles.ide}>
+			<div className={styles.ide} ref={editorRoot}>
 				<GraphiQL
 					key={draft.revision}
 					fetcher={transport.fetcher}
@@ -267,13 +332,13 @@ export default function GraphqlIde(): React.JSX.Element {
 			<div className={styles.actions} aria-label="Response pagination">
 				<button
 					disabled={busy || !previous}
-					onClick={() => previous && load(previous, 'previous')}
+					onClick={() => previous && loadResponsePage(previous, 'previous')}
 				>
 					Load previous page
 				</button>
 				<button
 					disabled={busy || !next}
-					onClick={() => next && load(next, 'next')}
+					onClick={() => next && loadResponsePage(next, 'next')}
 				>
 					Load next page
 				</button>
@@ -284,7 +349,7 @@ export default function GraphqlIde(): React.JSX.Element {
 							disabled={busy}
 							onClick={() => {
 								const link = related[relation];
-								if (link) load(link, 'next');
+								if (link) loadResponsePage(link, 'next');
 							}}
 						>
 							Load next {relation}
