@@ -92,11 +92,47 @@ describe('explorer pair report API helper', () => {
 		]);
 		expect(maxActive).toBeLessThanOrEqual(2);
 		expect(requests).toHaveLength(4);
+		const first = new URL(requests[0]!, 'https://example.test');
+		expect(first.searchParams.has('min_ledger')).toBe(false);
+		expect(first.searchParams.has('max_ledger')).toBe(false);
 		for (const path of requests.slice(1)) {
 			const url = new URL(path, 'https://example.test');
 			expect(url.searchParams.get('min_ledger')).toBe('500');
 			expect(url.searchParams.get('max_ledger')).toBe('520');
 		}
+	});
+
+	it('keeps the explicit range when only the reverse trade returns that range', async () => {
+		const selected = selection({ minLedger: '100', maxLedger: '120' });
+		const requests: URL[] = [];
+		const result = await loadPairReport(selected, new AbortController().signal, async path => {
+			const url = new URL(path, 'https://example.test');
+			requests.push(url);
+			if (requests.length === 1) return page(101, 120, 'trades');
+			return page(100, 120, url.pathname.split('/').at(-1)!);
+		});
+
+		expect(result.selection).toEqual(selected);
+		expect(result.sections['a-to-b']).toEqual({ error: 'The data service returned inconsistent ledger windows.' });
+		expect(result.sections['b-to-a'].page?.window).toMatchObject({ minLedger: 100, maxLedger: 120 });
+		expect(result.sections['pool-a-b'].page?.window).toMatchObject({ minLedger: 100, maxLedger: 120 });
+		expect(result.sections['pool-b-a'].page?.window).toMatchObject({ minLedger: 100, maxLedger: 120 });
+		expect(requests.map(url => url.pathname)).toEqual(['/v1/trades', '/v1/trades', '/v1/analytics/liquidity-pools', '/v1/analytics/liquidity-pools']);
+		expect(requests[1]?.searchParams.get('selling_asset')).toBe(assetB);
+		expect(requests.map(url => [url.searchParams.get('min_ledger'), url.searchParams.get('max_ledger')]))
+			.toEqual(Array.from({ length: 4 }, () => ['100', '120']));
+	});
+
+	it('rejects two different trade windows without issuing any pool request', async () => {
+		const selected = selection({ minLedger: '100', maxLedger: '120' });
+		const requests: URL[] = [];
+		const report = loadPairReport(selected, new AbortController().signal, async path => {
+			requests.push(new URL(path, 'https://example.test'));
+			return requests.length === 1 ? page(100, 119, 'trades') : page(99, 120, 'trades');
+		});
+		await expect(report).rejects.toThrow('The data service returned inconsistent ledger windows.');
+		expect(requests.map(url => [url.pathname, url.searchParams.get('selling_asset')]))
+			.toEqual([['/v1/trades', assetA], ['/v1/trades', assetB]]);
 	});
 
 	it('retains pinned trades and the other pool lane after a single pool failure', async () => {
