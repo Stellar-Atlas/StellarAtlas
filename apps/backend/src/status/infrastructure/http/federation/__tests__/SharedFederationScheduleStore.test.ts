@@ -178,7 +178,7 @@ describe('shared federation schedule', () => {
 			.catch((error: unknown) => error);
 		await started;
 		const foreignLock = join(directory, lockFile);
-		await writeFile(foreignLock, 'other owner', { flag: 'wx' });
+		await writeFile(foreignLock, 'other owner', { flag: 'wx', mode: 0o600 });
 		try {
 			release(reply(200));
 			await setTimeout(400);
@@ -197,7 +197,7 @@ describe('shared federation schedule', () => {
 	});
 
 	it('does not steal an abandoned lock or send a request when coordination is unavailable', async () => {
-		await writeFile(join(directory, lockFile), '', { flag: 'wx' });
+		await writeFile(join(directory, lockFile), '', { flag: 'wx', mode: 0o600 });
 		const budget = new ScheduledFederationProviderBudget(
 			new SharedFederationScheduleStore(directory, fixtureDirectorySync)
 		);
@@ -234,7 +234,7 @@ describe('shared federation schedule', () => {
 			.catch((error: unknown) => error);
 		await started;
 		const foreignLock = join(directory, lockFile);
-		await writeFile(foreignLock, 'other owner', { flag: 'wx' });
+		await writeFile(foreignLock, 'other owner', { flag: 'wx', mode: 0o600 });
 		const deadline = new Error('Lookup deadline');
 		try {
 			release(reply(429, { 'retry-after': '90' }));

@@ -1,3 +1,4 @@
+import { constants, type Stats } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
@@ -8,6 +9,8 @@ import type {
 } from './FederationProviderBudget.js';
 
 const maxBytes = 96 * 1024;
+const noFollow = constants.O_NOFOLLOW ?? 0;
+const nonBlocking = constants.O_NONBLOCK ?? 0;
 type SyncDirectory = (path: string) => Promise<void>;
 
 /** All cohosted processes must use the same operator-owned private local directory. */
@@ -45,26 +48,39 @@ export class SharedFederationScheduleStore implements FederationScheduleStore {
 		work: (schedules: Map<string, FederationSchedule>) => T,
 		completion: boolean
 	): Promise<T> {
-		const lockPath = join(this.directory, 'federation-schedule.lock');
+		const directory = await requireFederationScheduleDirectory(this.directory);
+		const lockPath = join(directory, 'federation-schedule.lock');
 		const lock = await acquire(lockPath, completion);
 		let writeUncertain = false;
 		try {
-			const statePath = join(this.directory, 'federation-schedule.json');
+			const statePath = join(directory, 'federation-schedule.json');
 			const schedules = await read(statePath);
+			const next = join(directory, 'federation-schedule.next');
+			writeUncertain = true;
+			if (await inspectLeaf(next))
+				throw new Error('Uncertain federation schedule write needs manual recovery');
+			writeUncertain = false;
 			const result = work(schedules);
 			const bytes = serialize(schedules);
-			const next = join(this.directory, 'federation-schedule.next');
 			writeUncertain = true;
 			await writeSyncedFile(next, bytes);
 			await rename(next, statePath);
-			await this.syncDirectory(this.directory);
+			await this.syncDirectory(directory);
 			writeUncertain = false;
 			return result;
 		} finally {
 			if (writeUncertain) this.needsRecovery = true;
 			try {
-				await lock.close();
 				// Preserve the lock if a write or barrier fails.
+				try {
+					if (!writeUncertain) {
+						const entry = await inspectLeaf(lockPath);
+						if (!entry || !sameFile(entry, await lock.stat()))
+							throw new Error('Federation schedule lock changed');
+					}
+				} finally {
+					await lock.close();
+				}
 				if (!writeUncertain) await unlink(lockPath);
 			} catch (error) {
 				this.needsRecovery = true;
@@ -79,19 +95,47 @@ export async function requireFederationScheduleDirectory(
 ): Promise<string> {
 	if (!isAbsolute(path))
 		throw new Error('Federation schedule directory must be absolute');
-	const canonical = await realpath(path);
-	const directory = await lstat(path);
+	if (resolve(path) !== path)
+		throw new Error('Federation schedule directory must be canonical');
 	const uid = process.getuid?.();
-	if (
-		resolve(path) !== canonical ||
-		!directory.isDirectory() ||
-		(uid !== undefined &&
-			(directory.uid !== uid || (directory.mode & 0o077) !== 0))
-	)
+	await requireTrustedParents(dirname(path), uid);
+	const directory = await lstat(path);
+	if (!directory.isDirectory() || !isPrivate(directory, uid) ||
+		(process.platform === 'win32' && (await realpath(path)) !== path))
 		throw new Error(
 			'Federation schedule requires a private canonical directory owned by the API user'
 		);
-	return canonical;
+	return path;
+}
+
+async function requireTrustedParents(path: string, uid: number | undefined): Promise<void> {
+	const parent = dirname(path);
+	if (parent !== path) await requireTrustedParents(parent, uid);
+	const entry = await lstat(path);
+	// A trusted sticky directory such as /tmp protects API-owned children.
+	if (!entry.isDirectory() ||
+		(uid !== undefined &&
+			((entry.uid !== uid && entry.uid !== 0) ||
+				((entry.mode & 0o022) !== 0 && (entry.mode & 0o1000) === 0))))
+		throw new Error('Federation schedule requires trusted canonical parents');
+}
+
+function isPrivate(entry: Stats, uid = process.getuid?.()): boolean {
+	return uid === undefined || (entry.uid === uid && (entry.mode & 0o077) === 0);
+}
+
+function sameFile(first: Stats, second: Stats): boolean {
+	return first.dev === second.dev && first.ino === second.ino;
+}
+
+async function inspectLeaf(path: string): Promise<Stats | null> {
+	const entry = await lstat(path).catch((error: unknown) => {
+		if (hasCode(error, 'ENOENT')) return null;
+		throw error;
+	});
+	if (entry && (!entry.isFile() || entry.nlink !== 1 || !isPrivate(entry)))
+		throw new Error('Federation schedule requires private ordinary files');
+	return entry;
 }
 
 /** Offline recovery. Quiesce every old owner before preparing or using the replacement. */
@@ -110,7 +154,7 @@ export async function recoverFederationSchedule(
 		dirname(replacementPath) !== dirname(oldDirectory)
 	)
 		throw new Error('Federation recovery requires a new sibling directory');
-	if (!(await lstat(join(oldDirectory, 'federation-schedule.lock'))).isFile())
+	if (!(await inspectLeaf(join(oldDirectory, 'federation-schedule.lock'))))
 		throw new Error('Federation recovery requires an abandoned lock file');
 	const stage = await lstat(
 		join(oldDirectory, 'federation-schedule.next')
@@ -123,25 +167,24 @@ export async function recoverFederationSchedule(
 			'Uncertain federation schedule write needs manual recovery'
 		);
 	const statePath = join(oldDirectory, 'federation-schedule.json');
-	if (!(await lstat(statePath)).isFile())
-		throw new Error('Committed federation schedule unavailable');
-	const schedules = await read(statePath);
+	const schedules = await read(statePath, true);
 	for (const schedule of schedules.values()) schedule.active = 0;
 	await mkdir(replacementPath, { mode: 0o700 });
+	const replacement = await requireFederationScheduleDirectory(replacementPath);
 	// Leave an incomplete replacement visibly fenced if a write or sync fails.
-	const recoveryLockPath = join(replacementPath, 'federation-schedule.lock');
+	const recoveryLockPath = join(replacement, 'federation-schedule.lock');
 	await writeSyncedFile(recoveryLockPath, '');
 	await writeSyncedFile(
-		join(replacementPath, 'federation-schedule.json'),
+		join(replacement, 'federation-schedule.json'),
 		serialize(schedules)
 	);
-	await syncDirectory(replacementPath);
-	await syncDirectory(dirname(replacementPath));
+	await syncDirectory(replacement);
+	await syncDirectory(dirname(replacement));
 	await unlink(recoveryLockPath);
 }
 
 export async function syncFederationDirectory(path: string): Promise<void> {
-	const directory = await open(path, 'r');
+	const directory = await open(path, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | noFollow);
 	try {
 		await directory.sync();
 	} finally {
@@ -150,13 +193,17 @@ export async function syncFederationDirectory(path: string): Promise<void> {
 }
 
 async function writeSyncedFile(path: string, bytes: string): Promise<void> {
-	const file = await open(path, 'wx', 0o600);
+	const file = await createPrivateFile(path);
 	try {
 		await file.writeFile(bytes, 'utf8');
 		await file.sync();
 	} finally {
 		await file.close();
 	}
+}
+
+function createPrivateFile(path: string) {
+	return open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow, 0o600);
 }
 
 function serialize(schedules: Map<string, FederationSchedule>): string {
@@ -182,9 +229,10 @@ async function acquire(path: string, completion: boolean) {
 		// An admitted slot still needs completion when the worker becomes idle.
 		if (delay) await setTimeout(delay);
 		try {
-			return await open(path, 'wx', 0o600);
+			return await createPrivateFile(path);
 		} catch (error) {
 			if (!hasCode(error, 'EEXIST')) throw error;
+			await inspectLeaf(path);
 		}
 		if (!completion && attempt === delays.length - 1)
 			throw new Error('Federation schedule is busy or needs recovery');
@@ -192,14 +240,18 @@ async function acquire(path: string, completion: boolean) {
 	}
 }
 
-async function read(path: string): Promise<Map<string, FederationSchedule>> {
-	const file = await open(path, 'r').catch((error: unknown) => {
-		if (hasCode(error, 'ENOENT')) return null;
-		throw error;
-	});
-	if (!file) return new Map();
+async function read(path: string, required = false): Promise<Map<string, FederationSchedule>> {
+	const entry = await inspectLeaf(path);
+	if (!entry) {
+		if (required) throw new Error('Committed federation schedule unavailable');
+		return new Map();
+	}
+	const file = await open(path, constants.O_RDONLY | noFollow | nonBlocking);
 	try {
-		const { size } = await file.stat();
+		const opened = await file.stat();
+		if (!sameFile(entry, opened) || !opened.isFile() || opened.nlink !== 1 || !isPrivate(opened))
+			throw new Error('Federation schedule changed during open');
+		const { size } = opened;
 		if (size < 1 || size > maxBytes)
 			throw new Error('Federation schedule has invalid size');
 		const bytes = Buffer.alloc(size);
