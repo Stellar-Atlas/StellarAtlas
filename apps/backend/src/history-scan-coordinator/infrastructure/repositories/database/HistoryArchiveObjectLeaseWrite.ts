@@ -356,8 +356,15 @@ export const historyArchiveObjectVerifiedBatchSql = `
                                 coalesce(eligible."workerStage", 'verified'),
                         "claimedAt" = null,
                         "claimedByCommunityScannerId" = null,
-                        "completionArchiveMetadata" =
-                                eligible."archiveMetadata",
+                        "completionArchiveMetadata" = case
+                                when object."objectType" = 'checkpoint-state'
+                                        and eligible."hasVerificationFacts"
+                                        and jsonb_typeof(eligible."archiveMetadata") = 'object'
+                                        and (eligible."verificationFacts" -> 'checkpointHistoryArchiveState')
+                                                = eligible."archiveMetadata"
+                                then null
+                                else eligible."archiveMetadata"
+                        end,
                         "errorMessage" = null,
                         "errorType" = null,
                         "failureChannel" = null,
