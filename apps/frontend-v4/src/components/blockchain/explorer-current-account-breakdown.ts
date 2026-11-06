@@ -15,8 +15,10 @@ const positive = (value: bigint) => value < 0n ? 0n : value;
 /** Only derive values supported by the same exact account response and ledger. */
 export function currentAccountBreakdown(row: CurrentBalance, snapshot: CurrentAccountSnapshot) {
 	const bound = snapshot.latestLedger !== null;
-	const selling = row.kind === 'pool' || !bound ? null : row.selling;
+	const reportedSelling = row.kind === 'pool' ? null : row.selling;
 	const minimumReserve = row.kind === 'native' && snapshot.inventoryComplete ? nativeMinimumReserve(snapshot) : null;
+	const reserveKnown = row.kind !== 'native' || minimumReserve !== null;
+	const selling = bound && reserveKnown ? reportedSelling : null;
 	const heldForReserve = minimumReserve === null ? null : row.balance - positive(row.balance - minimumReserve);
 	const afterReserve = row.balance - (heldForReserve ?? 0n);
 	const heldForOffers = selling === null ? null : afterReserve - positive(afterReserve - selling);
@@ -27,6 +29,9 @@ export function currentAccountBreakdown(row: CurrentBalance, snapshot: CurrentAc
 		? row.limit - row.balance - row.buying : null;
 	return {
 		available,
+		reportedSelling,
+		requiredReserved: selling === null ? null : (minimumReserve ?? 0n) + selling,
+		coveredReserved: heldForOffers === null ? null : (heldForReserve ?? 0n) + heldForOffers,
 		minimumReserve,
 		heldForReserve,
 		reserveShortfall: minimumReserve === null ? null : positive(minimumReserve - row.balance),
