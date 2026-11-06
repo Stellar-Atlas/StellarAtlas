@@ -76,8 +76,10 @@ test('two stalled cold lookups leave contract verification capacity and release 
 			if (stalled.length === 2) entered.resolve();
 		}
 	});
-	const endpoint = nativeRpcEndpoint(url.href, url.href)!;
-	const resolver = new SorobanDomainResolver(endpoint, 1_200);
+	// The two route factories mint separate capabilities for the same RPC URL.
+	const domainEndpoint = nativeRpcEndpoint(url.href, url.href)!;
+	const contractEndpoint = nativeRpcEndpoint(url.href, url.href)!;
+	const resolver = new SorobanDomainResolver(domainEndpoint, 1_200);
 	const first = exactDomainName('first.xlm')!;
 	const second = exactDomainName('second.xlm')!;
 	const domains = Promise.allSettled([
@@ -89,7 +91,7 @@ test('two stalled cold lookups leave contract verification capacity and release 
 		resolver.resolve(exactDomainName('third.xlm')!)
 	).rejects.toBeInstanceOf(SorobanDomainBusy);
 	await expect(
-		readContractCode(endpoint, StrKey.encodeContract(Buffer.alloc(32, 8)))
+		readContractCode(contractEndpoint, StrKey.encodeContract(Buffer.alloc(32, 8)))
 	).resolves.toMatchObject({ ledger: 123, executable: 'not_found' });
 	expect(stalled.every((response) => !response.destroyed)).toBe(true);
 	const outcomes = await domains;
