@@ -1,3 +1,4 @@
+import { StrKey } from '@stellar/stellar-sdk';
 import {
 	amount,
 	classicAddress,
@@ -89,20 +90,59 @@ interface AccountDetailOptions {
 
 const searchTimeoutMs = 8_000;
 
+function canonicalAccountSegment(value: string): string | null {
+	if (!/^(?:G[A-Z2-7]{55}|M[A-Z2-7]{68})$/.test(value)) return null;
+	try {
+		const canonical = value.startsWith('G')
+			? StrKey.encodeEd25519PublicKey(StrKey.decodeEd25519PublicKey(value))
+			: StrKey.encodeMed25519PublicKey(StrKey.decodeMed25519PublicKey(value));
+		return canonical === value ? canonical : null;
+	} catch {
+		return null;
+	}
+}
+
+function configuredHorizonBase(value: string): URL {
+	// This is operator configuration, so private hosts and non-default ports are
+	// intentional. Do not accept credentials or ambiguous URL delimiters.
+	const match = /^https?:\/\/([^/?#\\]+)(\/[^?#\\]*)?$/i.exec(value);
+	const authority = match?.[1];
+	if (!match || !authority || /[@%]|:$/.test(authority) || /[\u0000-\u0020\u007f]/.test(value))
+		throw new Error('Invalid Horizon account endpoint');
+	const path = match[2] ?? '/';
+	if (/%(?![0-9a-f]{2})|%(?:2f|5c)|\/(?:\.|%2e){1,2}(?=\/|$)/i.test(path))
+		throw new Error('Invalid Horizon account path');
+	const base = new URL(value);
+	if (base.username || base.password || !base.hostname)
+		throw new Error('Invalid Horizon account endpoint');
+	if (!base.pathname.endsWith('/')) base.pathname += '/';
+	return base;
+}
+
+function horizonResource(base: URL, resource: 'accounts' | 'ledgers', segment: string): URL {
+	const url = new URL(base.origin);
+	url.pathname = base.pathname + resource + '/' + segment;
+	return url;
+}
+
 export async function fetchExplorerAccount(
 	horizonUrl: string,
 	accountId: string,
-	detail?: AccountDetailOptions
+	detail?: AccountDetailOptions,
+	transport: typeof fetch = globalThis.fetch
 ): Promise<ExplorerAccountDTO | null> {
-	const classicDetail = detail !== undefined && accountId.startsWith('G');
+	const segment = canonicalAccountSegment(accountId);
+	if (segment === null) return null;
+	const base = configuredHorizonBase(horizonUrl);
+	const classicDetail = detail !== undefined && segment.startsWith('G');
 	const timeout = AbortSignal.timeout(
 		classicDetail ? horizonAccountTimeoutMs : searchTimeoutMs
 	);
 	const signal = detail ? AbortSignal.any([detail.signal, timeout]) : timeout;
-	const base = horizonUrl.endsWith('/') ? horizonUrl : horizonUrl + '/';
-	const response = await fetch(new URL('accounts/' + accountId, base), {
+	signal.throwIfAborted();
+	const response = await transport(horizonResource(base, 'accounts', segment), {
 		headers: { Accept: 'application/json' },
-		redirect: classicDetail ? 'error' : 'follow',
+		redirect: 'error',
 		signal
 	});
 	if (response.status === 404 && classicDetail) {
@@ -171,7 +211,7 @@ export async function fetchExplorerAccount(
 		);
 	const ledger =
 		latestLedger !== null && balanceInventoryComplete
-			? await fetchAccountLedger(base, latestLedger, signal)
+			? await fetchAccountLedger(base, latestLedger, signal, transport)
 			: null;
 	return {
 		...legacy,
@@ -193,13 +233,14 @@ export async function fetchExplorerAccount(
 }
 
 async function fetchAccountLedger(
-	base: string,
+	base: URL,
 	sequence: string,
-	signal: AbortSignal
+	signal: AbortSignal,
+	transport: typeof fetch
 ): Promise<{ closedAt: string | null; baseReserveRaw: string | null } | null> {
 	if (signal.aborted) return null;
 	try {
-		const response = await fetch(new URL('ledgers/' + sequence, base), {
+		const response = await transport(horizonResource(base, 'ledgers', sequence), {
 			headers: { Accept: 'application/json' },
 			redirect: 'error',
 			signal

@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import type { RequestHandler } from 'express';
+import { claimablePositionCursorScope } from './ClaimablePositionCursorScope.js';
 import {
 	amount,
 	classicAddress,
@@ -87,16 +87,11 @@ export function createExplorerClaimablePositionsHandler(config: {
 				.json({ error: 'invalid_claimable_positions_query' });
 		}
 
-		const scope = createHash('sha256')
-			.update(
-				JSON.stringify([
-					'account-claimable-positions-v1',
-					config.networkPassphrase,
-					accountId,
-					role
-				])
-			)
-			.digest('base64url');
+		const scope = claimablePositionCursorScope(
+			config.networkPassphrase,
+			accountId,
+			role
+		);
 		const after = cursor === undefined ? null : decodeCursor(cursor, scope);
 		if (cursor !== undefined && after === null)
 			return res

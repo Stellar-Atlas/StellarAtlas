@@ -15,6 +15,13 @@ const firstId = '00000000' + 'b'.repeat(64);
 const secondId = '00000000' + 'a'.repeat(64);
 const ledger = 63386340;
 const network = 'Test SDF Network ; September 2015';
+// Captured from the original v1 JSON / SHA-256 / base64url wire encoding.
+const v1ClaimantCursor =
+	'WzEsIlJoOFhuMW1qSm80U1l4WXY5QU9xNGVCc2Fx' +
+	'bC1lYjRrMU5UdmhLbXlHc1EiLCI2MzM4NjMzOS0w' +
+	'MDAwMDAwMGJiYmJiYmJiYmJiYmJiYmJiYmJiYmJi' +
+	'YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJi' +
+	'YmJiYmJiYmJiYmIiXQ';
 const predicate = {
 	and: [
 		{ abs_before: '2020-12-30T23:03:56Z', abs_before_epoch: '1609369436' },
@@ -186,7 +193,7 @@ it('deduplicates a full page, advances using the row token only, and carries eac
 		latestLedger: String(ledger)
 	});
 	const cursor: string = first.body.nextCursor;
-	expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/);
+	expect(cursor).toBe(v1ClaimantCursor);
 	const second = await request(app)
 		.get(route)
 		.query({ role: 'claimant', limit: 2, cursor })
