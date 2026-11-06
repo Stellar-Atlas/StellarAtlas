@@ -163,31 +163,32 @@ export async function loadPairReport(
 	sections: Readonly<Record<PairReportLane, PairReportSectionResult>>;
 }> {
 	const selected = validatePairReportSelection(selection);
+	const expected = selected.minLedger !== undefined && selected.maxLedger !== undefined
+		? { minLedger: Number(selected.minLedger), maxLedger: Number(selected.maxLedger) }
+		: undefined;
 	const load = async (
 		lane: PairReportLane,
 		scope: PairReportSelection,
-		pinned?: AnalyticsEntityPage['window']
+		pinned?: Pick<AnalyticsEntityPage['window'], 'minLedger' | 'maxLedger'>
 	): Promise<PairReportSectionResult> => {
 		throwIfAborted(signal);
 		try {
 			const raw = await requestJson(pairReportApiPath(scope, lane, offsets[lane]), signal);
 			throwIfAborted(signal);
 			const page = pinned ? parsePinnedPage(raw, pinned.minLedger, pinned.maxLedger) : parseEntityPage(raw);
-			if (!pinned) {
-				const { minLedger, maxLedger } = page.window;
-				if (minLedger < 2 || maxLedger > 4294967295 || maxLedger - minLedger > 2047)
-					throw new Error('The data service did not return a bounded ledger window.');
-			}
+			const { minLedger, maxLedger } = page.window;
+			if (minLedger < 2 || maxLedger > 4294967295 || maxLedger - minLedger > 2047)
+				throw new Error('The data service did not return a bounded ledger window.');
 			return { page };
 		} catch (cause: unknown) {
 			throwIfAborted(signal);
 			return { error: cause instanceof Error ? cause.message : 'This section is unavailable.' };
 		}
 	};
-	const forwardTrades = await load('a-to-b', selected);
+	const forwardTrades = await load('a-to-b', selected, expected);
 	// The other trade is already part of the report; use it as the anchor only
 	// when the normal anchor failed. Do not query pool lanes without a valid range.
-	const fallback = forwardTrades.page ? null : await load('b-to-a', selected);
+	const fallback = forwardTrades.page ? null : await load('b-to-a', selected, expected);
 	const pinned = (forwardTrades.page ?? fallback?.page)?.window;
 	if (!pinned) throw new Error(forwardTrades.error ?? 'Trade ledger window unavailable.');
 	const pinnedSelection = {
