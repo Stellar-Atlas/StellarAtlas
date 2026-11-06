@@ -7,6 +7,12 @@
 }
 .identity > div { min-width: 0; }
 .identity small { display: block; color: var(--muted); font-size: 0.74rem; }
+.identity .issuerAddress {
+	white-space: normal;
+	overflow: visible;
+	overflow-wrap: anywhere;
+}
+.cellValue { min-width: 0; overflow-wrap: anywhere; }
 .identity img, .mark {
 	width: 28px;
 	height: 28px;

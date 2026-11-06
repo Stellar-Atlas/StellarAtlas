@@ -68,36 +68,35 @@ it.each([
 	}
 });
 
-it('offers one shortcut per observed counter asset and distinguishes identical codes', () => {
+it('compares recorded-side counts and links each exact counter asset to the accepted pair report', () => {
 	const native = { id: 'native' };
 	const one = { id: 'USD:G' + 'A'.repeat(55) };
 	const two = { id: 'USD:G' + 'B'.repeat(55) };
 	const trade = (sellingAsset: { id: string }, buyingAsset: { id: string }) => ({ sellingAsset, buyingAsset });
 	const html = renderToStaticMarkup(ReactActual.createElement(ExplorerAssetMarketPairs, {
 		asset: native.id,
-		origin: '/explorer/assets/native?tab=markets&market_trade_min=2&market_trade_max=98',
-		rows: [trade(one, native), trade(native, one), trade(one, native), trade(native, two), trade(one, two),
+		origin: '/explorer/assets/native?tab=markets&market_trade_min=2&market_trade_max=98&return_to=%2Fexplorer%2Fassets%3Fq%3DXLM',
+		rows: [trade(native, two), trade(one, native), trade(native, one), trade(one, native), trade(one, two),
 			trade(native, native), trade(native, { id: 'invalid' })],
 		window: page.window
 	}));
-	expect(html).toContain('Loaded preview only.');
-	expect(html).toContain('Counts show which recorded side contains the selected asset.');
-	expect(html).toContain('Every trade has both sides. These counts measure neither volume nor buying or selling pressure.');
-	const cards = [...html.matchAll(/<li>(.*?)<\/li>/g)].map(match => match[1]);
-	expect(cards[0]).toContain('Recorded selling side: 1 · Recorded buying side: 2');
-	expect(cards[1]).toContain('Recorded selling side: 1 · Recorded buying side: 0');
-	expect(cards[0]).toContain('aria-hidden="true"');
-	expect(cards[1]).toContain('inline-size:100%');
+	expect(html).toContain('Every trade exchanges both assets.');
+	expect(html).toContain('not buy pressure, sell pressure, or volume.');
+	expect(html).toContain('<th scope="col">Recorded buying side</th><th scope="col">Recorded selling side</th>');
 	expect(html).toContain('<code>' + one.id.split(':')[1] + '</code>');
 	expect(html).toContain('<code>' + two.id.split(':')[1] + '</code>');
-	const links = [...html.matchAll(/href="([^"]+)"/g)].map(match =>
-		new URL(match[1]!.replaceAll('&amp;', '&'), 'https://explorer.invalid'));
+	const pairRows = [...html.matchAll(/<tr><th scope="row">.*?<\/tr>/g)].map(match => match[0]);
+	expect(pairRows.map(row => [...row.matchAll(/<td><span>(\d+)<\/span>/g)].map(match => Number(match[1]))))
+		.toEqual([[2, 1], [0, 1]]);
+	const links = pairRows.map(row => new URL(row.match(/href="([^"]+)"/)![1]!.replaceAll('&amp;', '&'), 'https://explorer.invalid'));
 	expect(links.map(url => url.searchParams.get('asset_b'))).toEqual([one.id, two.id]);
 	for (const url of links) {
 		expect(url.pathname).toBe('/explorer/markets');
 		expect(url.searchParams.get('asset_a')).toBe('native');
 		expect(url.searchParams.get('min_ledger')).toBe('99');
 		expect(url.searchParams.get('max_ledger')).toBe('101');
-		expect(url.searchParams.get('return_to')).toBe('/explorer/assets/native?tab=markets&market_trade_min=99&market_trade_max=101');
+		const back = new URL(url.searchParams.get('return_to')!, 'https://explorer.invalid');
+		expect(back.pathname + '?' + back.searchParams.toString())
+			.toBe('/explorer/assets/native?tab=markets&market_trade_min=99&market_trade_max=101&return_to=%2Fexplorer%2Fassets%3Fq%3DXLM');
 	}
 });

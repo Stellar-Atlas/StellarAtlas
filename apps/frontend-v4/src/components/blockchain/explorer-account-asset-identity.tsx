@@ -27,7 +27,7 @@ export function AccountAssetIdentity({ asset, metadata }: {
 		<div>
 			<Link href={buildEntityHref('assets', asset.id)}><strong>{asset.code}</strong></Link>
 			{name && name !== asset.code && <small>Issuer name: {name}</small>}
-			<small><Link href={buildEntityHref('accounts', asset.issuer)} aria-label={`Issuer ${asset.issuer}`}>{asset.issuer}</Link></small>
+			<small className={styles.issuerAddress}><Link href={buildEntityHref('accounts', asset.issuer)} aria-label={`Issuer ${asset.issuer}`}>{asset.issuer}</Link></small>
 			{collectible && <small>Issuer-declared {collectible} · scarcity unverified</small>}
 		</div>
 	</div>;

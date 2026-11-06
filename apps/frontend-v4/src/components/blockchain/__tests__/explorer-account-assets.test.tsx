@@ -59,17 +59,21 @@ it('subtracts only sell offers from authorized issued balances, never fabricatin
 	]));
 	const [native, issued] = current.balances;
 	expect(currentAccountBreakdown(native!, current.snapshot)).toMatchObject({
-		available: null, heldForOffers: 12500000n, offerShortfall: 0n, receiveHeadroom: null
+		available: null, reportedSelling: 12500000n, requiredReserved: null, coveredReserved: null,
+		heldForOffers: null, offerShortfall: null, receiveHeadroom: null
 	});
 	expect(currentAccountBreakdown(issued!, current.snapshot)).toMatchObject({
-		available: 67500001n, heldForOffers: 12500000n, offerShortfall: 0n, receiveHeadroom: 14999999n
+		available: 67500001n, requiredReserved: 12500000n, coveredReserved: 12500000n,
+		heldForOffers: 12500000n, offerShortfall: 0n, receiveHeadroom: 14999999n
 	});
 	expect(currentAccountBreakdown({ ...issued!, authorization: 'liabilities-only' }, current.snapshot).available).toBeNull();
 	expect(currentAccountBreakdown({ ...issued!, selling: null }, current.snapshot).available).toBeNull();
 	expect(currentAccountBreakdown({ ...issued!, balance: 1n }, current.snapshot).offerShortfall).toBe(12499999n);
-	const html = renderToStaticMarkup(<CurrentAccountInventory value={current} />);
+	const html = renderToStaticMarkup(<CurrentAccountInventory value={current} />).replaceAll('<!-- -->', '');
 	expect(html).toContain('6.7500001');
 	expect(html).toContain('Minimum XLM reserve not calculated');
+	expect(html).toContain('Reported sell liabilities: 1.25');
+	expect(html).not.toContain('Held for sell offers');
 });
 
 it('requires matching ledger and exact weighted sponsorship evidence for native reserve', () => {
@@ -82,17 +86,41 @@ it('requires matching ledger and exact weighted sponsorship evidence for native 
 	expect(nativeMinimumReserve({ ...reserve, subentries: null })).toBeNull();
 	expect(nativeMinimumReserve({ ...reserve, sponsored: 8n })).toBeNull();
 	expect(nativeMinimumReserve({ ...reserve, sponsored: 7n })).toBe(0n);
-	const native = parseCurrentAccount(account, accountBody([nativeRow('100000000', '12500000')])).balances[0]!;
+	const current = parseCurrentAccount(account, accountBody([nativeRow('100000000', '12500000')]));
+	const native = current.balances[0]!;
 	const snapshot = { ...reserve, closedAt: null, inventoryComplete: true };
 	expect(currentAccountBreakdown(native, snapshot)).toMatchObject({
 		minimumReserve: 30_000_000n, heldForReserve: 30_000_000n,
-		heldForOffers: 12_500_000n, available: 57_500_000n
+		heldForOffers: 12_500_000n, requiredReserved: 42_500_000n, coveredReserved: 42_500_000n, available: 57_500_000n
 	});
 	expect(currentAccountBreakdown(native, { ...snapshot, baseReserveLedger: '101' }).available).toBeNull();
 	expect(currentAccountBreakdown({ ...native, balance: 10_000_000n }, snapshot)).toMatchObject({
 		available: 0n, heldForReserve: 10_000_000n, reserveShortfall: 20_000_000n,
-		heldForOffers: 0n, offerShortfall: 12_500_000n
+		heldForOffers: 0n, offerShortfall: 12_500_000n, requiredReserved: 42_500_000n, coveredReserved: 10_000_000n
 	});
+	const html = renderToStaticMarkup(<CurrentAccountInventory value={{ ...current, snapshot, balances: [{ ...native, balance: 10_000_000n }] }} />)
+		.replaceAll('<!-- -->', '');
+	expect(html).toContain('Required: 4.25');
+	expect(html).toContain('Covered by balance: 1');
+});
+
+it('derives zero only from exact supported trustline evidence and does not infer pool share availability', () => {
+	const id = 'a'.repeat(64);
+	const current = parseCurrentAccount(account, accountBody([
+		nativeRow('100000000'),
+		creditRow('USD', '0', { sellingLiabilitiesRaw: '0', isAuthorized: true }),
+		creditRow('EUR', '0', { isAuthorized: true }),
+		creditRow('GBP', '0', { isAuthorized: false }),
+		{ assetType: 'liquidity_pool_shares', exact: { assetId: 'liquidity_pool_shares:' + id,
+			liquidityPoolId: id, balanceRaw: '10000000', sellingLiabilitiesRaw: '0' } }
+	]));
+	const rows = current.balances.slice(1).map(row => currentAccountBreakdown(row, current.snapshot));
+	expect(rows.map(r => [r.available, r.requiredReserved, r.coveredReserved]))
+		.toEqual([[0n, 0n, 0n], [null, null, null], [null, null, null], [null, null, null]]);
+	const html = renderToStaticMarkup(<CurrentAccountInventory value={current} />).replaceAll('<!-- -->', '');
+	expect(html).toContain('Shares held: 1');
+	expect(html).toContain('Available to withdraw: not assessed');
+	expect(html).toContain('Sell-offer reserve: not applicable');
 });
 
 it('shows Horizon issuer clawback capability without treating it as a spendability restriction', () => {
