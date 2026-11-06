@@ -12,7 +12,7 @@ let previous: ReactActual.DependencyList | undefined;
 let cleanup: (() => void) | undefined;
 let scheduled: ReactActual.EffectCallback | undefined;
 const buttons = new Map<string, () => void>();
-let verifyBuild: ((data: FormData) => void) | undefined;
+let verifyBuild: ReactActual.FormEventHandler<HTMLFormElement> | undefined;
 const request =
 	jest.fn<(path: string, signal: AbortSignal) => Promise<unknown>>();
 jest.unstable_mockModule('react', () => ({
@@ -55,8 +55,8 @@ function capture(
 		typeof props.onClick === 'function'
 	)
 		buttons.set(props.children, props.onClick as () => void);
-	if (type === 'form' && typeof props.action === 'function')
-		verifyBuild = props.action as (data: FormData) => void;
+	if (type === 'form' && typeof props.onSubmit === 'function')
+		verifyBuild = props.onSubmit as ReactActual.FormEventHandler<HTMLFormElement>;
 	return RuntimeActual[kind](type, props, key);
 }
 jest.unstable_mockModule('react/jsx-runtime', () => ({
@@ -138,10 +138,14 @@ function click(label: string) {
 }
 function submitBuild(sourceCommit = commit, wasmSha256 = hash) {
 	if (!verifyBuild) throw new Error('Missing builder form');
-	const data = new FormData();
-	data.set('commit', sourceCommit);
-	data.set('wasmSha256', wasmSha256);
-	verifyBuild(data);
+	const preventDefault = jest.fn();
+	const fields: Record<string, { value: string }> = {
+		'input[data-build-field="commit"]': { value: sourceCommit },
+		'input[data-build-field="wasmSha256"]': { value: wasmSha256 }
+	};
+	const currentTarget = { querySelector: (selector: string) => fields[selector] ?? null };
+	verifyBuild({ preventDefault, currentTarget } as unknown as ReactActual.FormEvent<HTMLFormElement>);
+	expect(preventDefault).toHaveBeenCalledTimes(1);
 }
 beforeEach(() => {
 	cleanup?.();
@@ -244,6 +248,58 @@ describe('synthetic contract provenance interaction journey', () => {
 		expect(render()).toContain('Enter the full 40-character commit');
 		effects();
 		expect(request).not.toHaveBeenCalled();
+	});
+	it.each(['Check build', 'Verify build'])('rejects wrong or missing contract identity for %s', async (action) => {
+		const { contractId, ...missingContractId } = evidence();
+		expect(contractId).toBe('contract-A');
+		for (const response of [evidence('verified', 'contract-B'), missingContractId]) {
+			request.mockResolvedValueOnce(response);
+		}
+		render();
+		if (action === 'Check build') click('Check build');
+		else submitBuild();
+		render();
+		effects();
+		await settled();
+		for (const retry of [true, false]) {
+			const html = render();
+			expect(html).toContain('Temporarily unavailable');
+			expect(html).not.toContain('Build attested');
+			expect(html).not.toContain('Your build is attested');
+			expect(html).not.toContain('/tree/' + commit);
+			expect(html).not.toContain('Observed ledger');
+			if (retry) {
+				click('Retry');
+				render();
+				effects();
+				await settled();
+			}
+		}
+		expect(request).toHaveBeenCalledTimes(2);
+	});
+	it('hides the prior match after malformed replacement and checks only after correction', async () => {
+		request.mockResolvedValue(evidence());
+		render();
+		submitBuild();
+		render();
+		effects();
+		await settled();
+		expect(render()).toContain('Your build is attested');
+		submitBuild('main', hash);
+		const rejected = render();
+		effects();
+		expect(rejected).toContain('Enter the full 40-character commit');
+		expect(rejected).not.toContain('Your build is attested');
+		expect(rejected).not.toContain('Build attested');
+		expect(rejected).not.toContain('Check again');
+		expect(rejected).not.toContain('/tree/' + commit);
+		expect(request).toHaveBeenCalledTimes(1);
+		submitBuild();
+		render();
+		effects();
+		await settled();
+		expect(render()).toContain('Your build is attested');
+		expect(request).toHaveBeenCalledTimes(2);
 	});
 	it.each([
 		['verified', 'Build attested'],

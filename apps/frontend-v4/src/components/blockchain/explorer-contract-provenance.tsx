@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ExplorerLink as Link } from './explorer-investigation';
 import {
 	recordValue,
@@ -67,10 +67,11 @@ export function ExplorerContractProvenance({
 	const [attempt, setAttempt] = useState(0);
 	const [expectedBuild, setExpectedBuild] = useState<ExpectedBuild | null>(null);
 	const [invalidInput, setInvalidInput] = useState<string | null>(null);
+	const inputRejected = invalidInput === contractId;
 	const activeResult =
 		result?.contractId === contractId && result.attempt === attempt ? result : null;
-	const value = activeResult?.value ?? null;
-	const error = activeResult !== null && value === null;
+	const value = inputRejected ? null : (activeResult?.value ?? null);
+	const error = !inputRejected && activeResult !== null && value === null;
 	useEffect(() => {
 		if (attempt === 0) return;
 		const controller = new AbortController();
@@ -79,8 +80,13 @@ export function ExplorerContractProvenance({
 			controller.signal
 		)
 			.then((response) => {
+				const evidence = recordValue(response);
 				if (!controller.signal.aborted)
-					setValue({ contractId, attempt, value: recordValue(response) });
+					setValue({
+						contractId,
+						attempt,
+						value: evidence?.contractId === contractId ? evidence : null
+					});
 			})
 			.catch(() => {
 				if (!controller.signal.aborted)
@@ -92,8 +98,9 @@ export function ExplorerContractProvenance({
 	const source = recordValue(build?.record);
 	const metadata = recordValue(value?.metadata);
 	const status = text(build?.status);
-	const expected = expectedBuild?.contractId === contractId ? expectedBuild : null;
-	const pending = attempt > 0 && activeResult === null;
+	const expected =
+		!inputRejected && expectedBuild?.contractId === contractId ? expectedBuild : null;
+	const pending = !inputRejected && attempt > 0 && activeResult === null;
 	let builderResult = '';
 	let builderDetail = '';
 	if (expected && value) {
@@ -117,9 +124,13 @@ export function ExplorerContractProvenance({
 	const workflowUrl = githubLink(source?.workflowUrl);
 	const runUrl = githubLink(source?.runUrl);
 	const repository = text(metadata?.sourceRepository);
-	function verifyBuild(formData: FormData) {
-		const commit = text(formData.get('commit')).trim().toLowerCase();
-		const wasmSha256 = text(formData.get('wasmSha256')).trim().toLowerCase();
+	function verifyBuild(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		const form = event.currentTarget;
+		const commit = form.querySelector<HTMLInputElement>('input[data-build-field="commit"]')
+			?.value.trim().toLowerCase() ?? '';
+		const wasmSha256 = form.querySelector<HTMLInputElement>('input[data-build-field="wasmSha256"]')
+			?.value.trim().toLowerCase() ?? '';
 		if (!/^[a-f0-9]{40}$/.test(commit) || !/^[a-f0-9]{64}$/.test(wasmSha256)) {
 			setInvalidInput(contractId);
 			return;
@@ -133,7 +144,7 @@ export function ExplorerContractProvenance({
 		<section className={styles.panel} aria-label="Contract build provenance">
 			<div className={styles.heading}>
 				<h2>Build provenance</h2>
-				{attempt === 0 ? (
+				{inputRejected ? null : attempt === 0 ? (
 					<button onClick={() => setAttempt(1)}>Check build</button>
 				) : (
 					<span
@@ -166,18 +177,18 @@ export function ExplorerContractProvenance({
 				<p>
 					<a href="/docs/contract-verification#publish-build">Open the publishing steps and worked example</a>
 				</p>
-				<form action={verifyBuild}>
+				<form onSubmit={verifyBuild}>
 					<label>
 						Source commit (40 hex characters)
-						<input name="commit" required spellCheck={false} autoComplete="off" />
+						<input data-build-field="commit" required spellCheck={false} autoComplete="off" />
 					</label>
 					<label>
 						Wasm SHA-256 (64 hex characters)
-						<input name="wasmSha256" required spellCheck={false} autoComplete="off" />
+						<input data-build-field="wasmSha256" required spellCheck={false} autoComplete="off" />
 					</label>
 					<button type="submit" disabled={pending}>Verify build</button>
 				</form>
-				{invalidInput === contractId && (
+				{inputRejected && (
 					<p role="alert">Enter the full 40-character commit and 64-character Wasm hash in hexadecimal.</p>
 				)}
 				{expected && (
@@ -286,7 +297,7 @@ export function ExplorerContractProvenance({
 						</p>
 					)}
 				</>
-			) : attempt > 0 ? (
+			) : pending ? (
 				<p className={styles.muted}>
 					Checking deployed code and available build records…
 				</p>
