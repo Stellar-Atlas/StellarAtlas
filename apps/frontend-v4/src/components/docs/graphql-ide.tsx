@@ -47,6 +47,7 @@ export default function GraphqlIde(): React.JSX.Element {
 		Partial<Record<TransactionRelation, PageLink>>
 	>({});
 	const editor = useRef<PageLink>(draft);
+	const actionRevision = useRef(0);
 	const history = useRef<PageLink[]>([]);
 	const lastResult = useRef<PageLink | null>(null);
 	const navigation = useRef<'next' | 'previous' | null>(null);
@@ -70,6 +71,8 @@ export default function GraphqlIde(): React.JSX.Element {
 				' ms' +
 				(errors ? ' · GraphQL errors returned (see response)' : '')
 		);
+		// The response still goes to GraphiQL, but only the current draft can use its actions.
+		if (result.actionRevision !== actionRevision.current) return;
 		setNext(null);
 		setRelated({});
 		if (result.status < 200 || result.status >= 300 || errors) return;
@@ -106,6 +109,7 @@ export default function GraphqlIde(): React.JSX.Element {
 	});
 	const [transport] = useState(() =>
 		createGraphqlIdeTransport({
+			beginDataExecution: () => ++actionRevision.current,
 			onBusy: (value) => {
 				if (mounted.current) setBusy(value);
 			},
@@ -125,6 +129,7 @@ export default function GraphqlIde(): React.JSX.Element {
 	}, [transport]);
 
 	function load(link: PageLink, direction: 'next' | 'previous' | null): void {
+		actionRevision.current++;
 		setCopyStatus(null);
 		editor.current = link;
 		navigation.current = direction;
@@ -151,6 +156,7 @@ export default function GraphqlIde(): React.JSX.Element {
 	}
 	function edit(field: 'query' | 'variables', value: string): void {
 		if (editor.current[field] === value) return;
+		actionRevision.current++;
 		editor.current = { ...editor.current, [field]: value };
 		setCopyStatus(null);
 		// Never apply an old response's cursor to a newly edited query.
