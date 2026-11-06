@@ -1,6 +1,6 @@
 import { StrKey } from '@stellar/stellar-sdk';
 import {
-	fetchProvenanceJson,
+	fetchGithubAttestations,
 	ProvenanceHttpError
 } from './BoundedProvenanceJson.js';
 import {
@@ -14,6 +14,7 @@ import {
 import { readContractCode, ContractRpcUnavailable } from './ContractRpcCode.js';
 import { readContractWasmMetadata } from './ContractWasmMetadata.js';
 import type { ScopedProvenanceRpc } from './ScopedProvenanceRpc.js';
+import type { RpcEndpoint } from './ProvenanceEndpointPolicy.js';
 
 export type BuildStatus =
 	| 'verified'
@@ -58,7 +59,7 @@ export class ContractProvenanceService {
 		{ expires: number; value: ContractProvenance['build'] }
 	>();
 	constructor(
-		private readonly rpcUrl: URL | undefined,
+		private readonly rpc: RpcEndpoint | undefined,
 		private readonly networkPassphrase: string,
 		private readonly scopedRpc?: ScopedProvenanceRpc
 	) {}
@@ -66,7 +67,7 @@ export class ContractProvenanceService {
 	async get(contractId: string): Promise<ContractProvenance> {
 		if (!StrKey.isValidContract(contractId))
 			throw new Error('Invalid contract address');
-		if (!this.rpcUrl && !this.scopedRpc)
+		if (!this.rpc && !this.scopedRpc)
 			throw new ContractRpcUnavailable('Contract RPC is not configured');
 		const existing = this.cache.get(contractId);
 		if (existing && existing.expires > Date.now()) return existing.value;
@@ -95,7 +96,7 @@ export class ContractProvenanceService {
 	): Promise<{ value: ContractProvenance; freshUntil?: number }> {
 		const scoped = await this.scopedRpc?.read(contractId);
 		const observation =
-			scoped ?? (await readContractCode(this.rpcUrl!, contractId));
+			scoped ?? (await readContractCode(this.rpc, contractId));
 		let metadata: ContractProvenance['metadata'] = {
 			sourceRepository: null,
 			homeDomain: null
@@ -163,17 +164,7 @@ export class ContractProvenanceService {
 		if (cached && cached.expires > Date.now()) return cached.value;
 		let value: ContractProvenance['build'];
 		try {
-			const data = record(
-				await fetchProvenanceJson(
-					new URL(
-						'https://api.github.com/repos/' +
-							repository +
-							'/attestations/sha256:' +
-							hash +
-							'?per_page=5'
-					)
-				)
-			);
+			const data = record(await fetchGithubAttestations(repository, hash));
 			if (!Array.isArray(data.attestations))
 				throw new Error('Invalid attestation response');
 			value = {

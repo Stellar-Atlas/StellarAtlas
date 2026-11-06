@@ -7,10 +7,12 @@ import {
 	REGISTRY_V2,
 	registryRecordKey
 } from '../SorobanDomainRecord.js';
+import { nativeRpcEndpoint } from '../../contract-provenance/ProvenanceEndpointPolicy.js';
+import type { RpcEndpoint } from '../../contract-provenance/ProvenanceEndpointPolicy.js';
 
 const rpcRequest = jest.fn<
 	Promise<unknown>,
-	[URL, { method: string; params?: object }, { signal: AbortSignal }]
+	[RpcEndpoint, { method: string; params?: object }, { signal: AbortSignal }]
 >();
 const moduleJest = (
 	import.meta as ImportMeta & {
@@ -20,7 +22,7 @@ const moduleJest = (
 moduleJest.unstable_mockModule(
 	'../../contract-provenance/BoundedProvenanceJson.js',
 	() => ({
-		fetchProvenanceJson: rpcRequest
+		fetchRpcJson: rpcRequest
 	})
 );
 const { sorobanDomainRouter } = await import('../SorobanDomainRouter.js');
@@ -29,6 +31,7 @@ const { SorobanDomainResolver } = await import('../SorobanDomainResolver.js');
 const account = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 7));
 const contract = StrKey.encodeContract(Buffer.alloc(32, 8));
 const rpcUrl = new URL('http://127.0.0.1:8000');
+const rpcEndpoint = nativeRpcEndpoint(rpcUrl.href, rpcUrl.href)!;
 const root = exactDomainName('mate.xlm')!;
 const nested = exactDomainName('treasury.addresses.mate.xlm')!;
 const now = 1_793_800_000;
@@ -118,7 +121,8 @@ function app(networkPassphrase: string = Networks.PUBLIC) {
 		'/v1',
 		sorobanDomainRouter({
 			networkPassphrase,
-			rpcUrl: rpcUrl.href
+			rpcUrl: rpcUrl.href,
+			approvedNativeRpcUrl: rpcUrl.href
 		})
 	);
 }
@@ -260,14 +264,14 @@ test.each([
 			error: `host invocation failed\n\nCaused by:\n    HostError: Error(Contract, #${code})\n`
 		}
 	});
-	const resolver = new SorobanDomainResolver(rpcUrl);
+	const resolver = new SorobanDomainResolver(rpcEndpoint);
 	await expect(resolver.resolve(root)).resolves.toMatchObject({ status });
 	await expect(resolver.resolve(root)).resolves.toMatchObject({ status });
 	expect(rpcRequest).toHaveBeenCalledTimes(3);
 });
 
 test('fails closed for unknown, archived, malformed or stale evidence and retries failures', async () => {
-	const resolver = new SorobanDomainResolver(rpcUrl);
+	const resolver = new SorobanDomainResolver(rpcEndpoint);
 	installRpc({
 		simulation: { latestLedger: ledger, error: 'Timeout at ledger 307' }
 	});
@@ -295,7 +299,7 @@ test('stops returning a cached address when the root expires', async () => {
 			results: [{ xdr: tuple({ expiresAt: now + 1 }).toXDR('base64') }]
 		}
 	});
-	const resolver = new SorobanDomainResolver(rpcUrl);
+	const resolver = new SorobanDomainResolver(rpcEndpoint);
 	await expect(resolver.resolve(root)).resolves.toMatchObject({
 		status: 'resolved'
 	});
@@ -308,7 +312,7 @@ test('stops returning a cached address when the root expires', async () => {
 
 test('cache hits also respect the sixty-second ledger freshness ceiling', async () => {
 	installRpc({ closeTime: now - 59 });
-	const resolver = new SorobanDomainResolver(rpcUrl);
+	const resolver = new SorobanDomainResolver(rpcEndpoint);
 	await expect(resolver.resolve(root)).resolves.toMatchObject({
 		status: 'resolved'
 	});
@@ -343,7 +347,7 @@ test('spends a single nine-second deadline across delayed RPC stages', async () 
 						: { latestLedger: ledger, error: 'Error(Contract, #307)' }
 			};
 		});
-		const resolver = new SorobanDomainResolver(rpcUrl);
+		const resolver = new SorobanDomainResolver(rpcEndpoint);
 		const assertion = expect(resolver.resolve(root)).rejects.toMatchObject({
 			name: 'AbortError'
 		});
@@ -373,7 +377,7 @@ test('spends a single nine-second deadline across delayed RPC stages', async () 
 
 test('disconnecting one coalesced caller keeps the other caller’s RPC alive', async () => {
 	const caller = new AbortController();
-	const resolver = new SorobanDomainResolver(rpcUrl);
+	const resolver = new SorobanDomainResolver(rpcEndpoint);
 	const disconnected = expect(
 		resolver.resolve(root, caller.signal)
 	).rejects.toMatchObject({ name: 'AbortError' });
@@ -385,7 +389,7 @@ test('disconnecting one coalesced caller keeps the other caller’s RPC alive', 
 });
 
 test('coalesces duplicate requests and rejects excess concurrent lookups', async () => {
-	const resolver = new SorobanDomainResolver(rpcUrl);
+	const resolver = new SorobanDomainResolver(rpcEndpoint);
 	const first = resolver.resolve(root);
 	const second = resolver.resolve(root);
 	const other = resolver.resolve(exactDomainName('other.xlm')!);

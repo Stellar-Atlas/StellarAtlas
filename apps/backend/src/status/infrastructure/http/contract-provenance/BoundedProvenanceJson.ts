@@ -2,6 +2,12 @@ import http from 'node:http';
 import https from 'node:https';
 import type { IncomingMessage, RequestOptions } from 'node:http';
 import type { ClientRequest } from 'node:http';
+import { githubRepository } from './ContractBuildAttestation.js';
+import {
+	isRpcEndpoint,
+	publicEndpointLookup,
+	type RpcEndpoint
+} from './ProvenanceEndpointPolicy.js';
 
 const MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
 const MAX_REQUEST_BODY_BYTES = 16 * 1024;
@@ -77,15 +83,47 @@ function bodyBytes(body: unknown): Buffer | undefined {
 	return bytes;
 }
 
-export async function fetchProvenanceJson(
+type RequestLimits = {
+	readonly agent?: http.Agent;
+	readonly signal?: AbortSignal;
+	readonly timeoutMs?: number;
+	readonly maxResponseBytes?: number;
+};
+
+export async function fetchRpcJson(
+	endpoint: RpcEndpoint,
+	body: object,
+	options: RequestLimits = {}
+): Promise<unknown> {
+	if (!isRpcEndpoint(endpoint))
+		throw new ProvenanceHttpError(null, 'transport', 'Unapproved RPC endpoint');
+	return requestJson(new URL(endpoint.href), endpoint.lookup, body, options);
+}
+
+const githubLookup = publicEndpointLookup('api.github.com');
+
+export async function fetchGithubAttestations(
+	repository: string,
+	digest: string
+): Promise<unknown> {
+	const name = githubRepository('github:' + repository);
+	if (!name || !/^[0-9a-f]{64}$/.test(digest))
+		throw new ProvenanceHttpError(
+			null,
+			'transport',
+			'Invalid attestation identity'
+		);
+	const destination = new URL('https://api.github.com');
+	destination.pathname = '/repos/' + name + '/attestations/sha256:' + digest;
+	destination.search = 'per_page=5';
+	return requestJson(destination, githubLookup);
+}
+
+async function requestJson(
 	url: URL,
+	lookup: RpcEndpoint['lookup'],
 	body?: unknown,
-	options: {
-		readonly agent?: http.Agent;
-		readonly signal?: AbortSignal;
-		readonly timeoutMs?: number;
-		readonly maxResponseBytes?: number;
-	} = {}
+	options: RequestLimits = {}
 ): Promise<unknown> {
 	const { agent, signal } = options;
 	signal?.throwIfAborted();
@@ -154,7 +192,8 @@ export async function fetchProvenanceJson(
 
 		const requestOptions: RequestOptions = {
 			method: payload === undefined ? 'GET' : 'POST',
-			headers
+			headers,
+			lookup
 		};
 
 		timeout = setTimeout(() => {

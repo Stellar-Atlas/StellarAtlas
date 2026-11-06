@@ -6,7 +6,11 @@ import { performance } from 'node:perf_hooks';
 import { PassThrough } from 'node:stream';
 import request from 'supertest';
 import { contractProvenanceRouter } from '../ContractProvenanceRouter.js';
-import { fetchProvenanceJson } from '../BoundedProvenanceJson.js';
+import {
+	fetchGithubAttestations,
+	fetchRpcJson
+} from '../BoundedProvenanceJson.js';
+import { scopedRpcEndpoint } from '../ProvenanceEndpointPolicy.js';
 
 const { jest: mocks } = import.meta as ImportMeta & { jest: typeof jest };
 const upstream = 'https://scoped.example.invalid/exact';
@@ -61,7 +65,9 @@ it.each([302, 429])(
 			'/v1',
 			contractProvenanceRouter({
 				rpcUrl: native,
+				approvedNativeRpcUrl: native,
 				provenanceRpcUrl: upstream,
+				approvedProvenanceRpcUrl: upstream,
 				networkPassphrase: Networks.PUBLIC
 			})
 		);
@@ -93,6 +99,7 @@ it('keeps native routing and response behavior when the setting is absent', asyn
 		'/v1',
 		contractProvenanceRouter({
 			rpcUrl: native,
+			approvedNativeRpcUrl: native,
 			networkPassphrase: Networks.TESTNET
 		})
 	);
@@ -111,6 +118,7 @@ it('does not open a connection for an invalid opt-in, even with a native URL', a
 		'/v1',
 		contractProvenanceRouter({
 			rpcUrl: native,
+			approvedNativeRpcUrl: native,
 			provenanceRpcUrl: '',
 			networkPassphrase: Networks.PUBLIC
 		})
@@ -119,13 +127,65 @@ it('does not open a connection for an invalid opt-in, even with a native URL', a
 	expect(mock).not.toHaveBeenCalled();
 });
 
+it('does not use an otherwise valid scoped endpoint unless independently approved', async () => {
+	const { mock } = transport(200);
+	const app = express().use(
+		'/v1',
+		contractProvenanceRouter({
+			rpcUrl: native,
+			approvedNativeRpcUrl: native,
+			provenanceRpcUrl: upstream,
+			approvedProvenanceRpcUrl: upstream + '/other',
+			networkPassphrase: Networks.PUBLIC
+		})
+	);
+	await request(app).get(path).expect(503);
+	expect(mock).not.toHaveBeenCalled();
+});
+
+it('attaches the checked lookup to HTTPS and fixes GitHub authority and request path', async () => {
+	const { mock } = transport(200, [Buffer.from('{"attestations":[]}')]);
+	const hash = 'a'.repeat(64);
+	for (const repository of [
+		'owner/..',
+		'//evil.invalid',
+		'owner/repo?x',
+		'owner/a%2Fb'
+	])
+		await expect(fetchGithubAttestations(repository, hash)).rejects.toThrow(
+			'Invalid attestation identity'
+		);
+	await expect(
+		fetchGithubAttestations('owner/repo', 'x/'.repeat(32))
+	).rejects.toThrow('Invalid attestation identity');
+	expect(mock).not.toHaveBeenCalled();
+	await expect(fetchGithubAttestations('owner/repo', hash)).resolves.toEqual({
+		attestations: []
+	});
+	expect(mock.mock.calls[0]?.[0]).toMatchObject({
+		origin: 'https://api.github.com',
+		pathname: '/repos/owner/repo/attestations/sha256:' + hash
+	});
+	expect(mock.mock.calls[0]?.[1]).toMatchObject({
+		method: 'GET',
+		lookup: expect.any(Function)
+	});
+	const endpoint = scopedRpcEndpoint(upstream, upstream)!;
+	await expect(
+		fetchRpcJson({ ...endpoint, href: 'https://other.example.invalid/' }, {})
+	).rejects.toThrow('Unapproved RPC endpoint');
+	expect(mock).toHaveBeenCalledTimes(1);
+});
+
 it('fails closed before a fifth real transport attempt while preserving the native path', async () => {
 	const { observed, mock } = transport(429);
 	const scopedApp = express().use(
 		'/v1',
 		contractProvenanceRouter({
 			rpcUrl: native,
+			approvedNativeRpcUrl: native,
 			provenanceRpcUrl: upstream,
+			approvedProvenanceRpcUrl: upstream,
 			networkPassphrase: Networks.PUBLIC
 		})
 	);
@@ -144,6 +204,7 @@ it('fails closed before a fifth real transport attempt while preserving the nati
 		'/v1',
 		contractProvenanceRouter({
 			rpcUrl: native,
+			approvedNativeRpcUrl: native,
 			networkPassphrase: Networks.PUBLIC
 		})
 	);
@@ -154,11 +215,11 @@ it('fails closed before a fifth real transport attempt while preserving the nati
 
 it('rejects a chunked response beyond the configured byte bound and bounds outbound bytes', async () => {
 	const { mock } = transport(200, [Buffer.alloc(8192), Buffer.alloc(8193)]);
-	const url = new URL(upstream);
+	const endpoint = scopedRpcEndpoint(upstream, upstream)!;
 	const agent = new https.Agent();
 	await expect(
-		fetchProvenanceJson(
-			url,
+		fetchRpcJson(
+			endpoint,
 			{},
 			{
 				agent,
@@ -171,7 +232,7 @@ it('rejects a chunked response beyond the configured byte bound and bounds outbo
 	expect(mock.mock.calls[0]?.[1]).toMatchObject({ agent });
 	expect(mock).toHaveBeenCalledTimes(1);
 	await expect(
-		fetchProvenanceJson(url, { oversized: 'x'.repeat(16 * 1024) })
+		fetchRpcJson(endpoint, { oversized: 'x'.repeat(16 * 1024) })
 	).rejects.toThrow('request body exceeds size limit');
 	expect(mock).toHaveBeenCalledTimes(1);
 });
@@ -192,8 +253,8 @@ it.each(['cancelled', 'timed out'])(
 			.spyOn(https, 'request')
 			.mockReturnValue(outbound as unknown as ReturnType<typeof https.request>);
 		try {
-			const pending = fetchProvenanceJson(
-				new URL(upstream),
+			const pending = fetchRpcJson(
+				scopedRpcEndpoint(upstream, upstream)!,
 				{},
 				{
 					agent,

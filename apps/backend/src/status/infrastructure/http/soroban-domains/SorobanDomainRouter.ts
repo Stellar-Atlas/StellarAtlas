@@ -5,6 +5,7 @@ import {
 	withHubbleRequestCancellation
 } from '../HubbleRequestCancellation.js';
 import { exactDomainName } from './SorobanDomainRecord.js';
+import { nativeRpcEndpoint } from '../contract-provenance/ProvenanceEndpointPolicy.js';
 import {
 	SorobanDomainBusy,
 	SorobanDomainResolver
@@ -12,14 +13,15 @@ import {
 
 export function sorobanDomainRouter(config: {
 	readonly rpcUrl?: string;
+	readonly approvedNativeRpcUrl?: string;
 	readonly networkPassphrase: string;
 }): Router {
 	const router = express.Router();
 	const mainnet = config.networkPassphrase === Networks.PUBLIC;
-	const resolver =
-		mainnet && config.rpcUrl
-			? new SorobanDomainResolver(new URL(config.rpcUrl))
-			: undefined;
+	const endpoint = mainnet
+		? nativeRpcEndpoint(config.rpcUrl, config.approvedNativeRpcUrl)
+		: undefined;
+	const resolver = endpoint ? new SorobanDomainResolver(endpoint) : undefined;
 
 	router.get('/soroban-domains/:name', async (request, response) => {
 		response.setHeader('Cache-Control', 'no-store');

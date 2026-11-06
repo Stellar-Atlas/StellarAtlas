@@ -1,9 +1,10 @@
 import { Address, Networks, StrKey, xdr } from '@stellar/stellar-sdk';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import type { fetchProvenanceJson } from '../BoundedProvenanceJson.js';
+import type { fetchRpcJson } from '../BoundedProvenanceJson.js';
 import { ContractProvenanceService } from '../ContractProvenanceService.js';
 import { ContractRpcUnavailable } from '../ContractRpcCode.js';
+import { scopedRpcEndpoint } from '../ProvenanceEndpointPolicy.js';
 import { scopedProvenanceRpc } from '../ScopedProvenanceRpc.js';
 
 const { jest: mocks } = import.meta as ImportMeta & { jest: typeof jest };
@@ -56,8 +57,8 @@ function fixture(
 	} = {}
 ) {
 	return mocks.fn<
-		ReturnType<typeof fetchProvenanceJson>,
-		Parameters<typeof fetchProvenanceJson>
+		ReturnType<typeof fetchRpcJson>,
+		Parameters<typeof fetchRpcJson>
 	>(async (_, body) => {
 		const { id, method, params } = body as {
 			id: number;
@@ -110,7 +111,11 @@ afterEach(() => mocks.restoreAllMocks());
 
 it('reads only the expected keys from the same fixed HTTPS endpoint within one budget', async () => {
 	const request = fixture({ codeResult: { latestLedger: latestLedger + 1 } });
-	const reader = scopedProvenanceRpc(url, Networks.PUBLIC, request);
+	const reader = scopedProvenanceRpc(
+		scopedRpcEndpoint(url, url),
+		Networks.PUBLIC,
+		request
+	);
 	const observation = await reader.read(contractId);
 	expect(observation).toMatchObject({ ledger: latestLedger, wasmSha256: hash });
 	const [network, health, instance, code] = request.mock.calls;
@@ -217,7 +222,11 @@ it.each([
 	async (_, overrides, calls) => {
 		const request = fixture(overrides);
 		await expect(
-			scopedProvenanceRpc(url, Networks.PUBLIC, request).read(contractId)
+			scopedProvenanceRpc(
+				scopedRpcEndpoint(url, url),
+				Networks.PUBLIC,
+				request
+			).read(contractId)
 		).rejects.toBeInstanceOf(ContractRpcUnavailable);
 		expect(request).toHaveBeenCalledTimes(calls);
 	}
@@ -234,7 +243,11 @@ it.each([
 ])('fails closed for invalid endpoint %s', async (endpoint) => {
 	const request = fixture();
 	await expect(
-		scopedProvenanceRpc(endpoint, Networks.PUBLIC, request).read(contractId)
+		scopedProvenanceRpc(
+			scopedRpcEndpoint(endpoint, endpoint),
+			Networks.PUBLIC,
+			request
+		).read(contractId)
 	).rejects.toBeInstanceOf(ContractRpcUnavailable);
 	expect(request).not.toHaveBeenCalled();
 });
@@ -242,14 +255,22 @@ it.each([
 it('refuses a non-mainnet Atlas configuration before calling any upstream', async () => {
 	const request = fixture();
 	await expect(
-		scopedProvenanceRpc(url, Networks.TESTNET, request).read(contractId)
+		scopedProvenanceRpc(
+			scopedRpcEndpoint(url, url),
+			Networks.TESTNET,
+			request
+		).read(contractId)
 	).rejects.toBeInstanceOf(ContractRpcUnavailable);
 	expect(request).not.toHaveBeenCalled();
 });
 
 it('does not publish a cached observation after the health close-time expiry', async () => {
 	const request = fixture();
-	const reader = scopedProvenanceRpc(url, Networks.PUBLIC, request);
+	const reader = scopedProvenanceRpc(
+		scopedRpcEndpoint(url, url),
+		Networks.PUBLIC,
+		request
+	);
 	const service = new ContractProvenanceService(
 		undefined,
 		Networks.PUBLIC,
@@ -282,15 +303,23 @@ it('shares a fail-fast, no-queue admission cap across adapter instances', async 
 		release = resolve;
 	});
 	request.mockImplementationOnce(() => held).mockImplementationOnce(() => held);
-	const first = scopedProvenanceRpc(url, Networks.PUBLIC, request).read(
-		contractId
-	);
-	const second = scopedProvenanceRpc(url, Networks.PUBLIC, request).read(
-		contractId
-	);
+	const first = scopedProvenanceRpc(
+		scopedRpcEndpoint(url, url),
+		Networks.PUBLIC,
+		request
+	).read(contractId);
+	const second = scopedProvenanceRpc(
+		scopedRpcEndpoint(url, url),
+		Networks.PUBLIC,
+		request
+	).read(contractId);
 	try {
 		await expect(
-			scopedProvenanceRpc(url, Networks.PUBLIC, request).read(contractId)
+			scopedProvenanceRpc(
+				scopedRpcEndpoint(url, url),
+				Networks.PUBLIC,
+				request
+			).read(contractId)
 		).rejects.toBeInstanceOf(ContractRpcUnavailable);
 		expect(request).toHaveBeenCalledTimes(2);
 	} finally {
@@ -299,7 +328,11 @@ it('shares a fail-fast, no-queue admission cap across adapter instances', async 
 	}
 	monotonicTime += 10_000;
 	await expect(
-		scopedProvenanceRpc(url, Networks.PUBLIC, request).read(contractId)
+		scopedProvenanceRpc(
+			scopedRpcEndpoint(url, url),
+			Networks.PUBLIC,
+			request
+		).read(contractId)
 	).resolves.toMatchObject({ wasmSha256: hash });
 });
 
@@ -314,7 +347,11 @@ it('does not reset the overall deadline after an individual RPC call', async () 
 		};
 	});
 	await expect(
-		scopedProvenanceRpc(url, Networks.PUBLIC, request).read(contractId)
+		scopedProvenanceRpc(
+			scopedRpcEndpoint(url, url),
+			Networks.PUBLIC,
+			request
+		).read(contractId)
 	).rejects.toBeInstanceOf(ContractRpcUnavailable);
 	expect(request).toHaveBeenCalledTimes(1);
 });
@@ -324,7 +361,11 @@ it('holds a replacement process for the prior process window before sending any 
 		const { scopedProvenanceRpc: freshReader } =
 			await import('../ScopedProvenanceRpc.js');
 		const request = fixture();
-		const reader = freshReader(url, Networks.PUBLIC, request);
+		const reader = freshReader(
+			scopedRpcEndpoint(url, url),
+			Networks.PUBLIC,
+			request
+		);
 		monotonicTime += 9_999;
 		await expect(reader.read(contractId)).rejects.toThrow(
 			'RPC evidence is unavailable'
@@ -341,9 +382,12 @@ it('holds a replacement process for the prior process window before sending any 
 it('shares a rolling monotonic attempt budget across readers and counts provider errors', async () => {
 	const request = fixture({ envelope: { error: { code: -32000 } } });
 	const readers = [
-		scopedProvenanceRpc(url, Networks.PUBLIC, request),
+		scopedProvenanceRpc(scopedRpcEndpoint(url, url), Networks.PUBLIC, request),
 		scopedProvenanceRpc(
-			'https://other.example.invalid/stellar',
+			scopedRpcEndpoint(
+				'https://other.example.invalid/stellar',
+				'https://other.example.invalid/stellar'
+			),
 			Networks.PUBLIC,
 			request
 		)

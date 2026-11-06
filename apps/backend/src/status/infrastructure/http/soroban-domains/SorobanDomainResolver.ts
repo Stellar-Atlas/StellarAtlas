@@ -8,7 +8,8 @@ import {
 	xdr
 } from '@stellar/stellar-sdk';
 import { LRUCache } from 'lru-cache';
-import { fetchProvenanceJson } from '../contract-provenance/BoundedProvenanceJson.js';
+import { fetchRpcJson } from '../contract-provenance/BoundedProvenanceJson.js';
+import type { RpcEndpoint } from '../contract-provenance/ProvenanceEndpointPolicy.js';
 import {
 	decodeRegistryRecord,
 	registryRecordKey,
@@ -60,10 +61,10 @@ export class SorobanDomainResolver {
 	private readonly agent: http.Agent;
 
 	constructor(
-		private readonly rpcUrl: URL,
+		private readonly rpc: RpcEndpoint,
 		private readonly timeoutMs = LOOKUP_TIMEOUT_MS
 	) {
-		const Agent = rpcUrl.protocol === 'https:' ? https.Agent : http.Agent;
+		const Agent = rpc.protocol === 'https:' ? https.Agent : http.Agent;
 		this.agent = new Agent({
 			keepAlive: true,
 			maxSockets: MAX_IN_FLIGHT,
@@ -245,8 +246,8 @@ export class SorobanDomainResolver {
 		params?: object
 	): Promise<Record<string, unknown>> {
 		signal.throwIfAborted();
-		const value = await fetchProvenanceJson(
-			this.rpcUrl,
+		const value = await fetchRpcJson(
+			this.rpc,
 			{
 				jsonrpc: '2.0',
 				id: 1,
