@@ -1,5 +1,3 @@
-import http from 'node:http';
-import https from 'node:https';
 import {
 	Account,
 	Contract,
@@ -8,7 +6,8 @@ import {
 	xdr
 } from '@stellar/stellar-sdk';
 import { LRUCache } from 'lru-cache';
-import { fetchProvenanceJson } from '../contract-provenance/BoundedProvenanceJson.js';
+import { fetchRpcJson } from '../contract-provenance/BoundedProvenanceJson.js';
+import type { RpcEndpoint } from '../contract-provenance/ProvenanceEndpointPolicy.js';
 import {
 	decodeRegistryRecord,
 	registryRecordKey,
@@ -57,20 +56,10 @@ export class SorobanDomainResolver {
 		ttlResolution: 0
 	});
 	private readonly pending = new Map<string, PendingLookup>();
-	private readonly agent: http.Agent;
-
 	constructor(
-		private readonly rpcUrl: URL,
+		private readonly rpc: RpcEndpoint,
 		private readonly timeoutMs = LOOKUP_TIMEOUT_MS
-	) {
-		const Agent = rpcUrl.protocol === 'https:' ? https.Agent : http.Agent;
-		this.agent = new Agent({
-			keepAlive: true,
-			maxSockets: MAX_IN_FLIGHT,
-			maxTotalSockets: MAX_IN_FLIGHT,
-			maxFreeSockets: 1
-		});
-	}
+	) {}
 
 	async resolve(
 		domain: ExactDomainName,
@@ -245,15 +234,15 @@ export class SorobanDomainResolver {
 		params?: object
 	): Promise<Record<string, unknown>> {
 		signal.throwIfAborted();
-		const value = await fetchProvenanceJson(
-			this.rpcUrl,
+		const value = await fetchRpcJson(
+			this.rpc,
 			{
 				jsonrpc: '2.0',
 				id: 1,
 				method,
 				params
 			},
-			{ agent: this.agent, signal }
+			{ signal }
 		);
 		signal.throwIfAborted();
 		const reply = object(value);

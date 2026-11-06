@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { Networks, StrKey } from '@stellar/stellar-sdk';
 import express from 'express';
 import { readContractCode } from '../../contract-provenance/ContractRpcCode.js';
+import { nativeRpcEndpoint } from '../../contract-provenance/ProvenanceEndpointPolicy.js';
 import { exactDomainName } from '../SorobanDomainRecord.js';
 import {
 	SorobanDomainBusy,
@@ -75,7 +76,8 @@ test('two stalled cold lookups leave contract verification capacity and release 
 			if (stalled.length === 2) entered.resolve();
 		}
 	});
-	const resolver = new SorobanDomainResolver(url, 1_200);
+	const endpoint = nativeRpcEndpoint(url.href, url.href)!;
+	const resolver = new SorobanDomainResolver(endpoint, 1_200);
 	const first = exactDomainName('first.xlm')!;
 	const second = exactDomainName('second.xlm')!;
 	const domains = Promise.allSettled([
@@ -87,7 +89,7 @@ test('two stalled cold lookups leave contract verification capacity and release 
 		resolver.resolve(exactDomainName('third.xlm')!)
 	).rejects.toBeInstanceOf(SorobanDomainBusy);
 	await expect(
-		readContractCode(url, StrKey.encodeContract(Buffer.alloc(32, 8)))
+		readContractCode(endpoint, StrKey.encodeContract(Buffer.alloc(32, 8)))
 	).resolves.toMatchObject({ ledger: 123, executable: 'not_found' });
 	expect(stalled.every((response) => !response.destroyed)).toBe(true);
 	const outcomes = await domains;
@@ -127,7 +129,8 @@ test('aborting the HTTP caller closes the in-flight outbound RPC when no callers
 				'/v1',
 				sorobanDomainRouter({
 					networkPassphrase: Networks.PUBLIC,
-					rpcUrl: rpc.href
+					rpcUrl: rpc.href,
+					approvedNativeRpcUrl: rpc.href
 				})
 			)
 		)

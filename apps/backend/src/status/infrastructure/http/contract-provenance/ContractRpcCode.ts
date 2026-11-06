@@ -1,7 +1,8 @@
 import { Address, xdr } from '@stellar/stellar-sdk';
 import { createHash } from 'node:crypto';
-import { fetchProvenanceJson } from './BoundedProvenanceJson.js';
+import { fetchRpcJson } from './BoundedProvenanceJson.js';
 import { record } from './ContractBuildAttestation.js';
+import type { RpcEndpoint } from './ProvenanceEndpointPolicy.js';
 
 export interface ContractCodeObservation {
 	readonly ledger: number;
@@ -16,7 +17,7 @@ export class ContractRpcUnavailable extends Error {}
 type ReadScopedEntries = (key: string) => Promise<Record<string, unknown>>;
 
 export async function readContractCode(
-	rpcUrl: URL,
+	rpc: RpcEndpoint | undefined,
 	contractId: string,
 	readScopedEntries?: ReadScopedEntries
 ): Promise<ContractCodeObservation> {
@@ -27,7 +28,7 @@ export async function readContractCode(
 			durability: xdr.ContractDataDurability.persistent
 		})
 	);
-	const instance = await readEntry(rpcUrl, instanceKey, readScopedEntries);
+	const instance = await readEntry(rpc, instanceKey, readScopedEntries);
 	if (!instance.entry)
 		return {
 			ledger: instance.ledger,
@@ -63,7 +64,7 @@ export async function readContractCode(
 		throw new ContractRpcUnavailable('Unsupported contract executable');
 	const hash = executable.wasmHash;
 	const code = await readEntry(
-		rpcUrl,
+		rpc,
 		xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash })),
 		readScopedEntries
 	);
@@ -91,7 +92,7 @@ export async function readContractCode(
 }
 
 async function readEntry(
-	rpcUrl: URL,
+	rpc: RpcEndpoint | undefined,
 	key: xdr.LedgerKey,
 	readScopedEntries?: ReadScopedEntries
 ): Promise<{ ledger: number; modifiedLedger: number; entry: string | null }> {
@@ -100,8 +101,9 @@ async function readEntry(
 		const result = await readScopedEntries(encodedKey);
 		return parseEntry(result, encodedKey, true);
 	}
+	if (!rpc) throw new ContractRpcUnavailable('Contract RPC is not configured');
 	const response = record(
-		await fetchProvenanceJson(rpcUrl, {
+		await fetchRpcJson(rpc, {
 			jsonrpc: '2.0',
 			id: 1,
 			method: 'getLedgerEntries',

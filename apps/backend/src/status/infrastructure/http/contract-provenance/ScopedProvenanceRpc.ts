@@ -1,7 +1,8 @@
 import { Networks } from '@stellar/stellar-sdk';
 import { performance } from 'node:perf_hooks';
-import { fetchProvenanceJson } from './BoundedProvenanceJson.js';
+import { fetchRpcJson } from './BoundedProvenanceJson.js';
 import { record } from './ContractBuildAttestation.js';
+import type { RpcEndpoint } from './ProvenanceEndpointPolicy.js';
 import {
 	ContractRpcUnavailable,
 	readContractCode,
@@ -46,11 +47,10 @@ export interface ScopedProvenanceRpc {
 // current state. Its network, close time and ledger entries are assertions,
 // not a consensus or state proof. Never follow provider or client-supplied URLs.
 export function scopedProvenanceRpc(
-	configuredUrl: string,
+	endpoint: RpcEndpoint<'scoped'> | undefined,
 	networkPassphrase: string,
-	request: typeof fetchProvenanceJson = fetchProvenanceJson
+	request: typeof fetchRpcJson = fetchRpcJson
 ): ScopedProvenanceRpc {
-	const endpoint = exactHttpsUrl(configuredUrl);
 	return {
 		async read(contractId) {
 			if (!endpoint || networkPassphrase !== Networks.PUBLIC)
@@ -120,7 +120,7 @@ export function scopedProvenanceRpc(
 					throw new Error('Scoped provenance RPC close time is not current');
 				let lastLedger = latestLedger;
 				const observation = await readContractCode(
-					endpoint,
+					undefined,
 					contractId,
 					async (key) => {
 						const result = await call('getLedgerEntries', key);
@@ -160,17 +160,4 @@ function ledgerNumber(value: unknown): value is number {
 		value > 0 &&
 		value <= 0xffffffff
 	);
-}
-
-function exactHttpsUrl(value: string): URL | undefined {
-	if (!/^https:\/\/[^\s\\?#]+$/.test(value)) return undefined;
-	const authority = value.slice('https://'.length).split('/')[0];
-	if (!authority || authority.includes('@')) return undefined;
-	try {
-		const url = new URL(value);
-		if (url.hostname && !url.username && !url.password) return url;
-	} catch {
-		// A present but invalid setting disables evidence rather than falling back.
-	}
-	return undefined;
 }

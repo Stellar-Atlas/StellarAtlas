@@ -5,18 +5,32 @@ import {
 	ProvenanceBusy
 } from './ContractProvenanceService.js';
 import { scopedProvenanceRpc } from './ScopedProvenanceRpc.js';
+import {
+	nativeRpcEndpoint,
+	scopedRpcEndpoint
+} from './ProvenanceEndpointPolicy.js';
 
 export function contractProvenanceRouter(config: {
 	readonly rpcUrl?: string;
 	readonly provenanceRpcUrl?: string;
+	readonly approvedNativeRpcUrl?: string;
+	readonly approvedProvenanceRpcUrl?: string;
 	readonly networkPassphrase: string;
 }): Router {
 	const scoped =
 		config.provenanceRpcUrl === undefined
 			? undefined
-			: scopedProvenanceRpc(config.provenanceRpcUrl, config.networkPassphrase);
+			: scopedProvenanceRpc(
+					scopedRpcEndpoint(
+						config.provenanceRpcUrl,
+						config.approvedProvenanceRpcUrl
+					),
+					config.networkPassphrase
+				);
 	const service = new ContractProvenanceService(
-		!scoped && config.rpcUrl ? new URL(config.rpcUrl) : undefined,
+		scoped
+			? undefined
+			: nativeRpcEndpoint(config.rpcUrl, config.approvedNativeRpcUrl),
 		config.networkPassphrase,
 		scoped
 	);
