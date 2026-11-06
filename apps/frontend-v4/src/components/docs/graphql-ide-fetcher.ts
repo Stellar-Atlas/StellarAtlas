@@ -14,12 +14,14 @@ export interface GraphqlIdeResult {
 	readonly status: number;
 	readonly elapsedMilliseconds: number;
 	readonly schemaRequest: boolean;
+	readonly actionRevision?: number;
 }
 
 interface TransportOptions {
 	readonly request?: typeof fetch;
 	readonly timeoutMilliseconds?: number;
 	readonly onBusy?: (busy: boolean) => void;
+	readonly beginDataExecution?: () => number;
 	readonly onResult?: (result: GraphqlIdeResult) => void;
 	readonly onError?: (message: string, schemaRequest: boolean) => void;
 }
@@ -84,6 +86,9 @@ export function createGraphqlIdeTransport(options: TransportOptions = {}): {
 				: undefined;
 		const execute = async (): Promise<FormattedExecutionResult> => {
 			if (cached) return cached;
+			const actionRevision = schemaRequest
+				? undefined
+				: options.beginDataExecution?.();
 			controllers.add(controller);
 			if (!schemaRequest) options.onBusy?.(true);
 			const started = performance.now();
@@ -138,7 +143,8 @@ export function createGraphqlIdeTransport(options: TransportOptions = {}): {
 						variables: JSON.stringify(parameters.variables ?? {}, null, 2),
 						status: response.status,
 						elapsedMilliseconds: Math.round(performance.now() - started),
-						schemaRequest
+						schemaRequest,
+						actionRevision
 					});
 				return result;
 			} catch (error) {

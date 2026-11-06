@@ -22,6 +22,35 @@ function response(body: unknown, status = 200): Response {
 }
 const query = '{ hubbleStatus { datasetCount } }';
 describe('GraphiQL HTTP transport', () => {
+	it('captures the action revision when a data execution starts and returns the original response', async () => {
+		let revision = 0;
+		const beginDataExecution = jest.fn(() => ++revision);
+		const onResult = jest.fn();
+		let complete!: (reply: Response) => void;
+		const request = jest.fn<typeof fetch>().mockImplementation(
+			() =>
+				new Promise<Response>((resolve) => {
+					complete = resolve;
+				})
+		);
+		const transport = createGraphqlIdeTransport({
+			request,
+			beginDataExecution,
+			onResult
+		});
+		const stream = iterator(transport.fetcher({ query }));
+		expect(beginDataExecution).not.toHaveBeenCalled();
+		const result = stream.next();
+		expect(beginDataExecution).toHaveBeenCalledTimes(1);
+		revision++;
+		const payload = { data: { hubbleStatus: { datasetCount: 10 } } };
+		complete(response(payload));
+		expect((await result).value).toEqual(payload);
+		expect(onResult).toHaveBeenCalledWith(
+			expect.objectContaining({ actionRevision: 1, result: payload })
+		);
+	});
+
 	it('does not execute on construction and sends one public same-origin request when consumed', async () => {
 		const request = jest
 			.fn<typeof fetch>()
