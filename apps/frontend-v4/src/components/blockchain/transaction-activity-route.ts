@@ -40,6 +40,24 @@ export function validLedger(value: string): boolean {
 	return value === '' || (/^[1-9]\d{0,9}$/.test(value) && Number(value) <= 4294967295);
 }
 
+export function resolveTypedTransactionLedger(
+	hash: string,
+	requestedLedger: string,
+	transaction: Readonly<Record<string, unknown>>
+): string {
+	if (typeof transaction.hash !== 'string' || !/^[a-f0-9]{64}$/i.test(transaction.hash) ||
+		transaction.hash.toLowerCase() !== hash.toLowerCase())
+		throw new Error('The data service returned a different transaction.');
+	const sequence = transaction.ledgerSequence;
+	// Match the typed transaction proxy's signed Int32 ledger bound.
+	if (typeof sequence !== 'number' || !Number.isInteger(sequence) || sequence < 1 || sequence > 2_147_483_647)
+		throw new Error('The data service returned an invalid transaction ledger.');
+	const resolved = String(sequence);
+	if (requestedLedger && requestedLedger !== resolved)
+		throw new Error('The data service returned a different ledger for this transaction.');
+	return resolved;
+}
+
 export function validActivityCursor(value: string | null | undefined): value is string {
 	return !!value && value.length <= 2048 && !/[\u0000-\u001f\u007f]/.test(value);
 }

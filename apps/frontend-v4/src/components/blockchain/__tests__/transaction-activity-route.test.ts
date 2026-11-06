@@ -1,6 +1,16 @@
-import { readTransactionActivityRoute, restoreTransactionRelation, transactionActivityHref, transactionActivityKey, transactionRelationPositionKey } from '../transaction-activity-route';
+import { readTransactionActivityRoute, resolveTypedTransactionLedger, restoreTransactionRelation, transactionActivityHref, transactionActivityKey, transactionRelationPositionKey } from '../transaction-activity-route';
 
 describe('transaction activity URL selection', () => {
+	it('binds only a valid matching typed transaction ledger, including failed on-chain transactions', () => {
+		const hash = 'ab'.repeat(32);
+		const transaction = { hash: hash.toUpperCase(), ledgerSequence: 64877689, successful: false };
+		expect(resolveTypedTransactionLedger(hash, '', transaction)).toBe('64877689');
+		expect(resolveTypedTransactionLedger(hash, '64877689', transaction)).toBe('64877689');
+		expect(() => resolveTypedTransactionLedger(hash, '64877688', transaction)).toThrow('different ledger');
+		expect(() => resolveTypedTransactionLedger(hash, '', { ...transaction, hash: 'cd'.repeat(32) })).toThrow('different transaction');
+		for (const ledgerSequence of [undefined, '64877689', 0, 1.5, 2_147_483_648])
+			expect(() => resolveTypedTransactionLedger(hash, '', { ...transaction, ledgerSequence })).toThrow('invalid transaction ledger');
+	});
 	it('round-trips exact independent opaque cursors, ledger and return context', () => {
 		const route = { ledger: '65213961', cursors: { operations: 'op+/=', effects: 'effects', events: 'events' } };
 		const url = new URL(transactionActivityHref('/explorer/transactions/hash-A', '?return_to=%2Fexplorer&unrelated=keep', route, 'hash-A', '#events'), 'http://fixture.invalid');

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, usePathname } from 'next/navigation';
-import { readTransactionActivityRoute, restoreTransactionRelation, transactionActivityHref, transactionActivityKey, transactionRelationPositionKey, validActivityCursor, validLedger, type TransactionActivityRoute } from './transaction-activity-route';
+import { readTransactionActivityRoute, resolveTypedTransactionLedger, restoreTransactionRelation, transactionActivityHref, transactionActivityKey, transactionRelationPositionKey, validActivityCursor, validLedger, type TransactionActivityRoute } from './transaction-activity-route';
 import {
 	requestExplorerTransaction,
 	transactionRelations as relations,
@@ -142,8 +142,9 @@ function TransactionDetail({ hash, route }: {
 	const params = useSearchParams();
 	const { ledger, cursors } = route;
 	const requestKey = transactionActivityKey(route);
-	const [loaded, setLoaded] = useState<{ key: string; data: EntityRecord } | null>(null);
+	const [loaded, setLoaded] = useState<{ key: string; data: EntityRecord; ledger: string } | null>(null);
 	const data = loaded?.key === requestKey ? loaded.data : null;
+	const navigationRoute = ledger || !loaded ? route : { ...route, ledger: loaded.ledger };
 	const activeRequest = useRef<AbortController | null>(null);
 	const resolvedLedger = useRef<{ hash: string; ledger: string } | null>(null);
 	const [busy, setBusy] = useState(false),
@@ -155,9 +156,9 @@ function TransactionDetail({ hash, route }: {
 		window.history.pushState(null, '', transactionActivityHref(pathname, params.toString(), selection, hash, window.location.hash));
 	};
 	const previousControl = (relation: Relation) => {
-		const previous = previousPages.current.get(transactionRelationPositionKey(route, relation));
+		const previous = previousPages.current.get(transactionRelationPositionKey(navigationRoute, relation));
 		return <button key={relation} type="button" disabled={busy || !cursors[relation]}
-			onClick={() => navigate(restoreTransactionRelation(route, relation, previous))}>
+			onClick={() => navigate(restoreTransactionRelation(navigationRoute, relation, previous))}>
 			{previous === undefined ? 'First' : 'Previous'} {relation}
 		</button>;
 	};
@@ -180,13 +181,10 @@ function TransactionDetail({ hash, route }: {
 				abort.signal
 			);
 			if (!disposed) {
-				const foundLedger = entityText(
-					recordValue(result.transaction),
-					'ledgerSequence'
-				);
+				const foundLedger = resolveTypedTransactionLedger(hash, selected, recordValue(result.transaction));
 				resolvedLedger.current = { hash, ledger: foundLedger };
-				if (foundLedger) setInput(foundLedger);
-				setLoaded({ key: requestKey, data: result });
+				setInput(foundLedger);
+				setLoaded({ key: requestKey, data: result, ledger: foundLedger });
 			}
 		})()
 			.catch((failure) => {
@@ -210,9 +208,7 @@ function TransactionDetail({ hash, route }: {
 	}, [hash, ledger, requestKey, retry]);
 	useEffect(() => setInput(ledger), [ledger]);
 	const tx = data ? recordValue(data.transaction) : null;
-	const chosenLedger = tx
-		? entityText(tx, 'ledgerSequence') || entityText(tx, 'ledger')
-		: ledger;
+	const chosenLedger = data ? navigationRoute.ledger : ledger;
 	return (
 		<div className={styles.workspace}>
 			<ExplorerEntityNavigation active="transactions" />
@@ -349,7 +345,7 @@ function TransactionDetail({ hash, route }: {
 										<button
 											disabled={busy || !validActivityCursor(next)}
 											onClick={() => {
-												const selection = { ledger, cursors: { ...cursors, [relation]: next } };
+												const selection = { ...navigationRoute, cursors: { ...cursors, [relation]: next } };
 												previousPages.current.set(transactionRelationPositionKey(selection, relation), cursors[relation] ?? null);
 												const oldest = previousPages.current.keys().next().value;
 												if (previousPages.current.size > 50 && oldest) previousPages.current.delete(oldest);
