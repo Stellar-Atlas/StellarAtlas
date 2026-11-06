@@ -1,5 +1,10 @@
 import type { RequestHandler } from 'express';
-import { claimablePositionCursorScope } from './ClaimablePositionCursorScope.js';
+import {
+	encodeClaimableCursor,
+	readClaimableCursor,
+	supportsClaimableCursorNetwork,
+	type ClaimableCursorScope
+} from './ClaimablePositionCursor.js';
 import {
 	amount,
 	classicAddress,
@@ -71,6 +76,7 @@ export function createExplorerClaimablePositionsHandler(config: {
 	const base = config.horizonUrl.endsWith('/')
 		? config.horizonUrl
 		: config.horizonUrl + '/';
+	const cursorNetworkSupported = supportsClaimableCursorNetwork(config.networkPassphrase);
 	return async (req, res) => {
 		res.setHeader('Cache-Control', 'no-store');
 		const accountId = classicAddress(req.params.accountId);
@@ -87,16 +93,17 @@ export function createExplorerClaimablePositionsHandler(config: {
 				.json({ error: 'invalid_claimable_positions_query' });
 		}
 
-		const scope = claimablePositionCursorScope(
-			config.networkPassphrase,
-			accountId,
-			role
-		);
-		const after = cursor === undefined ? null : decodeCursor(cursor, scope);
+		if (!cursorNetworkSupported)
+			return res.status(502).json({ error: 'claimable_positions_unavailable' });
+		const scope: ClaimableCursorScope = [config.networkPassphrase, accountId, role];
+		const after = cursor === undefined ? null : parsePagingToken(readClaimableCursor(cursor, scope));
 		if (cursor !== undefined && after === null)
 			return res
 				.status(400)
-				.json({ error: 'invalid_claimable_positions_cursor' });
+				.json({
+					error: 'invalid_claimable_positions_cursor',
+					message: 'Restart claimable-position pagination without a cursor.'
+				});
 
 		const controller = new AbortController();
 		const abort = () => controller.abort();
@@ -201,7 +208,7 @@ function parsePage(
 	limit: number,
 	after: PositionKey | null,
 	latestLedger: string | null,
-	scope: string
+	scope: ClaimableCursorScope
 ): Pick<PositionPage, 'pageStatus' | 'positions' | 'nextCursor'> {
 	const records = object(object(value)?._embedded)?.records;
 	if (!Array.isArray(records) || records.length > limit) invalidPage();
@@ -231,9 +238,7 @@ function parsePage(
 		// A full upstream page permits another request, including an empty terminal page.
 		nextCursor:
 			records.length === limit && last
-				? Buffer.from(JSON.stringify([1, scope, pagingToken(last)])).toString(
-						'base64url'
-					)
+				? encodeClaimableCursor(scope, pagingToken(last))
 				: null
 	};
 }
@@ -369,28 +374,6 @@ function parsePagingToken(value: unknown): PositionKey | null {
 
 function pagingToken(key: PositionKey): string {
 	return key.ledger + '-' + key.id;
-}
-
-function decodeCursor(cursor: unknown, scope: string): PositionKey | null {
-	if (
-		typeof cursor !== 'string' ||
-		cursor.length > 256 ||
-		!/^[A-Za-z0-9_-]+$/.test(cursor)
-	)
-		return null;
-	try {
-		const bytes = Buffer.from(cursor, 'base64url');
-		if (bytes.toString('base64url') !== cursor) return null;
-		const value: unknown = JSON.parse(bytes.toString('utf8'));
-		return Array.isArray(value) &&
-			value.length === 3 &&
-			value[0] === 1 &&
-			value[1] === scope
-			? parsePagingToken(value[2])
-			: null;
-	} catch {
-		return null;
-	}
 }
 
 function readLimit(value: unknown): number | null {

@@ -22,6 +22,14 @@ const v1ClaimantCursor =
 	'MDAwMDAwMGJiYmJiYmJiYmJiYmJiYmJiYmJiYmJi' +
 	'YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJi' +
 	'YmJiYmJiYmJiYmIiXQ';
+const v2ClaimantCursor =
+	'WzIsIlRlc3QgU0RGIE5ldHdvcmsgOyBTZXB0ZW1i' +
+	'ZXIgMjAxNSIsIkdDTkRORVdMNFdCUjdESEUzVk9W' +
+	'Q0tWTUJCNjdKTVpWM0xCWFVIUE9WRVBBQkVJQlZW' +
+	'UDVLUElDIiwiY2xhaW1hbnQiLCI2MzM4NjMzOS0w' +
+	'MDAwMDAwMGJiYmJiYmJiYmJiYmJiYmJiYmJiYmJi' +
+	'YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJi' +
+	'YmJiYmJiYmJiYmIiXQ';
 const predicate = {
 	and: [
 		{ abs_before: '2020-12-30T23:03:56Z', abs_before_epoch: '1609369436' },
@@ -193,7 +201,7 @@ it('deduplicates a full page, advances using the row token only, and carries eac
 		latestLedger: String(ledger)
 	});
 	const cursor: string = first.body.nextCursor;
-	expect(cursor).toBe(v1ClaimantCursor);
+	expect(cursor).toBe(v2ClaimantCursor);
 	const second = await request(app)
 		.get(route)
 		.query({ role: 'claimant', limit: 2, cursor })
@@ -240,6 +248,61 @@ it('rejects reusing a cursor across account, role or configured network before u
 		.query({ role: 'claimant', cursor })
 		.expect(400);
 	expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('requires restarting a v1 preview cursor without an upstream request, then emits v2', async () => {
+	const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(page([row()]));
+	const app = buildTestApp();
+	await request(app).get(route)
+		.query({ role: 'claimant', limit: 1, cursor: v1ClaimantCursor })
+		.expect(400).expect('Cache-Control', 'no-store').expect({
+			error: 'invalid_claimable_positions_cursor',
+			message: 'Restart claimable-position pagination without a cursor.'
+		});
+	expect(fetch).not.toHaveBeenCalled();
+	const first = await request(app).get(route).query({ role: 'claimant', limit: 1 }).expect(200);
+	expect(first.body.nextCursor).toBe(v2ClaimantCursor);
+	expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('supports a bounded custom Unicode network and refuses oversized identities without a fetch', async () => {
+	const appFor = (networkPassphrase: string) => {
+		const app = express();
+		app.get(route.replace(accountId, ':accountId'), createExplorerClaimablePositionsHandler({
+			horizonUrl: 'https://horizon.example',
+			networkPassphrase
+		}));
+		return app;
+	};
+	const custom = 'é'.repeat(255); // JSON including quotes is 512 UTF-8 bytes.
+	const fetch = jest.spyOn(globalThis, 'fetch')
+		.mockResolvedValueOnce(page([row()]))
+		.mockResolvedValueOnce(page([]));
+	await request(appFor(custom + 'é')).get(route).query({ role: 'claimant' }).expect(502);
+	expect(fetch).not.toHaveBeenCalled();
+	const app = appFor(custom);
+	const first = await request(app).get(route).query({ role: 'claimant', limit: 1 }).expect(200);
+	const cursor: string = first.body.nextCursor;
+	expect(cursor.length).toBeGreaterThan(256);
+	expect(cursor.length).toBeLessThanOrEqual(1024);
+	await request(app).get(route).query({ role: 'claimant', limit: 1, cursor }).expect(200);
+	expect(fetch).toHaveBeenCalledTimes(2);
+	expect(new URL(String(fetch.mock.calls[1]?.[0])).searchParams.get('cursor')).toBe(row().paging_token);
+});
+
+it('rejects alternate encodings, oversized cursors and invalid provider row tokens', async () => {
+	const fetch = jest.spyOn(globalThis, 'fetch');
+	const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64url');
+	const app = buildTestApp();
+	for (const cursor of [
+		v2ClaimantCursor + '=',
+		'A'.repeat(1025),
+		encode(' ' + Buffer.from(v2ClaimantCursor, 'base64url').toString('utf8')),
+		encode(JSON.stringify([2, network, accountId, 'claimant', 'https://untrusted.invalid']))
+	]) {
+		await request(app).get(route).query({ role: 'claimant', cursor }).expect(400);
+	}
+	expect(fetch).not.toHaveBeenCalled();
 });
 
 it.each([

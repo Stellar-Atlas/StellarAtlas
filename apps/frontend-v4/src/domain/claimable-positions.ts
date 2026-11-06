@@ -7,5 +7,5 @@ export function isClaimableRole(value: unknown): value is ClaimableRole {
 }
 
 export function isClaimableCursor(value: unknown): value is string {
-	return typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value);
+	return typeof value === 'string' && /^[A-Za-z0-9_-]{1,1024}$/.test(value);
 }

@@ -16,15 +16,17 @@ it('is off by default and forwards only the scoped role and opaque cursor when e
 		expect(fetch).not.toHaveBeenCalled();
 		process.env.STELLAR_ATLAS_ACCOUNT_CLAIMABLE_POSITIONS = '1';
 		process.env.STELLAR_ATLAS_PUBLIC_API_URL = 'http://127.0.0.1:3099';
-		for (const query of ['', '?role=claimant&role=sponsor', '?role=claimant&limit=999', '?role=sponsor&cursor=%2Fsomewhere']) {
+		for (const query of ['', '?role=claimant&role=sponsor', '?role=claimant&limit=999',
+			'?role=sponsor&cursor=%2Fsomewhere', '?role=sponsor&cursor=' + 'A'.repeat(1025)]) {
 			expect((await GET(new Request(path + query), { params })).status).toBe(400);
 		}
-		const response = await GET(new Request(path + '?role=sponsor&cursor=Abc-_'), { params });
+		const cursor = 'Abc-_'.repeat(204) + 'Abc-';
+		const response = await GET(new Request(path + '?role=sponsor&cursor=' + cursor), { params });
 		expect(response.status).toBe(200);
 		expect(response.headers.get('cache-control')).toBe('no-store');
 		expect(await response.json()).toEqual({ positions: [] });
 		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:3099/v1/explorer/accounts/' + account + '/claimable-positions?role=sponsor&cursor=Abc-_',
+		expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:3099/v1/explorer/accounts/' + account + '/claimable-positions?role=sponsor&cursor=' + cursor,
 			expect.objectContaining({ cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal) }));
 	} finally {
 		fetch.mockRestore();

@@ -1106,10 +1106,10 @@
 					{
 						"name": "cursor",
 						"in": "query",
-						"description": "Opaque continuation for the same account, role and configured network.",
+						"description": "Opaque v2 continuation for the same account, role and configured network. If an older cursor is rejected, omit it and request the first page.",
 						"schema": {
 							"type": "string",
-							"maxLength": 256
+							"maxLength": 1024
 						}
 					}
 				],
@@ -1125,13 +1125,13 @@
 						}
 					},
 					"400": {
-						"description": "Invalid account, role, page limit or continuation cursor"
+						"description": "Invalid account, role, page limit or continuation cursor. For a rejected cursor, restart at the first page."
 					},
 					"501": {
 						"description": "Provider does not support the endpoint"
 					},
 					"502": {
-						"description": "Provider or response unavailable"
+						"description": "Provider or response unavailable, or the configured public network identifier exceeds the cursor budget"
 					}
 				}
 			}
@@ -11507,7 +11507,8 @@
 					},
 					"nextCursor": {
 						"type": "string",
-						"nullable": true
+						"nullable": true,
+						"maxLength": 1024
 					}
 				}
 			},
