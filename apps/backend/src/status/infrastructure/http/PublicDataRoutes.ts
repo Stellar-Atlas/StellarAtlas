@@ -1,10 +1,17 @@
 import type { Express } from 'express';
 import type { EntityManager } from 'typeorm';
+import { join } from 'node:path';
 import { assetResourceRouter } from './asset-catalogue/AssetResourceRouter.js';
+import { AssetCatalogue } from './asset-catalogue/AssetCatalogue.js';
+import { AssetCatalogueSource } from './asset-catalogue/AssetCatalogueSource.js';
+import { IssuerDomainCache } from './issuer-domains/IssuerDomainCache.js';
+import { IssuerDomainLookup } from './issuer-domains/IssuerDomainLookup.js';
+import { issuerDomainRouter } from './issuer-domains/IssuerDomainRouter.js';
 import { hubbleWarehouseRouter } from './HubbleWarehouseRouter.js';
 import { hubbleWarehouseGraphqlHandler } from './HubbleWarehouseGraphql.js';
 import { publicGoodsRouter, type PublicGoodsRouterConfig } from './PublicGoodsRouter.js';
 import { createPublicGoodsReadinessReader } from './PublicGoodsReadinessReader.js';
+import { sorobanDomainRouter } from './soroban-domains/SorobanDomainRouter.js';
 
 interface PublicDataRouteConfig {
 	readonly warehouse: PublicGoodsRouterConfig['warehouse'];
@@ -15,9 +22,24 @@ interface PublicDataRouteConfig {
 
 export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfig): void {
 	app.use('/v1/analytics', hubbleWarehouseRouter({ warehouse: config.warehouse }));
+	app.use('/v1', sorobanDomainRouter({
+		rpcUrl: process.env.STELLAR_RPC_URL,
+		networkPassphrase: config.networkPassphrase
+	}));
+	const cacheRoot = process.env.ASSET_METADATA_CACHE_ROOT ?? '/mnt/stellaratlas_assets';
+	const source = new AssetCatalogueSource(config.networkPassphrase);
+	const catalogue = new AssetCatalogue(source, join(cacheRoot, 'catalogue'), config.networkPassphrase);
+	catalogue.start();
+	app.use('/v1', issuerDomainRouter(
+		config.networkPassphrase,
+		new IssuerDomainLookup(new IssuerDomainCache(join(cacheRoot, 'metadata'), config.networkPassphrase), catalogue)
+	));
 	app.use('/v1', assetResourceRouter({
 		warehouse: config.warehouse,
-		networkPassphrase: config.networkPassphrase
+		networkPassphrase: config.networkPassphrase,
+		cacheRoot,
+		source,
+		catalogue
 	}));
 	app.use('/v1/public-goods', publicGoodsRouter({
 		warehouse: config.warehouse,

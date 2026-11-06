@@ -310,8 +310,14 @@ function EventDialog({
 	const dialog = useRef<HTMLDialogElement>(null);
 	useEffect(() => {
 		const element = dialog.current;
+		const previousFocus = document.activeElement;
 		element?.showModal();
-		return () => element?.close();
+		return () => {
+			// Strict Mode replays this cleanup; the native close event must not deselect the row.
+			element?.close();
+			if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
+				previousFocus.focus({ preventScroll: true });
+		};
 	}, []);
 	const { fields, truncated } = flattenContractEventValue(payload(row));
 	const summary = summarizeContractEvent(
@@ -323,8 +329,10 @@ function EventDialog({
 			ref={dialog}
 			className={styles.raw}
 			aria-labelledby="event-details-title"
-			onCancel={onClose}
-			onClose={onClose}
+			onCancel={(event) => {
+				event.preventDefault();
+				onClose();
+			}}
 		>
 			<div className={styles.rawHeading}>
 				<h3 id="event-details-title">{summary.title}</h3>

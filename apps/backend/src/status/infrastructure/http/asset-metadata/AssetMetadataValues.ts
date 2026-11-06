@@ -3,6 +3,7 @@ import type {
 	AssetMetadata,
 	AssetMetadataInput,
 	CurrencyEntry,
+	IssuerCollectibleClaim,
 	IssuerMetadata
 } from './types.js';
 export interface PersistedIssuer extends IssuerMetadata {
@@ -10,6 +11,34 @@ export interface PersistedIssuer extends IssuerMetadata {
 }
 type LogoExtension = 'png' | 'jpg' | 'webp' | 'gif';
 const logoMaxBytes = 2 * 1024 * 1024;
+
+export function issuerCollectibleClaim(
+	fields: CurrencyEntry['fields']
+): IssuerCollectibleClaim | undefined {
+	const common = { source: 'issuer-toml', scarcity: 'unverified' } as const;
+	if (fields.is_asset_anchored === 'true' && fields.anchor_asset_type === 'nft')
+		return { ...common, kind: 'sep1-nft-backed' };
+
+	const target = fields.url;
+	const digest = fields.url_sha256;
+	if (
+		!target ||
+		target.length > 2048 ||
+		!/^(?:https|ipfs):\/\/[^/?#]/i.test(target) ||
+		/[\s\\\u0000-\u001f\u007f]/.test(target) ||
+		(digest !== undefined && !/^[a-f0-9]{64}$/i.test(digest))
+	)
+		return undefined;
+	const uri = URL.parse(target);
+	if (
+		uri?.hostname &&
+		!uri.username &&
+		!uri.password &&
+		(uri.protocol === 'https:' || (uri.protocol === 'ipfs:' && !uri.port))
+	)
+		return { ...common, kind: 'sep39-collectible-link' };
+	return undefined;
+}
 
 export function findCurrency(
 	currencies: readonly CurrencyEntry[],

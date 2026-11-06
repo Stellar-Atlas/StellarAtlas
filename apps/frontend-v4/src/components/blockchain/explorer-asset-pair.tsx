@@ -9,9 +9,9 @@ import {
 	type EntityRecord
 } from '../../api/explorer-analytics';
 import styles from './explorer-pool-table.module.css';
+import { assetMetadataCache as cache } from './explorer-asset-metadata-cache';
 
 type Metadata = Readonly<Record<string, EntityRecord>>;
-const cache = new Map<string, EntityRecord>();
 
 /** One bounded metadata request per group; never one network request per table cell. */
 export function usePairMetadata(

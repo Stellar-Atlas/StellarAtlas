@@ -10,6 +10,7 @@ jest.unstable_mockModule('next/navigation', () => ({
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({
 	default: {}
 }));
+jest.unstable_mockModule('../explorer-account-assets.module.css', () => ({ default: {} }));
 const { ExplorerBalanceObservations, BalanceObservationResults } =
 	await import('../explorer-balance-observations');
 const page: BalanceObservationPage = {

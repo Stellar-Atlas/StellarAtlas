@@ -323,7 +323,8 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 			},
 			getExplorerLocalTransactions,
 			getExplorerRecentTransactions,
-			horizonUrl: 'https://horizon.example'
+			horizonUrl: 'https://horizon.example',
+			networkPassphrase: 'Test SDF Network ; September 2015'
 		})
 	);
 	return app;

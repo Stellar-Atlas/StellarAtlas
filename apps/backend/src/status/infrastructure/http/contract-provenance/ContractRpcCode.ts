@@ -1,6 +1,8 @@
 import { Address, xdr } from '@stellar/stellar-sdk';
-import { fetchProvenanceJson } from './BoundedProvenanceJson.js';
+import { createHash } from 'node:crypto';
+import { fetchRpcJson } from './BoundedProvenanceJson.js';
 import { record } from './ContractBuildAttestation.js';
+import type { RpcEndpoint } from './ProvenanceEndpointPolicy.js';
 
 export interface ContractCodeObservation {
 	readonly ledger: number;
@@ -12,9 +14,12 @@ export interface ContractCodeObservation {
 
 export class ContractRpcUnavailable extends Error {}
 
+type ReadScopedEntries = (key: string) => Promise<Record<string, unknown>>;
+
 export async function readContractCode(
-	rpcUrl: URL,
-	contractId: string
+	rpc: RpcEndpoint | undefined,
+	contractId: string,
+	readScopedEntries?: ReadScopedEntries
 ): Promise<ContractCodeObservation> {
 	const instanceKey = xdr.LedgerKey.contractData(
 		new xdr.LedgerKeyContractData({
@@ -23,7 +28,7 @@ export async function readContractCode(
 			durability: xdr.ContractDataDurability.persistent
 		})
 	);
-	const instance = await readEntry(rpcUrl, instanceKey);
+	const instance = await readEntry(rpc, instanceKey, readScopedEntries);
 	if (!instance.entry)
 		return {
 			ledger: instance.ledger,
@@ -39,7 +44,9 @@ export async function readContractCode(
 	if (
 		data.contract.toXDR('base64') !==
 			instanceKey.contractData.contract.toXDR('base64') ||
-		data.key.toXDR('base64') !== instanceKey.contractData.key.toXDR('base64')
+		data.key.toXDR('base64') !== instanceKey.contractData.key.toXDR('base64') ||
+		(readScopedEntries &&
+			data.durability !== xdr.ContractDataDurability.persistent)
 	)
 		throw new Error('RPC contract instance identity mismatch');
 	if (data.val.type !== 'scvContractInstance')
@@ -57,8 +64,9 @@ export async function readContractCode(
 		throw new ContractRpcUnavailable('Unsupported contract executable');
 	const hash = executable.wasmHash;
 	const code = await readEntry(
-		rpcUrl,
-		xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash }))
+		rpc,
+		xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash })),
+		readScopedEntries
 	);
 	if (!code.entry)
 		throw new ContractRpcUnavailable('Contract Wasm is not available from RPC');
@@ -68,6 +76,12 @@ export async function readContractCode(
 	const wasm = decodedCode.contractCode;
 	if (wasm.hash.toString() !== hash.toString())
 		throw new Error('RPC Wasm identity mismatch');
+	if (
+		readScopedEntries &&
+		(code.modifiedLedger > instance.ledger ||
+			createHash('sha256').update(wasm.code).digest('hex') !== hash.toString())
+	)
+		throw new ContractRpcUnavailable('RPC Wasm digest or ledger mismatch');
 	return {
 		ledger: instance.ledger,
 		modifiedLedger: instance.modifiedLedger,
@@ -78,22 +92,36 @@ export async function readContractCode(
 }
 
 async function readEntry(
-	rpcUrl: URL,
-	key: xdr.LedgerKey
+	rpc: RpcEndpoint | undefined,
+	key: xdr.LedgerKey,
+	readScopedEntries?: ReadScopedEntries
 ): Promise<{ ledger: number; modifiedLedger: number; entry: string | null }> {
+	const encodedKey = key.toXDR('base64');
+	if (readScopedEntries) {
+		const result = await readScopedEntries(encodedKey);
+		return parseEntry(result, encodedKey, true);
+	}
+	if (!rpc) throw new ContractRpcUnavailable('Contract RPC is not configured');
 	const response = record(
-		await fetchProvenanceJson(rpcUrl, {
+		await fetchRpcJson(rpc, {
 			jsonrpc: '2.0',
 			id: 1,
 			method: 'getLedgerEntries',
-			params: { keys: [key.toXDR('base64')] }
+			params: { keys: [encodedKey] }
 		})
 	);
 	if (response.error !== undefined)
 		throw new ContractRpcUnavailable(
 			'RPC ledger entries are temporarily unavailable'
 		);
-	const result = record(response.result);
+	return parseEntry(record(response.result), encodedKey, false);
+}
+
+function parseEntry(
+	result: Record<string, unknown>,
+	encodedKey: string,
+	strict: boolean
+): { ledger: number; modifiedLedger: number; entry: string | null } {
 	const ledger = Number(result.latestLedger);
 	if (
 		!Number.isSafeInteger(ledger) ||
@@ -105,10 +133,19 @@ async function readEntry(
 	if (!result.entries.length) return { ledger, modifiedLedger: 0, entry: null };
 	const entry = record(result.entries[0]);
 	const modifiedLedger = Number(entry.lastModifiedLedgerSeq);
+	const liveUntil = entry.liveUntilLedgerSeq;
 	if (
-		entry.key !== key.toXDR('base64') ||
+		entry.key !== encodedKey ||
 		typeof entry.xdr !== 'string' ||
 		entry.xdr.length > 3 * 1024 * 1024 ||
+		(strict &&
+			(typeof entry.lastModifiedLedgerSeq !== 'number' ||
+				!/^[A-Za-z0-9+/]+={0,2}$/.test(entry.xdr) ||
+				entry.xdr.length % 4 !== 0 ||
+				typeof liveUntil !== 'number' ||
+				!Number.isInteger(liveUntil) ||
+				liveUntil < ledger ||
+				liveUntil > 0xffffffff)) ||
 		!Number.isSafeInteger(modifiedLedger) ||
 		modifiedLedger < 1 ||
 		modifiedLedger > ledger

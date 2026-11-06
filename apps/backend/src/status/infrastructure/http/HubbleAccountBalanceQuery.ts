@@ -9,7 +9,8 @@ import type {
 import {
 	decodeBalanceCursor,
 	encodeBalanceCursor,
-	requireBalanceAccount
+	requireBalanceAccount,
+	type HubbleBalanceCursor
 } from './HubbleAccountBalanceCursor.js';
 import { completedHubbleBatchPredicate } from './HubbleBatchVisibility.js';
 import {
@@ -22,11 +23,16 @@ import {
 	type HubbleSemanticQueryExecutor
 } from './HubbleSemanticWarehouse.js';
 
-export async function queryHubbleAccountBalances(
-	executor: HubbleSemanticQueryExecutor,
+interface ValidatedBalanceInput {
+	readonly account: string;
+	readonly after: HubbleBalanceCursor | null;
+	readonly limit: number;
+}
+
+export function validateHubbleAccountBalanceInput(
 	input: HubbleAccountBalanceInput,
-	catalog: Pick<HubbleCatalog, 'coverage' | 'generatedAt'>
-): Promise<HubbleAccountBalancePage> {
+	maximumRows: number
+): ValidatedBalanceInput {
 	const account = requireBalanceAccount(input.account);
 	const after = decodeBalanceCursor(account, input.after);
 	const requested = input.limit ?? 100;
@@ -34,7 +40,26 @@ export async function queryHubbleAccountBalances(
 		throw new HubbleWarehouseInputError(
 			'Balance limit must be between 1 and 200'
 		);
-	const limit = Math.min(requested, executor.maximumRows);
+	return { account, after, limit: Math.min(requested, maximumRows) };
+}
+
+export async function queryHubbleAccountBalances(
+	executor: HubbleSemanticQueryExecutor,
+	input: HubbleAccountBalanceInput,
+	catalog: Pick<HubbleCatalog, 'coverage' | 'generatedAt'>
+): Promise<HubbleAccountBalancePage> {
+	return queryValidatedHubbleAccountBalances(
+		executor,
+		validateHubbleAccountBalanceInput(input, executor.maximumRows),
+		catalog
+	);
+}
+
+export async function queryValidatedHubbleAccountBalances(
+	executor: HubbleSemanticQueryExecutor,
+	{ account, after, limit }: ValidatedBalanceInput,
+	catalog: Pick<HubbleCatalog, 'coverage' | 'generatedAt'>
+): Promise<HubbleAccountBalancePage> {
 	const parameters: HubblePreparedParameter[] = [
 		{ name: 'account', type: 'String', value: account },
 		{ name: 'row_limit', type: 'UInt32', value: String(limit + 1) },

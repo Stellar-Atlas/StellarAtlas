@@ -34,6 +34,11 @@ describe('controlled contract reproduction guide', () => {
 		expect(html).toContain('/v1/contracts/CBQSUF57OYX4RIMCZV62DKN6JFOTEKPHIZASMJYOUOCNHGNG2P3XQLSE/provenance');
 		expect(html).toContain('f60d33ec57eecee04b52d048c1c079983ff1b3834c8195fea811b025fb889361');
 		expect(html).toContain('build.record.commit');
+		expect(html).toContain('<code>ledgerEvidence</code>');
+		expect(html).toContain('<code>configured_rpc_observation</code>');
+		expect(html).toContain('not an independent ledger-state proof');
+		expect(html).toMatch(/absent or unrecognized value does not\s+establish independent proof/);
+		expect(html).toMatch(/<code>build.status<\/code> separately\s+for the attestation outcome/);
 		const copy = renderToStaticMarkup(boundaries?.content);
 		expect(copy).toContain('Build attested');
 		expect(copy).toContain('source-to-Wasm match');

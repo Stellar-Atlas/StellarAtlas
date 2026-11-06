@@ -22,6 +22,7 @@ import { OperationResultFields } from './explorer-operation-result';
 import { ExplorerRecordFields } from './explorer-record-fields';
 import { ExplorerEffectFields } from './explorer-effect-fields';
 import { ExplorerTransactionTransfers } from './explorer-transaction-transfers';
+import { ExplorerTransactionOperationMix } from './explorer-transaction-operation-mix';
 import { validTransactionTransferScope } from '../../api/transaction-transfers';
 import { recordFieldInput } from './record-field-tree';
 import { operationInvocation } from './explorer-operation-invocation';
@@ -323,6 +324,7 @@ function TransactionDetail({ hash, route }: {
 									<h3>
 										{relation.charAt(0).toUpperCase() + relation.slice(1)}
 									</h3>
+									{relation === 'operations' && <ExplorerTransactionOperationMix rows={items} />}
 									{items.length && relation === 'events' ? (
 										<ExplorerContractEventTable
 											rows={items}

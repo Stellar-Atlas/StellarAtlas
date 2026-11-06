@@ -371,7 +371,7 @@ const listen = async () => {
 		})
 	);
 
-	mountExplorerRoutes(api, kernel, config);
+	const drainFederation = await mountExplorerRoutes(api, kernel, config);
 
 	api.use(
 		['/v1/node', '/v1/nodes'],
@@ -455,10 +455,12 @@ const listen = async () => {
 		stopArchiveBackgroundTasks();
 		networkRoutes.stopNetworkSearchProjection();
 		console.log(`${signal} signal received: closing HTTP server`);
-		void stop(kernel.container.get(DataSource)).catch((error: unknown) => {
-			console.error('API shutdown failed', error);
-			process.exit(1);
-		});
+		void stop(kernel.container.get(DataSource), drainFederation).catch(
+			(error: unknown) => {
+				console.error('API shutdown failed', error);
+				process.exit(1);
+			}
+		);
 	};
 
 	process.once('SIGTERM', shutdown);
@@ -474,13 +476,16 @@ function trackServerSockets(httpServer: Server): void {
 	});
 }
 
-async function stop(dataSource: DataSource): Promise<void> {
+async function stop(
+	dataSource: DataSource,
+	drainFederation: () => Promise<boolean>
+): Promise<void> {
 	const forceCloseTimeout = setTimeout(() => {
 		for (const socket of serverSockets) socket.destroy();
 	}, 2_000);
 	forceCloseTimeout.unref();
 
-	await new Promise<void>((resolve, reject) => {
+	const httpClosed = new Promise<void>((resolve, reject) => {
 		server.close((error?: Error) => {
 			if (error) {
 				reject(error);
@@ -490,10 +495,15 @@ async function stop(dataSource: DataSource): Promise<void> {
 		});
 		server.closeIdleConnections();
 	});
+	const [, federationDrained] = await Promise.all([httpClosed, drainFederation()]);
 
 	clearTimeout(forceCloseTimeout);
 	console.log('HTTP server closed');
 	if (dataSource.isInitialized) await dataSource.destroy();
 	console.log('connection to db closed');
-	process.exit(0);
+	if (!federationDrained)
+		console.error(
+			'Federation schedule ownership unresolved at shutdown. Quiesce all owners before recovery.'
+		);
+	process.exit(federationDrained ? 0 : 1);
 }

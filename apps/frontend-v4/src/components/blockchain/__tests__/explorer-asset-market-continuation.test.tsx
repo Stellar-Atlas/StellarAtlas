@@ -76,11 +76,18 @@ it('offers one shortcut per observed counter asset and distinguishes identical c
 	const html = renderToStaticMarkup(ReactActual.createElement(ExplorerAssetMarketPairs, {
 		asset: native.id,
 		origin: '/explorer/assets/native?tab=markets&market_trade_min=2&market_trade_max=98',
-		rows: [trade(one, native), trade(native, one), trade(native, two), trade(one, two),
+		rows: [trade(one, native), trade(native, one), trade(one, native), trade(native, two), trade(one, two),
 			trade(native, native), trade(native, { id: 'invalid' })],
 		window: page.window
 	}));
-	expect(html).toContain('From this trade preview');
+	expect(html).toContain('Loaded preview only.');
+	expect(html).toContain('Counts show which recorded side contains the selected asset.');
+	expect(html).toContain('Every trade has both sides. These counts measure neither volume nor buying or selling pressure.');
+	const cards = [...html.matchAll(/<li>(.*?)<\/li>/g)].map(match => match[1]);
+	expect(cards[0]).toContain('Recorded selling side: 1 · Recorded buying side: 2');
+	expect(cards[1]).toContain('Recorded selling side: 1 · Recorded buying side: 0');
+	expect(cards[0]).toContain('aria-hidden="true"');
+	expect(cards[1]).toContain('inline-size:100%');
 	expect(html).toContain('<code>' + one.id.split(':')[1] + '</code>');
 	expect(html).toContain('<code>' + two.id.split(':')[1] + '</code>');
 	const links = [...html.matchAll(/href="([^"]+)"/g)].map(match =>

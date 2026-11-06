@@ -6,7 +6,16 @@ import styles from './explorer-entity.module.css';
 /** Human-unit Float64 observations are never rescaled or presented as exact raw amounts. */
 export function formatObservedAmount(value: number): string {
 	const formatted = formatDecimal(value, 20);
-	return Number(formatted.replaceAll(',', '')) === value ? formatted : String(value);
+	if (Number(formatted.replaceAll(',', '')) === value) return formatted;
+	const raw = String(value);
+	const scientific = /^(-?)(\d)(?:\.(\d+))?e([+-]?\d+)$/.exec(raw);
+	if (!scientific) return raw;
+	const [, sign, leading, fraction = '', exponent] = scientific;
+	const digits = leading! + fraction;
+	const point = 1 + Number(exponent);
+	if (point <= 0) return sign + '0.' + '0'.repeat(-point) + digits;
+	return point >= digits.length ? sign + digits.padEnd(point, '0')
+		: sign + digits.slice(0, point) + '.' + digits.slice(point);
 }
 
 export function observedTrustlineLimit(row: BalanceObservationRow): string | null {

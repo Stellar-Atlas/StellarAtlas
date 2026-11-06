@@ -12,6 +12,7 @@ const publicOperations = new Map<string, string>([
 	['queryParsedDataset', 'post /v1/datasets/{dataset}/query'],
 	['listAssetResources', 'get /v1/assets'],
 	['listIssuerResources', 'get /v1/issuers'],
+	['getIssuerDomainEvidence', 'get /v1/issuer-domains/{domain}'],
 	['getAssetResource', 'get /v1/assets/{asset}'],
 	['getAssetResourceMetadata', 'get /v1/assets/{asset}/metadata'],
 	['listAssetBalancesSnapshot', 'get /v1/assets/{asset}/balances'],
@@ -46,6 +47,10 @@ const publicOperations = new Map<string, string>([
 	['getDataFreshnessStatus', 'get /v1/status/data-freshness'],
 	['getDataQualityStatus', 'get /v1/status/data-quality'],
 	['getExplorerAccount', 'get /v1/explorer/accounts/{accountId}'],
+	[
+		'getExplorerClaimablePositions',
+		'get /v1/explorer/accounts/{accountId}/claimable-positions'
+	],
 	[
 		'getExplorerAccountObservations',
 		'get /v1/explorer/accounts/{accountId}/observations'

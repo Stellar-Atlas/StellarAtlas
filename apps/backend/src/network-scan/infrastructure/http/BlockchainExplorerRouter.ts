@@ -13,6 +13,7 @@ import {
 import { fetchTransactionByHash } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
 import { createExplorerLocalOperationHandler } from './ExplorerLocalOperationHandler.js';
+import { createExplorerClaimablePositionsHandler } from './ExplorerClaimablePositions.js';
 import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { GetExplorerLocalAccountChanges } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
@@ -38,6 +39,7 @@ export interface BlockchainExplorerRouterConfig {
 		'execute'
 	>;
 	readonly horizonUrl: string;
+	readonly networkPassphrase: string;
 	readonly rpcUrl?: string;
 }
 
@@ -226,19 +228,37 @@ export const blockchainExplorerRouter = (
 		}
 	});
 
+	router.get(
+		'/accounts/:accountId/claimable-positions',
+		createExplorerClaimablePositionsHandler(config)
+	);
+
 	router.get('/accounts/:accountId', async (req, res) => {
 		const accountId = req.params.accountId.trim();
-		if (!isAccountAddress(accountId))
+		if (
+			!isAccountAddress(accountId) ||
+			(accountId.startsWith('G') && !isValidLocalAccountId(accountId))
+		)
 			return res.status(400).json({ error: 'Invalid account address' });
 
 		setCacheHeader(res);
+		const controller = new AbortController();
+		const abort = () => controller.abort();
+		res.once('close', abort);
 		try {
-			const account = await fetchExplorerAccount(config.horizonUrl, accountId);
+			const account = await fetchExplorerAccount(config.horizonUrl, accountId, {
+				networkPassphrase: config.networkPassphrase,
+				signal: controller.signal
+			});
+			if (controller.signal.aborted) return;
 			if (!account) return res.status(404).json({ error: 'Account not found' });
 			return res.status(200).json(account);
 		} catch {
+			if (controller.signal.aborted) return;
 			res.setHeader('Cache-Control', 'no-store');
 			return res.status(502).json({ error: 'Account lookup unavailable' });
+		} finally {
+			res.off('close', abort);
 		}
 	});
 

@@ -57,6 +57,7 @@ it('formats human-unit Float64 observations without scaling, truncating precisio
 	expect(formatObservedAmount(1234567.1234567)).toBe('1,234,567.1234567');
 	for (const value of [1.2345678901234567, 1e-21, 5e-324, -5e-324, -1234567.1234567, 1e21]) {
 		expect(Number(formatObservedAmount(value).replaceAll(',', ''))).toBe(value);
+		expect(formatObservedAmount(value)).not.toMatch(/[eE]/);
 	}
 	expect(formatObservedAmount(12345678)).toBe('12,345,678');
 });

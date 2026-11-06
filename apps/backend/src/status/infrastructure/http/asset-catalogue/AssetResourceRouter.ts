@@ -56,12 +56,19 @@ export function assetResourceRouter(config: AssetResourceConfig): Router {
 	router.use(
 		contractProvenanceRouter({
 			rpcUrl: config.rpcUrl ?? process.env.STELLAR_RPC_URL,
+			provenanceRpcUrl: process.env.STELLAR_PROVENANCE_RPC_URL,
 			networkPassphrase: config.networkPassphrase
 		})
 	);
 	registerHubbleDatasetRoutes(router, config.warehouse);
-	registerAssetRelatedRoutes(router, catalogue, (asset) =>
-		assetMetadata(asset, metadata)
+	registerAssetRelatedRoutes(
+		router,
+		catalogue,
+		(asset) => assetMetadata(asset, metadata),
+		{
+			networkPassphrase: config.networkPassphrase,
+			load: (code, issuer) => metadata.getCachedClassicMetadata(code, issuer)
+		}
 	);
 	if (!config.catalogue) catalogue.start();
 	router.get('/asset-logos/:filename', (request, response, next) => {

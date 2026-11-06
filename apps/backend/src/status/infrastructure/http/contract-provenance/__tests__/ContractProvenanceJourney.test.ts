@@ -9,7 +9,8 @@ const signer =
 	'https://github.com/example/contract/.github/workflows/release.yml@refs/tags/v1';
 const verify = jest.fn<Promise<unknown>, unknown[]>();
 const readContractCode = jest.fn<Promise<unknown>, unknown[]>();
-const fetchProvenanceJson = jest.fn<Promise<unknown>, unknown[]>();
+const fetchRpcJson = jest.fn<Promise<unknown>, unknown[]>();
+const fetchGithubAttestations = jest.fn<Promise<unknown>, unknown[]>();
 // Use this module's Jest context so relative mocks resolve beside this test.
 // @types/jest does not declare import.meta.jest's ESM mocking API.
 const moduleJest = (
@@ -33,7 +34,8 @@ mockModule('../ContractRpcCode.js', () => ({
 	ContractRpcUnavailable: class extends Error {}
 }));
 mockModule('../BoundedProvenanceJson.js', () => ({
-	fetchProvenanceJson,
+	fetchRpcJson,
+	fetchGithubAttestations,
 	ProvenanceHttpError: class extends Error {}
 }));
 const { contractProvenanceRouter } =
@@ -108,6 +110,7 @@ function bundle(subjectHash = hash) {
 async function invoke(id = contractId) {
 	const router = contractProvenanceRouter({
 		rpcUrl: 'https://rpc.invalid',
+		approvedNativeRpcUrl: 'https://rpc.invalid',
 		networkPassphrase: 'synthetic network'
 	});
 	const layer = router.stack.find(
@@ -153,7 +156,8 @@ beforeEach(() => {
 		wasmSha256: hash,
 		wasm
 	});
-	fetchProvenanceJson
+	fetchRpcJson.mockReset();
+	fetchGithubAttestations
 		.mockReset()
 		.mockResolvedValue({ attestations: [{ bundle: bundle() }] });
 });
@@ -180,14 +184,13 @@ describe('synthetic registered provenance journey', () => {
 			certificateOIDs: { '1.3.6.1.4.1.57264.1.3': commit },
 			retry: { retries: 0 }
 		});
-		expect(String(fetchProvenanceJson.mock.calls[0]![0])).toBe(
-			'https://api.github.com/repos/example/contract/attestations/sha256:' +
-				hash +
-				'?per_page=5'
+		expect(fetchGithubAttestations).toHaveBeenCalledWith(
+			'example/contract',
+			hash
 		);
 	});
 	it('returns HTTP200 invalid for artifact mismatch without accepting injected signature trust', async () => {
-		fetchProvenanceJson.mockResolvedValue({
+		fetchGithubAttestations.mockResolvedValue({
 			attestations: [{ bundle: bundle('c'.repeat(64)) }]
 		});
 		const result = await invoke();
@@ -256,24 +259,18 @@ describe('synthetic registered provenance journey', () => {
 		await expect(check('example/contract')).resolves.toMatchObject({
 			status: 'verified'
 		});
-		expect(fetchProvenanceJson.mock.calls.map(([url]) => String(url))).toEqual(
-			['example/contract', 'attacker/contract'].map(
-				(repo) =>
-					'https://api.github.com/repos/' +
-					repo +
-					'/attestations/sha256:' +
-					hash +
-					'?per_page=5'
-			)
-		);
+		expect(fetchGithubAttestations.mock.calls).toEqual([
+			['example/contract', hash],
+			['attacker/contract', hash]
+		]);
 		expect(verify).toHaveBeenCalledTimes(1);
 	});
 	it('keeps unpublished and external evidence failure as unresolved HTTP200 results', async () => {
 		for (const status of ['not_published', 'unavailable']) {
 			if (status === 'not_published')
-				fetchProvenanceJson.mockResolvedValue({ attestations: [] });
+				fetchGithubAttestations.mockResolvedValue({ attestations: [] });
 			else
-				fetchProvenanceJson.mockRejectedValue(
+				fetchGithubAttestations.mockRejectedValue(
 					new Error('Synthetic upstream failure')
 				);
 			const result = await invoke();

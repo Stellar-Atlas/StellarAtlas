@@ -14,7 +14,9 @@ import {
 	buildAnalyticsLedgerPath,
 	parseAnalyticsLedgerLookup
 } from '../../api/explorer-record-lookup';
-import { ExplorerBalanceObservations } from './explorer-balance-observations';
+import { ExplorerAccountAssets } from './explorer-account-assets';
+import { ExplorerClaimablePositions } from './explorer-claimable-positions';
+import { ExplorerAccountFederation } from './explorer-account-federation';
 import { ExplorerLedgerActivity } from './explorer-ledger-activity';
 import { ExplorerAccountRelations } from './explorer-account-relations';
 import { isClassicAccount, isContractAccount } from '../../domain/classic-account';
@@ -22,10 +24,12 @@ import styles from './explorer-entity.module.css';
 
 export function ExplorerRecordLookup({
 	collection,
-	identifier
+	identifier,
+	claimablePositionsEnabled = false
 }: {
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
+	readonly claimablePositionsEnabled?: boolean;
 }): React.JSX.Element {
 	if (collection === 'accounts' && !isClassicAccount(identifier)) {
 		const contract = isContractAccount(identifier);
@@ -43,15 +47,18 @@ export function ExplorerRecordLookup({
 			</section>
 		</div>;
 	}
-	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier} />;
+	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier}
+		claimablePositionsEnabled={claimablePositionsEnabled} />;
 }
 
 function RecordLookup({
 	collection,
-	identifier
+	identifier,
+	claimablePositionsEnabled
 }: {
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
+	readonly claimablePositionsEnabled: boolean;
 }): React.JSX.Element {
 	const search = useExplorerRequest(
 		initialExplorerSearch,
@@ -92,6 +99,7 @@ function RecordLookup({
 				<h2>
 					{collection === 'accounts' ? 'Account' : 'Ledger'} {identifier}
 				</h2>
+				{collection === 'accounts' && <ExplorerAccountFederation accountId={identifier} network="mainnet" active />}
 				{collection === 'ledgers' && <ExplorerLedgerActivity ledger={identifier} />}
 				{collection === 'ledgers' ? (
 					<>
@@ -143,13 +151,9 @@ function RecordLookup({
 				{collection === 'accounts' && <ExplorerAccountRelations account={identifier} />}
 			</section>
 			{collection === 'accounts' && (
-				<ExplorerBalanceObservations
-					key={identifier}
-					autoLoad
-					kind="balances"
-					identifier={identifier}
-				/>
+				<ExplorerAccountAssets key={identifier} account={identifier} />
 			)}
+			{collection === 'accounts' && claimablePositionsEnabled && <ExplorerClaimablePositions account={identifier} />}
 		</div>
 	);
 }

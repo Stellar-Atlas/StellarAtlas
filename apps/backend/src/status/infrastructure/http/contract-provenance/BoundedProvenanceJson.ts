@@ -2,24 +2,38 @@ import http from 'node:http';
 import https from 'node:https';
 import type { IncomingMessage, RequestOptions } from 'node:http';
 import type { ClientRequest } from 'node:http';
+import { githubRepository } from './ContractBuildAttestation.js';
+import {
+	isRpcEndpoint,
+	publicEndpointLookup,
+	type RpcEndpoint
+} from './ProvenanceEndpointPolicy.js';
 
 const MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
 const MAX_REQUEST_BODY_BYTES = 16 * 1024;
 const REQUEST_TIMEOUT_MS = 20_000;
 
-const httpAgent = new http.Agent({
-	keepAlive: true,
-	maxSockets: 2,
-	maxTotalSockets: 2,
-	maxFreeSockets: 1
-});
+function endpointAgent(
+	protocol: RpcEndpoint['protocol'],
+	lookup: RpcEndpoint['lookup']
+): http.Agent {
+	const Agent = protocol === 'https:' ? https.Agent : http.Agent;
+	return new Agent({
+		lookup,
+		keepAlive: true,
+		maxSockets: 2,
+		maxTotalSockets: 2,
+		maxFreeSockets: 1
+	});
+}
 
-const httpsAgent = new https.Agent({
-	keepAlive: true,
-	maxSockets: 2,
-	maxTotalSockets: 2,
-	maxFreeSockets: 1
-});
+// Agent pools are keyed by authority, not by the address policy. Never share
+// an agent between capabilities, even when their URLs are identical.
+const rpcAgents = new WeakMap<RpcEndpoint, http.Agent>();
+const githubAgent = endpointAgent(
+	'https:',
+	publicEndpointLookup('api.github.com')
+);
 
 export type ProvenanceJsonErrorKind = 'http' | 'transport' | 'invalid_response';
 
@@ -77,11 +91,61 @@ function bodyBytes(body: unknown): Buffer | undefined {
 	return bytes;
 }
 
-export async function fetchProvenanceJson(
-	url: URL,
-	body?: unknown
+type RequestLimits = {
+	readonly signal?: AbortSignal;
+	readonly timeoutMs?: number;
+	readonly maxResponseBytes?: number;
+};
+
+export async function fetchRpcJson(
+	endpoint: RpcEndpoint,
+	body: object,
+	options: RequestLimits = {}
 ): Promise<unknown> {
+	if (!isRpcEndpoint(endpoint))
+		throw new ProvenanceHttpError(null, 'transport', 'Unapproved RPC endpoint');
+	let agent = rpcAgents.get(endpoint);
+	if (!agent) {
+		agent = endpointAgent(endpoint.protocol, endpoint.lookup);
+		rpcAgents.set(endpoint, agent);
+	}
+	return requestJson(new URL(endpoint.href), agent, body, options);
+}
+
+export async function fetchGithubAttestations(
+	repository: string,
+	digest: string
+): Promise<unknown> {
+	const name = githubRepository('github:' + repository);
+	if (!name || !/^[0-9a-f]{64}$/.test(digest))
+		throw new ProvenanceHttpError(
+			null,
+			'transport',
+			'Invalid attestation identity'
+		);
+	const destination = new URL('https://api.github.com');
+	destination.pathname = '/repos/' + name + '/attestations/sha256:' + digest;
+	destination.search = 'per_page=5';
+	return requestJson(destination, githubAgent);
+}
+
+async function requestJson(
+	url: URL,
+	agent: http.Agent,
+	body?: unknown,
+	options: RequestLimits = {}
+): Promise<unknown> {
+	const { signal } = options;
+	signal?.throwIfAborted();
 	const payload = bodyBytes(body);
+	const timeoutMs = Math.min(
+		options.timeoutMs ?? REQUEST_TIMEOUT_MS,
+		REQUEST_TIMEOUT_MS
+	);
+	const maxResponseBytes = Math.min(
+		options.maxResponseBytes ?? MAX_RESPONSE_BYTES,
+		MAX_RESPONSE_BYTES
+	);
 	if (
 		(url.protocol !== 'http:' && url.protocol !== 'https:') ||
 		url.hostname.length === 0 ||
@@ -116,6 +180,7 @@ export async function fetchProvenanceJson(
 			if (settled) return;
 			settled = true;
 			if (timeout !== undefined) clearTimeout(timeout);
+			signal?.removeEventListener('abort', onAbort);
 			if (error !== undefined) {
 				response?.destroy();
 				request?.destroy();
@@ -125,9 +190,20 @@ export async function fetchProvenanceJson(
 			}
 		};
 
+		const onAbort = (): void =>
+			finish(
+				new ProvenanceHttpError(
+					null,
+					'transport',
+					'Provenance request cancelled'
+				)
+			);
+		signal?.addEventListener('abort', onAbort, { once: true });
+
 		const requestOptions: RequestOptions = {
 			method: payload === undefined ? 'GET' : 'POST',
-			headers
+			headers,
+			agent
 		};
 
 		timeout = setTimeout(() => {
@@ -138,7 +214,7 @@ export async function fetchProvenanceJson(
 					'Provenance request timed out'
 				)
 			);
-		}, REQUEST_TIMEOUT_MS);
+		}, timeoutMs);
 
 		try {
 			const handleResponse = (incoming: IncomingMessage): void => {
@@ -171,7 +247,7 @@ export async function fetchProvenanceJson(
 				if (
 					contentLength !== undefined &&
 					/^\d+$/.test(contentLength) &&
-					Number(contentLength) > MAX_RESPONSE_BYTES
+					Number(contentLength) > maxResponseBytes
 				) {
 					finish(
 						new ProvenanceHttpError(
@@ -189,7 +265,7 @@ export async function fetchProvenanceJson(
 					if (settled) return;
 					const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
 					receivedBytes += buffer.byteLength;
-					if (receivedBytes > MAX_RESPONSE_BYTES) {
+					if (receivedBytes > maxResponseBytes) {
 						finish(
 							new ProvenanceHttpError(
 								null,
@@ -239,16 +315,8 @@ export async function fetchProvenanceJson(
 			};
 			request =
 				url.protocol === 'https:'
-					? https.request(
-							url,
-							{ ...requestOptions, agent: httpsAgent },
-							handleResponse
-						)
-					: http.request(
-							url,
-							{ ...requestOptions, agent: httpAgent },
-							handleResponse
-						);
+					? https.request(url, requestOptions, handleResponse)
+					: http.request(url, requestOptions, handleResponse);
 			request.once('error', () =>
 				finish(
 					new ProvenanceHttpError(

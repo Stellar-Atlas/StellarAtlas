@@ -1,0 +1,33 @@
+.summary {
+	padding: 0.65rem 0.75rem;
+	border: 1px solid var(--border);
+	border-radius: 0.45rem;
+}
+.summary h4 {
+	margin: 0 0 0.4rem;
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+.summary dl {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1rem;
+	margin: 0;
+}
+.summary dl > div {
+	display: flex;
+	gap: 0.4rem;
+	min-width: 0;
+	max-width: 100%;
+	align-items: baseline;
+}
+.summary dt {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.summary dd {
+	margin: 0;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}

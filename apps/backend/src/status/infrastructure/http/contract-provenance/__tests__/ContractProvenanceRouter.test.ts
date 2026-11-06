@@ -1,16 +1,24 @@
 import express from 'express';
 import request from 'supertest';
-import { createServer, type Server } from 'node:http';
 import { createHash } from 'node:crypto';
 import { Address, StrKey, xdr } from '@stellar/stellar-sdk';
-import { contractProvenanceRouter } from '../ContractProvenanceRouter';
+import type { fetchRpcJson } from '../BoundedProvenanceJson.js';
+
+const { jest: mocks } = import.meta as ImportMeta & { jest: typeof jest };
+const fetchRpc = mocks.fn<
+	ReturnType<typeof fetchRpcJson>,
+	Parameters<typeof fetchRpcJson>
+>();
+mocks.unstable_mockModule('../BoundedProvenanceJson.js', () => ({
+	fetchRpcJson: fetchRpc,
+	fetchGithubAttestations: mocks.fn(),
+	ProvenanceHttpError: class extends Error {}
+}));
+const { contractProvenanceRouter } =
+	await import('../ContractProvenanceRouter.js');
 
 describe('contract provenance RPC path', () => {
-	let upstream: Server;
-	afterEach(async () => {
-		if (upstream)
-			await new Promise<void>((resolve) => upstream.close(() => resolve()));
-	});
+	afterEach(() => fetchRpc.mockReset());
 	it('reads matching instance and code evidence and caches the bounded result', async () => {
 		const id = StrKey.encodeContract(new Uint8Array(32).fill(7));
 		const wasm = Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]);
@@ -47,40 +55,31 @@ describe('contract provenance RPC path', () => {
 				code: wasm
 			})
 		);
-		let calls = 0;
-		upstream = createServer((incoming, outgoing) => {
-			incoming.resume();
-			incoming.on('end', () => {
-				const key = calls++ === 0 ? instanceKey : codeKey;
-				outgoing.setHeader('Content-Type', 'application/json');
-				outgoing.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: 1,
-						result: {
-							latestLedger: 150,
-							entries: [
-								{
-									key: key.toXDR('base64'),
-									xdr: (calls === 1 ? instance : code).toXDR('base64'),
-									lastModifiedLedgerSeq: 100
-								}
-							]
+		const endpoint = 'http://127.0.0.1:9000/stellar/rpc';
+		function evidence(key: xdr.LedgerKey, entry: xdr.LedgerEntryData) {
+			return {
+				jsonrpc: '2.0',
+				id: 1,
+				result: {
+					latestLedger: 150,
+					entries: [
+						{
+							key: key.toXDR('base64'),
+							xdr: entry.toXDR('base64'),
+							lastModifiedLedgerSeq: 100
 						}
-					})
-				);
-			});
-		});
-		await new Promise<void>((resolve) =>
-			upstream.listen(0, '127.0.0.1', resolve)
-		);
-		const address = upstream.address();
-		if (!address || typeof address === 'string')
-			throw new Error('No test listener');
+					]
+				}
+			};
+		}
+		fetchRpc
+			.mockResolvedValueOnce(evidence(instanceKey, instance))
+			.mockResolvedValueOnce(evidence(codeKey, code));
 		const app = express().use(
 			'/v1',
 			contractProvenanceRouter({
-				rpcUrl: 'http://127.0.0.1:' + address.port,
+				rpcUrl: endpoint,
+				approvedNativeRpcUrl: endpoint,
 				networkPassphrase: 'test'
 			})
 		);
@@ -97,7 +96,17 @@ describe('contract provenance RPC path', () => {
 		await request(app)
 			.get('/v1/contracts/' + id + '/provenance')
 			.expect(200);
-		expect(calls).toBe(2);
+		expect(fetchRpc.mock.calls.map(([rpc, body]) => [rpc.href, body])).toEqual(
+			[instanceKey, codeKey].map((key) => [
+				endpoint,
+				{
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'getLedgerEntries',
+					params: { keys: [key.toXDR('base64')] }
+				}
+			])
+		);
 	});
 	it('rejects invalid addresses and returns uncached unavailability when RPC is unconfigured', async () => {
 		const app = express().use(
