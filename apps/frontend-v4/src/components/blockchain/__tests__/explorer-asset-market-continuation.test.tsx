@@ -68,7 +68,7 @@ it.each([
 	}
 });
 
-it('compares directional preview counts and links each exact counter asset to the accepted pair report', () => {
+it('compares recorded-side counts and links each exact counter asset to the accepted pair report', () => {
 	const native = { id: 'native' };
 	const one = { id: 'USD:G' + 'A'.repeat(55) };
 	const two = { id: 'USD:G' + 'B'.repeat(55) };
@@ -80,8 +80,9 @@ it('compares directional preview counts and links each exact counter asset to th
 			trade(native, native), trade(native, { id: 'invalid' })],
 		window: page.window
 	}));
-	expect(html).toContain('Trade counts from this preview only');
-	expect(html).toContain('<th scope="col">Buys</th><th scope="col">Sells</th>');
+	expect(html).toContain('Every trade exchanges both assets.');
+	expect(html).toContain('not buy pressure, sell pressure, or volume.');
+	expect(html).toContain('<th scope="col">Recorded buying side</th><th scope="col">Recorded selling side</th>');
 	expect(html).toContain('<code>' + one.id.split(':')[1] + '</code>');
 	expect(html).toContain('<code>' + two.id.split(':')[1] + '</code>');
 	const pairRows = [...html.matchAll(/<tr><th scope="row">.*?<\/tr>/g)].map(match => match[0]);

@@ -52,11 +52,11 @@ export function ExplorerAssetMarketPairs({ asset, origin, rows, window }: {
 		<section aria-labelledby={heading} className={styles.observedPairs}>
 			<h4 id={heading}>Observed pair activity</h4>
 			<table id={table} aria-labelledby={heading}>
-				<caption>Trade counts from this preview only. Buy and sell refer to this asset.</caption>
+				<caption>Every trade exchanges both assets. Preview counts show this asset’s recorded side, not buy pressure, sell pressure, or volume.</caption>
 				<thead><tr>
 					<th scope="col">Counter asset</th>
-					<th scope="col">Buys</th>
-					<th scope="col">Sells</th>
+					<th scope="col">Recorded buying side</th>
+					<th scope="col">Recorded selling side</th>
 				</tr></thead>
 				<tbody>
 					{(expanded ? pairs : pairs.slice(0, previewLimit)).map(([id, { label, href, buys, sells }]) => (
