@@ -121,8 +121,8 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 			: view === 'trustlines' ? 'No trustlines reported by Horizon.' : 'No asset balances reported by Horizon.'}</p>
 			: <div className={styles.tableWrap}><table className={styles.table} aria-label={view === 'trustlines' ? 'Current trustlines' : 'Current assets'}>
 				<thead><tr><th scope="col">Asset</th><th scope="col">Total balance</th>
-					{view === 'trustlines' ? <><th scope="col">Limit &amp; receive headroom</th><th scope="col">Authorization &amp; sponsor</th></>
-						: <><th scope="col">Available</th><th scope="col">Commitments</th></>}
+					<th scope="col">Available</th><th scope="col">Reserved</th>
+					{view === 'trustlines' && <><th scope="col">Limit &amp; receive headroom</th><th scope="col">Authorization &amp; sponsor</th></>}
 				</tr></thead>
 				<tbody>{visible.map(row => {
 					const breakdown = currentAccountBreakdown(row, value.snapshot);
@@ -132,8 +132,14 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 						{row.kind === 'credit' && <div className={assets.context}>Issuer clawback: {row.clawbackEnabled === true
 							? 'Enabled' : row.clawbackEnabled === false ? 'Not enabled' : 'Not reported'}</div>}
 					</WalletCell>
-					<WalletCell label="Total balance" amount>{formatAtomic(row.balance.toString(), 7)}</WalletCell>
-					{view === 'trustlines' ? <>
+					<WalletCell label="Total balance" amount>{row.kind === 'pool'
+						? <>Shares held: {walletAmount(row.balance)}</> : walletAmount(row.balance)}</WalletCell>
+					<WalletCell label="Available" amount>{row.kind === 'pool' ? 'Available to withdraw: not assessed' : breakdown.available !== null
+						? walletAmount(breakdown.available)
+						: row.kind === 'credit' && (row.authorization === 'restricted' || row.authorization === 'liabilities-only')
+							? 'Restricted' : 'Not calculated'}</WalletCell>
+					<WalletCell label="Reserved" amount><WalletReservations row={row} snapshot={value.snapshot} breakdown={breakdown} /></WalletCell>
+					{view === 'trustlines' && <>
 						<WalletCell label="Limit & receive headroom" amount>
 							{row.limit === null ? 'Limit not reported' : formatAtomic(row.limit.toString(), 7)}
 							{row.kind === 'credit' && <>
@@ -144,37 +150,47 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 						<WalletCell label="Authorization & sponsor">{row.kind === 'credit' ? authorization[row.authorization] : 'Pool-share trustline'}
 							{row.sponsor && <div className={assets.context}>Sponsor: <Link href={buildEntityHref('accounts', row.sponsor)}>{row.sponsor}</Link></div>}
 						</WalletCell>
-					</> : <>
-						<WalletCell label="Available" amount>{breakdown.available !== null
-							? formatAtomic(breakdown.available.toString(), 7)
-							: row.kind === 'credit' && (row.authorization === 'restricted' || row.authorization === 'liabilities-only')
-								? 'Restricted' : 'Not calculated'}</WalletCell>
-						<WalletCell label="Commitments" amount>
-							{row.kind === 'native' && <div>{breakdown.minimumReserve === null ? 'Minimum XLM reserve not calculated'
-								: <>
-									Minimum XLM reserve: {formatAtomic(breakdown.minimumReserve.toString(), 7)}
-									<ReserveInputs snapshot={value.snapshot} />
-								</>}</div>}
-							{breakdown.heldForOffers === null ? (row.kind === 'pool' ? 'Not calculated' : row.selling === null
-								? 'Sell offers not reported' : <>Reported sell offers: {formatAtomic(row.selling.toString(), 7)}</>)
-								: <>Held for sell offers: {formatAtomic(breakdown.heldForOffers.toString(), 7)}</>}
-							{breakdown.reserveShortfall !== null && breakdown.reserveShortfall > 0n &&
-								<div className={assets.context}>Reserve shortfall: {formatAtomic(breakdown.reserveShortfall.toString(), 7)}</div>}
-							{breakdown.offerShortfall !== null && breakdown.offerShortfall > 0n &&
-								<div className={assets.context}>Sell-offer shortfall: {formatAtomic(breakdown.offerShortfall.toString(), 7)}</div>}
-						</WalletCell>
 					</>}
 					</tr>;
 				})}</tbody>
 			</table></div>}
-		{view === 'assets' && rows.length > 0 && <p className={assets.context}>
-			Available excludes sell offers and, for XLM, the minimum reserve when known. It does not account for transaction fees.
+		{rows.length > 0 && <p className={assets.context}>
+			Available excludes sell offers and the XLM minimum reserve when known. Transaction fees are not included.
 		</p>}
 		{rows.length > pageSize && <div className={styles.actions} role="group" aria-label="Current account pages">
 			<button type="button" disabled={offset === 0} onClick={() => setPage(offset / pageSize - 1)}>Previous</button>
 			<button type="button" disabled={offset + pageSize >= rows.length} onClick={() => setPage(offset / pageSize + 1)}>Next</button>
 			<span>{offset + 1}–{offset + visible.length} of {rows.length}</span>
 		</div>}
+	</>;
+}
+
+const walletAmount = (value: bigint) => formatAtomic(value.toString(), 7);
+
+function WalletReservations({ row, snapshot, breakdown }: {
+	readonly row: CurrentBalance;
+	readonly snapshot: CurrentAccountSnapshot;
+	readonly breakdown: ReturnType<typeof currentAccountBreakdown>;
+}): React.JSX.Element {
+	if (row.kind === 'pool') return <>Sell-offer reserve: not applicable</>;
+	const { requiredReserved, coveredReserved, minimumReserve, reportedSelling, heldForOffers, reserveShortfall, offerShortfall } = breakdown;
+	return <>
+		<div>{requiredReserved === null ? 'Not calculated' : <>Required: {walletAmount(requiredReserved)}</>}</div>
+		{coveredReserved !== null && requiredReserved !== null && coveredReserved < requiredReserved &&
+			<div>Covered by balance: {walletAmount(coveredReserved)}</div>}
+		{row.kind === 'native' && <div className={assets.context}>
+			{minimumReserve === null ? 'Minimum XLM reserve not calculated' : <>
+				Minimum XLM reserve: {walletAmount(minimumReserve)}
+				<ReserveInputs snapshot={snapshot} />
+			</>}
+		</div>}
+		{heldForOffers === null ? <div className={assets.context}>{reportedSelling === null
+			? 'Sell offers not reported' : <>Reported sell liabilities: {walletAmount(reportedSelling)}</>}</div>
+			: row.kind === 'native' && <div className={assets.context}>Held for sell offers: {walletAmount(heldForOffers)}</div>}
+		{reserveShortfall !== null && reserveShortfall > 0n &&
+			<div className={assets.context}>Reserve shortfall: {walletAmount(reserveShortfall)}</div>}
+		{offerShortfall !== null && offerShortfall > 0n &&
+			<div className={assets.context}>Sell-offer shortfall: {walletAmount(offerShortfall)}</div>}
 	</>;
 }
 
