@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import { HookHarness } from '../../blockchain/__tests__/asset-workspace-hook-harness';
+import * as analytics from '../../../api/explorer-analytics';
 import { withExplorerReturnTo } from '../../../api/explorer-return-context';
 
 const base = 'https://fixture.invalid';
@@ -22,9 +23,8 @@ const request = jest.fn(async (path: string) => {
 jest.unstable_mockModule('react', () => ({useEffect:hooks.useEffect,useRef:hooks.useRef,useState:hooks.useState}));
 jest.unstable_mockModule('next/navigation', () => ({usePathname:() => route.pathname,useSearchParams:() => route.searchParams}));
 jest.unstable_mockModule('../../../api/explorer-analytics', () => ({
-	requestExplorerJson:request,
-	buildEntityHref:(collection:string,id:string,query:Record<string,string>) =>
-		'/explorer/' + collection + '/' + id + '?' + new URLSearchParams(query)
+	...analytics,
+	requestExplorerJson: request
 }));
 const { useTransferInvestigation } = await import('../use-transfer-investigation');
 const { transferTransactionReference } = await import('../transfer-investigation-route');
