@@ -60,7 +60,10 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 			content: (
 				<>
 					<p>
-						Use a contract C-address with the{' '}
+						Open the contract in the Atlas explorer and choose <strong>Check build</strong>.
+						To confirm a specific release, open <strong>Verify my build</strong> and
+						enter the full commit and Wasm SHA-256. For automated checks, use the
+						contract C-address with the{' '}
 						<a href="/docs/api/getContractBuildProvenance">
 							provenance endpoint
 						</a>
@@ -106,10 +109,9 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 			content: (
 				<>
 					<p>
-						For builders, the supported publication path is a GitHub artifact
-						attestation in a publicly readable repository. There is no Atlas
-						source-upload or verification-job submission endpoint. The lookup
-						discovers published evidence for the exact deployed Wasm digest.
+						Publish a GitHub artifact attestation from a publicly readable
+						repository. Atlas looks up the signed evidence by the repository
+						embedded in the deployed Wasm and the deployed Wasm’s SHA-256.
 					</p>
 					<ol>
 						<li>
@@ -129,8 +131,16 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 								publish artifact provenance
 							</a>{' '}
 							for the final Wasm bytes, including any optimization and metadata.
-							The subject SHA-256 must equal the observed deployed digest;
-							attesting a source archive or a different build is insufficient.
+							Grant the job <code>id-token: write</code> and <code>attestations: write</code>,
+							and give the attestation step the final Wasm as its <code>subject-path</code>.
+							Deploy that same file. The{' '}
+							<a href={`${reflectorRepo}/actions/runs/12277879551/attempts/1`}>
+								Reflector DAO reference workflow run
+							</a>{' '}
+							produced the published attestation used above.
+							<Code>{`# Run with the final artifact from the release workflow
+gh attestation verify path/to/final.wasm -R YOUR_ORG/YOUR_REPO
+sha256sum path/to/final.wasm`}</Code>
 						</li>
 						<li>
 							The supported bundle uses in-toto Statement v1, SLSA provenance v1
@@ -140,8 +150,12 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 							metadata claim alone.
 						</li>
 						<li>
-							After publication, repeat the lookup and inspect the returned
-							status. Native contract observations can be retained for one minute,
+							After publication, open <strong>Verify my build</strong> on your
+							contract page. Paste the full commit from the workflow run and the
+							SHA-256 printed above, then select <strong>Verify build</strong>.
+							Atlas reports a match only if it validates signed evidence for both
+							values. Use <strong>Check again</strong> after correcting or publishing
+							evidence. Native contract observations can be retained for one minute,
 							and build outcomes for up to thirty minutes.
 							Repeated requests do not force a fresh build check.
 						</li>

@@ -21,6 +21,23 @@ const labels: Record<string, string> = {
 	builtin: 'Built-in asset contract',
 	not_found_at_ledger: 'Not found at this ledger'
 };
+const builderNextStep: Record<string, string> = {
+	not_published: 'Publish a GitHub artifact attestation for the exact Wasm you deployed. A previous lookup may be cached for up to 30 minutes.',
+	metadata_missing: 'Build and deploy Wasm with source_repo=github:OWNER/REPO in its metadata.',
+	metadata_invalid: 'Correct the source metadata in your build and deploy the resulting Wasm.',
+	unsupported: 'Use source_repo=github:OWNER/REPO to identify a publicly readable GitHub repository.',
+	invalid: 'Check the signature, repository, workflow identity and Wasm hash in the published attestation.',
+	unavailable: 'Atlas could not check the build evidence. Try again later.',
+	builtin: 'Built-in asset contracts have no deployed Wasm build to attest.',
+	not_found_at_ledger: 'Check the contract address and the observed ledger before trying again.'
+};
+
+type ExpectedBuild = {
+	readonly contractId: string;
+	readonly commit: string;
+	readonly wasmSha256: string;
+};
+
 function text(value: unknown): string {
 	return typeof value === 'string' ? value : '';
 }
@@ -44,27 +61,30 @@ export function ExplorerContractProvenance({
 }): React.JSX.Element {
 	const [result, setValue] = useState<{
 		contractId: string;
+		attempt: number;
 		value: EntityRecord | null;
 	} | null>(null);
-	const [failedContract, setError] = useState<string | null>(null);
 	const [attempt, setAttempt] = useState(0);
-	const value = result?.contractId === contractId ? result.value : null;
-	const error = failedContract === contractId;
+	const [expectedBuild, setExpectedBuild] = useState<ExpectedBuild | null>(null);
+	const [invalidInput, setInvalidInput] = useState<string | null>(null);
+	const activeResult =
+		result?.contractId === contractId && result.attempt === attempt ? result : null;
+	const value = activeResult?.value ?? null;
+	const error = activeResult !== null && value === null;
 	useEffect(() => {
 		if (attempt === 0) return;
 		const controller = new AbortController();
-		setValue(null);
-		setError(null);
 		void requestExplorerJson(
 			'/v1/contracts/' + encodeURIComponent(contractId) + '/provenance',
 			controller.signal
 		)
 			.then((response) => {
 				if (!controller.signal.aborted)
-					setValue({ contractId, value: recordValue(response) });
+					setValue({ contractId, attempt, value: recordValue(response) });
 			})
 			.catch(() => {
-				if (!controller.signal.aborted) setError(contractId);
+				if (!controller.signal.aborted)
+					setValue({ contractId, attempt, value: null });
 			});
 		return () => controller.abort();
 	}, [contractId, attempt]);
@@ -72,11 +92,43 @@ export function ExplorerContractProvenance({
 	const source = recordValue(build?.record);
 	const metadata = recordValue(value?.metadata);
 	const status = text(build?.status);
+	const expected = expectedBuild?.contractId === contractId ? expectedBuild : null;
+	const pending = attempt > 0 && activeResult === null;
+	let builderResult = '';
+	let builderDetail = '';
+	if (expected && value) {
+		if (text(value.wasmSha256) && value.wasmSha256 !== expected.wasmSha256) {
+			builderResult = 'Wasm hash mismatch';
+			builderDetail = 'The deployed Wasm hash differs from the hash you entered. Check the release artifact and contract address.';
+		} else if (status === 'verified' && value.wasmSha256 === expected.wasmSha256) {
+			if (source?.commit === expected.commit) {
+				builderResult = 'Your build is attested';
+			} else {
+				builderResult = 'Source commit mismatch';
+				builderDetail = 'The signed attestation identifies a different source commit from the one you entered.';
+			}
+		} else {
+			builderResult = status === 'verified' ? 'Build unconfirmed' : (labels[status] ?? 'Build unconfirmed');
+			builderDetail = builderNextStep[status] ?? 'Atlas could not confirm the requested build from the available evidence.';
+		}
+	}
 	const ledgerEvidence = parseLedgerEvidence(value?.ledgerEvidence);
 	const commitUrl = githubLink(source?.sourceUrl);
 	const workflowUrl = githubLink(source?.workflowUrl);
 	const runUrl = githubLink(source?.runUrl);
 	const repository = text(metadata?.sourceRepository);
+	function verifyBuild(formData: FormData) {
+		const commit = text(formData.get('commit')).trim().toLowerCase();
+		const wasmSha256 = text(formData.get('wasmSha256')).trim().toLowerCase();
+		if (!/^[a-f0-9]{40}$/.test(commit) || !/^[a-f0-9]{64}$/.test(wasmSha256)) {
+			setInvalidInput(contractId);
+			return;
+		}
+		setInvalidInput(null);
+		setExpectedBuild({ contractId, commit, wasmSha256 });
+		setAttempt((current) => current + 1);
+	}
+
 	return (
 		<section className={styles.panel} aria-label="Contract build provenance">
 			<div className={styles.heading}>
@@ -85,16 +137,66 @@ export function ExplorerContractProvenance({
 					<button onClick={() => setAttempt(1)}>Check build</button>
 				) : (
 					<span
-						className={status === 'verified' ? styles.verified : styles.status}
+						role="status"
+						className={
+							status === 'verified' && (!expected || builderResult === 'Your build is attested')
+								? styles.verified
+								: styles.status
+						}
 					>
 						{error
 							? 'Temporarily unavailable'
 							: value
-								? (labels[status] ?? 'Not assessed')
+								? (builderResult || labels[status] || 'Not assessed')
 								: 'Checking'}
 					</span>
 				)}
 			</div>
+			<details className={styles.builder} key={contractId}>
+				<summary>Verify my build</summary>
+				<p>
+					Atlas checks the code on Stellar and compares signed build evidence
+					to the release details you enter below.
+				</p>
+				<ol>
+					<li>Build with <code>source_repo=github:OWNER/REPO</code> in the Wasm metadata.</li>
+					<li>Publish GitHub build provenance for the final Wasm and deploy those exact bytes.</li>
+					<li>Enter the workflow run’s source commit and artifact SHA-256 below.</li>
+				</ol>
+				<p>
+					<a href="/docs/contract-verification#publish-build">Open the publishing steps and worked example</a>
+				</p>
+				<form action={verifyBuild}>
+					<label>
+						Source commit (40 hex characters)
+						<input name="commit" required spellCheck={false} autoComplete="off" />
+					</label>
+					<label>
+						Wasm SHA-256 (64 hex characters)
+						<input name="wasmSha256" required spellCheck={false} autoComplete="off" />
+					</label>
+					<button type="submit" disabled={pending}>Verify build</button>
+				</form>
+				{invalidInput === contractId && (
+					<p role="alert">Enter the full 40-character commit and 64-character Wasm hash in hexadecimal.</p>
+				)}
+				{expected && (
+					<>
+						<p className={styles.expected}>
+							Requested commit <code>{expected.commit}</code> and Wasm hash{' '}
+							<code>{expected.wasmSha256}</code>.
+						</p>
+						{builderDetail && <p>{builderDetail}</p>}
+						{value && (
+							<p>
+								<button onClick={() => setAttempt((current) => current + 1)}>
+									Check again
+								</button>
+							</p>
+						)}
+					</>
+				)}
+			</details>
 			{error ? (
 				<p>
 					Contract evidence is unavailable.{' '}
@@ -179,8 +281,8 @@ export function ExplorerContractProvenance({
 					)}
 					{status === 'verified' && (
 						<p className={styles.muted}>
-							The signed build matches this Wasm hash. This is not a security
-							audit.
+							The signed build matches the deployed Wasm hash. Source
+							reproduction and security audit are separate checks.
 						</p>
 					)}
 				</>
