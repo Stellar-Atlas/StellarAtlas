@@ -29,6 +29,7 @@ interface PageLink {
 }
 
 interface LiveModel {
+	getValue(): string;
 	getVersionId(): number;
 }
 type ModelRevision = readonly [LiveModel, number];
@@ -150,7 +151,11 @@ export default function GraphqlIde(): React.JSX.Element {
 	const [transport] = useState(() =>
 		createGraphqlIdeTransport({
 			beginDataExecution: () => {
-				executionQuery.current = readQueryModel(editorRoot.current);
+				const liveQuery = readQueryModel(editorRoot.current);
+				// Execute reads Monaco immediately. Reconcile any edit before the
+				// debounced callback reports the same value.
+				if (liveQuery) edit('query', liveQuery[0].getValue());
+				executionQuery.current = liveQuery;
 				return ++actionRevision.current;
 			},
 			onBusy: (value) => {
