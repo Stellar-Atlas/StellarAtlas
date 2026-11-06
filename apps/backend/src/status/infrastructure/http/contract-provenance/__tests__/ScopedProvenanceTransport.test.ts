@@ -168,7 +168,7 @@ it('attaches the checked lookup to HTTPS and fixes GitHub authority and request 
 	});
 	expect(mock.mock.calls[0]?.[1]).toMatchObject({
 		method: 'GET',
-		lookup: expect.any(Function)
+		agent: { options: { lookup: expect.any(Function) } }
 	});
 	const endpoint = scopedRpcEndpoint(upstream, upstream)!;
 	await expect(
@@ -216,20 +216,20 @@ it('fails closed before a fifth real transport attempt while preserving the nati
 it('rejects a chunked response beyond the configured byte bound and bounds outbound bytes', async () => {
 	const { mock } = transport(200, [Buffer.alloc(8192), Buffer.alloc(8193)]);
 	const endpoint = scopedRpcEndpoint(upstream, upstream)!;
-	const agent = new https.Agent();
 	await expect(
 		fetchRpcJson(
 			endpoint,
 			{},
 			{
-				agent,
 				signal: new AbortController().signal,
 				maxResponseBytes: 16 * 1024,
 				timeoutMs: 2000
 			}
 		)
 	).rejects.toThrow('response exceeds size limit');
-	expect(mock.mock.calls[0]?.[1]).toMatchObject({ agent });
+	expect(mock.mock.calls[0]?.[1]).toMatchObject({
+		agent: { maxSockets: 2, maxTotalSockets: 2, maxFreeSockets: 1 }
+	});
 	expect(mock).toHaveBeenCalledTimes(1);
 	await expect(
 		fetchRpcJson(endpoint, { oversized: 'x'.repeat(16 * 1024) })
@@ -241,7 +241,6 @@ it.each(['cancelled', 'timed out'])(
 	'destroys a hung request when %s with combined options',
 	async (reason) => {
 		mocks.useFakeTimers();
-		const agent = new https.Agent();
 		const controller = new AbortController();
 		const destroy = mocks.fn();
 		const outbound = Object.assign(new EventEmitter(), {
@@ -257,13 +256,14 @@ it.each(['cancelled', 'timed out'])(
 				scopedRpcEndpoint(upstream, upstream)!,
 				{},
 				{
-					agent,
 					signal: controller.signal,
 					maxResponseBytes: 16 * 1024,
 					timeoutMs: 30
 				}
 			);
-			expect(transport.mock.calls[0]?.[1]).toMatchObject({ agent });
+			expect(transport.mock.calls[0]?.[1]).toMatchObject({
+				agent: { options: { lookup: expect.any(Function) } }
+			});
 			const assertion = expect(pending).rejects.toThrow('request ' + reason);
 			mocks.advanceTimersByTime(29);
 			expect(destroy).not.toHaveBeenCalled();
@@ -274,7 +274,6 @@ it.each(['cancelled', 'timed out'])(
 			controller.abort();
 			expect(destroy).toHaveBeenCalledTimes(1);
 		} finally {
-			agent.destroy();
 			mocks.useRealTimers();
 		}
 	}

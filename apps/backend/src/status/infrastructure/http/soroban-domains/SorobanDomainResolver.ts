@@ -1,5 +1,3 @@
-import http from 'node:http';
-import https from 'node:https';
 import {
 	Account,
 	Contract,
@@ -58,20 +56,10 @@ export class SorobanDomainResolver {
 		ttlResolution: 0
 	});
 	private readonly pending = new Map<string, PendingLookup>();
-	private readonly agent: http.Agent;
-
 	constructor(
 		private readonly rpc: RpcEndpoint,
 		private readonly timeoutMs = LOOKUP_TIMEOUT_MS
-	) {
-		const Agent = rpc.protocol === 'https:' ? https.Agent : http.Agent;
-		this.agent = new Agent({
-			keepAlive: true,
-			maxSockets: MAX_IN_FLIGHT,
-			maxTotalSockets: MAX_IN_FLIGHT,
-			maxFreeSockets: 1
-		});
-	}
+	) {}
 
 	async resolve(
 		domain: ExactDomainName,
@@ -254,7 +242,7 @@ export class SorobanDomainResolver {
 				method,
 				params
 			},
-			{ agent: this.agent, signal }
+			{ signal }
 		);
 		signal.throwIfAborted();
 		const reply = object(value);

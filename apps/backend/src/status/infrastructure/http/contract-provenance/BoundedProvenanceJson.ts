@@ -13,19 +13,27 @@ const MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
 const MAX_REQUEST_BODY_BYTES = 16 * 1024;
 const REQUEST_TIMEOUT_MS = 20_000;
 
-const httpAgent = new http.Agent({
-	keepAlive: true,
-	maxSockets: 2,
-	maxTotalSockets: 2,
-	maxFreeSockets: 1
-});
+function endpointAgent(
+	protocol: RpcEndpoint['protocol'],
+	lookup: RpcEndpoint['lookup']
+): http.Agent {
+	const Agent = protocol === 'https:' ? https.Agent : http.Agent;
+	return new Agent({
+		lookup,
+		keepAlive: true,
+		maxSockets: 2,
+		maxTotalSockets: 2,
+		maxFreeSockets: 1
+	});
+}
 
-const httpsAgent = new https.Agent({
-	keepAlive: true,
-	maxSockets: 2,
-	maxTotalSockets: 2,
-	maxFreeSockets: 1
-});
+// Agent pools are keyed by authority, not by the address policy. Never share
+// an agent between capabilities, even when their URLs are identical.
+const rpcAgents = new WeakMap<RpcEndpoint, http.Agent>();
+const githubAgent = endpointAgent(
+	'https:',
+	publicEndpointLookup('api.github.com')
+);
 
 export type ProvenanceJsonErrorKind = 'http' | 'transport' | 'invalid_response';
 
@@ -84,7 +92,6 @@ function bodyBytes(body: unknown): Buffer | undefined {
 }
 
 type RequestLimits = {
-	readonly agent?: http.Agent;
 	readonly signal?: AbortSignal;
 	readonly timeoutMs?: number;
 	readonly maxResponseBytes?: number;
@@ -97,10 +104,13 @@ export async function fetchRpcJson(
 ): Promise<unknown> {
 	if (!isRpcEndpoint(endpoint))
 		throw new ProvenanceHttpError(null, 'transport', 'Unapproved RPC endpoint');
-	return requestJson(new URL(endpoint.href), endpoint.lookup, body, options);
+	let agent = rpcAgents.get(endpoint);
+	if (!agent) {
+		agent = endpointAgent(endpoint.protocol, endpoint.lookup);
+		rpcAgents.set(endpoint, agent);
+	}
+	return requestJson(new URL(endpoint.href), agent, body, options);
 }
-
-const githubLookup = publicEndpointLookup('api.github.com');
 
 export async function fetchGithubAttestations(
 	repository: string,
@@ -116,16 +126,16 @@ export async function fetchGithubAttestations(
 	const destination = new URL('https://api.github.com');
 	destination.pathname = '/repos/' + name + '/attestations/sha256:' + digest;
 	destination.search = 'per_page=5';
-	return requestJson(destination, githubLookup);
+	return requestJson(destination, githubAgent);
 }
 
 async function requestJson(
 	url: URL,
-	lookup: RpcEndpoint['lookup'],
+	agent: http.Agent,
 	body?: unknown,
 	options: RequestLimits = {}
 ): Promise<unknown> {
-	const { agent, signal } = options;
+	const { signal } = options;
 	signal?.throwIfAborted();
 	const payload = bodyBytes(body);
 	const timeoutMs = Math.min(
@@ -193,7 +203,7 @@ async function requestJson(
 		const requestOptions: RequestOptions = {
 			method: payload === undefined ? 'GET' : 'POST',
 			headers,
-			lookup
+			agent
 		};
 
 		timeout = setTimeout(() => {
@@ -305,16 +315,8 @@ async function requestJson(
 			};
 			request =
 				url.protocol === 'https:'
-					? https.request(
-							url,
-							{ ...requestOptions, agent: agent ?? httpsAgent },
-							handleResponse
-						)
-					: http.request(
-							url,
-							{ ...requestOptions, agent: agent ?? httpAgent },
-							handleResponse
-						);
+					? https.request(url, requestOptions, handleResponse)
+					: http.request(url, requestOptions, handleResponse);
 			request.once('error', () =>
 				finish(
 					new ProvenanceHttpError(
