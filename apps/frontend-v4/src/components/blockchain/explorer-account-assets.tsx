@@ -127,29 +127,29 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 				<tbody>{visible.map(row => {
 					const breakdown = currentAccountBreakdown(row, value.snapshot);
 					return <tr key={row.id}>
-					<td data-label="Asset">
+					<WalletCell label="Asset">
 						<CurrentAsset row={row} metadata={metadata[row.id]} />
 						{row.kind === 'credit' && <div className={assets.context}>Issuer clawback: {row.clawbackEnabled === true
 							? 'Enabled' : row.clawbackEnabled === false ? 'Not enabled' : 'Not reported'}</div>}
-					</td>
-					<td data-label="Total balance" className={assets.amount}>{formatAtomic(row.balance.toString(), 7)}</td>
+					</WalletCell>
+					<WalletCell label="Total balance" amount>{formatAtomic(row.balance.toString(), 7)}</WalletCell>
 					{view === 'trustlines' ? <>
-						<td data-label="Limit & receive headroom" className={assets.amount}>
+						<WalletCell label="Limit & receive headroom" amount>
 							{row.limit === null ? 'Limit not reported' : formatAtomic(row.limit.toString(), 7)}
 							{row.kind === 'credit' && <>
 								{row.buying !== null && <div className={assets.context}>Buy offers: {formatAtomic(row.buying.toString(), 7)}</div>}
 								{breakdown.receiveHeadroom !== null && <div className={assets.context}>Receive headroom: {formatAtomic(breakdown.receiveHeadroom.toString(), 7)}</div>}
 							</>}
-						</td>
-						<td data-label="Authorization & sponsor">{row.kind === 'credit' ? authorization[row.authorization] : 'Pool-share trustline'}
+						</WalletCell>
+						<WalletCell label="Authorization & sponsor">{row.kind === 'credit' ? authorization[row.authorization] : 'Pool-share trustline'}
 							{row.sponsor && <div className={assets.context}>Sponsor: <Link href={buildEntityHref('accounts', row.sponsor)}>{row.sponsor}</Link></div>}
-						</td>
+						</WalletCell>
 					</> : <>
-						<td data-label="Available" className={assets.amount}>{breakdown.available !== null
+						<WalletCell label="Available" amount>{breakdown.available !== null
 							? formatAtomic(breakdown.available.toString(), 7)
 							: row.kind === 'credit' && (row.authorization === 'restricted' || row.authorization === 'liabilities-only')
-								? 'Restricted' : 'Not calculated'}</td>
-						<td data-label="Commitments" className={assets.amount}>
+								? 'Restricted' : 'Not calculated'}</WalletCell>
+						<WalletCell label="Commitments" amount>
 							{row.kind === 'native' && <div>{breakdown.minimumReserve === null ? 'Minimum XLM reserve not calculated'
 								: <>
 									Minimum XLM reserve: {formatAtomic(breakdown.minimumReserve.toString(), 7)}
@@ -162,7 +162,7 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 								<div className={assets.context}>Reserve shortfall: {formatAtomic(breakdown.reserveShortfall.toString(), 7)}</div>}
 							{breakdown.offerShortfall !== null && breakdown.offerShortfall > 0n &&
 								<div className={assets.context}>Sell-offer shortfall: {formatAtomic(breakdown.offerShortfall.toString(), 7)}</div>}
-						</td>
+						</WalletCell>
 					</>}
 					</tr>;
 				})}</tbody>
@@ -176,6 +176,17 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 			<span>{offset + 1}–{offset + visible.length} of {rows.length}</span>
 		</div>}
 	</>;
+}
+
+function WalletCell({ label, amount, children }: {
+	readonly label: string;
+	readonly amount?: boolean;
+	readonly children: React.ReactNode;
+}): React.JSX.Element {
+	// The mobile table grid generates its own label. Keep the value in one grid item.
+	return <td data-label={label} className={amount ? assets.amount : undefined}>
+		<div className={assets.cellValue}>{children}</div>
+	</td>;
 }
 
 function ReserveInputs({ snapshot }: { readonly snapshot: CurrentAccountSnapshot }): React.JSX.Element | null {
