@@ -1,17 +1,8 @@
 import {
-	mkdir,
-	readFile,
-	stat,
-	rename,
-	writeFile,
-	open,
-	unlink
-} from 'node:fs/promises';
-import { join } from 'node:path';
-import {
 	AssetCatalogueSource,
 	type AssetObservation
 } from './AssetCatalogueSource.js';
+import { AssetCatalogueFiles } from './AssetCatalogueFiles.js';
 import {
 	nativeAsset,
 	parseAssetReference,
@@ -86,14 +77,13 @@ export class AssetCatalogue {
 	}
 	private async readSnapshot(): Promise<void> {
 		try {
-			const info = await stat(join(this.cacheRoot, 'catalogue.json'));
-			if (this.snapshot && info.mtimeMs === this.cacheMtime) {
+			const files = await AssetCatalogueFiles.open(this.cacheRoot, false);
+			const stored = await files?.readSnapshot(this.snapshot ? this.cacheMtime : undefined);
+			if (!stored || stored.json === undefined) {
 				this.loadedAt = Date.now();
 				return;
 			}
-			const raw = JSON.parse(
-				await readFile(join(this.cacheRoot, 'catalogue.json'), 'utf8')
-			) as CatalogueSnapshot;
+			const raw = JSON.parse(stored.json) as CatalogueSnapshot;
 			if (raw.version !== 1 || !Array.isArray(raw.assets))
 				throw new Error('Invalid asset catalogue cache');
 			if (raw.generatedAt !== this.snapshot?.generatedAt) {
@@ -109,7 +99,7 @@ export class AssetCatalogue {
 					a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 				);
 			}
-			this.cacheMtime = info.mtimeMs;
+			this.cacheMtime = stored.mtime;
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
 				console.error('Asset catalogue cache read failed', error);
@@ -203,18 +193,9 @@ export class AssetCatalogue {
 		};
 	}
 	async refresh(): Promise<boolean> {
-		await mkdir(this.cacheRoot, { recursive: true });
-		const lock = join(this.cacheRoot, 'catalogue.lock');
-		try {
-			const info = await stat(lock);
-			if (Date.now() - info.mtimeMs > 900_000) await unlink(lock);
-		} catch {}
-		let handle;
-		try {
-			handle = await open(lock, 'wx');
-		} catch {
-			return false;
-		}
+		const files = await AssetCatalogueFiles.open(this.cacheRoot, true);
+		const release = await files?.lock();
+		if (!files || !release) return false;
 		try {
 			await this.load();
 			const update = await this.source.refresh(this.snapshot?.watermark);
@@ -260,15 +241,12 @@ export class AssetCatalogue {
 				),
 				assets: [...merged.values()]
 			};
-			const temp = join(this.cacheRoot, 'catalogue.' + process.pid + '.tmp');
-			await writeFile(temp, JSON.stringify(snapshot));
-			await rename(temp, join(this.cacheRoot, 'catalogue.json'));
+			await files.replaceSnapshot(JSON.stringify(snapshot));
 			this.loadedAt = 0;
 			await this.load();
 			return true;
 		} finally {
-			await handle.close();
-			await unlink(lock).catch(() => undefined);
+			await release();
 		}
 	}
 	start(): void {
