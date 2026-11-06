@@ -186,6 +186,7 @@ it('accepts only configured local ownership and uses its server-selected network
 		createAccountFederation('relative-schedule', Networks.PUBLIC, read)
 	).rejects.toThrow('must be absolute');
 	const directory = await mkdtemp(join(tmpdir(), 'atlas-federation-owner-'));
+	const clock = jest.spyOn(Date, 'now').mockImplementation(now);
 	try {
 		if (process.platform === 'win32') {
 			await expect(
@@ -209,6 +210,7 @@ it('accepts only configured local ownership and uses its server-selected network
 		expect(read).toHaveBeenCalledTimes(1);
 		await expect(federation.drain()).resolves.toBe(true);
 	} finally {
+		clock.mockRestore();
 		await rmdir(directory);
 	}
 });
