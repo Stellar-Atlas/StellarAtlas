@@ -72,6 +72,40 @@
 	gap: 1rem;
 	flex-wrap: wrap;
 }
+.builder {
+	margin-top: 0.75rem;
+}
+.builder summary {
+	cursor: pointer;
+}
+.builder ol {
+	padding-inline-start: 1.25rem;
+	font-size: 0.85rem;
+}
+.builder form {
+	display: grid;
+	gap: 0.65rem;
+	margin-top: 0.75rem;
+	justify-items: start;
+}
+.builder label {
+	display: grid;
+	gap: 0.25rem;
+	width: min(100%, 32rem);
+	font-size: 0.85rem;
+}
+.builder input {
+	min-width: 0;
+	padding: 0.45rem;
+	font: inherit;
+	color: inherit;
+	background: var(--surface-raised, #222d33);
+	border: 1px solid var(--border-color, #344047);
+	border-radius: 0.4rem;
+}
+.expected {
+	overflow-wrap: anywhere;
+}
 @media (max-width: 560px) {
 	.details {
 		grid-template-columns: 1fr;
