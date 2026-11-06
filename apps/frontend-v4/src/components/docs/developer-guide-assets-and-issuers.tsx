@@ -154,8 +154,8 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 					</p>
 					<ul>
 						<li>
-							<strong>Offer commitments.</strong> Selling liabilities reserve
-							part of the held balance for open offers. For a fully authorized
+							<strong>Offer commitments.</strong> Selling liabilities report the
+							amount required for open sell offers. For a fully authorized
 							issued-asset trustline, subtract those commitments from the balance
 							to calculate availability. Buying liabilities reserve capacity to
 							receive the asset and do not reduce the held balance.
@@ -168,16 +168,21 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 							<code>accounting.baseReserveLedger</code> matches the snapshot
 							ledger and all counts are available. For example, 10 XLM with 1.25
 							XLM committed to selling and a 3 XLM reserve leaves 5.75 XLM before
-							fees. If reserve evidence is missing, show the known balance and
-							commitments and leave native availability uncalculated.
+							fees. The required amount is 4.25 XLM. With only 1 XLM held,
+							1 XLM covers part of the minimum reserve first. The reserve
+							shortfall is 2 XLM and the sell-offer shortfall is 1.25 XLM.
+							Availability in that case is zero. If reserve evidence is missing,
+							the reported selling liability can still be shown. Leave the
+							combined required and covered amounts, offer allocation and
+							availability uncalculated.
 						</li>
 						<li>
 							<strong>Receive headroom.</strong> For a fully authorized issued
 							trustline, subtract the balance and buying liabilities from the
 							trustline limit. A zero-balance trustline can still have receive
 							headroom. Keep authorization restrictions visible, including
-							authorization only to maintain liabilities. Missing inputs and
-							shortfalls need their own states.
+							authorization only to maintain liabilities. A restricted or unknown
+							amount is different from an exact zero on an authorized trustline.
 						</li>
 					</ul>
 					<p>
@@ -186,8 +191,18 @@ export const assetsAndIssuersGuide: DeveloperGuidePage = {
 						claimable balance has already left the source balance, and reserve
 						sponsorship is already included in the account counts. Avoid
 						deducting either twice. A classic balance shown through a Stellar
-						Asset Contract is the same holding. Liquidity-pool shares are share
-						positions, with withdrawal rules separate from wallet availability.
+						Asset Contract is the same holding. For classic liquidity-pool shares,
+						show the exact share balance. Sell-offer reservations do not apply,
+						and share count alone does not establish a withdrawable amount.
+						The account’s reserve calculation already uses the protocol’s
+						weighted counts.
+					</p>
+					<p>
+						Where a protocol position is supported by a retained observation,
+						show it separately with its ledger and close time. Even a recent
+						observation describes that ledger. Keep it out of current balance
+						and availability totals. Missing evidence does not establish a
+						zero position or complete account coverage.
 					</p>
 					<p>
 						Cached logos and collectible labels come from issuer metadata
