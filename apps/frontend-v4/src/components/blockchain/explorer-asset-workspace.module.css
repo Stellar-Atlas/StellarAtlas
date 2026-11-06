@@ -215,49 +215,75 @@
 }
 .observedPairs {
 	display: grid;
-	gap: 0.45rem;
+	min-width: 0;
+	gap: 0.55rem;
+	padding: clamp(0.65rem, 2vw, 1rem);
+	border: 1px solid var(--border);
+	border-radius: 0.55rem;
 }
-.observedPairs h4,
-.observedPairs ul {
+.observedPairs h4 {
 	margin: 0;
 }
-.observedPairs ul {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
-	gap: 0.5rem;
-	padding: 0;
-	list-style: none;
+.observedPairs table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+	font-size: 0.85rem;
 }
-.observedPairs li {
-	min-width: 0;
-	max-width: 100%;
+.observedPairs caption {
+	padding-bottom: 0.55rem;
+	color: var(--muted);
+	text-align: start;
+	font-size: 0.78rem;
+}
+.observedPairs :is(th, td) {
+	padding: 0.45rem clamp(0.3rem, 1.4vw, 0.85rem);
+	border-bottom: 1px solid var(--border);
+	text-align: start;
+}
+.observedPairs thead {
+	color: var(--muted);
+}
+.observedPairs thead th:not(:first-child) {
+	width: 24%;
 }
 .observedPairs a {
-	display: grid;
-	gap: 0.3rem;
-	padding: 0.35rem 0.65rem;
-	border: 1px solid var(--border);
-	border-radius: 0.35rem;
+	display: inline-block;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 }
 .observedPairs a:focus-visible {
 	outline: 2px solid var(--blue);
 	outline-offset: 2px;
 }
-.pairDirection {
-	display: flex;
-	block-size: 0.28rem;
-	overflow: hidden;
-	border-radius: 2px;
-	background: var(--muted);
-}
-.pairDirection > span { background: var(--blue); }
-.pairCounts { color: var(--muted); font-size: 0.78rem; }
 .observedPairs code {
-	overflow-wrap: anywhere;
-}
-.observedPairs > span {
+	display: block;
+	padding: 0;
+	border: 0;
+	background: none;
 	color: var(--muted);
-	font-size: 0.78rem;
+	font-size: 0.72rem;
+	font-weight: 400;
+}
+.observedPairs td {
+	font-variant-numeric: tabular-nums;
+}
+.pairCountTrack,
+.pairCountTrack > span {
+	display: block;
+	height: 0.25rem;
+	border-radius: 0.2rem;
+}
+.pairCountTrack {
+	margin-top: 0.2rem;
+	background: var(--border);
+}
+.pairCountTrack > span {
+	background: currentColor;
+	opacity: 0.65;
+}
+.observedPairs > button {
+	justify-self: start;
 }
 .holderControls {
 	display: flex;
@@ -280,7 +306,8 @@
 	border-radius: 0.3rem;
 	padding: 0.45rem 0.6rem;
 }
-.holderControls button {
+.holderControls button,
+.observedPairs > button {
 	background: var(--button-secondary);
 	color: var(--ink);
 	border: 1px solid var(--border);
