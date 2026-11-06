@@ -131,6 +131,10 @@ export default {
 			preset: 'ts-jest',
 			displayName: 'backend',
 			rootDir: 'apps/backend',
+			moduleNameMapper: {
+				// Share one GraphQLSchema constructor with graphql-http under Jest.
+				'^graphql$': '<rootDir>/node_modules/graphql/index.js'
+			},
 			moduleDirectories: ['node_modules'],
 			testMatch: [
 				'**/__tests__/**/*.(integration|test).(js|jsx|ts|tsx)',

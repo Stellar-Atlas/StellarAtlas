@@ -1,5 +1,6 @@
 import { HubbleWarehouseUnavailableError } from './HubbleWarehouseErrors.js';
 import { currentHubbleRequestSignal } from './HubbleRequestCancellation.js';
+import { readHubbleWarehouseJson } from './HubbleWarehouseJsonResponse.js';
 import type {
 	HubblePreparedParameter,
 	HubblePreparedResponse
@@ -29,37 +30,23 @@ export function createHubbleWarehouseTransport(
 		}
 		const headers: Record<string, string> = { Accept: 'application/json' };
 		if (authorization !== undefined) headers.Authorization = authorization;
+		const deadline = AbortSignal.timeout(timeoutMs);
+		const caller = currentHubbleRequestSignal();
+		const signal = caller === undefined ? deadline : AbortSignal.any([deadline, caller]);
+		let response: Response;
 		try {
-			const deadline = AbortSignal.timeout(timeoutMs);
-			const caller = currentHubbleRequestSignal();
-			const response = await fetchImplementation(url, {
+			signal.throwIfAborted();
+			response = await fetchImplementation(url, {
 				headers,
 				method: 'POST',
-				signal:
-					caller === undefined ? deadline : AbortSignal.any([deadline, caller])
+				signal
 			});
-			const body = await response.text();
-			if (!response.ok) {
-				throw new HubbleWarehouseUnavailableError(
-					'ClickHouse returned HTTP ' +
-						response.status +
-						': ' +
-						body.slice(0, 512)
-				);
-			}
-			const parsed: unknown = JSON.parse(body);
-			if (parsed === null || typeof parsed !== 'object') {
-				throw new HubbleWarehouseUnavailableError(
-					'ClickHouse returned an invalid JSON response'
-				);
-			}
-			return parsed as HubblePreparedResponse<T>;
-		} catch (error) {
-			if (error instanceof HubbleWarehouseUnavailableError) throw error;
+		} catch {
+			// Transport errors may retain endpoint URLs or credentials in their causes.
 			throw new HubbleWarehouseUnavailableError(
-				'Hubble ClickHouse query failed',
-				{ cause: error }
+				signal.aborted ? 'ClickHouse request canceled' : 'ClickHouse request failed'
 			);
 		}
+		return readHubbleWarehouseJson<T>(response, signal);
 	};
 }
