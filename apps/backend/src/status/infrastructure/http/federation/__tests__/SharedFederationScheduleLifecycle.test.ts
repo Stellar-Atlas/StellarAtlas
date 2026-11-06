@@ -52,7 +52,7 @@ const workerSource = `
 	void budget.run('provider.example', async () => {
 		await writeFile(join(directory, 'admitted'), '', { flag: 'wx' });
 		if (mode === 'crash-holder') {
-			await writeFile(join(directory, 'federation-schedule.lock'), 'fixture owner', { flag: 'wx' });
+			await writeFile(join(directory, 'federation-schedule.lock'), 'fixture owner', { flag: 'wx', mode: 0o600 });
 			await writeFile(join(directory, 'held'), '', { flag: 'wx' });
 			await setTimeout(30000);
 		}

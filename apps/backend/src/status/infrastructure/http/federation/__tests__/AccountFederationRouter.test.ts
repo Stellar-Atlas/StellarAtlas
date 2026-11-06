@@ -34,6 +34,9 @@ const display = {
 	reverseProviderOrigin: 'https://provider.example',
 	forwardProviderOrigin: 'https://alias-provider.example'
 } as const;
+type DisplayResult = Omit<typeof display, 'memo'> & {
+	readonly memo: { readonly type: 'id' | 'text'; readonly value: string };
+};
 const indexed = (
 	overrides: Parameters<typeof accountObservationRow>[0] = {}
 ) => {
@@ -61,7 +64,7 @@ const indexed = (
 function fixture(result = indexed()) {
 	const readAccount = jest.fn(async () => result);
 	const lookup = jest.fn<
-		Promise<typeof display | { status: 'throttled'; retryAtMs: number }>,
+		Promise<DisplayResult | { status: 'throttled'; retryAtMs: number }>,
 		[string, string | null]
 	>(async () => display);
 	const service = new AccountFederationService(
@@ -80,6 +83,7 @@ it('uses the indexed domain, returns exact display-only data and sets no-store',
 	const result = await request(app)
 		.get(path)
 		.expect('Cache-Control', 'no-store')
+		.expect('X-Content-Type-Options', 'nosniff')
 		.expect(200);
 	expect(readAccount).toHaveBeenCalledWith({ accountId, limit: 1 });
 	expect(lookup).toHaveBeenCalledWith(accountId, 'example.org');
@@ -88,6 +92,25 @@ it('uses the indexed domain, returns exact display-only data and sets no-store',
 		network: 'mainnet',
 		observedLedger: '63390042'
 	});
+	expect(result.headers.etag).toBeUndefined();
+});
+
+it('encodes provider markup safely without changing parsed JSON or caching it', async () => {
+	const { app, lookup } = fixture();
+	const memo = { type: 'text', value: '</script><svg onload="alert(1)">&' } as const;
+	// Keep the fixture independent from the provider parser.
+	lookup.mockImplementationOnce(async () => ({ ...display, memo }));
+	const result = await request(app)
+		.get(path)
+		.set('If-None-Match', '*')
+		.expect('Content-Type', /application\/json/)
+		.expect('Cache-Control', 'no-store')
+		.expect('X-Content-Type-Options', 'nosniff')
+		.expect(200);
+	expect(result.text).toContain('\\u003c/script\\u003e');
+	expect(result.text).toContain('\\u0026');
+	expect(result.text).not.toContain('<svg');
+	expect(result.body.memo).toEqual(memo);
 	expect(result.headers.etag).toBeUndefined();
 });
 
@@ -106,6 +129,14 @@ it('rejects caller-supplied network, domain and endpoint and skips HEAD', async 
 	await request(app)
 		.get('/v1/explorer/accounts/Ginvalid/federation')
 		.expect(400);
+	const malicious = await request(app)
+		.get('/v1/explorer/accounts/' + encodeURIComponent('<script>alert(1)</script>') + '/federation')
+		.expect('Content-Type', /application\/json/)
+		.expect('Cache-Control', 'no-store')
+		.expect('X-Content-Type-Options', 'nosniff')
+		.expect(400)
+		.expect({ error: 'invalid_account_or_query' });
+	expect(malicious.headers.etag).toBeUndefined();
 	expect(readAccount).not.toHaveBeenCalled();
 	expect(lookup).not.toHaveBeenCalled();
 });
@@ -226,7 +257,7 @@ it('bounds graceful drain, reports unresolved ownership, and lets the lock owner
 	const budget = new ScheduledFederationProviderBudget(store, () => 10_000);
 	const lookup = jest.fn(async () => {
 		await budget.run('provider.example', async () => {
-			await writeFile(lock, 'held by fixture owner', { flag: 'wx' });
+			await writeFile(lock, 'held by fixture owner', { flag: 'wx', mode: 0o600 });
 			started();
 			return { status: 200, headers: {}, body: Buffer.alloc(0) };
 		});

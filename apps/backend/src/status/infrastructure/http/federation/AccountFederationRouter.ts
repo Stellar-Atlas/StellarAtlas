@@ -213,5 +213,9 @@ export function accountFederationRouter(
 
 function sendJson(response: Response, status: number, body: object): void {
 	// A transient alias should not have an Express-generated cache validator.
-	response.status(status).type('application/json').end(JSON.stringify(body));
+	const json = JSON.stringify(body).replace(/[<>&]/g, (character) =>
+		'\\u' + character.charCodeAt(0).toString(16).padStart(4, '0')
+	);
+	response.setHeader('X-Content-Type-Options', 'nosniff');
+	response.status(status).type('application/json').end(json);
 }

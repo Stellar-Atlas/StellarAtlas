@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -46,6 +45,18 @@ const [first, second, different, tomlOnly, subdomain, otherNetwork] = [
 ].map(account) as [string, string, string, string, string, string];
 let root: string;
 
+// Golden SHA-256 filenames for the public network identifier, newline and key.
+const mainnetIssuerFiles = new Map([
+	[first, 'ee99ec387233fb937416eb6a0c8d865bfe3cb987efd74bde8e01b7b0ca76a7cc'],
+	[second, 'ba263d5ed2992027cd31c5d54f81aa09c13195ea7ea04b3dde7b17d974bf68f2'],
+	[different, '252b32a2b786d05f7a530a1348ec62de3cdde01aebfcc7ede52427e3d27d6961'],
+	[subdomain, 'bd0ff5aa81cbe8fcca4cc88e10773f2650b14a2ca70e2a5b912240c2e8affceb']
+]);
+const testnetIssuerFiles = new Map([
+	[otherNetwork, 'f5b6a2262add2ce23a34009f8d23ee17570aa1482293c263b24518572f6d3dae']
+]);
+const mainnetTomlFile = 'd896b3973105282572c16e6d5232e4b085abca58654135dd3ddbaa4cf43d295e';
+
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), 'issuer-domain-fixture-'));
 	await mkdir(join(root, 'issuer-domains'));
@@ -57,40 +68,29 @@ afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
 });
 
-function save(
-	folder: string,
-	key: string,
-	data: object,
-	passphrase: string = network
-) {
-	const hash = createHash('sha256')
-		.update(passphrase + '\n' + key)
-		.digest('hex');
-	return writeFile(join(root, folder, hash + '.json'), JSON.stringify(data));
+function save(folder: string, fileKey: string, data: object) {
+	return writeFile(join(root, folder, fileKey + '.json'), JSON.stringify(data));
 }
 
 function home(
 	issuer: string,
 	homeDomain: string,
-	options: { passphrase?: string; error?: boolean; fetchedAt?: string } = {}
+	options: { testnet?: boolean; error?: boolean; fetchedAt?: string } = {}
 ) {
-	return save(
-		'issuer-domains',
+	const fileKey = (options.testnet ? testnetIssuerFiles : mainnetIssuerFiles).get(issuer);
+	if (!fileKey) throw new Error('No golden filename for issuer fixture');
+	return save('issuer-domains', fileKey, {
 		issuer,
-		{
-			issuer,
-			homeDomain,
-			fetchedAt: options.fetchedAt ?? observedAt,
-			lastAttemptAt: observedAt,
-			error: options.error ?? false
-		},
-		options.passphrase
-	);
+		homeDomain,
+		fetchedAt: options.fetchedAt ?? observedAt,
+		lastAttemptAt: observedAt,
+		error: options.error ?? false
+	});
 }
 
 function toml(source: string, overrides: object = {}) {
 	const parsed = parseIssuerToml(source);
-	return save('issuers', domain, {
+	return save('issuers', mainnetTomlFile, {
 		...parsed,
 		homeDomain: domain,
 		tomlUrl: 'https://' + domain + '/.well-known/stellar.toml',
@@ -136,7 +136,7 @@ test('combines exact indexed home domains with attributed TOML accounts and asse
 		home(second, domain),
 		home(different, 'other.example'),
 		home(subdomain, 'sub.' + domain),
-		home(otherNetwork, domain, { passphrase: Networks.TESTNET }),
+		home(otherNetwork, domain, { testnet: true }),
 		toml(`ACCOUNTS = ["${first}", "${different}", "${tomlOnly}", "invalid"]
 [[CURRENCIES]]
 code = "USD"
