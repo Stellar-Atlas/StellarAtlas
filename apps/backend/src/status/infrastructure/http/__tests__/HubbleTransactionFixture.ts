@@ -35,7 +35,7 @@ const envelope = new TransactionBuilder(
 	.addMemo(Memo.text('typed fixture'))
 	.setTimeout(0)
 	.build();
-export const transactionHash = envelope.hash().toString('hex');
+export const transactionHash = Buffer.from(envelope.hash()).toString('hex');
 const common = {
 	ledger_sequence: transactionLedger,
 	closed_at: '2026-09-01 00:00:00.000',

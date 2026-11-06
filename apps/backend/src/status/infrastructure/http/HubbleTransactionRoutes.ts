@@ -1,6 +1,7 @@
 import type { Request, Router } from 'express';
 import type { HubbleTransactionInput } from './HubbleTransactionContracts.js';
 import { normalizeTransactionInput } from './HubbleTransactionCursor.js';
+import { withHubbleRequestCancellation } from './HubbleRequestCancellation.js';
 import type { HubbleWarehouse } from './HubbleWarehouseContracts.js';
 import {
 	HubbleWarehouseInputError,
@@ -21,7 +22,11 @@ export function registerHubbleTransactionRoutes(
 			}
 			response.setHeader('Cache-Control', 'no-store');
 			try {
-				const detail = await warehouse.transactionDetail(parseRequest(request));
+				const input = parseRequest(request);
+				const detail = await withHubbleRequestCancellation(request, response, () =>
+					warehouse.transactionDetail(input)
+				);
+				if (response.destroyed) return;
 				if (detail === null) {
 					response.status(404).json({
 						code: 'hubble_not_found',
@@ -29,6 +34,7 @@ export function registerHubbleTransactionRoutes(
 					});
 				} else response.status(200).json(detail);
 			} catch (error) {
+				if (response.destroyed) return;
 				if (error instanceof HubbleWarehouseInputError) {
 					response
 						.status(400)
