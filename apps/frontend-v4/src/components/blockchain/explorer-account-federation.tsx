@@ -23,7 +23,7 @@ type Props = {
 
 const messages = {
 	indexed_evidence_insufficient:
-		'The index has insufficient recent account evidence to check a federation name. The account may still exist.',
+		'There is insufficient recent account metadata to check a federation name. The account may still exist.',
 	unsupported: 'Federation lookup is unsupported for this account evidence.',
 	not_found: 'The reverse federation provider returned no name.',
 	mismatch: 'The federation responses disagreed. No name could be confirmed.',
@@ -142,7 +142,7 @@ function FederationEvidence({
 			<EvidenceField label="Forward provider">
 				{result.forwardProviderOrigin}
 			</EvidenceField>
-			<EvidenceField label="Indexed account observation ledger">
+			<EvidenceField label="Account metadata observation ledger">
 				{result.observedLedger}
 			</EvidenceField>
 			{closedAt && (

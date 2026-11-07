@@ -46,6 +46,8 @@ export interface BlockchainExplorerRouterConfig {
 	>;
 	readonly horizonUrl: string;
 	readonly accountProvider?: ExplorerAccountProviderConfig;
+	/** Shared with federation so both routes use one admission budget and cache. */
+	readonly accountProviderService?: ReturnType<typeof createExplorerAccountProvider>;
 	readonly networkPassphrase: string;
 	readonly rpcUrl?: string;
 }
@@ -57,7 +59,7 @@ export const blockchainExplorerRouter = (
 	config: BlockchainExplorerRouterConfig
 ): express.Router => {
 	const router = express.Router();
-	const accountProvider = config.accountProvider && createExplorerAccountProvider(config.accountProvider, config.networkPassphrase);
+	const accountProvider = config.accountProviderService ?? (config.accountProvider && createExplorerAccountProvider(config.accountProvider, config.networkPassphrase));
 
 	router.get('/local-read-model', async (_req, res) => {
 		setCacheHeader(res);

@@ -1,4 +1,5 @@
 import { StrKey } from '@stellar/stellar-sdk';
+import { normalizeIssuerDomain } from '../../../status/infrastructure/http/issuer-domains/IssuerDomainCache.js';
 import { readHorizonAccountJson, accountRetryAfter, HorizonAccountReadError } from './HorizonAccountResponse.js';
 import {
 	amount,
@@ -35,6 +36,8 @@ interface ExplorerAccountBalanceExactDTO {
 }
 
 export interface ExplorerAccountDTO {
+	/** Ledger account metadata only; no federation aliases or ownership claim. */
+	readonly homeDomain?: string | null;
 	readonly provider?: { readonly mode: 'operator_alternate'; readonly hostname: string; readonly observedAt?: string };
 	readonly accountId: string;
 	readonly balances: readonly ExplorerAccountBalanceDTO[];
@@ -60,6 +63,7 @@ interface ExplorerAccountAccountingDTO {
 }
 
 interface HorizonAccountRecord {
+	home_domain?: unknown;
 	account_id?: string;
 	balances?: HorizonBalanceRecord[];
 	id?: string;
@@ -217,6 +221,7 @@ export async function fetchExplorerAccount(
 			: null;
 	return {
 		...legacy,
+		homeDomain: currentHomeDomain(record.home_domain),
 		accounting: {
 			scope: 'horizon_account_balances',
 			networkPassphrase: detail.networkPassphrase,
@@ -232,6 +237,12 @@ export async function fetchExplorerAccount(
 			balanceInventoryComplete
 		}
 	};
+}
+
+function currentHomeDomain(value: unknown): string | null | undefined {
+	if (value === '') return null;
+	if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > 32) return undefined;
+	return normalizeIssuerDomain(value) ?? undefined;
 }
 
 async function fetchAccountLedger(

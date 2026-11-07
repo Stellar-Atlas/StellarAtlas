@@ -15,6 +15,7 @@ import {
 
 interface BuildTestAppOptions {
 	readonly accountProvider?: ExplorerAccountProviderConfig;
+	readonly accountProviderService?: Parameters<typeof blockchainExplorerRouter>[0]['accountProviderService'];
 	readonly localAccountChanges?: ExplorerLocalAccountChangesDTO;
 	readonly localFeed?: ExplorerLocalTransactionsDTO;
 	readonly localLedger?: ExplorerCanonicalLedgerDTO | null;
@@ -320,6 +321,7 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 		'/v1/explorer',
 		blockchainExplorerRouter({
 			accountProvider: options.accountProvider,
+			accountProviderService: options.accountProviderService,
 			getExplorerLocalAccountChanges,
 			getExplorerLocalReadModel: {
 				execute: async () => localReadModel()
