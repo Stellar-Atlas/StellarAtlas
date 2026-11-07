@@ -71,6 +71,16 @@ function ledgerResponse(
 
 afterEach(() => jest.restoreAllMocks());
 
+it.each([
+	['Example.ORG', 'example.org'], ['', null], [undefined, undefined],
+	[null, undefined], [123, undefined], ['https://example.org/', undefined], ['x'.repeat(33), undefined]
+] as const)('maps only valid bounded ledger home_domain metadata (%s)', async (homeDomain, expected) => {
+	jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(accountResponse({ ...account, home_domain: homeDomain }))
+		.mockResolvedValueOnce(ledgerResponse());
+	const result = await request(buildTestApp()).get(route).expect(200);
+	expect(result.body.homeDomain).toBe(expected);
+});
+
 it('adds network-bound exact inputs and loads only the account snapshot ledger from the configured origin', async () => {
 	const fetch = jest
 		.spyOn(globalThis, 'fetch')

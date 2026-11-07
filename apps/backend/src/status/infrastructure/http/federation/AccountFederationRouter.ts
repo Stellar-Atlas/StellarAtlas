@@ -3,6 +3,8 @@ import express, { type Response, type Router } from 'express';
 import { setTimeout } from 'node:timers/promises';
 import type { GetExplorerLocalAccountChanges } from '../../../../network-scan/use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
 import { ScheduledFederationProviderBudget } from './FederationProviderBudget.js';
+import { ExplorerAccountProviderError } from '../../../../network-scan/infrastructure/http/ExplorerAccountProvider.js';
+import { currentFederationEvidence, type CurrentFederationSource } from './CurrentAccountFederationEvidence.js';
 import {
 	ReverseFederationResolver,
 	type ReverseFederationResult
@@ -40,7 +42,8 @@ export class AccountFederationService {
 		private readonly readAccount: ReadAccount,
 		private readonly lookup: Lookup,
 		private readonly drainSchedule: () => Promise<void>,
-		private readonly now: () => number = Date.now
+		private readonly now: () => number = Date.now,
+		private readonly current?: CurrentFederationSource
 	) {}
 
 	resolve(accountId: string): Promise<AccountFederationResult> {
@@ -49,11 +52,29 @@ export class AccountFederationService {
 		if (active) return active;
 		if (this.pending.size >= maxPending)
 			return Promise.resolve({ status: 'temporary_failure' });
-		const operation = this.resolveIndexed(accountId).finally(() =>
+		const operation = (this.current ? this.resolveCurrent(accountId) : this.resolveIndexed(accountId)).finally(() =>
 			this.pending.delete(accountId)
 		);
 		this.pending.set(accountId, operation);
 		return operation;
+	}
+
+	private async resolveCurrent(accountId:string):Promise<AccountFederationResult> {
+		try {
+			const source=this.current!;
+			const account=await source.provider.read(accountId,new AbortController().signal);
+			if (this.closing) return {status:'temporary_failure'};
+			const evidence=currentFederationEvidence(accountId,account,source,this.now());
+			if (evidence.status!=='eligible') return evidence;
+			const result=await this.lookup(accountId,evidence.homeDomain);
+			if (result.status!=='display_only') return result;
+			if (result.accountId!==accountId) return {status:'mismatch'};
+			return {...result,observedLedger:evidence.observedLedger};
+		} catch(error) {
+			if (error instanceof ExplorerAccountProviderError && error.status===429)
+				return {status:'throttled',retryAtMs:this.now()+error.retryAfterSeconds*1000};
+			return {status:'temporary_failure'};
+		}
 	}
 
 	async drain(timeoutMs = drainTimeoutMs): Promise<boolean> {
@@ -120,7 +141,8 @@ export class AccountFederationService {
 export async function createAccountFederation(
 	schedulePath: string | undefined,
 	passphrase: string,
-	readAccount: ReadAccount
+	readAccount: ReadAccount,
+	current?: CurrentFederationSource['provider']
 ): Promise<{ router: Router; drain: () => Promise<boolean> }> {
 	const network =
 		passphrase === Networks.PUBLIC
@@ -143,7 +165,9 @@ export async function createAccountFederation(
 		service = new AccountFederationService(
 			readAccount,
 			(accountId, domain) => resolver.resolve(accountId, domain),
-			() => store.drain()
+			() => store.drain(),
+			Date.now,
+			current && {provider:current,networkPassphrase:passphrase}
 		);
 	}
 	return {

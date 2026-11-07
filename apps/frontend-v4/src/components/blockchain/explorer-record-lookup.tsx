@@ -18,6 +18,7 @@ import { ExplorerAccountAssets } from './explorer-account-assets';
 import { ExplorerClaimablePositions } from './explorer-claimable-positions';
 import { ExplorerAccountProtocolPosition } from './explorer-account-protocol-position';
 import { ExplorerAccountFederation } from './explorer-account-federation';
+import { AccountAtlasIdentity } from '../verification/account-atlas-identity';
 import { ExplorerLedgerActivity } from './explorer-ledger-activity';
 import { ExplorerAccountRelations } from './explorer-account-relations';
 import { isClassicAccount, isContractAccount } from '../../domain/classic-account';
@@ -104,6 +105,7 @@ function RecordLookup({
 				<h2>
 					{collection === 'accounts' ? 'Account' : 'Ledger'} {identifier}
 				</h2>
+				{collection === 'accounts' && <AccountAtlasIdentity address={identifier} network="mainnet" />}
 				{collection === 'accounts' && <ExplorerAccountFederation accountId={identifier} network="mainnet" active />}
 				{collection === 'ledgers' && <ExplorerLedgerActivity ledger={identifier} />}
 				{collection === 'ledgers' ? (
