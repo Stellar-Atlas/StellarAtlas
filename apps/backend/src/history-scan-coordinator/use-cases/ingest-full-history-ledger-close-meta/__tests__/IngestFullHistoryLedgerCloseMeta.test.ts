@@ -135,7 +135,7 @@ describe('IngestFullHistoryLedgerCloseMeta', () => {
 		);
 	});
 
-	it('refuses to publish a partial typed shard', async () => {
+	it('rejects a range shorter than the minimum source-aligned shard', async () => {
 		const ingestion = createIngestion();
 		const signal = new AbortController().signal;
 		const context = await ingestion.prepare(signal);
@@ -146,7 +146,7 @@ describe('IngestFullHistoryLedgerCloseMeta', () => {
 				fullHistoryLedgerCloseMetaRange(3, 65),
 				signal
 			)
-		).rejects.toThrow(/whole typed shards/i);
+		).rejects.toThrow(/at least 64 ledgers/i);
 		expect(source.requestedLedgers).toEqual([]);
 		expect(manifest.batches).toEqual([]);
 	});

@@ -106,6 +106,8 @@ export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
 	readonly wait: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 }
 
+const MAXIMUM_CONSECUTIVE_PRIORITY_RANGES = 4;
+
 export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies
@@ -117,6 +119,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	let nextLedger: number | null = null;
 	let readyEmitted = false;
 	let reloadDurableState = true;
+	let priorityStreak = 0;
 
 	while (!dependencies.signal.aborted) {
 		try {
@@ -154,6 +157,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				if (!(await admitCycle(config, dependencies,
 					config.prioritizeCurrent && pending.kind === 'priority'))) continue;
 				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger, pending);
+				priorityStreak = pending.kind === 'priority'
+					? Math.min(priorityStreak + 1, MAXIMUM_CONSECUTIVE_PRIORITY_RANGES)
+					: 0;
 				continue;
 			}
 			if (
@@ -183,6 +189,21 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				sourceBatchLedgerCount: cycleContext.config.ledgersPerBatch,
 				typedShardLedgerCount: config.typedShardLedgerCount
 			};
+			let offeredHistoricalRange: FullHistoryLedgerCloseMetaRange | null | undefined;
+			if (config.lastAvailableLedger === null &&
+				priorityStreak >= MAXIMUM_CONSECUTIVE_PRIORITY_RANGES) {
+				if (await admitCycle(config, dependencies)) {
+					offeredHistoricalRange = await dependencies.priorityRangeReader.readNextHistoricalRange(rangeOptions);
+					if (offeredHistoricalRange !== null) {
+						nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger,
+							createPendingPlan(cycleContext, config, offeredHistoricalRange, 'historical'));
+						priorityStreak = 0;
+						continue;
+					}
+				}
+				// A denied historical offer waits; current admission must be fresh afterward.
+				if (!(await admitCycle(config, dependencies, config.prioritizeCurrent))) continue;
+			}
 			const priorityRange =
 				config.lastAvailableLedger === null
 					? await dependencies.priorityRangeReader.readNextRange(rangeOptions)
@@ -190,6 +211,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			if (priorityRange !== null) {
 				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger,
 					createPendingPlan(cycleContext, config, priorityRange, 'priority'));
+				priorityStreak = Math.min(priorityStreak + 1, MAXIMUM_CONSECUTIVE_PRIORITY_RANGES);
 				continue;
 			}
 			const frontier = boundedFrontier(
@@ -197,10 +219,12 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				config.lastAvailableLedger
 			);
 			if (config.prioritizeCurrent && !(await admitCycle(config, dependencies))) continue;
-			const range = await dependencies.priorityRangeReader.readNextHistoricalRange({
-				...rangeOptions,
-				latestAvailableLedger: frontier.endSequence
-			});
+			const range = offeredHistoricalRange === undefined
+				? await dependencies.priorityRangeReader.readNextHistoricalRange({
+					...rangeOptions,
+					latestAvailableLedger: frontier.endSequence
+				})
+				: offeredHistoricalRange;
 			if (range === null) {
 				dependencies.emit(
 					idleEvent(
@@ -218,6 +242,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			}
 			nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger,
 				createPendingPlan(cycleContext, config, range, 'historical'));
+			priorityStreak = 0;
 		} catch (error) {
 			if (dependencies.signal.aborted) break;
 			reloadDurableState = true;

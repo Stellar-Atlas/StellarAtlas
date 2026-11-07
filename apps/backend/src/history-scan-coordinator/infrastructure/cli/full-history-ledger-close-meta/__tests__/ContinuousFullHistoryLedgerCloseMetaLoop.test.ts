@@ -1,453 +1,271 @@
 import {
-	fullHistoryLedgerCloseMetaRange,
-	fullHistoryLedgerCloseMetaSha256Digest
+	fullHistoryLedgerCloseMetaRange as range,
+	fullHistoryLedgerCloseMetaSha256Digest as digest,
+	type FullHistoryLedgerCloseMetaRange
 } from '../../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import type { FullHistoryLedgerCloseMetaIngestionContext } from '../../../../use-cases/ingest-full-history-ledger-close-meta/IngestFullHistoryLedgerCloseMeta.js';
+import { TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader } from '../../../database/full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader.js';
 import {
-	runContinuousFullHistoryLedgerCloseMetaLoop,
-	type ContinuousFullHistoryLedgerCloseMetaEvent
+	runContinuousFullHistoryLedgerCloseMetaLoop as run,
+	type ContinuousFullHistoryLedgerCloseMetaEvent,
+	type ContinuousFullHistoryLedgerCloseMetaLoopConfig,
+	type ContinuousFullHistoryLedgerCloseMetaLoopDependencies
 } from '../ContinuousFullHistoryLedgerCloseMetaLoop.js';
+import type { PendingPlan } from '../FullHistoryLedgerCloseMetaPendingPlan.js';
 
 describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
-	it('processes from the durable watermark in a bounded cycle', async () => {
-		const controller = new AbortController();
-		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
-		const ranges: Array<{ end: number; start: number }> = [];
-		await runContinuousFullHistoryLedgerCloseMetaLoop(config(), {
-			emit: (event) => events.push(event),
-			ensureStorageCapacity: () => Promise.resolve(),
-			formatError: String,
-			frontier: {
-				readLatestRange: () =>
-					Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10))
-			},
-			ingestion: {
-				ingestRange: (_context, range) => {
-					ranges.push({
-						end: range.endSequence,
-						start: range.startSequence
-					});
-					controller.abort();
-					return Promise.resolve({
-						committedBatches: [
-							{
-								batchId: 'batch',
-								nextLedger: 7,
-								replayed: false,
-								watermarkVersion: 1
-							}
-						],
-						endLedger: 6,
-						ledgerCount: 4,
-						sourceObjectCount: 4,
-						startLedger: 3
-					});
-				},
-				prepare: () => Promise.resolve(context(3))
-			},
-			now: () => 1_000,
-			priorityRangeReader: noPriorityRangeReader(),
-			signal: controller.signal,
-			wait: () => Promise.resolve()
-		});
-
-		expect(ranges).toEqual([{ end: 6, start: 3 }]);
-		expect(events).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ event: 'ready', nextLedger: 3 }),
-				expect.objectContaining({ event: 'processed', nextLedger: 7 })
-			])
-		);
-	});
-
-	it('fills a proof-gated near-tip gap before the genesis watermark', async () => {
-		const controller = new AbortController();
-		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
-		let frontierCalls = 0;
-		let observedDurableNextLedger: number | undefined;
-		await runContinuousFullHistoryLedgerCloseMetaLoop(config(), {
-			emit: (event) => events.push(event),
-			ensureStorageCapacity: () => Promise.resolve(),
-			formatError: String,
-			frontier: {
-				readLatestRange: () => {
-					frontierCalls += 1;
-					return Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10));
-				}
-			},
-			ingestion: {
-				ingestRange: (_context, range) => {
-					controller.abort();
-					return Promise.resolve({
-						committedBatches: [
-							{
-								batchId: 'tip-batch',
-								nextLedger: 3,
-								replayed: false,
-								watermarkVersion: 0
-							}
-						],
-						endLedger: range.endSequence,
-						ledgerCount: range.ledgerCount,
-						sourceObjectCount: range.ledgerCount,
-						startLedger: range.startSequence
-					});
-				},
-				prepare: () => Promise.resolve(context(3))
-			},
-			now: () => 1_000,
-			priorityRangeReader: {
-				readNextRange: (options) => {
-					observedDurableNextLedger = options.durableNextLedger;
-					return Promise.resolve(fullHistoryLedgerCloseMetaRange(100, 103));
-				}
-			},
-			signal: controller.signal,
-			wait: () => Promise.resolve()
-		});
-
-		expect(frontierCalls).toBe(0);
-		expect(observedDurableNextLedger).toBe(3);
-		expect(events).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ event: 'ready', nextLedger: 3 }),
-				expect.objectContaining({
-					endLedger: 103,
-					event: 'priority-processed',
-					nextLedger: 3,
-					startLedger: 100
-				})
-			])
-		);
-	});
-
-	it('reports caught-up state and polls without inventing work', async () => {
-		const controller = new AbortController();
-		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
-		let ingestCalls = 0;
-		await runContinuousFullHistoryLedgerCloseMetaLoop(config(), {
-			emit: (event) => events.push(event),
-			ensureStorageCapacity: () => Promise.resolve(),
-			formatError: String,
-			frontier: {
-				readLatestRange: () =>
-					Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10))
-			},
-			ingestion: {
-				ingestRange: () => {
-					ingestCalls += 1;
-					throw new Error('unexpected ingestion');
-				},
-				prepare: () => Promise.resolve(context(11))
-			},
-			now: () => 1_000,
-			priorityRangeReader: noPriorityRangeReader(),
-			signal: controller.signal,
-			wait: () => {
-				controller.abort();
-				return Promise.resolve();
-			}
-		});
-
-		expect(ingestCalls).toBe(0);
-		expect(events).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({
-					event: 'idle',
-					frontierLedger: 10,
-					retryInMilliseconds: 20
-				})
-			])
-		);
-	});
-
-	it('stops successfully after the inclusive bounded range is durable', async () => {
-		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
-		let frontierCalls = 0;
-		await runContinuousFullHistoryLedgerCloseMetaLoop(
-			{ ...config(), lastAvailableLedger: 6 },
-			{
-				emit: (event) => events.push(event),
-				ensureStorageCapacity: () => Promise.resolve(),
-				formatError: String,
-				frontier: {
-					readLatestRange: () => {
-						frontierCalls += 1;
-						return Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10));
-					}
-				},
-				ingestion: {
-					ingestRange: (_context, range) =>
-						Promise.resolve({
-							committedBatches: [
-								{
-									batchId: 'bounded-batch',
-									nextLedger: 7,
-									replayed: false,
-									watermarkVersion: 1
-								}
-							],
-							endLedger: range.endSequence,
-							ledgerCount: range.ledgerCount,
-							sourceObjectCount: range.ledgerCount,
-							startLedger: range.startSequence
-						}),
-					prepare: () => Promise.resolve(context(3))
-				},
-				now: () => 1_000,
-				priorityRangeReader: noPriorityRangeReader(),
-				signal: new AbortController().signal,
-				wait: () => Promise.resolve()
-			}
-		);
-
-		expect(frontierCalls).toBe(1);
-		expect(events).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({
-					event: 'processed',
-					endLedger: 6,
-					startLedger: 3
-				}),
-				expect.objectContaining({
-					event: 'complete',
-					lastLedger: 6,
-					nextLedger: 7,
-					status: 'completed'
-				})
-			])
-		);
-	});
-
-	it('does not contact the source after an already completed bounded replay', async () => {
-		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
-		await runContinuousFullHistoryLedgerCloseMetaLoop(
-			{ ...config(), lastAvailableLedger: 6 },
-			{
-				emit: (event) => events.push(event),
-				ensureStorageCapacity: () => Promise.reject(new Error('unexpected')),
-				formatError: String,
-				frontier: {
-					readLatestRange: () => Promise.reject(new Error('unexpected'))
-				},
-				ingestion: {
-					ingestRange: () => Promise.reject(new Error('unexpected')),
-					prepare: () => Promise.resolve(context(7))
-				},
-				now: () => 1_000,
-				priorityRangeReader: noPriorityRangeReader(),
-				signal: new AbortController().signal,
-				wait: () => Promise.resolve()
-			}
-		);
-
-		expect(events).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ event: 'complete', nextLedger: 7 })
-			])
-		);
-	});
-
-	it('does not select near-tip work during a bounded replay', async () => {
-		const controller = new AbortController();
-		let priorityCalls = 0;
-		const ranges: Array<{ end: number; start: number }> = [];
-		await runContinuousFullHistoryLedgerCloseMetaLoop(
-			{ ...config(), lastAvailableLedger: 6 },
-			{
-				emit: () => undefined,
-				ensureStorageCapacity: () => Promise.resolve(),
-				formatError: String,
-				frontier: {
-					readLatestRange: () =>
-						Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10))
-				},
-				ingestion: {
-					ingestRange: (_context, range) => {
-						ranges.push({
-							end: range.endSequence,
-							start: range.startSequence
-						});
-						controller.abort();
-						return Promise.resolve({
-							committedBatches: [
-								{
-									batchId: 'bounded-batch',
-									nextLedger: 7,
-									replayed: false,
-									watermarkVersion: 1
-								}
-							],
-							endLedger: range.endSequence,
-							ledgerCount: range.ledgerCount,
-							sourceObjectCount: range.ledgerCount,
-							startLedger: range.startSequence
-						});
-					},
-					prepare: () => Promise.resolve(context(3))
-				},
-				now: () => 1_000,
-				priorityRangeReader: {
-					readNextRange: () => {
-						priorityCalls += 1;
-						return Promise.resolve(fullHistoryLedgerCloseMetaRange(100, 103));
-					}
-				},
-				signal: controller.signal,
-				wait: () => Promise.resolve()
-			}
-		);
-
-		expect(priorityCalls).toBe(0);
-		expect(ranges).toEqual([{ end: 6, start: 3 }]);
-	});
-
-	it('reloads the durable watermark after a partially committed cycle fails', async () => {
-		const controller = new AbortController();
-		const ranges: Array<{ end: number; start: number }> = [];
-		let prepareCalls = 0;
-		let ingestCalls = 0;
-		await runContinuousFullHistoryLedgerCloseMetaLoop(config(), {
-			emit: () => undefined,
-			ensureStorageCapacity: () => Promise.resolve(),
-			formatError: String,
-			frontier: {
-				readLatestRange: () =>
-					Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10))
-			},
-			ingestion: {
-				ingestRange: (_context, range) => {
-					ingestCalls += 1;
-					ranges.push({
-						end: range.endSequence,
-						start: range.startSequence
-					});
-					if (ingestCalls === 1) {
-						throw new Error('one shard failed after another committed');
-					}
-					controller.abort();
-					return Promise.resolve({
-						committedBatches: [
-							{
-								batchId: 'recovered-batch',
-								nextLedger: 9,
-								replayed: false,
-								watermarkVersion: 2
-							}
-						],
-						endLedger: 8,
-						ledgerCount: 4,
-						sourceObjectCount: 4,
-						startLedger: 5
-					});
-				},
-				prepare: () => {
-					prepareCalls += 1;
-					return Promise.resolve(context(prepareCalls === 1 ? 3 : 5));
-				}
-			},
-			now: () => 1_000,
-			priorityRangeReader: noPriorityRangeReader(),
-			signal: controller.signal,
-			wait: () => Promise.resolve()
-		});
-
-		expect(prepareCalls).toBe(2);
-		expect(ranges).toEqual([
-			{ end: 6, start: 3 },
-			{ end: 8, start: 5 }
+	it('offers one historical range after every four successful current ranges', async () => {
+		const f = fixture(10);
+		await run(f.config, f.dependencies);
+		expect(f.selected.map(r => r.startSequence)).toEqual([
+			1000, 1064, 1128, 1192, 3, 1256, 1320, 1384, 1448, 67
 		]);
 	});
 
-	it.each([
-		{ expectedCalls: 0, frontier: 65, label: '63 ledgers' },
-		{ expectedCalls: 1, frontier: 66, label: '64 ledgers' }
-	])(
-		'waits for a complete production shard with $label available',
-		async ({ expectedCalls, frontier }) => {
-			const controller = new AbortController();
-			let ingestCalls = 0;
-			await runContinuousFullHistoryLedgerCloseMetaLoop(
-				{ ...config(), cycleLedgerCount: 64, typedShardLedgerCount: 64 },
-				{
-					emit: () => undefined,
-					ensureStorageCapacity: () => Promise.resolve(),
-					formatError: String,
-					frontier: {
-						readLatestRange: () =>
-							Promise.resolve(
-								fullHistoryLedgerCloseMetaRange(frontier, frontier)
-							)
-					},
-					ingestion: {
-						ingestRange: (_context, range) => {
-							ingestCalls += 1;
-							controller.abort();
-							return Promise.resolve({
-								committedBatches: [
-									{
-										batchId: 'batch',
-										nextLedger: range.endSequence + 1,
-										replayed: false,
-										watermarkVersion: 1
-									}
-								],
-								endLedger: range.endSequence,
-								ledgerCount: range.ledgerCount,
-								sourceObjectCount: range.ledgerCount,
-								startLedger: range.startSequence
-							});
-						},
-						prepare: () => Promise.resolve(context(3))
-					},
-					now: () => 1_000,
-					priorityRangeReader: noPriorityRangeReader(),
-					signal: controller.signal,
-					wait: () => {
-						controller.abort();
-						return Promise.resolve();
-					}
-				}
-			);
-			expect(ingestCalls).toBe(expectedCalls);
-		}
-	);
+	it('waits on denied history and requires fresh current admission', async () => {
+		const f = fixture(6);
+		let denied = false;
+		f.dependencies.admitCycle = async current => {
+			f.calls.push(current ? 'admit-current' : 'admit-history');
+			if (!current && !denied) { denied = true; return denial(); }
+			return { admitted: true };
+		};
+		await run(f.config, f.dependencies);
+		const gate = f.calls.indexOf('admit-history');
+		expect(f.calls.slice(gate, gate + 4)).toEqual([
+			'admit-history', 'wait-10', 'admit-current', 'priority'
+		]);
+		expect(f.selected.map(r => r.startSequence)).toEqual([1000, 1064, 1128, 1192, 1256, 3]);
+		expect(f.events.filter(e => e.event === 'admission-deferred')).toHaveLength(1);
+	});
+
+	it('a denied fresh current gate cannot reuse admission from before the historical wait', async () => {
+		const f = fixture(5);
+		let historyDenied = false;
+		f.dependencies.admitCycle = async current => {
+			f.calls.push(current ? 'admit-current' : 'admit-history');
+			if (!current) { historyDenied = true; return denial(); }
+			return historyDenied ? denial() : { admitted: true };
+		};
+		f.dependencies.wait = async ms => {
+			f.calls.push(`wait-${ms}`);
+			if (historyDenied && f.calls.at(-2) === 'admit-current') f.controller.abort();
+		};
+		await run(f.config, f.dependencies);
+		expect(f.selected).toHaveLength(4);
+		expect(f.calls.slice(f.calls.indexOf('admit-history'))).toEqual([
+			'admit-history', 'wait-10', 'admit-current', 'wait-10'
+		]);
+	});
+
+	it('retries resumed pending priority unchanged and counts its success once', async () => {
+		const f = fixture(6);
+		f.pending = plan('priority', 900);
+		const ingest = f.dependencies.ingestion.ingestRange;
+		let failed = false;
+		f.dependencies.ingestion.ingestRange = async (...args) => {
+			if (!failed) {
+				failed = true;
+				f.selected.push(args[1]);
+				throw new Error('partial commit');
+			}
+			return ingest(...args);
+		};
+		await run(f.config, f.dependencies);
+		expect(f.selected.map(r => r.startSequence)).toEqual([900, 900, 1000, 1064, 1128, 3]);
+		expect(f.calls.indexOf('ingest')).toBeLessThan(f.calls.indexOf('frontier'));
+		expect(f.events.filter(e => e.event === 'priority-processed')).toHaveLength(4);
+		expect(f.pending).toBeNull();
+	});
+
+	it('resumes pending historical work before selecting new current work', async () => {
+		const f = fixture(1);
+		f.pending = plan('historical', 3);
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(3, 66)]);
+		expect(f.calls).not.toContain('frontier');
+		expect(f.calls).not.toContain('priority');
+		expect(f.calls).toContain('admit-history');
+	});
+
+	it('errors do not erase a due historical offer', async () => {
+		const f = fixture(5);
+		const historical = f.dependencies.priorityRangeReader.readNextHistoricalRange;
+		let failed = false;
+		f.dependencies.priorityRangeReader.readNextHistoricalRange = async options => {
+			if (!failed) { failed = true; throw new Error('historical lookup failed'); }
+			return historical(options);
+		};
+		await run(f.config, f.dependencies);
+		expect(f.selected.map(r => r.startSequence)).toEqual([1000, 1064, 1128, 1192, 3]);
+		expect(f.events.filter(e => e.event === 'cycle-error')).toHaveLength(1);
+		expect(f.dependencies.ingestion.prepare).toHaveBeenCalledTimes(2);
+	});
+
+	it('null historical selection does not erase a due historical offer', async () => {
+		const f = fixture(6);
+		const historical = f.dependencies.priorityRangeReader.readNextHistoricalRange;
+		let reads = 0;
+		f.dependencies.priorityRangeReader.readNextHistoricalRange = async options =>
+			++reads === 1 ? null : historical(options);
+		await run(f.config, f.dependencies);
+		expect(reads).toBe(2);
+		expect(f.selected.map(r => r.startSequence)).toEqual([1000, 1064, 1128, 1192, 1256, 3]);
+	});
+
+	it('reads source frontier before selecting current work without advancing genesis', async () => {
+		const f = fixture(1);
+		await run(f.config, f.dependencies);
+		expect(f.calls.indexOf('frontier')).toBeLessThan(f.calls.indexOf('priority'));
+		expect(f.events).toContainEqual(expect.objectContaining({
+			event: 'priority-processed', nextLedger: 3, startLedger: 1000
+		}));
+	});
+
+	it('clips bounded replay and completes without priority selection', async () => {
+		const f = fixture(100);
+		f.config = { ...f.config, prioritizeCurrent: false, lastAvailableLedger: 66 };
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(3, 66)]);
+		expect(f.calls).not.toContain('priority');
+		expect(f.calls.filter(c => c === 'frontier')).toHaveLength(1);
+		expect(f.events).toContainEqual(expect.objectContaining({ event: 'complete', nextLedger: 67 }));
+	});
+
+	it('does not contact source for already-complete bounded replay', async () => {
+		const f = fixture(100);
+		f.config = { ...f.config, prioritizeCurrent: false, lastAvailableLedger: 66 };
+		f.dependencies.ingestion.prepare = jest.fn(async () => context(67));
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([]);
+		expect(f.calls).not.toContain('frontier');
+	});
+
+	it('storage failure cannot write a pending plan or start ingestion', async () => {
+		const f = fixture(1);
+		f.dependencies.ensureStorageCapacity = async () => { throw new Error('disk full'); };
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([]);
+		expect(f.pending).toBeNull();
+		expect(f.calls).not.toContain('pending-write');
+		expect(f.events).toContainEqual(expect.objectContaining({ event: 'cycle-error', message: 'Error: disk full' }));
+	});
+
+	it.each([65, 66])('retains 64-ledger historical minimum at source head %i', async head => {
+		const f = fixture(1);
+		f.dependencies.frontier.readLatestRange = async () => range(head, head);
+		f.dependencies.priorityRangeReader.readNextRange = async () => null;
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual(head === 66 ? [range(3, 66)] : []);
+	});
 });
 
-function config() {
+type Dependencies = { -readonly [K in keyof ContinuousFullHistoryLedgerCloseMetaLoopDependencies]:
+	ContinuousFullHistoryLedgerCloseMetaLoopDependencies[K] };
+
+function fixture(stopAfter: number) {
+	const controller = new AbortController();
+	const selected: FullHistoryLedgerCloseMetaRange[] = [];
+	const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
+	const calls: string[] = [];
+	let priorityReads = 0;
+	let durableNextLedger = 3;
+	const f = {
+		controller, selected, events, calls, pending: null as PendingPlan | null,
+		config: {
+			admissionRetryMilliseconds: 10, cycleCooldownMilliseconds: 0,
+			cycleLedgerCount: 64, errorBackoffMilliseconds: 30, idlePollMilliseconds: 20,
+			lastAvailableLedger: null, prioritizeCurrent: true, typedShardLedgerCount: 64
+		} as ContinuousFullHistoryLedgerCloseMetaLoopConfig,
+		dependencies: {} as Dependencies
+	};
+	const historical = new TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader({
+		query: async <T>() => [] as T
+	});
+	f.dependencies = {
+		admitCycle: async current => {
+			calls.push(current ? 'admit-current' : 'admit-history');
+			return { admitted: true };
+		},
+		emit: event => events.push(event),
+		ensureStorageCapacity: async () => { calls.push('capacity'); },
+		formatError: String,
+		frontier: { readLatestRange: async () => { calls.push('frontier'); return range(10000, 10000); } },
+		ingestion: {
+			prepare: jest.fn(async () => context(durableNextLedger)),
+			ingestRange: async (_context, selectedRange) => {
+				calls.push('ingest');
+				selected.push(selectedRange);
+				if (selected.length >= stopAfter) controller.abort();
+				if (selectedRange.startSequence < 100) durableNextLedger = selectedRange.endSequence + 1;
+				return receipt(selectedRange, durableNextLedger);
+			}
+		},
+		now: () => 1000,
+		pendingPlans: {
+			read: async () => f.pending,
+			write: async pending => { calls.push('pending-write'); f.pending = pending; },
+			clear: async () => { f.pending = null; }
+		},
+		priorityRangeReader: {
+			readNextRange: async () => {
+				calls.push('priority');
+				const start = 1000 + priorityReads++ * 64;
+				return range(start, start + 63);
+			},
+			readNextHistoricalRange: async options => {
+				calls.push('historical');
+				return historical.readNextHistoricalRange(options);
+			}
+		},
+		signal: controller.signal,
+		wait: async ms => {
+			calls.push(`wait-${ms}`);
+			if (calls.length > 2000) {
+				controller.abort();
+				const error = events.filter(event => event.event === 'cycle-error').at(-1);
+				throw new Error(`Fixture exceeded 2000 calls: ${error?.message ?? calls.slice(-10).join(', ')}`);
+			}
+		}
+	};
+	return f;
+}
+
+function receipt(selected: FullHistoryLedgerCloseMetaRange, nextLedger: number) {
 	return {
-		cycleLedgerCount: 4,
-		errorBackoffMilliseconds: 30,
-		idlePollMilliseconds: 20,
-		lastAvailableLedger: null,
-		typedShardLedgerCount: 2
+		committedBatches: [{ batchId: 'batch', nextLedger, replayed: false, watermarkVersion: 1 }],
+		endLedger: selected.endSequence, ledgerCount: selected.ledgerCount,
+		sourceObjectCount: selected.ledgerCount, startLedger: selected.startSequence
 	};
 }
 
-function noPriorityRangeReader() {
-	return { readNextRange: () => Promise.resolve(null) };
+function context(nextLedger = 3): FullHistoryLedgerCloseMetaIngestionContext {
+	return {
+		config: { batchesPerPartition: 64000, compression: 'zstd', ledgersPerBatch: 1,
+			networkPassphrase: 'Public Global Stellar Network ; September 2015', version: '1.0' },
+		registeredSource: { configDigest: digest('11'.repeat(32)), firstAvailableLedger: range(3, 3).startSequence,
+			networkPassphraseHash: digest('22'.repeat(32)), nextLedger, sourceId: 'source', watermarkVersion: 0 }
+	};
 }
 
-function context(
-	nextLedger: number
-): FullHistoryLedgerCloseMetaIngestionContext {
+function plan(kind: PendingPlan['kind'], startLedger: number): PendingPlan {
+	const registered = context().registeredSource;
 	return {
-		config: {
-			batchesPerPartition: 64_000,
-			compression: 'zstd',
-			ledgersPerBatch: 1,
-			networkPassphrase: 'Public Global Stellar Network ; September 2015',
-			version: '1.0'
-		},
-		registeredSource: {
-			configDigest: fullHistoryLedgerCloseMetaSha256Digest('11'.repeat(32)),
-			firstAvailableLedger: fullHistoryLedgerCloseMetaRange(3, 3).startSequence,
-			networkPassphraseHash: fullHistoryLedgerCloseMetaSha256Digest(
-				'22'.repeat(32)
-			),
-			nextLedger,
-			sourceId: 'source',
-			watermarkVersion: 0
-		}
+		version: 1, kind, networkPassphraseHash: registered.networkPassphraseHash,
+		sourceId: registered.sourceId, configDigest: registered.configDigest,
+		partitionVersion: 'source-aligned-remainder-v1', sourceBatchLedgerCount: 1,
+		typedShardLedgerCount: 64, startLedger, endLedger: startLedger + 63,
+		shards: [{ startLedger, endLedger: startLedger + 63 }]
+	};
+}
+
+function denial() {
+	return {
+		admitted: false as const, reasons: ['io-full-pressure' as const],
+		snapshot: { databaseConnectionBasisPoints: 0, databaseProbeMilliseconds: 0,
+			ioFullPressureBasisPoints: 100, ioSomePressureBasisPoints: 100,
+			md0InflightRequests: 0, recoveryHealthySamples: 0, recoveryHealthySamplesRequired: 1 }
 	};
 }
