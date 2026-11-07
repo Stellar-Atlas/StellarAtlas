@@ -2,7 +2,9 @@ package backfill
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -130,5 +132,147 @@ func TestAgedOutCatchupMetadataTimeoutFallsThrough(t *testing.T) {
 		if err != nil || !found || got.ID != older.ID || notices != 1 {
 			t.Fatalf("timeout blocked ordinary history: %+v %v %v notices=%d", got, found, err, notices)
 		}
+	}
+}
+
+func TestAgedOutProbeDoesNotBlockHistoryCompletionOrSelection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	batchAt := func(id string, end uint32) catalog.Batch {
+		return catalog.Batch{ID: id, StartLedger: end - 63, EndLedger: end, LedgerCount: 64, SourceSHA256: id}
+	}
+	prior, ordinary := batchAt("prior", 68_000), batchAt("ordinary", 69_000)
+	ambiguous, priority, live := batchAt("ambiguous", 69_500), batchAt("priority", 70_000), batchAt("live", 80_000)
+	claims := newCurrentClaims()
+	claims.observeTip(80_000)
+	if ok, err := claims.reserve(prior, false); !ok || err != nil {
+		t.Fatalf("prepare admitted completion: %t %v", ok, err)
+	}
+	selector := &laneSelection{claims: claims, history: []catalog.Batch{ordinary}, loadedAt: time.Now()}
+	started, releaseProbe, exited := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var probes atomic.Int32
+	io := currentWorkerIO{
+		recent: func(context.Context) ([]catalog.Batch, error) { return []catalog.Batch{live}, nil },
+		agedOut: func(ctx context.Context) (uint32, []catalog.Batch, error) {
+			if probes.Add(1) != 1 {
+				return 0, nil, fmt.Errorf("overlapping priority probe")
+			}
+			close(started)
+			select {
+			case <-releaseProbe:
+				return 80_000, []catalog.Batch{prior, ordinary, ambiguous, priority}, nil
+			case <-ctx.Done():
+				return 0, nil, ctx.Err()
+			}
+		},
+		states: func(context.Context, []string) (clickhouse.BatchAdmissionSnapshot, error) {
+			return clickhouse.BatchAdmissionSnapshot{Incomplete: map[string]string{ambiguous.ID: ambiguous.SourceSHA256}}, nil
+		},
+	}
+	type selectionResult struct {
+		batch catalog.Batch
+		found bool
+		err   error
+	}
+	result := make(chan selectionResult, 1)
+	go func() {
+		defer close(exited)
+		batch, found, err := selector.next(ctx, io)
+		result <- selectionResult{batch, found, err}
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-releaseProbe:
+		default:
+			close(releaseProbe)
+		}
+		select {
+		case <-exited:
+		case <-time.After(time.Second):
+			t.Error("priority probe did not join cancellation")
+		}
+	})
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("priority probe did not enter")
+	}
+	finished := make(chan struct{})
+	go func() { selector.finish(prior); close(finished) }()
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("priority metadata I/O blocked admitted completion bookkeeping")
+	}
+	ordinaryResult := make(chan selectionResult, 1)
+	go func() {
+		batch, found, err := selector.next(ctx, io)
+		ordinaryResult <- selectionResult{batch, found, err}
+	}()
+	select {
+	case got := <-ordinaryResult:
+		if got.err != nil || !got.found || got.batch.ID != ordinary.ID {
+			t.Fatalf("ordinary history did not advance: %+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("priority metadata I/O blocked ordinary history selection")
+	}
+	// Advancing the cadence cannot start a second probe while the first is owned.
+	if _, found, err := selector.nextAgedOut(ctx, io, time.Now().Add(2*time.Minute)); found || err != nil || probes.Load() != 1 {
+		t.Fatalf("priority ownership lost: found=%t err=%v probes=%d", found, err, probes.Load())
+	}
+	current := &laneSelection{current: true, claims: claims}
+	if got, found, err := current.next(ctx, io); err != nil || !found || got.ID != live.ID {
+		t.Fatalf("current lane did not advance independently: %+v %t %v", got, found, err)
+	}
+	close(releaseProbe)
+	got := <-result
+	if got.err != nil || !got.found || got.batch.ID != priority.ID {
+		t.Fatalf("priority probe ignored concurrent claims/completion or ambiguity: %+v", got)
+	}
+}
+
+func TestAgedOutProbeCancellationJoinsAndReleasesOwnership(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	entered := make(chan struct{})
+	var probes atomic.Int32
+	target := catalog.Batch{ID: "priority", StartLedger: 69_937, EndLedger: 70_000, LedgerCount: 64, SourceSHA256: "priority"}
+	io := currentWorkerIO{
+		agedOut: func(ctx context.Context) (uint32, []catalog.Batch, error) {
+			if probes.Add(1) == 1 {
+				close(entered)
+				<-ctx.Done()
+				return 0, nil, ctx.Err()
+			}
+			return 80_000, []catalog.Batch{target}, nil
+		},
+		states: func(context.Context, []string) (clickhouse.BatchAdmissionSnapshot, error) {
+			return clickhouse.BatchAdmissionSnapshot{}, nil
+		},
+	}
+	selector := &laneSelection{claims: newCurrentClaims()}
+	joined := make(chan error, 1)
+	go func() {
+		_, found, err := selector.nextAgedOut(ctx, io, time.Now())
+		if found {
+			joined <- fmt.Errorf("cancelled probe reserved work")
+			return
+		}
+		joined <- err
+	}()
+	<-entered
+	cancel()
+	select {
+	case err := <-joined:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("probe did not retain parent cancellation: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancelled probe did not join")
+	}
+	if batch, found, err := selector.nextAgedOut(context.Background(), io, time.Now().Add(2*time.Minute)); err != nil || !found || batch.ID != target.ID || probes.Load() != 2 {
+		t.Fatalf("settled probe retained ownership: %+v %t %v probes=%d", batch, found, err, probes.Load())
 	}
 }

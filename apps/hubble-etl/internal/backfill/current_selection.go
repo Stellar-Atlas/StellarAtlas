@@ -93,15 +93,16 @@ func (c *currentClaims) resolvedBatch(batch catalog.Batch) (bool, error) {
 }
 
 type laneSelection struct {
-	mu               sync.Mutex // Protect selection/release only; never held during ingest.
-	current          bool
-	claims           *currentClaims
-	minimum          uint32
-	history          []catalog.Batch
-	position         int
-	loadedAt         time.Time
-	lastAgedOutProbe time.Time
-	reserved         map[string]int
+	mu                   sync.Mutex // Protect selection/release only; never held during ingest.
+	current              bool
+	claims               *currentClaims
+	minimum              uint32
+	history              []catalog.Batch
+	position             int
+	loadedAt             time.Time
+	lastAgedOutProbe     time.Time
+	agedOutProbeInFlight bool
+	reserved             map[string]int
 }
 
 func (s *laneSelection) release(batch catalog.Batch) {
@@ -122,6 +123,13 @@ func (s *laneSelection) finish(batch catalog.Batch) {
 }
 
 func (s *laneSelection) next(ctx context.Context, io currentWorkerIO) (catalog.Batch, bool, error) {
+	// One existing history worker probes without blocking ordinary selection or
+	// completion bookkeeping. Its context and worker lifetime still own the I/O.
+	if !s.current {
+		if batch, found, err := s.nextAgedOut(ctx, io, time.Now()); found || err != nil {
+			return batch, found, err
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.current {
@@ -149,9 +157,6 @@ func (s *laneSelection) next(ctx context.Context, io currentWorkerIO) (catalog.B
 			}
 		}
 		return catalog.Batch{}, false, nil
-	}
-	if batch, found, err := s.nextAgedOut(ctx, io, time.Now()); found || err != nil {
-		return batch, found, err
 	}
 	// Reservation indices remain tied to this snapshot until every claim leaves it.
 	if s.loadedAt.IsZero() || (s.position == len(s.history) && len(s.reserved) == 0 && time.Since(s.loadedAt) >= 5*time.Minute) {

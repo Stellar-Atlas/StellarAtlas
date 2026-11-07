@@ -8,41 +8,55 @@ import (
 	"github.com/stellar/go-stellar-sdk/network"
 )
 
-// The immutable catalog forbids overlapping ranges per network and has a
-// unique (network, start, end) index. Bound that index range before joining
-// ledger-close-meta metadata; never take the newest N rows and then age-filter.
+// Bound batch-only inputs before metadata access. The existing frontier/range
+// indexes select one tip and the age band; each lateral lookup is a dataset
+// primary-key lookup, never a whole-catalog join before LIMIT.
 const agedOutBatchSQL = `
-	with tip as materialized (
-		select b.end_ledger as latest
+	with tip_batch as materialized (
+		select b.id, b.end_ledger as latest
 		from full_history_ledger_close_meta_batch b
-		join full_history_ledger_close_meta_dataset d
-		  on d.batch_id = b.id and d.network_passphrase_hash = b.network_passphrase_hash
-		  and d.dataset = 'ledger-close-meta'
 		where b.network_passphrase_hash = $1
-		order by b.start_ledger desc, b.id desc
+		order by b.end_ledger desc
 		limit 1
-	), aged as materialized (
-		select b.id, b.start_ledger, b.end_ledger, b.ledger_count, d.storage_key,
-		       encode(d.output_sha256, 'hex') as digest
-		from tip t
-		join full_history_ledger_close_meta_batch b
-		  on b.network_passphrase_hash = $1
-		  and b.start_ledger > greatest(0, t.latest - $3::bigint) - 1023
-		  and b.start_ledger <= t.latest - $2::bigint - 63
-		  and b.end_ledger > greatest(0, t.latest - $3::bigint)
-		  and b.end_ledger <= t.latest - $2::bigint
+	), tip as materialized (
+		select b.latest, d.batch_id is not null as dataset_present
+		from tip_batch b
+		left join lateral (
+			select d.batch_id
+			from full_history_ledger_close_meta_dataset d
+			where d.batch_id = b.id and d.network_passphrase_hash = $1
+			  and d.dataset = 'ledger-close-meta'
+			limit 1
+		) d on true
+	), aged_batches as materialized (
+		select b.id, b.start_ledger, b.end_ledger, b.ledger_count
+		from full_history_ledger_close_meta_batch b
+		where b.network_passphrase_hash = $1
+		  and (select dataset_present from tip)
+		  and b.start_ledger > greatest(0, (select latest from tip) - $3::bigint) - 1023
+		  and b.start_ledger <= (select latest from tip) - $2::bigint - 63
+		  and b.end_ledger > greatest(0, (select latest from tip) - $3::bigint)
+		  and b.end_ledger <= (select latest from tip) - $2::bigint
 		  and b.ledger_count between 64 and 1024
-		join full_history_ledger_close_meta_dataset d
-		  on d.batch_id = b.id and d.network_passphrase_hash = b.network_passphrase_hash
-		  and d.dataset = 'ledger-close-meta'
 		order by b.start_ledger, b.id
 		limit $4
 	)
-	select t.latest, coalesce(a.id::text, '') as id, coalesce(a.start_ledger, 0) as start_ledger,
-	       coalesce(a.end_ledger, 0) as end_ledger, coalesce(a.ledger_count, 0) as ledger_count,
-	       coalesce(a.storage_key, '') as storage_key, coalesce(a.digest, '') as digest
-	from tip t left join aged a on true
-	order by a.start_ledger, a.id
+	select t.latest, t.dataset_present as tip_dataset_present,
+	       coalesce(b.id::text, '') as id, coalesce(b.start_ledger, 0) as start_ledger,
+	       coalesce(b.end_ledger, 0) as end_ledger, coalesce(b.ledger_count, 0) as ledger_count,
+	       coalesce(d.storage_key, '') as storage_key,
+	       coalesce(encode(d.output_sha256, 'hex'), '') as digest,
+	       b.id is null or d.batch_id is not null as dataset_present
+	from tip t
+	left join aged_batches b on true
+	left join lateral (
+		select d.batch_id, d.storage_key, d.output_sha256
+		from full_history_ledger_close_meta_dataset d
+		where d.batch_id = b.id and d.network_passphrase_hash = $1
+		  and d.dataset = 'ledger-close-meta'
+		limit 1
+	) d on b.id is not null
+	order by b.start_ledger, b.id
 `
 
 // LoadAgedOut returns the whole eligible age band from a single catalog
@@ -71,8 +85,12 @@ func LoadAgedOut(ctx context.Context, databaseURL, networkPassphrase string, cur
 	for rows.Next() {
 		var tip uint32
 		var batch Batch
-		if err := rows.Scan(&tip, &batch.ID, &batch.StartLedger, &batch.EndLedger, &batch.LedgerCount, &batch.StorageKey, &batch.SourceSHA256); err != nil {
+		var tipDatasetPresent, datasetPresent bool
+		if err := rows.Scan(&tip, &tipDatasetPresent, &batch.ID, &batch.StartLedger, &batch.EndLedger, &batch.LedgerCount, &batch.StorageKey, &batch.SourceSHA256, &datasetPresent); err != nil {
 			return 0, nil, fmt.Errorf("decode aged-out immutable catalog: %w", err)
+		}
+		if err := validateAgedOutDatasetPresence(tipDatasetPresent, batch.ID, datasetPresent); err != nil {
+			return 0, nil, err
 		}
 		if tip == 0 || (latest != 0 && latest != tip) {
 			return 0, nil, fmt.Errorf("aged-out catalog tip changed in one snapshot")
@@ -97,4 +115,15 @@ func LoadAgedOut(ctx context.Context, databaseURL, networkPassphrase string, cur
 		return 0, nil, fmt.Errorf("stream aged-out immutable catalog: %w", err)
 	}
 	return latest, batches, nil
+}
+
+// Missing required metadata is an invariant failure, not an empty age band.
+func validateAgedOutDatasetPresence(tipPresent bool, batchID string, datasetPresent bool) error {
+	if !tipPresent {
+		return fmt.Errorf("aged-out catalog tip lacks required ledger-close-meta dataset")
+	}
+	if batchID != "" && !datasetPresent {
+		return fmt.Errorf("aged-out catalog batch lacks required ledger-close-meta dataset")
+	}
+	return nil
 }

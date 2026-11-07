@@ -14,10 +14,19 @@ const agedOutMaximumLedgerLag uint32 = 17_280
 const agedOutAdmissionPageSize = 128 // Existing ClickHouse BatchAdmissionFor bound.
 
 func (s *laneSelection) nextAgedOut(ctx context.Context, io currentWorkerIO, now time.Time) (catalog.Batch, bool, error) {
-	if io.agedOut == nil || io.states == nil || (!s.lastAgedOutProbe.IsZero() && now.Sub(s.lastAgedOutProbe) < agedOutProbeInterval) {
+	s.mu.Lock()
+	if io.agedOut == nil || io.states == nil || s.agedOutProbeInFlight || (!s.lastAgedOutProbe.IsZero() && now.Sub(s.lastAgedOutProbe) < agedOutProbeInterval) {
+		s.mu.Unlock()
 		return catalog.Batch{}, false, nil
 	}
 	s.lastAgedOutProbe = now
+	s.agedOutProbeInFlight = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.agedOutProbeInFlight = false
+		s.mu.Unlock()
+	}()
 	probe, cancel := context.WithTimeout(ctx, agedOutProbeBudget)
 	defer cancel()
 	latest, rows, err := io.agedOut(probe)
