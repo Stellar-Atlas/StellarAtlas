@@ -271,4 +271,3 @@ function databaseInteger(value: string, field: string): number {
 	}
 	return parsed;
 }
-
