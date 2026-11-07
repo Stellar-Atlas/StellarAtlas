@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { StrKey } from '@stellar/stellar-sdk';
 import official from './fixtures/stellar-expert-directory/record.json' with { type: 'json' };
@@ -27,11 +27,14 @@ const fixtureAddress = official.path.slice(9, -5);
 const contract = StrKey.encodeContract(Buffer.alloc(32, 17));
 const account = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 23));
 const path = (address: string) => `accounts/${address}.json`;
+// Git object IDs are protocol identifiers; use Git's native fixture encoder.
 const gitBlob = (bytes: Uint8Array) =>
-	createHash('sha1')
-		.update(`blob ${bytes.byteLength}\0`)
-		.update(bytes)
-		.digest('hex');
+	execFileSync('git', ['hash-object', '--stdin'], {
+		input: bytes,
+		encoding: 'utf8',
+		timeout: 5_000,
+		maxBuffer: 128
+	}).trim();
 
 const fixture = {
 	kind: 'upsert',
