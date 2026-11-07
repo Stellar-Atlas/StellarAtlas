@@ -185,7 +185,10 @@ describe('GetExplorerLocalAccountChanges', () => {
 			'coverage."status" = \'complete\''
 		);
 		expect(explorerLocalAccountChangesSql).toContain(
-			'join complete_coverage proof_gate'
+			'where proof_gate."batchId" = account_change."batch_id"'
+		);
+		expect(explorerLocalAccountChangesSql).toContain(
+			'offset 0\n\t\t) proof_gate on true'
 		);
 		expect(explorerLocalAccountChangesSql).toContain(
 			'from "full_history_lcm_account_state_change" account_change'
