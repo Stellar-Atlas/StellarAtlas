@@ -41,6 +41,7 @@ export interface LocalFullHistoryLedgerCloseMetaAdmissionOptions {
 	readonly maximumIoFullPressureBasisPoints: number;
 	readonly maximumIoSomePressureBasisPoints: number;
 	readonly maximumMd0InflightRequests: number;
+	readonly skipMd0InflightLimit?: boolean;
 	readonly now?: () => number;
 	readonly readIoPressure?: (signal: AbortSignal) => Promise<string>;
 	readonly readMd0Inflight?: (signal: AbortSignal) => Promise<string>;
