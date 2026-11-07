@@ -1,13 +1,14 @@
 import { jest } from '@jest/globals';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { parseCurrentAccount } from '../../../api/explorer-current-account';
+import { parseCurrentAccount, parseCurrentAccountProvider, fetchCurrentAccount } from '../../../api/explorer-current-account';
 import { publicNetworkPassphrase } from '../../../api/explorer-current-account-snapshot';
 import { currentAccountBreakdown, nativeMinimumReserve } from '../explorer-current-account-breakdown';
+import { executeExplorerRequest } from '../explorer-request';
 
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-account-assets.module.css', () => ({ default: {} }));
 const { AccountAssetIdentity } = await import('../explorer-account-asset-identity');
-const { CurrentAccountInventory, AccountSnapshotEvidence } = await import('../explorer-account-assets');
+const { CurrentAccountInventory, AccountSnapshotEvidence, CurrentAccountProviderLabel, CurrentAccountAbsence } = await import('../explorer-account-assets');
 const account = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const issuer = 'GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE';
 const nativeRow = (balanceRaw: unknown, sellingLiabilitiesRaw?: string) => ({
@@ -21,6 +22,35 @@ const accountBody = (balances: readonly unknown[]) => ({
 	accountId: account, balances, source: 'horizon', lastModifiedLedger: '100',
 	accounting: { scope: 'horizon_account_balances', networkPassphrase: publicNetworkPassphrase,
 		snapshotStatus: 'ledger_bound', latestLedger: '101', balanceInventoryComplete: true }
+});
+
+it('attributes only a validated public provider hostname and keeps native defaults and exact values', async () => {
+	const provider = parseCurrentAccountProvider({ mode: 'operator_alternate', hostname: 'provider.example.org', observedAt: '2026-11-07T20:00:00.000Z' });
+	const html = renderToStaticMarkup(<CurrentAccountProviderLabel provider={provider} />);
+	expect(html).toContain('provider.example.org');
+	expect(html).toContain('Operator-selected alternate');
+	expect(html).toContain('Provider response observed');
+	expect(html.replaceAll('<!-- -->', '')).toContain('Wallet addresses are sent to provider.example.org.');
+	expect(renderToStaticMarkup(<CurrentAccountProviderLabel provider={null} />)).toContain('Configured Stellar Horizon service');
+	for (const value of [{ mode: 'native', hostname: 'private' }, { mode: 'operator_alternate', hostname: 'http://private/' },
+		{ mode: 'operator_alternate', hostname: 'provider.example.org', observedAt: 'bad' }])
+		expect(() => parseCurrentAccountProvider(value)).toThrow();
+	const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...accountBody([nativeRow('1000000000')]), provider }))
+		.mockResolvedValueOnce(Response.json({ error: 'Account not found', provider }, { status: 404 }))
+		.mockResolvedValueOnce(Response.json({ error: 'Unavailable', provider }, { status: 503, headers: { 'retry-after': '120' } }));
+	try {
+		const loaded = await fetchCurrentAccount(account, new AbortController().signal);
+		expect(loaded.value?.balances[0]?.balance).toBe(1000000000n);
+		expect(loaded.provider?.hostname).toBe('provider.example.org');
+		const missing = await fetchCurrentAccount(account, new AbortController().signal);
+		expect(missing).toMatchObject({ value: null, provider });
+		expect(renderToStaticMarkup(<CurrentAccountAbsence result={missing} failed={false} />)).toContain('Account not found');
+		const unavailable = await fetchCurrentAccount(account, new AbortController().signal);
+		expect(unavailable).toMatchObject({ status: 'unavailable', provider });
+		expect(renderToStaticMarkup(<CurrentAccountAbsence result={unavailable} failed={false} />)).toBe('');
+		expect(renderToStaticMarkup(<CurrentAccountAbsence result={missing} failed={true} />)).toBe('');
+		expect(await executeExplorerRequest(async () => unavailable, 'generic failure')).toEqual({ ok: false, message: unavailable.message });
+	} finally { fetch.mockRestore(); }
 });
 
 it('parses exact Horizon units, rejects float or wrong account data, and keeps zero trustlines in the inventory', () => {

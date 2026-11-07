@@ -1,4 +1,5 @@
 import express from 'express';
+import type { ExplorerAccountProviderConfig } from '../../../../core/config/ExplorerAccountProviderConfig.js';
 import type { ExplorerLocalReadModelDTO } from '../../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { ExplorerLocalTransactionsDTO } from '../../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 import type { ExplorerLocalOperationsDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalOperation.js';
@@ -13,6 +14,7 @@ import {
 } from '../BlockchainExplorerRouter.js';
 
 interface BuildTestAppOptions {
+	readonly accountProvider?: ExplorerAccountProviderConfig;
 	readonly localAccountChanges?: ExplorerLocalAccountChangesDTO;
 	readonly localFeed?: ExplorerLocalTransactionsDTO;
 	readonly localLedger?: ExplorerCanonicalLedgerDTO | null;
@@ -317,6 +319,7 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 	app.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			accountProvider: options.accountProvider,
 			getExplorerLocalAccountChanges,
 			getExplorerLocalReadModel: {
 				execute: async () => localReadModel()

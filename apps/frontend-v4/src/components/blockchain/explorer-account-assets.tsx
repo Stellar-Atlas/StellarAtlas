@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { buildEntityHref, type EntityRecord } from '../../api/explorer-analytics';
-import { fetchCurrentAccount, type CurrentAccount, type CurrentBalance } from '../../api/explorer-current-account';
+import { fetchCurrentAccount, type CurrentAccount, type CurrentBalance, type CurrentAccountResponse, type CurrentAccountProvider } from '../../api/explorer-current-account';
 import { currentAccountFreshness, type CurrentAccountSnapshot } from '../../api/explorer-current-account-snapshot';
 import { LocalDateTime } from '../local-date-time';
 import { AccountAssetIdentity } from './explorer-account-asset-identity';
@@ -49,14 +49,14 @@ export function ExplorerAccountAssets({ account }: { readonly account: string })
 }
 
 function CurrentAccountPanel({ account }: { readonly account: string }): React.JSX.Element {
-	const request = useExplorerRequest<{ value: CurrentAccount | null; fetchedAt: string } | null>(null, failure);
+	const request = useExplorerRequest<(CurrentAccountResponse & { fetchedAt: string }) | null>(null, failure);
 	const inFlight = useRef<AbortController | null>(null);
 	const load = useCallback(() => {
 		if (inFlight.current !== null) return;
 		const abort = new AbortController();
 		inFlight.current = abort;
 		void request.run(() => withExplorerRequestDeadline(abort, 70_000, async () => ({
-			value: await fetchCurrentAccount(account, abort.signal), fetchedAt: new Date().toISOString()
+			...await fetchCurrentAccount(account, abort.signal), fetchedAt: new Date().toISOString()
 		}))).finally(() => {
 			if (inFlight.current === abort) inFlight.current = null;
 		});
@@ -73,19 +73,35 @@ function CurrentAccountPanel({ account }: { readonly account: string }): React.J
 	}, [load]);
 	return <section className={styles.panel} aria-label="Horizon account balances" aria-busy={request.loading}>
 		<h2>Horizon account balances</h2>
-		<p className={assets.context}>Configured Stellar Horizon service · Classic account only</p>
+		<CurrentAccountProviderLabel provider={request.result?.provider ?? null} />
 		<div className={styles.actions}>
 			<button type="button" disabled={request.loading} onClick={load}>Refresh current account</button>
 		</div>
 		{request.loading && <p role="status">Loading current account…</p>}
 		{request.error && <p role="alert">{request.error}{request.result ? ' Showing the last successful response.' : ''}</p>}
 		{request.result && <p className={assets.context}>Fetched <LocalDateTime dateTime={request.result.fetchedAt} /></p>}
-		{request.result?.value === null && <p>Account not found by Horizon.</p>}
+		<CurrentAccountAbsence result={request.result} failed={request.error !== null} />
 		{request.result?.value && <>
 			<AccountSnapshotEvidence snapshot={request.result.value.snapshot} fetchedAt={request.result.fetchedAt} />
 			<CurrentAccountInventory value={request.result.value} />
 		</>}
 	</section>;
+}
+
+export function CurrentAccountAbsence({ result, failed }: {
+	readonly result: CurrentAccountResponse | null; readonly failed: boolean;
+}): React.JSX.Element | null {
+	return !failed && result?.status !== 'unavailable' && result?.value === null
+		? <p>Account not found by Horizon.</p> : null;
+}
+
+export function CurrentAccountProviderLabel({ provider }: { readonly provider: CurrentAccountProvider | null }): React.JSX.Element {
+	return <div className={assets.context}><p>{provider
+		? <>Source: {provider.hostname} · Operator-selected alternate Horizon · Classic account only</>
+		: <>Configured Stellar Horizon service · Classic account only</>}</p>
+		{provider && <p>Wallet addresses are sent to {provider.hostname}.</p>}
+		{provider?.observedAt && <p>Provider response observed <LocalDateTime dateTime={provider.observedAt} /></p>}
+	</div>;
 }
 
 export function AccountSnapshotEvidence({ snapshot, fetchedAt }: {

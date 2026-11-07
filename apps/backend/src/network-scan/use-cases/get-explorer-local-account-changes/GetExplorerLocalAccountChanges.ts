@@ -234,7 +234,7 @@ export const explorerLocalAccountChangesSql = `
 			account_change."last_modified_ledger"::text as "lastModifiedLedger",
 			account_change."sponsor",
 			account_change."closed_at_unix_millis"::text as "closedAtUnixMillis",
-			observation_ledger."closed_at" as "observationLedgerClosedAt",
+			proof_gate."observationLedgerClosedAt",
 			encode(account_change."ledger_key_sha256", 'hex') as "ledgerKeySha256",
 			encode(account_change."row_sha256", 'hex') as "rowSha256",
 			proof_gate."firstLedger" as "coverageFirstLedger",
@@ -251,11 +251,17 @@ export const explorerLocalAccountChangesSql = `
 			proof_gate."proofEvaluatedAt" as "canonicalProofEvaluatedAt",
 			proof_gate."coverageCompletedAt" as "canonicalCoverageCompletedAt"
 		from "full_history_lcm_account_state_change" account_change
-		join complete_coverage proof_gate
-			on proof_gate."batchId" = account_change."batch_id"
-		join "full_history_lcm_ledger_projection" observation_ledger
-			on observation_ledger."batch_id" = account_change."batch_id"
-			and observation_ledger."ledger_sequence" = account_change."ledger_sequence"
+		join lateral (
+			select proof_gate.*,
+				observation_ledger."closed_at" as "observationLedgerClosedAt"
+			from complete_coverage proof_gate
+			join "full_history_lcm_ledger_projection" observation_ledger
+				on observation_ledger."batch_id" = proof_gate."batchId"
+				and observation_ledger."ledger_sequence" = account_change."ledger_sequence"
+			where proof_gate."batchId" = account_change."batch_id"
+			-- Keep proof lookup parameterized by the account candidate.
+			offset 0
+		) proof_gate on true
 		where account_change."account_id" = $2
 		order by account_change."ledger_sequence" desc,
 			account_change."transaction_index" desc,

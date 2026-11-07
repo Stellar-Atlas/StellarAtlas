@@ -162,6 +162,41 @@ STELLAR_RPC_URL=http://127.0.0.1:8002
 
 ## Probe Commands
 
+### Optional account-only provider
+
+`EXPLORER_ACCOUNT_PROVIDER_URL` is unset by default. An operator may explicitly
+select an approved HTTPS provider base for detailed Classic G-account reads only.
+It does not change `HORIZON_URL`, search, the public Horizon proxy, claimable or
+contract positions, live feeds, or historical ingestion. It is not automatic
+fallback: a failed alternate never silently switches to the native endpoint.
+
+Responses identify the selected public hostname and provider-read time, separately
+from the account's last-modified ledger and the snapshot's as-of ledger/time.
+Only the hostname is public; credentials and URL query/fragment/port are rejected.
+Provider/network identity, privacy and quota policy must be approved before a
+normal configuration/release handoff. No provider is selected by this document.
+
+The account path shares matching in-flight reads within one API process. It has
+four active distinct reads, 64 waiting callers, one initial start token replenishing
+one start every five seconds, and no waiting-work queue. Each start makes at most
+two sequential HTTP reads: approximately 1,440 steady-state requests per hour
+for one instance, plus initial/carry-in demand. Additional instances, restarts and
+other clients sharing an outbound IP require a separate aggregate budget.
+Results expire after 20 seconds (not-found after five)
+and use at most 32 entries / 8 MiB of serialized-value accounting; each upstream
+body and stored value is capped at 2 MiB. JavaScript object overhead and active
+parsing are additional, bounded by the active-read limits. These are per-process
+controls, not a fleet-wide quota. Failures impose exponential five-to-60-second
+backoff, honoring bounded upstream `Retry-After` up to 300 seconds. Excess work
+receives 429/503 with `Retry-After`; there are no periodic wallet polls or writes.
+
+The UI explicitly states that wallet addresses are sent to the selected provider.
+The provider sees requested public account addresses, request timing and the
+server's outbound IP. Browser cookies and client-IP headers are not forwarded.
+Keep the app-to-Atlas API connection unchanged; never let a request select an
+upstream URL. The existing native default and exact balance/reserve calculations
+remain in place when this opt-in is absent.
+
 Horizon root and latest-ledger API:
 
 ```bash
