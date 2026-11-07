@@ -43,6 +43,23 @@ recovery procedure. Observe transitions with
 `journalctl -u stellaratlas-hubble-etl.service`; a healthy gate does not claim
 complete historical coverage or validate every stored row/checksum.
 
+## Optional historical admission hold
+
+`HUBBLE_ETL_HISTORY_HOLD_FILE` is disabled when unset, with no marker access.
+When configured, it names a regular root-owned marker in a dedicated directory
+under the existing Linux `/run` tmpfs. All parent directories must be root-owned,
+non-symlink directories without group/world write access. The marker must also
+be non-symlink, singly linked, non-group/world-writable and at most 4 KiB;
+its contents are never read.
+
+Presence holds new historical admissions, including baseline history. Absence in
+a valid directory resumes them under the existing guards. Unsafe or unavailable
+control state holds history only. Checks occur at admission boundaries and once
+per second while held; logs report only held/resumed transitions. Current-ledger
+workers never consult this control, and admitted imports finish normally.
+This is a coordination control, not instantaneous cancellation or a guarantee
+that shared I/O contention will disappear.
+
 ## Optional one-time retained batch priority
 
 Set `HUBBLE_ETL_PRIORITY_BATCH_ID` in the existing host file

@@ -19,6 +19,7 @@ const currentWindowLedgers uint32 = 4096
 
 type currentWorkerIO struct {
 	recent        func(context.Context) ([]catalog.Batch, error)
+	agedOut       func(context.Context) (uint32, []catalog.Batch, error)
 	history       func(context.Context) ([]catalog.Batch, error)
 	states        func(context.Context, []string) (clickhouse.BatchAdmissionSnapshot, error)
 	allStates     func(context.Context) (clickhouse.BatchAdmissionSnapshot, error)
@@ -42,9 +43,13 @@ func RunCurrentWorkers(ctx context.Context, config Config, currentGuard *Pressur
 	}
 	currentConfig := config
 	currentConfig.PressureGuard = currentGuard
+	currentConfig.HistoryAdmissionHold = nil
 	io := currentWorkerIO{
 		recent: func(ctx context.Context) ([]catalog.Batch, error) {
 			return catalog.LoadRecent(ctx, config.DatabaseURL, config.NetworkPassphrase, 128)
+		},
+		agedOut: func(ctx context.Context) (uint32, []catalog.Batch, error) {
+			return catalog.LoadAgedOut(ctx, config.DatabaseURL, config.NetworkPassphrase, currentWindowLedgers, agedOutMaximumLedgerLag)
 		},
 		history: func(ctx context.Context) ([]catalog.Batch, error) {
 			return catalog.Load(ctx, config.DatabaseURL, config.NetworkPassphrase)
@@ -121,7 +126,14 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 		workers.Add(1)
 		go func(current, baseline bool, selector *laneSelection) {
 			defer workers.Done()
+			hold := config.HistoryAdmissionHold
+			if current {
+				hold = nil
+			}
 			for admissionCtx.Err() == nil {
+				if err := hold.Wait(admissionCtx); err != nil {
+					return
+				}
 				var admissionErr error
 				if baseline && io.baselineAdmit != nil {
 					admissionErr = io.baselineAdmit(admissionCtx)
@@ -131,6 +143,9 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 				if admissionErr != nil {
 					reportWorkerFailure(admissionCtx, admissionErr, fatal, stopAdmission)
 					return
+				}
+				if hold.blocked() {
+					continue
 				}
 				// No source is selected before a pressure wait. Bound all metadata
 				// reads together so an old selection cannot survive a long wait.
@@ -194,6 +209,10 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 				if admissionCtx.Err() != nil {
 					selector.release(batch)
 					return
+				}
+				if hold.blocked() {
+					selector.release(batch)
+					continue
 				}
 				// Only process shutdown cancels admitted imports. A metadata error
 				// in the other lane stops new admission and lets this write finish.

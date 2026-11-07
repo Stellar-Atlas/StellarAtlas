@@ -145,6 +145,20 @@ func waitReadiness(ctx context.Context, delay time.Duration) error {
 }
 
 func waitBatchAdmission(ctx context.Context, config Config) error {
+	for {
+		if err := config.HistoryAdmissionHold.Wait(ctx); err != nil {
+			return err
+		}
+		if err := waitUnheldBatchAdmission(ctx, config); err != nil {
+			return err
+		}
+		if !config.HistoryAdmissionHold.blocked() {
+			return nil
+		}
+	}
+}
+
+func waitUnheldBatchAdmission(ctx context.Context, config Config) error {
 	if config.ReadinessGuard != nil {
 		if err := config.ReadinessGuard.Wait(ctx); err != nil {
 			return err

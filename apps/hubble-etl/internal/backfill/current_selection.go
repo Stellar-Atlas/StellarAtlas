@@ -29,6 +29,12 @@ func (c *currentClaims) observe(batches []catalog.Batch) {
 	}
 }
 
+func (c *currentClaims) observeTip(latest uint32) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.latest = max(c.latest, latest)
+}
+
 func (c *currentClaims) reserve(batch catalog.Batch, current bool) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -87,14 +93,15 @@ func (c *currentClaims) resolvedBatch(batch catalog.Batch) (bool, error) {
 }
 
 type laneSelection struct {
-	mu       sync.Mutex // Protect selection/release only; never held during ingest.
-	current  bool
-	claims   *currentClaims
-	minimum  uint32
-	history  []catalog.Batch
-	position int
-	loadedAt time.Time
-	reserved map[string]int
+	mu               sync.Mutex // Protect selection/release only; never held during ingest.
+	current          bool
+	claims           *currentClaims
+	minimum          uint32
+	history          []catalog.Batch
+	position         int
+	loadedAt         time.Time
+	lastAgedOutProbe time.Time
+	reserved         map[string]int
 }
 
 func (s *laneSelection) release(batch catalog.Batch) {
@@ -142,6 +149,9 @@ func (s *laneSelection) next(ctx context.Context, io currentWorkerIO) (catalog.B
 			}
 		}
 		return catalog.Batch{}, false, nil
+	}
+	if batch, found, err := s.nextAgedOut(ctx, io, time.Now()); found || err != nil {
+		return batch, found, err
 	}
 	// Reservation indices remain tied to this snapshot until every claim leaves it.
 	if s.loadedAt.IsZero() || (s.position == len(s.history) && len(s.reserved) == 0 && time.Since(s.loadedAt) >= 5*time.Minute) {

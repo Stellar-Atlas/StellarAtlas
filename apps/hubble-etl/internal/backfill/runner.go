@@ -32,6 +32,7 @@ type Config struct {
 	PriorityBatchID              string
 	PressureGuard                *PressureGuard
 	BaselineHistoryPressureGuard *PressureGuard
+	HistoryAdmissionHold         *HistoryAdmissionHold
 	ReadinessGuard               *WarehouseReadinessGuard
 	Publisher                    *publication.WarehousePublisher
 	OnProgress                   func(Summary)
@@ -74,38 +75,48 @@ func Cycle(ctx context.Context, config Config) (Summary, error) {
 	if err := ValidateBatchScheduling(config.MaximumBatches, config.RecentBatches); err != nil {
 		return summary, err
 	}
-	if err := waitBatchAdmission(ctx, config); err != nil {
-		return summary, err
+	var pending []catalog.Batch
+	for {
+		if err := waitBatchAdmission(ctx, config); err != nil {
+			return summary, err
+		}
+		batches, err := catalog.Load(
+			ctx,
+			config.DatabaseURL,
+			config.NetworkPassphrase,
+		)
+		if err != nil {
+			return summary, err
+		}
+		summary.CatalogBatches = len(batches)
+		var completed, incomplete map[string]string
+		if config.RecentBatches > 0 {
+			// Frequent head refresh never blindly replays partial or failed writes.
+			state, stateErr := config.Client.BatchAdmissionState(ctx)
+			err = stateErr
+			completed = state.Completed
+			incomplete = state.Incomplete
+		} else {
+			completed, err = config.Client.CompletedBatches(ctx)
+		}
+		if err != nil {
+			return summary, fmt.Errorf("read warehouse completion state: %w", err)
+		}
+		// Do not select from metadata loaded before a newly raised hold. A later
+		// admission reloads it after the hold, including in one-shot mode.
+		if config.HistoryAdmissionHold.blocked() {
+			continue
+		}
+		selected, completedCount, err := selectPendingBatches(
+			batches, completed, config.PriorityBatchID, config.MaximumBatches, config.MinimumStartLedger, config.RecentBatches, incomplete,
+		)
+		if err != nil {
+			return summary, err
+		}
+		summary.CompletedBatches = completedCount
+		pending = selected
+		break
 	}
-	batches, err := catalog.Load(
-		ctx,
-		config.DatabaseURL,
-		config.NetworkPassphrase,
-	)
-	if err != nil {
-		return summary, err
-	}
-	summary.CatalogBatches = len(batches)
-	var completed, incomplete map[string]string
-	if config.RecentBatches > 0 {
-		// Frequent head refresh never blindly replays partial or failed writes.
-		state, stateErr := config.Client.BatchAdmissionState(ctx)
-		err = stateErr
-		completed = state.Completed
-		incomplete = state.Incomplete
-	} else {
-		completed, err = config.Client.CompletedBatches(ctx)
-	}
-	if err != nil {
-		return summary, fmt.Errorf("read warehouse completion state: %w", err)
-	}
-	pending, completedCount, err := selectPendingBatches(
-		batches, completed, config.PriorityBatchID, config.MaximumBatches, config.MinimumStartLedger, config.RecentBatches, incomplete,
-	)
-	if err != nil {
-		return summary, err
-	}
-	summary.CompletedBatches = completedCount
 	if len(pending) == 0 {
 		return summary, nil
 	}
