@@ -194,6 +194,21 @@ const app = express();
 const port = resolvePort(process.env.PORT);
 
 app.use((req: Request, res: Response, next: NextFunction) => {
+  if (
+    (req.method === "GET" || req.method === "HEAD") &&
+    ["stellaratlas.io", "www.stellaratlas.io"].includes(req.hostname?.toLowerCase() ?? "") &&
+    /^\/notify(?:\/|$)/.test(req.path) &&
+    req.accepts("html") === "html"
+  ) {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.redirect(307, "/legacy" + req.originalUrl);
+    return;
+  }
+  next();
+});
+
+app.use((req: Request, res: Response, next: NextFunction) => {
   if (!modernCompatibilityPathPattern.test(req.path)) {
     next();
     return;
