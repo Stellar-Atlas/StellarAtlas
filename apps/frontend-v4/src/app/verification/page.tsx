@@ -10,6 +10,9 @@ export default function VerificationPage(): React.JSX.Element {
 				description="Apply for an account identity reviewed and verified by StellarAtlas."
 			/>
 			<VerificationApplication />
+			<p>
+				<a href="/verification/review">Reviewer sign-in</a>
+			</p>
 		</main>
 	);
 }

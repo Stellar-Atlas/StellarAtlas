@@ -15,6 +15,12 @@ jest.unstable_mockModule('../verification-application.module.css', () => ({
 }));
 const { VerificationApplication, readApplication } =
 	await import('../verification-application');
+const { VerificationReviewPanel, VerificationReview } =
+	await import('../verification-review');
+const { AtlasIdentityView, IdentityLookup, AccountAtlasIdentity } =
+	await import('../account-atlas-identity');
+const { readAtlasIdentity, readReviewQueue } =
+	await import('../../../api/atlas-verification');
 const fetchMock = jest.fn<typeof fetch>();
 const originalFetch = globalThis.fetch;
 const application = {
@@ -26,6 +32,13 @@ const application = {
 	name: 'Example',
 	website: 'https://example.org/',
 	supportingEvidence: 'Private evidence',
+	submittedAt: '2026-11-07T20:00:00.000Z',
+	control: {
+		network: 'mainnet',
+		address: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+		method: 'stellar-account-authority',
+		verifiedAt: '2026-11-07T20:00:00.000Z'
+	},
 	review: null
 };
 const response = (value: unknown, status = 200) =>
@@ -136,4 +149,189 @@ it('rejects malformed application status before presentation', () => {
 		{ network: 'unknown' }
 	])
 		expect(readApplication({ ...application, ...patch })).toBeNull();
+});
+
+const reviewerSession = () => ({
+	token: 'r'.repeat(43),
+	address: application.address,
+	network: 'mainnet' as const,
+	expiresAt: new Date(Date.now() + 60_000).toISOString()
+});
+function click(tree: React.ReactNode, label: string) {
+	const button = elements(tree).find(
+		(node) => node.type === 'button' && node.props.children === label
+	)!;
+	(button.props.onClick as () => void)();
+}
+it('shows only target-bound approved Atlas identity, never imported or pending evidence', () => {
+	const publicRecord = {
+		source: 'stellaratlas/verification',
+		publisher: 'StellarAtlas',
+		status: 'verified',
+		address: application.address,
+		network: 'mainnet',
+		name: 'Approved identity',
+		website: 'https://example.org/',
+		revision: 2,
+		verifiedAt: '2026-11-07T20:00:00.000Z',
+		supportingEvidence: 'Private evidence'
+	};
+	const identity = readAtlasIdentity(
+		{ verification: publicRecord },
+		'mainnet',
+		application.address
+	)!;
+	expect(identity).not.toHaveProperty('supportingEvidence');
+	const html = renderToStaticMarkup(
+		<AtlasIdentityView state={{ status: 'loaded', identity }} />
+	);
+	expect(html).toContain('Verified by Atlas');
+	expect(html).toContain('Approved identity');
+	expect(html).not.toContain('Private evidence');
+	for (const patch of [
+		{ status: 'pending' },
+		{ source: 'stellar.expert' },
+		{ network: 'testnet' },
+		{ website: 'javascript:alert(1)' },
+		{ verifiedAt: '2026-02-30T00:00:00.000Z' }
+	])
+		expect(() =>
+			readAtlasIdentity(
+				{ verification: { ...publicRecord, ...patch } },
+				'mainnet',
+				application.address
+			)
+		).toThrow();
+	expect(
+		renderToStaticMarkup(
+			<AtlasIdentityView state={{ status: 'unavailable' }} />
+		)
+	).not.toContain('No approved');
+	expect(
+		renderToStaticMarkup(
+			<AtlasIdentityView state={{ status: 'loaded', identity: null }} />
+		)
+	).toContain('No approved Atlas identity');
+});
+it('makes one disposable public lookup for the focused account and does not treat errors as absence', async () => {
+	fetchMock.mockResolvedValue(response({ error: 'private failure' }, 503));
+	const draw = () =>
+		harness.render(() =>
+			IdentityLookup({ address: application.address, network: 'mainnet' })
+		);
+	draw();
+	await settle();
+	expect(renderToStaticMarkup(draw())).toContain('lookup unavailable');
+	draw();
+	expect(fetchMock).toHaveBeenCalledTimes(1);
+	expect(fetchMock.mock.calls[0]?.[0]).toBe(
+		'/v1/account-verification/mainnet/' + application.address
+	);
+	expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe('omit');
+	const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+	harness.reset();
+	expect(signal?.aborted).toBe(true);
+	expect(
+		AccountAtlasIdentity({ address: 'invalid', network: 'mainnet' })
+	).toBeNull();
+});
+it('keeps reviewer controls and private evidence absent until the server grants queue access', async () => {
+	fetchMock.mockResolvedValue(response({ error: 'private failure' }, 403));
+	const session = reviewerSession(),
+		expired = jest.fn();
+	const draw = () =>
+		harness.render(() =>
+			VerificationReviewPanel({ session, onExpired: expired })
+		);
+	expect(fetchMock).not.toHaveBeenCalled();
+	click(draw(), 'Load pending queue');
+	await settle();
+	const html = renderToStaticMarkup(draw());
+	expect(html).toContain('Reviewer access');
+	expect(html).not.toContain('Private evidence</p>');
+	expect(html).not.toContain('Save decision');
+	expect(html).not.toContain('Load application');
+	expect(html).not.toContain('private failure');
+	expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+		Authorization: 'Bearer ' + session.token
+	});
+	expect(fetchMock.mock.calls[0]?.[1]?.cache).toBe('no-store');
+	expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe('omit');
+});
+it('sends a confirmed, revision-bound approval and removes stale controls on conflict without retry', async () => {
+	fetchMock
+		.mockResolvedValueOnce(response({ items: [application], nextCursor: null }))
+		.mockResolvedValueOnce(response({}, 409));
+	const session = reviewerSession();
+	const draw = () =>
+		harness.render(() =>
+			VerificationReviewPanel({ session, onExpired: () => undefined })
+		);
+	click(draw(), 'Load pending queue');
+	await settle();
+	click(draw(), 'Review');
+	expect(renderToStaticMarkup(draw())).toContain('Private evidence');
+	const select = elements(draw()).find((node) => node.type === 'select')!;
+	(select.props.onChange as (e: { target: { value: string } }) => void)({
+		target: { value: 'approved' }
+	});
+	const reason = elements(draw()).find((node) => node.type === 'textarea')!;
+	(reason.props.onChange as (e: { target: { value: string } }) => void)({
+		target: { value: 'Identity evidence checked' }
+	});
+	const form = () =>
+		elements(draw())
+			.filter((node) => node.type === 'form')
+			.at(-1)!;
+	const submit = () =>
+		(form().props.onSubmit as (e: { preventDefault: () => void }) => void)({
+			preventDefault: () => undefined
+		});
+	submit();
+	expect(fetchMock).toHaveBeenCalledTimes(1);
+	for (const checkbox of elements(draw()).filter(
+		(node) => node.props.type === 'checkbox'
+	))
+		(checkbox.props.onChange as (e: { target: { checked: boolean } }) => void)({
+			target: { checked: true }
+		});
+	submit();
+	await settle();
+	expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+		revision: 1,
+		state: 'approved',
+		reason: 'Identity evidence checked',
+		identityEvidenceReviewed: true
+	});
+	expect(fetchMock.mock.calls[1]?.[0]).toBe(
+		'/v1/account-verification/applications/' + application.id + '/decisions'
+	);
+	const html = renderToStaticMarkup(draw());
+	expect(html).toContain('application changed');
+	expect(html).not.toContain('Record decision');
+	expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+it('distinguishes disabled review from unknown availability and rejects oversized or malformed queues', async () => {
+	fetchMock.mockResolvedValue(response({ available: false }));
+	const draw = () => harness.render(() => VerificationReview());
+	draw();
+	await settle();
+	const html = renderToStaticMarkup(draw());
+	expect(html).toContain('not enabled');
+	expect(html).not.toContain('Authenticate');
+	expect(() =>
+		readReviewQueue({
+			items: Array(21).fill(application),
+			nextCursor: application.id
+		})
+	).toThrow();
+	expect(() =>
+		readReviewQueue({ items: [application], nextCursor: application.id })
+	).toThrow();
+	expect(() =>
+		readReviewQueue({
+			items: [{ ...application, state: 'approved' }],
+			nextCursor: null
+		})
+	).toThrow();
 });

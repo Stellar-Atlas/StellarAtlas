@@ -78,3 +78,35 @@
 	margin-bottom: 1.5rem;
 	border-inline-start: 3px solid currentColor;
 }
+.reviewQueue {
+	list-style: none;
+	padding: 0;
+}
+.reviewQueue li {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+	justify-content: space-between;
+	padding: 1rem 0;
+	border-bottom: 1px solid var(--border-color, #64748b);
+}
+.reviewQueue li > div {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.reviewQueue button {
+	flex-shrink: 0;
+}
+.panel .check {
+	display: flex;
+	align-items: baseline;
+	gap: 0.65rem;
+	margin: 1rem 0;
+	font-weight: normal;
+}
+.panel .check input {
+	width: auto;
+}
+.evidence {
+	white-space: pre-wrap;
+}

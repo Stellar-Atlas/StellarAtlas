@@ -3,26 +3,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import styles from './verification-application.module.css';
 import {
+	readApplication,
+	type VerificationDraft as Draft,
+	type SavedApplication as Saved
+} from '../../api/verification-application';
+export { readApplication } from '../../api/verification-application';
+import {
 	VerificationAuthentication,
 	type VerificationSession
 } from './verification-authentication';
 
 const endpoint = '/v1/account-verification';
-type Draft = {
-	network: 'mainnet' | 'testnet';
-	address: string;
-	name: string;
-	website: string;
-	supportingEvidence: string;
-};
-type State =
-	'pending' | 'changes_requested' | 'approved' | 'rejected' | 'revoked';
-type Saved = Draft & {
-	id: string;
-	state: State;
-	revision: number;
-	reason: string | null;
-};
 const empty: Draft = {
 	network: 'mainnet',
 	address: '',
@@ -30,49 +21,6 @@ const empty: Draft = {
 	website: '',
 	supportingEvidence: ''
 };
-export function readApplication(value: unknown): Saved | null {
-	if (!value || typeof value !== 'object') return null;
-	const row = value as Record<string, unknown>;
-	if (
-		typeof row.id !== 'string' ||
-		!uuid(row.id) ||
-		![
-			'pending',
-			'changes_requested',
-			'approved',
-			'rejected',
-			'revoked'
-		].includes(String(row.state)) ||
-		!Number.isSafeInteger(row.revision) ||
-		Number(row.revision) < 1 ||
-		(row.network !== 'mainnet' && row.network !== 'testnet') ||
-		typeof row.address !== 'string' ||
-		!/^G[A-Z2-7]{55}$/.test(row.address) ||
-		typeof row.name !== 'string' ||
-		row.name.length > 120 ||
-		typeof row.website !== 'string' ||
-		row.website.length > 512 ||
-		typeof row.supportingEvidence !== 'string' ||
-		row.supportingEvidence.length > 4000
-	)
-		return null;
-	const review =
-		row.review && typeof row.review === 'object'
-			? (row.review as Record<string, unknown>)
-			: null;
-	return {
-		id: row.id,
-		state: row.state as State,
-		revision: Number(row.revision),
-		network: row.network,
-		address: row.address,
-		name: row.name,
-		website: row.website,
-		supportingEvidence: row.supportingEvidence,
-		reason:
-			typeof review?.reason === 'string' ? review.reason.slice(0, 1000) : null
-	};
-}
 export function VerificationApplication(): React.JSX.Element {
 	const [available, setAvailable] = useState<boolean | null>(null);
 	const [authNetworks, setAuthNetworks] = useState<('mainnet' | 'testnet')[]>(
