@@ -1,4 +1,6 @@
 import express from 'express';
+import type { ExplorerAccountProviderConfig } from '../../../core/config/ExplorerAccountProviderConfig.js';
+import { createExplorerAccountProvider, ExplorerAccountProviderError } from './ExplorerAccountProvider.js';
 import {
 	fetchExplorerAccount,
 	fetchExplorerAssets,
@@ -43,6 +45,7 @@ export interface BlockchainExplorerRouterConfig {
 		'execute'
 	>;
 	readonly horizonUrl: string;
+	readonly accountProvider?: ExplorerAccountProviderConfig;
 	readonly networkPassphrase: string;
 	readonly rpcUrl?: string;
 }
@@ -54,6 +57,7 @@ export const blockchainExplorerRouter = (
 	config: BlockchainExplorerRouterConfig
 ): express.Router => {
 	const router = express.Router();
+	const accountProvider = config.accountProvider && createExplorerAccountProvider(config.accountProvider, config.networkPassphrase);
 
 	router.get('/local-read-model', async (_req, res) => {
 		setCacheHeader(res);
@@ -256,16 +260,22 @@ export const blockchainExplorerRouter = (
 		const abort = () => controller.abort();
 		res.once('close', abort);
 		try {
-			const account = await fetchExplorerAccount(config.horizonUrl, accountId, {
+			const alternate = accountId.startsWith('G') ? accountProvider : undefined;
+			const account = alternate ? await alternate.read(accountId, controller.signal) : await fetchExplorerAccount(config.horizonUrl, accountId, {
 				networkPassphrase: config.networkPassphrase,
 				signal: controller.signal
 			});
 			if (controller.signal.aborted) return;
-			if (!account) return res.status(404).json({ error: 'Account not found' });
+			if (alternate) res.setHeader('Cache-Control', 'no-store');
+			if (!account) return res.status(404).json({ error: 'Account not found', ...(alternate && { provider: alternate.provider }) });
 			return res.status(200).json(account);
-		} catch {
+		} catch (error: unknown) {
 			if (controller.signal.aborted) return;
 			res.setHeader('Cache-Control', 'no-store');
+			if (error instanceof ExplorerAccountProviderError) {
+				res.setHeader('Retry-After', String(error.retryAfterSeconds));
+				return res.status(error.status).json({ error: 'Account provider temporarily unavailable', provider: accountProvider?.provider });
+			}
 			return res.status(502).json({ error: 'Account lookup unavailable' });
 		} finally {
 			res.off('close', abort);

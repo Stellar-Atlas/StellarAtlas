@@ -89,6 +89,7 @@ export async function mountExplorerRoutes(
 	api.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			accountProvider: config.explorerAccountProvider,
 			accountProtocolPosition,
 			getExplorerLocalAccountChanges,
 			getExplorerLocalReadModel: kernel.container.get(

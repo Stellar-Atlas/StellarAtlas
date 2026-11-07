@@ -104,6 +104,34 @@ describe('BlockchainExplorerRouter local account observations', () => {
 			.expect(502)
 			.expect('Cache-Control', 'no-store');
 	});
+
+	it('uses the explicit alternate only for detailed G accounts and attributes its data', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async () => Response.json({
+			account_id: canonicalSourceAccount, balances: [{ asset_type: 'native', balance: '100.0000000' }],
+			sequence: '123', subentry_count: 1
+		}));
+		const app = buildTestApp({ accountProvider: { url: 'https://provider.example.org/', hostname: 'provider.example.org' } });
+		await request(app).get(`/v1/explorer/accounts/${canonicalSourceAccount}`).expect(200).expect('Cache-Control', 'no-store')
+			.expect(response => {
+				expect(response.body.provider).toMatchObject({ mode: 'operator_alternate', hostname: 'provider.example.org' });
+				expect(response.body.balances[0].exact.balanceRaw).toBe('1000000000');
+				expect(JSON.stringify(response.body)).not.toContain('horizon.example');
+			});
+		await request(app).get(`/v1/explorer/accounts/${canonicalSourceAccount}`).expect(200);
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+		expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(`https://provider.example.org/accounts/${canonicalSourceAccount}`);
+		await request(app).get(`/v1/explorer/search?query=${canonicalSourceAccount}&type=account`).expect(200);
+		expect(String(fetchSpy.mock.calls[1]?.[0])).toBe(`https://horizon.example/accounts/${canonicalSourceAccount}`);
+	});
+
+	it('returns attributed backoff without falling through to the native provider', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 429, headers: { 'retry-after': '120' } }));
+		const app = buildTestApp({ accountProvider: { url: 'https://provider.example.org/', hostname: 'provider.example.org' } });
+		for (let attempt = 0; attempt < 2; attempt++)
+			await request(app).get(`/v1/explorer/accounts/${canonicalSourceAccount}`).expect(503).expect('Cache-Control', 'no-store')
+				.expect('Retry-After', '120').expect(response => expect(response.body.provider.hostname).toBe('provider.example.org'));
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+	});
 });
 
 function unavailableAccountObservation(): ExplorerLocalAccountChangesDTO {

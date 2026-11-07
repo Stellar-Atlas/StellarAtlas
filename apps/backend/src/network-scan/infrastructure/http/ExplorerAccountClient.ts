@@ -1,4 +1,5 @@
 import { StrKey } from '@stellar/stellar-sdk';
+import { readHorizonAccountJson, accountRetryAfter, HorizonAccountReadError } from './HorizonAccountResponse.js';
 import {
 	amount,
 	classicAddress,
@@ -34,6 +35,7 @@ interface ExplorerAccountBalanceExactDTO {
 }
 
 export interface ExplorerAccountDTO {
+	readonly provider?: { readonly mode: 'operator_alternate'; readonly hostname: string; readonly observedAt?: string };
 	readonly accountId: string;
 	readonly balances: readonly ExplorerAccountBalanceDTO[];
 	readonly lastModifiedLedger: string | null;
@@ -146,7 +148,7 @@ export async function fetchExplorerAccount(
 		signal
 	});
 	if (response.status === 404 && classicDetail) {
-		const problem = (await response.json()) as {
+		const problem = (await readHorizonAccountJson(response, signal)) as {
 			status?: unknown;
 			type?: unknown;
 		};
@@ -158,12 +160,12 @@ export async function fetchExplorerAccount(
 		throw new Error('Unrecognized Horizon not-found response');
 	}
 	if (!response.ok || (classicDetail && response.status !== 200)) {
-		void response.body?.cancel().catch(() => undefined);
+		await response.body?.cancel().catch(() => undefined);
 		if (response.status === 404) return null;
-		throw new Error('Horizon account request failed');
+		throw new HorizonAccountReadError(accountRetryAfter(response));
 	}
 
-	const record = (await response.json()) as HorizonAccountRecord;
+	const record = (await readHorizonAccountJson(response, signal)) as HorizonAccountRecord;
 	const id = record.account_id ?? record.id;
 	if (
 		typeof id !== 'string' ||
@@ -246,10 +248,10 @@ async function fetchAccountLedger(
 			signal
 		});
 		if (response.status !== 200) {
-			void response.body?.cancel().catch(() => undefined);
+			await response.body?.cancel().catch(() => undefined);
 			return null;
 		}
-		const ledger = (await response.json()) as {
+		const ledger = (await readHorizonAccountJson(response, signal)) as {
 			sequence?: unknown;
 			base_reserve_in_stroops?: unknown;
 			closed_at?: unknown;

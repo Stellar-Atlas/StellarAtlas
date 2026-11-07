@@ -26,6 +26,25 @@ export interface CurrentAccount {
 	readonly snapshot: CurrentAccountSnapshot;
 }
 
+export interface CurrentAccountProvider { readonly mode: 'operator_alternate'; readonly hostname: string; readonly observedAt: string | null }
+export interface CurrentAccountResponse {
+	readonly value: CurrentAccount | null;
+	readonly provider: CurrentAccountProvider | null;
+	readonly status?: 'unavailable';
+	readonly message?: string;
+}
+
+export function parseCurrentAccountProvider(value: unknown): CurrentAccountProvider | null {
+	if (value === undefined) return null;
+	const data = recordValue(value);
+	if (data.mode !== 'operator_alternate' || typeof data.hostname !== 'string' || data.hostname.length > 253 ||
+		!data.hostname.includes('.') || !data.hostname.split('.').every(part => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(part))) invalid();
+	if (data.observedAt !== undefined && (typeof data.observedAt !== 'string' ||
+		!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(data.observedAt) ||
+		!Number.isFinite(Date.parse(data.observedAt)) || new Date(data.observedAt).toISOString() !== data.observedAt)) invalid();
+	return { mode: 'operator_alternate', hostname: data.hostname, observedAt: typeof data.observedAt === 'string' ? data.observedAt : null };
+}
+
 export function classicAssetIdentity(id: string): ClassicAssetIdentity | null {
 	const parts = /^([A-Za-z0-9]{1,12}):(G[A-Z2-7]{55})$/.exec(id);
 	return parts?.[1] && parts[2] && isClassicAccount(parts[2])
@@ -89,7 +108,7 @@ export function parseCurrentAccount(account: string, payload: unknown): CurrentA
 	return { balances, lastModifiedLedger: modified === null ? null : Number(modified), snapshot };
 }
 
-export async function fetchCurrentAccount(account: string, signal: AbortSignal): Promise<CurrentAccount | null> {
+export async function fetchCurrentAccount(account: string, signal: AbortSignal): Promise<CurrentAccountResponse> {
 	if (!isClassicAccount(account)) invalid();
 	const response = await fetch('/api/explorer/current-account/' + encodeURIComponent(account), {
 		headers: { accept: 'application/json' }, cache: 'no-store', credentials: 'omit', redirect: 'error', signal
@@ -98,10 +117,6 @@ export async function fetchCurrentAccount(account: string, signal: AbortSignal):
 	if (!response.headers.get('content-type')?.toLowerCase().includes('json') ||
 		Number(response.headers.get('content-length')) > responseLimit || !response.body) {
 		void response.body?.cancel().catch(() => undefined);
-		invalid();
-	}
-	if (!response.ok && response.status !== 404) {
-		void response.body.cancel().catch(() => undefined);
 		invalid();
 	}
 	const reader = response.body.getReader();
@@ -121,11 +136,17 @@ export async function fetchCurrentAccount(account: string, signal: AbortSignal):
 		void reader.cancel().catch(() => undefined);
 	}
 	const payload: unknown = JSON.parse(text);
+	const provider = parseCurrentAccountProvider(recordValue(payload).provider);
+	if (!response.ok && response.status !== 404) {
+		if (provider) return { value: null, provider, status: 'unavailable',
+			message: `Current account provider ${provider.hostname} (operator-selected alternate) is temporarily unavailable.` };
+		invalid();
+	}
 	if (response.status === 404) {
 		const problem = recordValue(payload);
 		if (problem.error !== 'Account not found') invalid();
-		return null;
+		return { value: null, provider };
 	}
 	if (response.status !== 200) invalid();
-	return parseCurrentAccount(account, payload);
+	return { value: parseCurrentAccount(account, payload), provider };
 }
