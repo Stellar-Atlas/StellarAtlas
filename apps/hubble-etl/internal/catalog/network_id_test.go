@@ -21,3 +21,21 @@ func TestCatalogNetworkIDCompatibility(t *testing.T) {
 		})
 	}
 }
+
+func TestAgedOutCatalogDatasetPresence(t *testing.T) {
+	for _, tc := range []struct {
+		name, batchID           string
+		tip, dataset, wantError bool
+	}{
+		{"complete", "batch", true, true, false},
+		{"empty band", "", true, false, false},
+		{"missing tip metadata", "", false, false, true},
+		{"missing batch metadata", "batch", true, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateAgedOutDatasetPresence(tc.tip, tc.batchID, tc.dataset); (err != nil) != tc.wantError {
+				t.Fatalf("metadata presence error = %v, wantError=%v", err, tc.wantError)
+			}
+		})
+	}
+}
