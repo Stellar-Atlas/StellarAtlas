@@ -1,7 +1,6 @@
 import { constants as fsConstants } from 'node:fs';
 import {
 	open,
-	lstat,
 	rename,
 	unlink,
 	type FileHandle
@@ -50,40 +49,37 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 	constructor(private readonly file: string) {}
 
 	async read(): Promise<PendingPlan | null> {
-		let metadata;
-		try {
-			metadata = await lstat(this.file);
-		} catch (error) {
-			if (isCode(error, 'ENOENT')) return null;
-			throw error;
-		}
-		if (metadata.isSymbolicLink() || !metadata.isFile()) {
-			throw new Error('Pending plan must be a regular non-symlink file');
-		}
-		if (metadata.size > MAX_FILE_BYTES) {
-			throw new Error('Pending plan file exceeds its bounded size limit');
+		const { O_NOFOLLOW, O_NONBLOCK } = fsConstants;
+		if (O_NOFOLLOW === undefined || O_NONBLOCK === undefined) {
+			throw new Error('Pending plan requires safe non-symlink file opening');
 		}
 
 		let handle: FileHandle | undefined;
 		try {
-			const noFollow = fsConstants.O_NOFOLLOW ?? 0;
-			handle = await open(this.file, fsConstants.O_RDONLY | noFollow);
+			handle = await open(this.file, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
 			const opened = await handle.stat();
 			if (!opened.isFile() || opened.size > MAX_FILE_BYTES) {
 				throw new Error('Pending plan must be a bounded regular file');
 			}
-			const contents = await handle.readFile();
-			if (contents.byteLength > MAX_FILE_BYTES) {
+			const buffer = Buffer.alloc(MAX_FILE_BYTES + 1);
+			let length = 0;
+			while (length < buffer.length) {
+				const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
+				if (bytesRead === 0) break;
+				length += bytesRead;
+			}
+			if (length > MAX_FILE_BYTES) {
 				throw new Error('Pending plan file exceeds its bounded size limit');
 			}
 			let parsed: unknown;
 			try {
-				parsed = JSON.parse(contents.toString('utf8'));
+				parsed = JSON.parse(buffer.toString('utf8', 0, length));
 			} catch {
 				throw new Error('Pending plan file contains invalid JSON');
 			}
 			return validatePendingPlan(parsed);
 		} catch (error) {
+			if (isCode(error, 'ENOENT')) return null;
 			if (isCode(error, 'ELOOP')) {
 				throw new Error('Pending plan must be a regular non-symlink file');
 			}
