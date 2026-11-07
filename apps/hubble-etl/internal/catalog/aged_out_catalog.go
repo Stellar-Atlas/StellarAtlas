@@ -2,10 +2,10 @@ package catalog
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/stellar/go-stellar-sdk/network"
 )
 
 // The immutable catalog forbids overlapping ranges per network and has a
@@ -59,8 +59,9 @@ func LoadAgedOut(ctx context.Context, databaseURL, networkPassphrase string, cur
 		return 0, nil, fmt.Errorf("connect to aged-out immutable catalog: %w", err)
 	}
 	defer connection.Close(ctx)
-	networkHash := sha256.Sum256([]byte(networkPassphrase))
-	rows, err := connection.Query(ctx, agedOutBatchSQL, networkHash[:], int64(currentLag), int64(maximumLag), limit+1)
+	// The public Stellar network ID is the existing catalog partition key.
+	networkID := network.ID(networkPassphrase)
+	rows, err := connection.Query(ctx, agedOutBatchSQL, networkID[:], int64(currentLag), int64(maximumLag), limit+1)
 	if err != nil {
 		return 0, nil, fmt.Errorf("read aged-out immutable catalog: %w", err)
 	}
