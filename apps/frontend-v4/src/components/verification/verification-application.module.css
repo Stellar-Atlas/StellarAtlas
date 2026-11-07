@@ -1,0 +1,80 @@
+.panel {
+	max-width: 54rem;
+	margin: 1.5rem auto;
+	padding: clamp(1rem, 3vw, 2rem);
+	border: 1px solid var(--border-color, #64748b);
+	border-radius: 1rem;
+}
+.panel p {
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+.panel label {
+	display: grid;
+	gap: 0.5rem;
+	font-weight: 600;
+}
+.panel input,
+.panel select,
+.panel textarea {
+	width: 100%;
+	box-sizing: border-box;
+	min-width: 0;
+	font: inherit;
+	color: inherit;
+	background: transparent;
+	border: 1px solid var(--border-color, #64748b);
+	border-radius: 0.4rem;
+	padding: 0.7rem;
+}
+.panel select option {
+	color: #111827;
+	background: #fff;
+}
+.panel textarea {
+	resize: vertical;
+}
+.panel button {
+	font: inherit;
+	padding: 0.65rem 1rem;
+	cursor: pointer;
+}
+.panel button:disabled {
+	cursor: default;
+	opacity: 0.65;
+}
+.panel :focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 3px;
+}
+.lookup {
+	display: flex;
+	align-items: end;
+	flex-wrap: wrap;
+	gap: 1rem;
+	margin: 2rem 0;
+}
+.lookup label {
+	flex: 1;
+	min-width: min(18rem, 100%);
+}
+.form fieldset {
+	min-width: 0;
+	padding: 1rem;
+	border: 1px solid var(--border-color, #64748b);
+}
+.form legend {
+	padding: 0.5rem;
+	font-weight: 700;
+}
+.fields {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+	gap: 1rem;
+	margin-bottom: 1rem;
+}
+.status {
+	padding: 1rem;
+	margin-bottom: 1.5rem;
+	border-inline-start: 3px solid currentColor;
+}

@@ -1,4 +1,5 @@
 import express from 'express';
+import { createAtlasVerification } from '../../../status/infrastructure/verification/VerificationActivation.js';
 import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
 import { resolve } from 'node:path';
@@ -151,6 +152,7 @@ const setup = async (): Promise<{ config: Config; kernel: Kernel }> => {
 
 	const config = configResult.value;
 	const kernel = await Kernel.getInstance(config);
+	api.use('/v1/account-verification', createAtlasVerification(process.env, kernel.container.get(DataSource)));
 
 	return {
 		config: config,
