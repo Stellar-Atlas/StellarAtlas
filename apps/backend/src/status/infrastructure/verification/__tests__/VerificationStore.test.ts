@@ -26,7 +26,9 @@ const application: Application = {
 	review: null
 };
 function fixture(rows: unknown[] = [{ id: application.id, count: 0 }]) {
-	const query = jest.fn(async (_sql: string, _parameters?: unknown[]) => rows);
+	const query = jest.fn(async (_sql: string, _parameters?: unknown[]) =>
+		_sql.startsWith('UPDATE') ? [rows, rows.length] : rows
+	);
 	const transaction = jest.fn(
 		async (work: (manager: EntityManager) => Promise<void>) =>
 			work({ query } as unknown as EntityManager)
@@ -54,6 +56,23 @@ it('stores a new application and audit event in one bounded transaction using pa
 	expect(sql.join(' ')).not.toContain(application.supportingEvidence);
 	expect(sql[0]).toContain('lock_timeout');
 	expect(sql[1]).toContain('statement_timeout');
+});
+it('accepts the actual TypeORM UPDATE result and appends its event in the same transaction', async () => {
+	const f = fixture([{ id: application.id }]);
+	const next = { ...application, revision: 2 };
+	await expect(
+		f.store.update(1, next, {
+			actor: 'owner',
+			action: 'resubmitted',
+			application: next
+		})
+	).resolves.toBeUndefined();
+	expect(f.transaction).toHaveBeenCalledTimes(1);
+	expect(
+		f.query.mock.calls.some((call) =>
+			call[0].includes('INSERT INTO atlas_verification_event')
+		)
+	).toBe(true);
 });
 it('does not append an audit event when a concurrent update wins', async () => {
 	const f = fixture([]);

@@ -1,4 +1,5 @@
 import type { DataSource, EntityManager } from 'typeorm';
+import { verificationReturnedRows } from './VerificationSqlRows.js';
 import {
 	VerificationError,
 	type Application,
@@ -60,7 +61,7 @@ export class TypeOrmVerificationStore implements VerificationStore {
 			await this.database.transaction(async (manager) => {
 				await manager.query("SET LOCAL lock_timeout = '2s'");
 				await manager.query("SET LOCAL statement_timeout = '5s'");
-				const rows = await manager.query<{ id: string }[]>(
+				const result = await manager.query<unknown>(
 					`UPDATE atlas_verification_application
 					SET state=$2, revision=$3, payload=$4::jsonb
 					WHERE id=$1 AND revision=$5 RETURNING id`,
@@ -72,7 +73,9 @@ export class TypeOrmVerificationStore implements VerificationStore {
 						expectedRevision
 					]
 				);
-				if (rows.length !== 1)
+				// PostgresQueryRunner returns [returnedRows, affectedCount] for UPDATE.
+				const rows = verificationReturnedRows(result);
+				if (rows.length !== 1 || rows[0]?.id !== application.id)
 					throw new VerificationError(
 						409,
 						'Application changed; reload before deciding'

@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import styles from './verification-application.module.css';
+import {
+	VerificationAuthentication,
+	type VerificationSession
+} from './verification-authentication';
 
 const endpoint = '/v1/account-verification';
 type Draft = {
@@ -71,6 +75,10 @@ export function readApplication(value: unknown): Saved | null {
 }
 export function VerificationApplication(): React.JSX.Element {
 	const [available, setAvailable] = useState<boolean | null>(null);
+	const [authNetworks, setAuthNetworks] = useState<('mainnet' | 'testnet')[]>(
+		[]
+	);
+	const [session, setSession] = useState<VerificationSession | null>(null);
 	const [draft, setDraft] = useState<Draft>(empty);
 	const [saved, setSaved] = useState<Saved | null>(null);
 	const [lookupId, setLookupId] = useState('');
@@ -88,13 +96,28 @@ export function VerificationApplication(): React.JSX.Element {
 			.then(async (response) => {
 				if (!response.ok) throw new Error();
 				const data: unknown = await response.json();
-				if (!controller.signal.aborted)
+				if (!controller.signal.aborted) {
+					if (
+						data &&
+						typeof data === 'object' &&
+						'authentication' in data &&
+						data.authentication === 'stellar-challenge' &&
+						'networks' in data &&
+						Array.isArray(data.networks)
+					)
+						setAuthNetworks(
+							data.networks.filter(
+								(value): value is 'mainnet' | 'testnet' =>
+									value === 'mainnet' || value === 'testnet'
+							)
+						);
 					setAvailable(
 						!!data &&
 							typeof data === 'object' &&
 							'available' in data &&
 							data.available === true
 					);
+				}
 			})
 			.catch(() => {
 				if (!controller.signal.aborted) setAvailable(false);
@@ -103,12 +126,23 @@ export function VerificationApplication(): React.JSX.Element {
 	}, []);
 	async function request(path: string, init?: RequestInit): Promise<void> {
 		if (busy || !available) return;
+		if (
+			authNetworks.length &&
+			(!session || Date.parse(session.expiresAt) <= Date.now())
+		) {
+			setMessage('Authenticate your account before continuing.');
+			return;
+		}
 		setBusy(true);
 		setMessage('');
 		try {
 			const response = await fetch(endpoint + path, {
 				...init,
-				credentials: 'same-origin',
+				headers: {
+					...init?.headers,
+					...(session ? { Authorization: 'Bearer ' + session.token } : {})
+				},
+				credentials: session ? 'omit' : 'same-origin',
 				cache: 'no-store',
 				signal: lifetime.current?.signal
 			});
@@ -194,6 +228,26 @@ export function VerificationApplication(): React.JSX.Element {
 			)}
 			{available === true && (
 				<>
+					{authNetworks.length > 0 && (
+						<VerificationAuthentication
+							networks={authNetworks}
+							onSession={(value) => {
+								setSession(value);
+								setSaved(null);
+								setLookupId('');
+								setMessage('');
+								setDraft(
+									value
+										? {
+												...empty,
+												network: value.network,
+												address: value.address
+											}
+										: empty
+								);
+							}}
+						/>
+					)}
 					<form
 						onSubmit={(event) => {
 							event.preventDefault();

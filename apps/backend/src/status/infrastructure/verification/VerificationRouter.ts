@@ -20,7 +20,9 @@ export interface VerificationBoundary {
 	reviewer(request: Request): Promise<Reviewer | null>;
 	control(
 		request: Request,
-		input: Pick<Submission, 'network' | 'address'>,
+		input: Pick<Submission, 'network' | 'address'> & {
+			readonly control?: ControlEvidence;
+		},
 		subjectId: string
 	): Promise<ControlEvidence | null>;
 }
@@ -48,11 +50,9 @@ export function verificationRouter(input: {
 	router.use((_req, res, next) =>
 		input.enabled
 			? next()
-			: res
-					.status(503)
-					.json({
-						error: 'Atlas verification is not accepting applications yet'
-					})
+			: res.status(503).json({
+					error: 'Atlas verification is not accepting applications yet'
+				})
 	);
 	const boundary = input.boundary;
 	const applicant = async (request: Request) => {
@@ -76,13 +76,12 @@ export function verificationRouter(input: {
 				.then((result) => res.status(result.status ?? 200).json(result.body))
 				.catch((error) => {
 					const known = error instanceof VerificationError;
-					res
-						.status(known ? error.status : 503)
-						.json({
-							error: known
-								? error.message
-								: 'Verification is temporarily unavailable'
-						});
+					if (known && error.status === 429) res.set('Retry-After', '60');
+					res.status(known ? error.status : 503).json({
+						error: known
+							? error.message
+							: 'Verification is temporarily unavailable'
+					});
 				});
 		};
 	const body = (request: Request) => {
