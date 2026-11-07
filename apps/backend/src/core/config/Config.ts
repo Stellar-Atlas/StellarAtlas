@@ -7,6 +7,10 @@ import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { parseOptionalUrl } from './parseOptionalUrl.js';
 import { parseMeilisearchRuntimeConfig } from './MeilisearchRuntimeConfig.js';
 import { parseExplorerTransactionFreshnessWindowMs } from './ExplorerConfig.js';
+import {
+	parseExplorerAccountProtocolPositionConfig,
+	type ExplorerAccountProtocolPositionConfig
+} from './ExplorerAccountProtocolPositionConfig.js';
 import type {
 	MeilisearchNetworkWorkloadConfig,
 	MeilisearchWorkloadConfig
@@ -49,6 +53,7 @@ export interface Config {
 	horizonUrl: Url;
 	horizonPublicUrl?: Url;
 	explorerTransactionFreshnessWindowMs: number;
+	explorerAccountProtocolPositions?: ExplorerAccountProtocolPositionConfig;
 	rpcUrl?: Url;
 	rpcPublicUrl?: Url;
 	failoverFrontendBaseUrl?: Url;
@@ -115,6 +120,7 @@ export class DefaultConfig implements Config {
 	historySlowArchiveMaxLedgers?: number;
 	logLevel = 'info';
 	explorerTransactionFreshnessWindowMs = 5 * 60 * 1_000;
+	explorerAccountProtocolPositions?: ExplorerAccountProtocolPositionConfig;
 	meilisearchNetwork = parseMeilisearchRuntimeConfig({}).network;
 	meilisearchScp = parseMeilisearchRuntimeConfig({}).scp;
 	networkScanLoopIntervalMs?: number;
@@ -235,6 +241,12 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (explorerFreshnessWindow.isErr())
 		return err(explorerFreshnessWindow.error);
 	config.explorerTransactionFreshnessWindowMs = explorerFreshnessWindow.value;
+	const protocolPositions = parseExplorerAccountProtocolPositionConfig(
+		process.env,
+		networkConfig.networkPassphrase
+	);
+	if (protocolPositions.isErr()) return err(protocolPositions.error);
+	config.explorerAccountProtocolPositions = protocolPositions.value;
 
 	const env = process.env.NODE_ENV;
 	if (isString(env)) config.nodeEnv = env;

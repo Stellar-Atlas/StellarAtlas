@@ -18,7 +18,11 @@ const native = 'https://native.example.invalid/rpc';
 const path =
 	'/v1/contracts/' + StrKey.encodeContract(new Uint8Array(32)) + '/provenance';
 
-function transport(statusCode: number, chunks: Buffer[] = []) {
+function transport(
+	statusCode: number,
+	chunks: Buffer[] = [],
+	retryAfter?: string
+) {
 	const observed: { url: string; body: string }[] = [];
 	const mock = mocks.spyOn(https, 'request').mockImplementation(((
 		destination: URL,
@@ -33,7 +37,11 @@ function transport(statusCode: number, chunks: Buffer[] = []) {
 				queueMicrotask(() => {
 					const incoming = Object.assign(new PassThrough(), {
 						statusCode,
-						headers: { 'content-type': 'application/json', location: native }
+						headers: {
+							'content-type': 'application/json',
+							location: native,
+							'retry-after': retryAfter
+						}
 					});
 					handleResponse(incoming);
 					for (const chunk of chunks) {
@@ -56,6 +64,17 @@ beforeEach(() => {
 	mocks.spyOn(performance, 'now').mockImplementation(() => monotonicTime);
 });
 afterEach(() => mocks.restoreAllMocks());
+
+it.each(['120', 'Fri, 06 Nov 2026 02:40:00 GMT', undefined])(
+	'preserves HTTP Retry-After in the bounded transport error (%s)',
+	async (retryAfter) => {
+		const { mock } = transport(429, [], retryAfter);
+		await expect(
+			fetchProvenanceJson(new URL(upstream), { method: 'getLedgerEntries' })
+		).rejects.toMatchObject({ status: 429, retryAfter: retryAfter ?? null });
+		expect(mock).toHaveBeenCalledTimes(1);
+	}
+);
 
 it.each([302, 429])(
 	'does not redirect, retry or fall back after HTTPS %i',

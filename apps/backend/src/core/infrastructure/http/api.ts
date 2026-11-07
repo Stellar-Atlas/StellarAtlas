@@ -108,7 +108,10 @@ import { GetLatestFbasProofSets } from '@fbas/use-cases/get-latest-fbas-proof-se
 import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTierHistory.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
-import { mountExplorerRoutes } from './ExplorerRoutes.js';
+import {
+	mountExplorerRoutes,
+	prepareExplorerAccountProtocolPositionHandler
+} from './ExplorerRoutes.js';
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
@@ -153,6 +156,8 @@ const setup = async (): Promise<{ config: Config; kernel: Kernel }> => {
 };
 const listen = async () => {
 	const { config, kernel } = await setup();
+	const accountProtocolPosition =
+		await prepareExplorerAccountProtocolPositionHandler(kernel, config);
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
 	const hubbleWarehouse = withHubbleTransactionLedgerHints(
@@ -371,7 +376,12 @@ const listen = async () => {
 		})
 	);
 
-	const drainFederation = await mountExplorerRoutes(api, kernel, config);
+	const drainFederation = await mountExplorerRoutes(
+		api,
+		kernel,
+		config,
+		accountProtocolPosition
+	);
 
 	api.use(
 		['/v1/node', '/v1/nodes'],

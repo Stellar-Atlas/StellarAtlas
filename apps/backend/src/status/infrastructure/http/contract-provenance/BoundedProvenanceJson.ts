@@ -40,16 +40,19 @@ export type ProvenanceJsonErrorKind = 'http' | 'transport' | 'invalid_response';
 export class ProvenanceHttpError extends Error {
 	readonly status: number | null;
 	readonly kind: ProvenanceJsonErrorKind;
+	readonly retryAfter: string | null;
 
 	constructor(
 		status: number | null,
 		kind: ProvenanceJsonErrorKind,
-		message: string
+		message: string,
+		retryAfter: string | null = null
 	) {
 		super(message);
 		this.name = 'ProvenanceHttpError';
 		this.status = status;
 		this.kind = kind;
+		this.retryAfter = retryAfter;
 	}
 }
 
@@ -227,7 +230,8 @@ async function requestJson(
 							typeof status === 'number' ? 'http' : 'transport',
 							typeof status === 'number'
 								? 'Provenance request returned a non-success status'
-								: 'Provenance response had no status'
+								: 'Provenance response had no status',
+							incoming.headers['retry-after'] ?? null
 						)
 					);
 					return;

@@ -62,6 +62,7 @@ async function EntityRoute({
 	if ((collection === 'accounts' || collection === 'ledgers') && identifier)
 		return (
 			<ExplorerRecordLookup collection={collection} identifier={identifier}
+				protocolPositionsEnabled={collection === 'accounts' && process.env.STELLAR_ATLAS_ACCOUNT_PROTOCOL_POSITIONS === '1'}
 				claimablePositionsEnabled={collection === 'accounts' && process.env.STELLAR_ATLAS_ACCOUNT_CLAIMABLE_POSITIONS === '1'} />
 		);
 	if (collection === 'transactions' && identifier)

@@ -1,6 +1,10 @@
 import express from 'express';
-import Kernel from '../Kernel.js';
+import type Kernel from '../Kernel.js';
 import type { Config } from '../../config/Config.js';
+import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
+import { composeExplorerAccountProtocolPositionHandler } from '@network-scan/infrastructure/http/ExplorerAccountProtocolPositionComposition.js';
+import { SorobanEvidenceStore } from '../../../status/infrastructure/soroban-positions/SorobanEvidenceStore.js';
 import {
 	blockchainExplorerRouter,
 	createExplorerTransactionLookupHandler
@@ -21,8 +25,11 @@ import { createAccountFederation } from '../../../status/infrastructure/http/fed
 
 export async function mountExplorerRoutes(
 	api: express.Express,
-	kernel: Kernel,
-	config: Config
+	kernel: Pick<Kernel, 'container'>,
+	config: Config,
+	accountProtocolPosition?: ReturnType<
+		typeof composeExplorerAccountProtocolPositionHandler
+	>
 ): Promise<() => Promise<boolean>> {
 	const getExplorerLocalTransactions = kernel.container.get(
 		GetExplorerLocalTransactions
@@ -80,6 +87,7 @@ export async function mountExplorerRoutes(
 	api.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			accountProtocolPosition,
 			getExplorerLocalAccountChanges,
 			getExplorerLocalReadModel: kernel.container.get(
 				GetExplorerLocalReadModel
@@ -92,4 +100,28 @@ export async function mountExplorerRoutes(
 		})
 	);
 	return federation.drain;
+}
+
+export async function prepareExplorerAccountProtocolPositionHandler(
+	kernel: Pick<Kernel, 'container'>,
+	config: Config
+): Promise<
+	ReturnType<typeof composeExplorerAccountProtocolPositionHandler> | undefined
+> {
+	const settings = config.explorerAccountProtocolPositions;
+	if (!settings) return undefined;
+	const store = await SorobanEvidenceStore.open(
+		settings.root,
+		settings.limits
+	).catch(() => {
+		throw new Error('Account protocol position private store is unavailable');
+	});
+	return composeExplorerAccountProtocolPositionHandler({
+		references: settings.references,
+		recentWithinMs: settings.recentWithinMs,
+		store,
+		canonicalLedger: kernel.container.get<FullHistoryCanonicalRepository>(
+			HISTORY_TYPES.FullHistoryCanonicalRepository
+		)
+	});
 }
