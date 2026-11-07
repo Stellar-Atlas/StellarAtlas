@@ -32,10 +32,19 @@ it('shares matching readers and retains an attributed short-lived result, not a 
 });
 
 it('rejects excess distinct work and callers without creating a waiting-work queue', async () => {
+	let now = 1_000_000;
 	const pending = deferred<ExplorerAccountDTO | null>();
 	const fetchAccount = jest.fn<typeof fetchExplorerAccount>().mockReturnValue(pending.promise);
-	const service = createExplorerAccountProvider(config, 'network', { fetchAccount });
-	const active = Array.from({ length: 4 }, (_, index) => service.read(String(index), signal()));
+	const service = createExplorerAccountProvider(config, 'network', { now: () => now, fetchAccount });
+	const active = [service.read('0', signal())];
+	await expect(service.read('too-soon', signal())).rejects.toMatchObject({ status: 429, retryAfterSeconds: 5 });
+	now += 4_999;
+	await expect(service.read('still-too-soon', signal())).rejects.toMatchObject({ status: 429, retryAfterSeconds: 1 });
+	for (let index = 1; index < 4; index++) {
+		now += index === 1 ? 1 : 5_000;
+		active.push(service.read(String(index), signal()));
+	}
+	now += 5_000;
 	await expect(service.read('excess', signal())).rejects.toMatchObject({ status: 429 });
 	const joined = Array.from({ length: 60 }, () => service.read('0', signal()));
 	await expect(service.read('0', signal())).rejects.toMatchObject({ status: 429 });
@@ -43,13 +52,15 @@ it('rejects excess distinct work and callers without creating a waiting-work que
 	expect(fetchAccount).toHaveBeenCalledTimes(4);
 	pending.resolve(account);
 	await Promise.all([...active, ...joined]);
+	await service.read('admitted-after-active', signal());
 	await expect(service.read('rate-limited', signal())).rejects.toMatchObject({ status: 429 });
 });
 
 it('does not cancel other waiters or overlap a replacement while the last waiter is cancelling', async () => {
+	let now = 1_000_000;
 	const pending = deferred<ExplorerAccountDTO | null>();
 	const fetchAccount = jest.fn<typeof fetchExplorerAccount>().mockReturnValueOnce(pending.promise).mockResolvedValue(account);
-	const service = createExplorerAccountProvider(config, 'network', { fetchAccount });
+	const service = createExplorerAccountProvider(config, 'network', { now: () => now, fetchAccount });
 	const a = new AbortController(), b = new AbortController();
 	const first = service.read('G', a.signal), second = service.read('G', b.signal);
 	await Promise.resolve();
@@ -60,6 +71,7 @@ it('does not cancel other waiters or overlap a replacement while the last waiter
 	b.abort(new Error('Last left'));
 	await expect(second).rejects.toThrow('Last left');
 	expect(upstream?.aborted).toBe(true);
+	now += 5_000;
 	await expect(service.read('G', signal())).rejects.toMatchObject({ status: 429 });
 	pending.resolve(account);
 	// Allow the cancelled upstream's complete then/catch/finally chain to settle.
@@ -81,17 +93,18 @@ it('honors bounded Retry-After and never automatically retries or selects the na
 	expect(fetchAccount.mock.calls.every(call => call[0] === config.url)).toBe(true);
 });
 
-it('bounds retained serialized bytes, refuses oversized values and briefly reuses not-found results', async () => {
+it('expires retained values, refuses oversized values and briefly reuses not-found results', async () => {
 	let now = 1_000_000;
 	// Synthetic mapped DTO exercises the cache's byte accounting, not account validation.
 	const fetchAccount = jest.fn<typeof fetchExplorerAccount>().mockResolvedValue({ ...account, sequence: '1'.repeat(1_800_000) });
 	const service = createExplorerAccountProvider(config, 'network', { now: () => now, fetchAccount });
 	for (let index = 0; index < 5; index++) {
-		now += 2_001;
+		now += 5_001;
 		await service.read(String(index), signal());
 	}
 	await service.read('4', signal());
 	expect(fetchAccount).toHaveBeenCalledTimes(5);
+	now += 5_001;
 	await service.read('0', signal());
 	expect(fetchAccount).toHaveBeenCalledTimes(6);
 	const absent = jest.fn<typeof fetchExplorerAccount>().mockResolvedValue(null);

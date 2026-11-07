@@ -6,7 +6,7 @@ import { HorizonAccountReadError } from './HorizonAccountResponse.js';
 export const accountProviderLimits = Object.freeze({
 	active: 4, waiters: 64, entries: 32, bytes: 8 * 1024 * 1024,
 	valueBytes: 2 * 1024 * 1024, ttlMs: 20_000, absentTtlMs: 5_000,
-	burst: 4, refillMs: 2_000
+	burst: 1, refillMs: 5_000
 });
 
 export class ExplorerAccountProviderError extends Error {
@@ -90,7 +90,8 @@ export function createExplorerAccountProvider(
 		const refill = Math.floor(Math.max(0, now() - tokenTime) / accountProviderLimits.refillMs);
 		if (refill) { tokens = Math.min(accountProviderLimits.burst, tokens + refill); tokenTime += refill * accountProviderLimits.refillMs; }
 		if (running.size >= accountProviderLimits.active || waiters >= accountProviderLimits.waiters || tokens < 1)
-			throw new ExplorerAccountProviderError(429, 2);
+			throw new ExplorerAccountProviderError(429, tokens < 1
+				? Math.max(1, Math.ceil((accountProviderLimits.refillMs - (now() - tokenTime)) / 1000)) : 2);
 		tokens--;
 		const controller = new AbortController();
 		const entry: Entry = { controller, waiters: 0, settled: false,

@@ -99,6 +99,7 @@ export function CurrentAccountProviderLabel({ provider }: { readonly provider: C
 	return <div className={assets.context}><p>{provider
 		? <>Source: {provider.hostname} · Operator-selected alternate Horizon · Classic account only</>
 		: <>Configured Stellar Horizon service · Classic account only</>}</p>
+		{provider && <p>Wallet addresses are sent to {provider.hostname}.</p>}
 		{provider?.observedAt && <p>Provider response observed <LocalDateTime dateTime={provider.observedAt} /></p>}
 	</div>;
 }

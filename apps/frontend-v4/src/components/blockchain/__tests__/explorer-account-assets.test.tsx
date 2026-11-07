@@ -30,6 +30,7 @@ it('attributes only a validated public provider hostname and keeps native defaul
 	expect(html).toContain('provider.example.org');
 	expect(html).toContain('Operator-selected alternate');
 	expect(html).toContain('Provider response observed');
+	expect(html.replaceAll('<!-- -->', '')).toContain('Wallet addresses are sent to provider.example.org.');
 	expect(renderToStaticMarkup(<CurrentAccountProviderLabel provider={null} />)).toContain('Configured Stellar Horizon service');
 	for (const value of [{ mode: 'native', hostname: 'private' }, { mode: 'operator_alternate', hostname: 'http://private/' },
 		{ mode: 'operator_alternate', hostname: 'provider.example.org', observedAt: 'bad' }])
