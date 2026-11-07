@@ -24,11 +24,13 @@ import {
 } from '../../full-history-ledger-close-meta/FullHistoryBulkStorageBudget.js';
 import { GoFullHistoryLedgerCloseMetaProcessor } from '../../full-history-ledger-close-meta/GoFullHistoryLedgerCloseMetaProcessor.js';
 import { FullHistoryPublishedOutputInventory } from '../../full-history-ledger-close-meta/FullHistoryPublishedOutputInventory.js';
+import { TypeOrmRegisteredOutputInventory } from '../../full-history-ledger-close-meta/TypeOrmRegisteredOutputInventory.js';
 import { typeOrmFullHistoryLedgerCloseMetaDatabasePool } from '../../full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaDatabasePool.js';
 import type { FullHistoryLedgerCloseMetaServiceConfig } from './FullHistoryLedgerCloseMetaServiceConfig.js';
 
 export interface FullHistoryLedgerCloseMetaComposition {
 	readonly admission: FullHistoryLedgerCloseMetaAdmissionPort;
+	readonly currentAdmission?: FullHistoryLedgerCloseMetaAdmissionPort;
 	readonly dataSource: DataSource;
 	readonly frontier: AnonymousS3Sep54LedgerCloseMetaFrontier;
 	readonly ingestion: IngestFullHistoryLedgerCloseMeta;
@@ -50,6 +52,9 @@ export function composeFullHistoryLedgerCloseMetaService(
 ): FullHistoryLedgerCloseMetaComposition {
 	assertFullHistoryLedgerCloseMetaMemoryEnvelope(config.processingConcurrency);
 	const dataSource = createFullHistoryLedgerCloseMetaDataSource(config);
+	const databasePool = config.admissionEnabled
+		? typeOrmFullHistoryLedgerCloseMetaDatabasePool(dataSource)
+		: null;
 	const repository = new TypeOrmFullHistoryLedgerCloseMetaManifestRepository(
 		dataSource
 	);
@@ -65,7 +70,10 @@ export function composeFullHistoryLedgerCloseMetaService(
 		requestTimeoutMilliseconds: config.requestTimeoutMilliseconds
 	});
 	const outputInventory = new FullHistoryPublishedOutputInventory(
-		config.typedOutputRoot
+		config.typedOutputRoot,
+		process.env.FULL_HISTORY_REGISTERED_OUTPUT_INVENTORY === '1'
+			? new TypeOrmRegisteredOutputInventory(dataSource)
+			: undefined
 	);
 	const processor = new GoFullHistoryLedgerCloseMetaProcessor({
 		executablePath: config.executablePath,
@@ -92,10 +100,9 @@ export function composeFullHistoryLedgerCloseMetaService(
 		typedOutputRoot: config.typedOutputRoot
 	});
 	return Object.freeze({
-		admission: config.admissionEnabled
+		admission: databasePool !== null
 			? new LocalFullHistoryLedgerCloseMetaAdmission({
-					databasePool:
-						typeOrmFullHistoryLedgerCloseMetaDatabasePool(dataSource),
+					databasePool,
 					maximumDatabaseConnectionBasisPoints:
 						config.admissionMaximumDatabaseConnectionBasisPoints,
 					maximumDatabaseProbeMilliseconds:
@@ -110,6 +117,25 @@ export function composeFullHistoryLedgerCloseMetaService(
 						config.admissionRecoveryHealthySamplesRequired
 				})
 			: unrestrictedFullHistoryLedgerCloseMetaAdmission,
+		...(config.prioritizeCurrent && databasePool !== null
+			? {
+					currentAdmission: new LocalFullHistoryLedgerCloseMetaAdmission({
+						databasePool,
+						maximumDatabaseConnectionBasisPoints:
+							config.admissionMaximumDatabaseConnectionBasisPoints,
+						maximumDatabaseProbeMilliseconds:
+							config.admissionMaximumDatabaseProbeMilliseconds,
+						maximumIoFullPressureBasisPoints: 4_000,
+						maximumIoSomePressureBasisPoints: 5_000,
+						// One current shard may progress while historical I/O is queued.
+						skipMd0InflightLimit: true,
+						maximumMd0InflightRequests:
+							config.admissionMaximumMd0InflightRequests,
+						recoveryHealthySamplesRequired:
+							config.admissionRecoveryHealthySamplesRequired
+					})
+				}
+			: {}),
 		dataSource,
 		frontier: new AnonymousS3Sep54LedgerCloseMetaFrontier({
 			bucket: config.s3Bucket,

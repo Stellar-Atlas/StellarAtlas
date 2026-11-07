@@ -1,4 +1,6 @@
 import type { DataSource } from 'typeorm';
+import { join } from 'node:path';
+import { FileFullHistoryLedgerCloseMetaPendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import {
 	composeFullHistoryLedgerCloseMetaService,
 	FULL_HISTORY_LEDGER_CLOSE_META_MAXIMUM_OUTPUT_BYTES_PER_SHARD,
@@ -160,11 +162,19 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					errorBackoffMilliseconds: config.errorBackoffMilliseconds,
 					idlePollMilliseconds: config.idlePollMilliseconds,
 					lastAvailableLedger: config.lastAvailableLedger,
+					prioritizeCurrent: config.prioritizeCurrent === true,
 					typedShardLedgerCount: config.typedShardLedgerCount
 				},
 				{
-					admitCycle: () =>
-						activeComposition.admission.evaluate(abortController.signal),
+					admitCycle: (current) => {
+						const admission = current
+							? activeComposition.currentAdmission
+							: activeComposition.admission;
+						if (admission === undefined) {
+							throw new Error('Current-priority admission is not configured');
+						}
+						return admission.evaluate(abortController.signal);
+					},
 					emit: (event) => writeEvent(dependencies.stdout, event),
 					ensureStorageCapacity: () =>
 						activeComposition.storageBudget.assertCanAllocate(
@@ -174,6 +184,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					frontier: activeComposition.frontier,
 					ingestion: activeComposition.ingestion,
 					now: dependencies.now,
+					pendingPlans: new FileFullHistoryLedgerCloseMetaPendingPlan(
+						join(config.typedOutputRoot, 'pending-source-ingestion-plan.json')
+					),
 					priorityRangeReader: activeComposition.priorityRangeReader,
 					signal: abortController.signal,
 					wait: dependencies.wait

@@ -26,13 +26,19 @@ import {
 	createSep54LedgerCloseMetaObjectKey,
 	parseSep54LedgerCloseMetaConfig
 } from '../../infrastructure/full-history-ledger-close-meta/Sep54LedgerCloseMetaObjectKey.js';
+import {
+	createShardRanges,
+	FULL_HISTORY_LEDGER_CLOSE_META_TYPED_SHARD_LEDGER_MINIMUM
+} from './FullHistoryLedgerCloseMetaShardRanges.js';
 
+export {
+	FULL_HISTORY_LEDGER_CLOSE_META_TYPED_SHARD_LEDGER_MINIMUM
+} from './FullHistoryLedgerCloseMetaShardRanges.js';
 export const FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY_MAX = 1_024;
 export const FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY_MAX = 64;
 export const FULL_HISTORY_LEDGER_CLOSE_META_RANGE_LEDGER_LIMIT = 65_536;
 export const FULL_HISTORY_LEDGER_CLOSE_META_SHARD_COMPRESSED_BYTES_LIMIT =
 	1 * 1_024 ** 3;
-export const FULL_HISTORY_LEDGER_CLOSE_META_TYPED_SHARD_LEDGER_MINIMUM = 64;
 export const FULL_HISTORY_LEDGER_CLOSE_META_TYPED_SHARD_LEDGER_LIMIT = 1_024;
 
 export interface FullHistoryLedgerCloseMetaIngestionTiming {
@@ -168,9 +174,11 @@ export class IngestFullHistoryLedgerCloseMeta {
 			rangeInput,
 			context.registeredSource.firstAvailableLedger
 		);
-		if (range.ledgerCount % this.#typedShardLedgerCount !== 0) {
+		if (
+			range.ledgerCount < FULL_HISTORY_LEDGER_CLOSE_META_TYPED_SHARD_LEDGER_MINIMUM
+		) {
 			throw new RangeError(
-				'LedgerCloseMeta ingestion range must contain whole typed shards'
+				'LedgerCloseMeta ingestion range must contain at least 64 ledgers'
 			);
 		}
 		const shardRanges = createShardRanges(
@@ -383,27 +391,6 @@ function validateIngestionRange(
 		);
 	}
 	return range;
-}
-
-function createShardRanges(
-	range: FullHistoryLedgerCloseMetaRange,
-	ledgersPerBatch: number,
-	typedShardLedgerCount: number
-): readonly FullHistoryLedgerCloseMetaRange[] {
-	const ranges: FullHistoryLedgerCloseMetaRange[] = [];
-	for (
-		let start: number = range.startSequence;
-		start <= range.endSequence;
-		start += typedShardLedgerCount
-	) {
-		if (typedShardLedgerCount % ledgersPerBatch !== 0) {
-			throw new RangeError('Typed shard would split a SEP-54 source batch');
-		}
-		ranges.push(
-			fullHistoryLedgerCloseMetaRange(start, start + typedShardLedgerCount - 1)
-		);
-	}
-	return ranges;
 }
 
 function createSourceRanges(
