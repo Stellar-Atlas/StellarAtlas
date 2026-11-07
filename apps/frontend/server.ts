@@ -197,6 +197,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (
     (req.method === "GET" || req.method === "HEAD") &&
     ["stellaratlas.io", "www.stellaratlas.io"].includes(req.hostname?.toLowerCase() ?? "") &&
+    req.headers.authorization === undefined &&
+    req.headers.upgrade === undefined &&
     /^\/notify(?:\/|$)/.test(req.path) &&
     req.accepts("html") === "html"
   ) {
