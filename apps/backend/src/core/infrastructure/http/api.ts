@@ -120,6 +120,7 @@ import { mountPublicDataRoutes } from '@status/infrastructure/http/PublicDataRou
 import { withHubbleTransactionLedgerHints } from '@status/infrastructure/http/HubbleTransactionLedgerHints.js';
 import { createPostgresHubbleTransactionLedgerLocator } from '@status/infrastructure/http/HubbleTransactionLedgerLocator.js';
 import { corsMiddleware } from './CorsMiddleware.js';
+import { apiBackgroundTasksEnabled, apiListenHost } from './ApiRuntimeMode.js';
 import {
 	stellarRpcRouter,
 	unavailableStellarRpcRouter
@@ -129,6 +130,8 @@ let server: Server;
 const serverSockets = new Set<Socket>();
 let shutdownStarted = false;
 const api = express();
+const backgroundTasks = apiBackgroundTasksEnabled(process.env);
+const listenHost = apiListenHost(process.env);
 api.use(corsMiddleware);
 mountParsedHistoryRequestBodyParser(api);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
@@ -167,7 +170,7 @@ const listen = async () => {
 			config.networkConfig.networkPassphrase
 		)
 	);
-	const stopArchiveBackgroundTasks = startArchiveBackgroundTasks(kernel);
+	const stopArchiveBackgroundTasks = backgroundTasks ? startArchiveBackgroundTasks(kernel) : () => undefined;
 
 	api.use(
 		'/horizon',
@@ -207,6 +210,7 @@ const listen = async () => {
 	);
 
 	mountPublicDataRoutes(api, {
+		backgroundTasksEnabled: backgroundTasks,
 		warehouse: hubbleWarehouse,
 		manager: kernel.container.get(DataSource).manager,
 		networkPassphrase: config.networkConfig.networkPassphrase,
@@ -380,7 +384,8 @@ const listen = async () => {
 		api,
 		kernel,
 		config,
-		accountProtocolPosition
+		accountProtocolPosition,
+		backgroundTasks
 	);
 
 	api.use(
@@ -427,13 +432,14 @@ const listen = async () => {
 		networkScanRepository: kernel.container.get<NetworkScanRepository>(
 			NETWORK_TYPES.NetworkScanRepository
 		),
-		searchConfig: config.meilisearchNetwork
+		searchConfig: backgroundTasks ? config.meilisearchNetwork : { ...config.meilisearchNetwork, writable: false }
 	});
 	api.use('/v1', networkRoutes);
 
-	server = api.listen(config.apiPort, () => {
+	const onListening = () => {
 		console.log('api listening on port: ' + config.apiPort);
-	});
+	};
+	server = api.listen({ port: config.apiPort, ...(listenHost ? { host: listenHost } : {}) }, onListening);
 	trackServerSockets(server);
 	attachWarehouseLiveWebSocket(server);
 	attachNetworkLiveWebSocket(server, {

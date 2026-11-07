@@ -3,7 +3,7 @@ import { mkdtemp, readdir, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { Networks, StrKey, xdr } from '@stellar/stellar-sdk';
-import type { fetchProvenanceJson } from '../../http/contract-provenance/BoundedProvenanceJson.js';
+import type { fetchProtocolRpcJson } from '../ProtocolRpcJson.js';
 import {
 	blendFixedSupplyKeys,
 	blendFixedSupplyTarget
@@ -79,7 +79,7 @@ function setup(entries: readonly unknown[] = []) {
 			ledgers: [{ sequence: ledger, hash: ledgerHash, headerXdr }]
 		}
 	};
-	const request: typeof fetchProvenanceJson = async (_url, body) => {
+	const request: typeof fetchProtocolRpcJson = async (_url, body) => {
 		const { method, id } = body as { method: keyof typeof results; id: string };
 		calls.push(method);
 		return { jsonrpc: '2.0', id, result: results[method] };

@@ -1,9 +1,7 @@
 import { StrKey } from '@stellar/stellar-sdk';
 import { performance } from 'node:perf_hooks';
-import {
-	fetchProvenanceJson,
-	ProvenanceHttpError
-} from '../http/contract-provenance/BoundedProvenanceJson.js';
+import { ProvenanceHttpError } from '../http/contract-provenance/BoundedProvenanceJson.js';
+import { fetchProtocolRpcJson } from './ProtocolRpcJson.js';
 import { blendFixedSupplyTarget } from './BlendFixedSupply.js';
 import { produceBlendSupplyEvidence } from './BlendSupplyEvidenceProducer.js';
 import type { PositionSnapshot } from './TimelockPositions.js';
@@ -83,11 +81,11 @@ class ProviderCooldown extends Error {
 export function createBlendSupplyRefreshAdmission(
 	rpcUrl: string,
 	{
-		request = fetchProvenanceJson,
+		request = fetchProtocolRpcJson,
 		monotonicNow = () => performance.now(),
 		wallNow = Date.now
 	}: {
-		readonly request?: typeof fetchProvenanceJson;
+		readonly request?: typeof fetchProtocolRpcJson;
 		readonly monotonicNow?: () => number;
 		readonly wallNow?: () => number;
 	} = {}
@@ -163,7 +161,7 @@ export function createBlendSupplyRefreshAdmission(
 		let remaining = callsPerRefresh;
 		reserved += remaining;
 
-		const admittedRequest: typeof fetchProvenanceJson = async (...args) => {
+		const admittedRequest: typeof fetchProtocolRpcJson = async (...args) => {
 			const now = monotonicNow();
 			const blocked = cooldownInfo(now);
 			if (blocked) throw new ProviderCooldown(blocked);

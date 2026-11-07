@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Networks, StrKey, xdr } from '@stellar/stellar-sdk';
-import {
-	ProvenanceHttpError,
-	type fetchProvenanceJson
-} from '../../http/contract-provenance/BoundedProvenanceJson.js';
+import { ProvenanceHttpError } from '../../http/contract-provenance/BoundedProvenanceJson.js';
+import type { fetchProtocolRpcJson } from '../ProtocolRpcJson.js';
 import { blendFixedSupplyTarget } from '../BlendFixedSupply.js';
 import { createBlendSupplyRefreshAdmission } from '../BlendSupplyRefreshAdmission.js';
 
@@ -67,7 +65,7 @@ function harness(before?: (call: Call, index: number) => void | Promise<void>) {
 	let time = 0;
 	let wallShift = 0;
 	const calls: Call[] = [];
-	const request: typeof fetchProvenanceJson = async (url, body, options) => {
+	const request: typeof fetchProtocolRpcJson = async (url, body, options) => {
 		expect(url.href).toBe(rpcUrl);
 		expect(options?.signal?.aborted).toBe(false);
 		const { method, id } = body as { method: Method; id: string };

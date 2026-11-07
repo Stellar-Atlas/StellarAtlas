@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Networks, xdr } from '@stellar/stellar-sdk';
-import { fetchProvenanceJson } from '../http/contract-provenance/BoundedProvenanceJson.js';
+import { fetchProtocolRpcJson } from './ProtocolRpcJson.js';
 import { record } from '../http/contract-provenance/ContractBuildAttestation.js';
 import {
 	blendFixedSupplyKeys,
@@ -58,7 +58,7 @@ export async function produceBlendSupplyEvidence(
 		readonly snapshot: PositionSnapshot;
 		readonly signal?: AbortSignal;
 	},
-	request: typeof fetchProvenanceJson = fetchProvenanceJson
+	request: typeof fetchProtocolRpcJson = fetchProtocolRpcJson
 ): Promise<ProducedBlendSupplyEvidence> {
 	const { ledger, ledgerHash, networkId: selectedNetwork } = input.snapshot;
 	if (

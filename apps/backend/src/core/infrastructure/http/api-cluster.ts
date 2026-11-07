@@ -10,6 +10,7 @@ import {
 } from './ApiClusterPolicy.js';
 import { isHistoryArchiveWorkerStatusIpcMessageDTO } from 'history-scanner-dto';
 import { isHistoryArchiveProofRefreshWakeMessage } from '@history-scan-coordinator/infrastructure/ipc/HistoryArchiveProofRefreshWake.js';
+import { apiBackgroundTasksEnabled } from './ApiRuntimeMode.js';
 
 const shutdownTimeoutMs = 30_000;
 type ShutdownSignal = 'SIGINT' | 'SIGTERM';
@@ -28,6 +29,8 @@ function runPrimary(): void {
 
 	let workerCount: number;
 	try {
+		if (!apiBackgroundTasksEnabled(process.env))
+			throw new Error('API without background ownership must use single api.js');
 		workerCount = parseApiWorkerCount(process.env.API_WORKERS);
 	} catch (error: unknown) {
 		console.error(

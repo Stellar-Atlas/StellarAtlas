@@ -91,23 +91,27 @@ export class SorobanEvidenceStore {
 		assertDigest(sha256);
 		await this.assertRoot();
 		const file = join(this.root, sha256);
-		let info: Stats;
+		let handle: Awaited<ReturnType<typeof open>>;
 		try {
-			info = await lstat(file);
+			handle = await open(
+				file,
+				constants.O_RDONLY |
+					(constants.O_NOFOLLOW ?? 0) |
+					(constants.O_NONBLOCK ?? 0)
+			);
 		} catch (error) {
 			if (isCode(error, 'ENOENT')) return null;
+			if (isCode(error, 'ELOOP') || isCode(error, 'EISDIR'))
+				throw new Error('Soroban evidence object is not a regular file');
 			throw error;
 		}
-		this.assertObject(info);
-		const handle = await open(
-			file,
-			constants.O_RDONLY |
-				(constants.O_NOFOLLOW ?? 0) |
-				(constants.O_NONBLOCK ?? 0)
-		);
 		try {
 			const opened = await handle.stat();
 			this.assertObject(opened);
+			// Authorize the opened object, not a pre-open pathname check. Also
+			// reject aliases on platforms without O_NOFOLLOW before reading bytes.
+			const info = await lstat(file);
+			this.assertObject(info);
 			if (!sameObject(info, opened))
 				throw new Error('Soroban evidence object changed');
 			const buffer = Buffer.alloc(opened.size + 1);

@@ -11,6 +11,7 @@ import {
 	fetchRpcJson
 } from '../BoundedProvenanceJson.js';
 import { scopedRpcEndpoint } from '../ProvenanceEndpointPolicy.js';
+import { fetchProtocolRpcJson } from '../../../soroban-positions/ProtocolRpcJson.js';
 
 const { jest: mocks } = import.meta as ImportMeta & { jest: typeof jest };
 const upstream = 'https://scoped.example.invalid/exact';
@@ -65,12 +66,38 @@ beforeEach(() => {
 });
 afterEach(() => mocks.restoreAllMocks());
 
+it('rejects protocol RPC destinations without configured approval', async () => {
+	const { mock } = transport(200);
+	mocks.replaceProperty(process, 'env', {
+		...process.env,
+		STELLAR_PROVENANCE_RPC_APPROVED_URL: undefined
+	});
+	await expect(
+		fetchProtocolRpcJson(new URL(upstream), { method: 'getNetwork' })
+	).rejects.toMatchObject({ kind: 'transport' });
+	expect(mock).not.toHaveBeenCalled();
+});
+
+it('uses the approved protocol capability and preserves Retry-After', async () => {
+	const { mock } = transport(429, [], '90');
+	mocks.replaceProperty(process, 'env', {
+		...process.env,
+		STELLAR_PROVENANCE_RPC_APPROVED_URL: upstream
+	});
+	await expect(
+		fetchProtocolRpcJson(new URL(upstream), { method: 'getNetwork' })
+	).rejects.toMatchObject({ status: 429, retryAfter: '90' });
+	expect(mock).toHaveBeenCalledTimes(1);
+});
+
 it.each(['120', 'Fri, 06 Nov 2026 02:40:00 GMT', undefined])(
 	'preserves HTTP Retry-After in the bounded transport error (%s)',
 	async (retryAfter) => {
 		const { mock } = transport(429, [], retryAfter);
+		const endpoint = scopedRpcEndpoint(upstream, upstream);
+		if (!endpoint) throw new Error('Invalid fixture endpoint');
 		await expect(
-			fetchProvenanceJson(new URL(upstream), { method: 'getLedgerEntries' })
+			fetchRpcJson(endpoint, { method: 'getLedgerEntries' })
 		).rejects.toMatchObject({ status: 429, retryAfter: retryAfter ?? null });
 		expect(mock).toHaveBeenCalledTimes(1);
 	}

@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
 import {
 	chmod,
 	lstat,
 	mkdir,
 	mkdtemp,
+	open,
 	readFile,
 	readdir,
 	rename,
@@ -91,11 +93,16 @@ test('reads exact UTF-8 by digest and verifies a deduplication hit without rewri
 	expect(await store.read(record.sha256)).toBeNull();
 	await store.putIfAbsent(record);
 	const path = join(root, record.sha256);
-	const first = await lstat(path);
-	await store.putIfAbsent(record);
-	expect(await store.read(record.sha256)).toEqual(record);
-	expect(await readFile(path)).toEqual(Buffer.from(record.json));
-	expect((await lstat(path)).ino).toBe(first.ino);
+	const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+	try {
+		const first = await handle.stat();
+		await store.putIfAbsent(record);
+		expect(await store.read(record.sha256)).toEqual(record);
+		expect(await handle.readFile()).toEqual(Buffer.from(record.json));
+		expect((await lstat(path)).ino).toBe(first.ino);
+	} finally {
+		await handle.close();
+	}
 	expect(await readdir(root)).toEqual([record.sha256]);
 });
 

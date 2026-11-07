@@ -18,6 +18,7 @@ interface PublicDataRouteConfig {
 	readonly getArchiveStatusSummary: PublicGoodsRouterConfig['getArchiveStatusSummary'];
 	readonly manager: EntityManager;
 	readonly networkPassphrase: string;
+	readonly backgroundTasksEnabled?: boolean;
 }
 
 export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfig): void {
@@ -29,7 +30,8 @@ export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfi
 	const cacheRoot = process.env.ASSET_METADATA_CACHE_ROOT ?? '/mnt/stellaratlas_assets';
 	const source = new AssetCatalogueSource(config.networkPassphrase);
 	const catalogue = new AssetCatalogue(source, join(cacheRoot, 'catalogue'), config.networkPassphrase);
-	catalogue.start();
+	if (config.backgroundTasksEnabled !== false) catalogue.start();
+	else void catalogue.load();
 	app.use('/v1', issuerDomainRouter(
 		config.networkPassphrase,
 		new IssuerDomainLookup(new IssuerDomainCache(join(cacheRoot, 'metadata'), config.networkPassphrase), catalogue)

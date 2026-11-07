@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Address, StrKey, xdr } from '@stellar/stellar-sdk';
-import { fetchProvenanceJson } from '../http/contract-provenance/BoundedProvenanceJson.js';
+import { fetchProtocolRpcJson } from './ProtocolRpcJson.js';
 import { record } from '../http/contract-provenance/ContractBuildAttestation.js';
 import type {
 	PositionSnapshot,
@@ -47,7 +47,7 @@ export async function produceTimelockEvidence(
 		readonly registry: readonly TimelockRegistration[];
 		readonly signal?: AbortSignal;
 	},
-	fetchJson: typeof fetchProvenanceJson = fetchProvenanceJson
+	fetchJson: typeof fetchProtocolRpcJson = fetchProtocolRpcJson
 ): Promise<ProducedEvidence> {
 	const { networkPassphrase, registry } = input;
 	const { networkId, ledger, ledgerHash } = input.snapshot;

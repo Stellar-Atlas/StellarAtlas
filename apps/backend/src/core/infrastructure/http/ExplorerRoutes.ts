@@ -29,7 +29,8 @@ export async function mountExplorerRoutes(
 	config: Config,
 	accountProtocolPosition?: ReturnType<
 		typeof composeExplorerAccountProtocolPositionHandler
-	>
+	>,
+	backgroundTasksEnabled = true
 ): Promise<() => Promise<boolean>> {
 	const getExplorerLocalTransactions = kernel.container.get(
 		GetExplorerLocalTransactions
@@ -50,7 +51,7 @@ export async function mountExplorerRoutes(
 		GetExplorerLocalAccountChanges
 	);
 	const federation = await createAccountFederation(
-		process.env.FEDERATION_SCHEDULE_DIRECTORY,
+		backgroundTasksEnabled ? process.env.FEDERATION_SCHEDULE_DIRECTORY : undefined,
 		config.networkConfig.networkPassphrase,
 		(query) => getExplorerLocalAccountChanges.execute(query)
 	);
