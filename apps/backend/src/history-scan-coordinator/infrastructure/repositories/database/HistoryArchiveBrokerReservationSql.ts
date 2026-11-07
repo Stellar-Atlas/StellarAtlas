@@ -56,7 +56,8 @@ export function buildReserveBrokerJobsSql(
 	candidateRelation:
 		| 'history_archive_broker_candidate'
 		| 'history_archive_object_queue' = 'history_archive_broker_candidate',
-	phase: HistoryArchiveRetryPhase = getHistoryArchiveRetryPhase()
+	phase: HistoryArchiveRetryPhase = getHistoryArchiveRetryPhase(),
+	options: { readonly certifyReadyScopes?: boolean } = { certifyReadyScopes: certifiedReadyScopes }
 ): string {
 	const firstPass = phase === 'first-pass';
 	const neverAttempted = historyArchiveNeverAttemptedSql('object');
@@ -123,7 +124,8 @@ export function buildReserveBrokerJobsSql(
 		firstPass && candidateRelation === 'history_archive_broker_candidate'
 			? historyArchiveBrokerFirstPassAdmissionSql(
 					eligibleSql,
-					historyArchiveBrokerFreshEligibilitySql()
+					historyArchiveBrokerFreshEligibilitySql(),
+					options
 				)
 			: `eligible as materialized (select source.*,null::timestamptz as first_pass_root_ready_at from (${eligibleSql}) source)`;
 	return `
@@ -145,11 +147,17 @@ export const historyArchiveBrokerCandidateProjectionEnabled =
 const brokerCandidateRelation = historyArchiveBrokerCandidateProjectionEnabled
 	? 'history_archive_broker_candidate'
 	: 'history_archive_object_queue';
+// Off by default. Only projection-backed first-pass reservation reads it.
+const certifiedReadyScopes = process.env.HISTORY_ARCHIVE_BROKER_CERTIFIED_READY_SCOPES === 'true';
 export const reserveBrokerJobsSql = buildReserveBrokerJobsSql(
 	false,
-	brokerCandidateRelation
+	brokerCandidateRelation,
+	getHistoryArchiveRetryPhase(),
+	{ certifyReadyScopes: certifiedReadyScopes }
 );
 export const reserveBrokerSingleSlotRetrySql = buildReserveBrokerJobsSql(
 	true,
-	brokerCandidateRelation
+	brokerCandidateRelation,
+	getHistoryArchiveRetryPhase(),
+	{ certifyReadyScopes: certifiedReadyScopes }
 );
