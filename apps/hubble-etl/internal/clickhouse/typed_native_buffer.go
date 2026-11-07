@@ -99,13 +99,12 @@ func (w *BatchWriter) appendTypedNative(dataset string, table *tableBuffer, ledg
 		table.nativeBuffer.values = make([]any, len(columns))
 	}
 	values := table.nativeBuffer.values
+	metadataOffset := len(columns) - 5
 	// The driver's Block.Append passes individual interface values to columns;
 	// it does not retain this argument slice. Clear it even on failed appends.
 	defer clear(values)
 	if p != nil {
 		copy(values, p.values)
-		n := len(p.values)
-		values[n], values[n+1], values[n+2], values[n+3], values[n+4] = w.identity.ID, w.identity.SourceSHA256, ledger, table.nextRow, w.ingestedAt
 	} else {
 		var row map[string]json.RawMessage
 		if err := json.Unmarshal(encoded, &row); err != nil {
@@ -114,6 +113,9 @@ func (w *BatchWriter) appendTypedNative(dataset string, table *tableBuffer, ledg
 		known := make(map[string]struct{}, len(columns))
 		for i, c := range columns {
 			known[c.Name] = struct{}{}
+			if i >= metadataOffset {
+				continue
+			}
 			v, err := nativeInputValue(row[c.Name], c.Type)
 			if err != nil {
 				return fmt.Errorf("%s column %s: %w", dataset, c.Name, err)
@@ -126,6 +128,10 @@ func (w *BatchWriter) appendTypedNative(dataset string, table *tableBuffer, ledg
 			}
 		}
 	}
+	// finishEncodedRow receives freshly writer-appended metadata on both paths.
+	// Its five trailing schema-fingerprinted fields already have exact owned
+	// values; fallback still validates the whole JSON object and unknown names.
+	values[metadataOffset], values[metadataOffset+1], values[metadataOffset+2], values[metadataOffset+3], values[metadataOffset+4] = w.identity.ID, w.identity.SourceSHA256, ledger, table.nextRow, w.ingestedAt
 	return table.nativeBuffer.append(values, len(encoded)+1, p.RetainedBytes())
 }
 func (w *BatchWriter) failTypedNative(table *tableBuffer, err error) error {

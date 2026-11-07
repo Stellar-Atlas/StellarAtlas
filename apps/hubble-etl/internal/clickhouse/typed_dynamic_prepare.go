@@ -1,12 +1,15 @@
 package clickhouse
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"math"
 	"unicode/utf8"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/chcol"
+	"github.com/stellar/go-stellar-sdk/xdr"
+	"github.com/stellar/stellar-etl/v2/internal/transform"
 )
 
 var errDirectDynamicUnsupported = errors.New("Dynamic value requires legacy JSON normalization")
@@ -25,6 +28,12 @@ func prepareTypedDynamic(value any) (any, error) {
 		if v == nil {
 			return nil, nil
 		}
+	case json.RawMessage:
+		next, err := typedRawMessage(v, 0)
+		if err == nil {
+			return next, nil
+		}
+		return legacyPreparedDynamic(value)
 	}
 	next, err := directTypedDynamic(value, 0)
 	if err == nil {
@@ -48,6 +57,12 @@ func prepareRetainedTypedDynamic(value any) (any, error) {
 		if v == nil {
 			return nil, nil
 		}
+	case json.RawMessage:
+		next, err := typedRawMessage(v, 0)
+		if err != nil {
+			return nil, errTypedNativeUnsupported
+		}
+		return next, nil
 	}
 	next, err := directTypedDynamic(value, 0)
 	if errors.Is(err, errDirectDynamicUnsupported) {
@@ -89,6 +104,25 @@ func directTypedDynamic(value any, depth int) (chcol.Dynamic, error) {
 			return chcol.Dynamic{}, errDirectDynamicUnsupported
 		}
 		return wrap(v, "String"), nil
+	case transform.Price:
+		// Pinned Price JSON is exactly {"n": int32, "d": int32}. Preserve
+		// the legacy Dynamic map and child depth, not a computed float price.
+		if depth == 128 {
+			return chcol.Dynamic{}, errDirectDynamicUnsupported
+		}
+		return wrap(map[string]chcol.Dynamic{
+			"n": wrap(int64(v.Numerator), "Int64"),
+			"d": wrap(int64(v.Denominator), "Int64"),
+		}, "Map(String, Dynamic)"), nil
+	case json.RawMessage:
+		next, err := typedRawMessage(v, depth)
+		if err != nil {
+			return chcol.Dynamic{}, err
+		}
+		if next == nil {
+			return chcol.NewDynamic(nil), nil
+		}
+		return next.(chcol.Dynamic), nil
 	case int:
 		return signed(int64(v))
 	case int8:
@@ -99,6 +133,8 @@ func directTypedDynamic(value any, depth int) (chcol.Dynamic, error) {
 		return signed(int64(v))
 	case int64:
 		return signed(v)
+	case xdr.Int64:
+		return signed(int64(v))
 	case uint:
 		return unsigned(uint64(v))
 	case uint8:
@@ -159,4 +195,30 @@ func directTypedDynamic(value any, depth int) (chcol.Dynamic, error) {
 	default:
 		return chcol.Dynamic{}, errDirectDynamicUnsupported
 	}
+}
+
+// Exact standard RawMessage leaves are already serialized by xdrjson.Decode.
+// Decode only that leaf with the same number/depth rules as retained JSON.
+// Decline errors so the existing whole-row fallback keeps error precedence.
+func typedRawMessage(raw json.RawMessage, depth int) (any, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	if !json.Valid(raw) {
+		return nil, errDirectDynamicUnsupported
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, errDirectDynamicUnsupported
+	}
+	if value == nil {
+		return nil, nil
+	}
+	next, err := typedDynamic(value, depth)
+	if err != nil {
+		return nil, errDirectDynamicUnsupported
+	}
+	return next, nil
 }
