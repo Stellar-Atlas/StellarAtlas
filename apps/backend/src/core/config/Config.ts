@@ -7,6 +7,7 @@ import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { parseOptionalUrl } from './parseOptionalUrl.js';
 import { parseMeilisearchRuntimeConfig } from './MeilisearchRuntimeConfig.js';
 import { parseExplorerTransactionFreshnessWindowMs } from './ExplorerConfig.js';
+import { parseExplorerAccountProviderConfig, type ExplorerAccountProviderConfig } from './ExplorerAccountProviderConfig.js';
 import {
 	parseExplorerAccountProtocolPositionConfig,
 	type ExplorerAccountProtocolPositionConfig
@@ -52,6 +53,7 @@ export interface Config {
 	ipStackAccessKey: string;
 	horizonUrl: Url;
 	horizonPublicUrl?: Url;
+	explorerAccountProvider?: ExplorerAccountProviderConfig;
 	explorerTransactionFreshnessWindowMs: number;
 	explorerAccountProtocolPositions?: ExplorerAccountProtocolPositionConfig;
 	rpcUrl?: Url;
@@ -112,6 +114,7 @@ export class DefaultConfig implements Config {
 	frontendBaseUrl?: string;
 	frontendRevalidateToken?: string;
 	horizonPublicUrl?: Url;
+	explorerAccountProvider?: ExplorerAccountProviderConfig;
 	rpcUrl?: Url;
 	rpcPublicUrl?: Url;
 	failoverFrontendBaseUrl?: Url;
@@ -241,6 +244,9 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (explorerFreshnessWindow.isErr())
 		return err(explorerFreshnessWindow.error);
 	config.explorerTransactionFreshnessWindowMs = explorerFreshnessWindow.value;
+	const accountProvider = parseExplorerAccountProviderConfig(process.env.EXPLORER_ACCOUNT_PROVIDER_URL);
+	if (accountProvider.isErr()) return err(accountProvider.error);
+	config.explorerAccountProvider = accountProvider.value;
 	const protocolPositions = parseExplorerAccountProtocolPositionConfig(
 		process.env,
 		networkConfig.networkPassphrase

@@ -3,6 +3,7 @@ import { StrKey } from '@stellar/stellar-sdk';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fetchExplorerAccount } from '../ExplorerAccountClient.js';
+import { readHorizonAccountJson } from '../HorizonAccountResponse.js';
 
 const account = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 5));
 const muxed = StrKey.encodeMed25519PublicKey(Buffer.alloc(40, 5));
@@ -100,4 +101,30 @@ it('respects caller cancellation before and during a provider read', async () =>
 	await expect(fetchExplorerAccount('https://horizon.example', muxed, options, transport))
 		.rejects.toThrow('Client disconnected');
 	expect(transport).toHaveBeenCalledTimes(1);
+});
+
+it('bounds complete upstream parsing and cancels an aborted or oversized body', async () => {
+	const signal = new AbortController().signal;
+	await expect(readHorizonAccountJson(Response.json({ exact: '9223372036854775807' }), signal))
+		.resolves.toEqual({ exact: '9223372036854775807' });
+	await expect(readHorizonAccountJson(new Response('{}', { headers: { 'content-length': '2097153' } }), signal)).rejects.toThrow();
+	await expect(readHorizonAccountJson(new Response(new Uint8Array(2097153)), signal)).rejects.toThrow();
+	await expect(readHorizonAccountJson(new Response('{"partial":'), signal)).rejects.toThrow();
+	await expect(readHorizonAccountJson(new Response(new Uint8Array([0xff])), signal)).rejects.toThrow();
+	const abort = new AbortController(), cancel = jest.fn();
+	const pending = readHorizonAccountJson(new Response(new ReadableStream({ cancel })), abort.signal);
+	abort.abort(new Error('Closed'));
+	await expect(pending).rejects.toThrow('Closed');
+	expect(cancel).toHaveBeenCalledTimes(1);
+	let finishCancel!: () => void;
+	const cancellation = new Promise<void>(resolve => { finishCancel = resolve; });
+	const last = new AbortController();
+	const draining = readHorizonAccountJson(new Response(new ReadableStream({ cancel: () => cancellation })), last.signal);
+	let settled = false;
+	void draining.catch(() => { settled = true; });
+	last.abort(new Error('Draining'));
+	await new Promise(resolve => setImmediate(resolve));
+	expect(settled).toBe(false);
+	finishCancel();
+	await expect(draining).rejects.toThrow('Draining');
 });
