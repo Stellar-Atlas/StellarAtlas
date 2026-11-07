@@ -1,3 +1,4 @@
+import { withCertifiedReadyScopes } from './HistoryArchiveBrokerCertifiedReadyScopesSql.js';
 import { historyArchiveBrokerRecoveryAdmissionSql } from './HistoryArchiveBrokerRecoveryAdmissionSql.js';
 import { historyArchiveBrokerControlAdmissionSql } from './HistoryArchiveBrokerControlAdmissionSql.js';
 
@@ -8,7 +9,8 @@ import { historyArchiveBrokerControlAdmissionSql } from './HistoryArchiveBrokerC
  * timestamp outside the checkpoint prefix still controls round-robin fairness. */
 export function historyArchiveBrokerFirstPassAdmissionSql(
 	eligibleSql: string,
-	freshEligibleSql: string = eligibleSql
+	freshEligibleSql: string = eligibleSql,
+	options: { readonly certifyReadyScopes?: boolean } = {}
 ): string {
 	const fresh = `object.status='pending' and object.attempts=0`;
 	const scope = `object."archiveUrlIdentity"=scope."archiveUrlIdentity"
@@ -20,7 +22,7 @@ export function historyArchiveBrokerFirstPassAdmissionSql(
 			ready."updatedAt",ready."objectRemoteId"
 		limit least($1::integer,$2::integer)
 	)`;
-	return `ready_scopes as materialized (
+	const admission = `ready_scopes as materialized (
 		select ready."archiveUrlIdentity",ready.priority,fresh."objectType",
 			min(fresh."checkpointLedger") as first_checkpoint,
 			max(fresh."checkpointLedger") as last_checkpoint,
@@ -89,6 +91,7 @@ export function historyArchiveBrokerFirstPassAdmissionSql(
 			limit 1
 		) admitted
 	)`;
+	return options.certifyReadyScopes === true ? withCertifiedReadyScopes(admission) : admission;
 }
 
 // Scheduling-only indexes: no proof/evidence rewrite. The migration is deliberately
