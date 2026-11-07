@@ -9,6 +9,8 @@ import type {
 	IngestFullHistoryLedgerCloseMeta
 } from '../../../use-cases/ingest-full-history-ledger-close-meta/IngestFullHistoryLedgerCloseMeta.js';
 import type { TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader } from '../../database/full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader.js';
+import { createShardRanges } from '../../../use-cases/ingest-full-history-ledger-close-meta/FullHistoryLedgerCloseMetaShardRanges.js';
+import type { PendingPlan, PendingPlanStore } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import type {
 	FullHistoryLedgerCloseMetaAdmissionDecision,
 	FullHistoryLedgerCloseMetaAdmissionReason,
@@ -22,6 +24,7 @@ export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
 	readonly errorBackoffMilliseconds: number;
 	readonly idlePollMilliseconds: number;
 	readonly lastAvailableLedger: number | null;
+	readonly prioritizeCurrent?: boolean;
 	readonly typedShardLedgerCount: number;
 }
 
@@ -81,7 +84,7 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 	  };
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
-	readonly admitCycle: () => Promise<FullHistoryLedgerCloseMetaAdmissionDecision>;
+	readonly admitCycle: (current?: boolean) => Promise<FullHistoryLedgerCloseMetaAdmissionDecision>;
 	readonly emit: (event: ContinuousFullHistoryLedgerCloseMetaEvent) => void;
 	readonly ensureStorageCapacity: () => Promise<void>;
 	readonly formatError: (error: unknown) => string;
@@ -94,9 +97,10 @@ export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
 		'prepare' | 'ingestRange'
 	>;
 	readonly now: () => number;
+	readonly pendingPlans: PendingPlanStore;
 	readonly priorityRangeReader: Pick<
 		TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader,
-		'readNextRange'
+		'readNextRange' | 'readNextHistoricalRange'
 	>;
 	readonly signal: AbortSignal;
 	readonly wait: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -106,6 +110,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies
 ): Promise<void> {
+	if (config.prioritizeCurrent && config.lastAvailableLedger !== null) {
+		throw new Error('prioritize current cannot be combined with bounded historical replay');
+	}
 	let context: FullHistoryLedgerCloseMetaIngestionContext | null = null;
 	let nextLedger: number | null = null;
 	let readyEmitted = false;
@@ -114,7 +121,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	while (!dependencies.signal.aborted) {
 		try {
 			if (reloadDurableState) {
-				if (!(await admitCycle(config, dependencies))) continue;
+				if (!(await admitCycle(config, dependencies, config.prioritizeCurrent))) continue;
 				context = await dependencies.ingestion.prepare(dependencies.signal);
 				nextLedger = context.registeredSource.nextLedger;
 				reloadDurableState = false;
@@ -133,6 +140,22 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			}
 			const cycleContext = context;
 			const durableNextLedger = nextLedger;
+			const pending = await dependencies.pendingPlans.read();
+			if (pending !== null) {
+				if (pending.endLedger - pending.startLedger + 1 > config.cycleLedgerCount ||
+					(config.lastAvailableLedger !== null && pending.endLedger > config.lastAvailableLedger)) {
+					throw new Error('Pending ingestion plan exceeds configured cycle capacity or replay bound');
+				}
+				const expected = createPendingPlan(cycleContext, config, fullHistoryLedgerCloseMetaRange(
+					pending.startLedger, pending.endLedger), pending.kind);
+				if (JSON.stringify(pending) !== JSON.stringify(expected)) {
+					throw new Error('Pending ingestion plan does not match source identity or partition configuration');
+				}
+				if (!(await admitCycle(config, dependencies,
+					config.prioritizeCurrent && pending.kind === 'priority'))) continue;
+				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger, pending);
+				continue;
+			}
 			if (
 				boundedReplayComplete(durableNextLedger, config.lastAvailableLedger)
 			) {
@@ -145,61 +168,40 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				});
 				return;
 			}
-			const priorityRange =
-				config.lastAvailableLedger === null
-					? await dependencies.priorityRangeReader.readNextRange({
-							durableNextLedger,
-							firstAvailableLedger:
-								cycleContext.registeredSource.firstAvailableLedger,
-							maximumLedgerCount: config.cycleLedgerCount,
-							networkPassphraseHash:
-								cycleContext.registeredSource.networkPassphraseHash,
-							sourceBatchLedgerCount: cycleContext.config.ledgersPerBatch,
-							typedShardLedgerCount: config.typedShardLedgerCount
-						})
-					: null;
-			if (priorityRange !== null) {
-				if (!(await admitCycle(config, dependencies))) continue;
-				await runAdmittedAttempt(config, dependencies, async () => {
-					await dependencies.ensureStorageCapacity();
-					const startedAt = dependencies.now();
-					const receipt = await dependencies.ingestion.ingestRange(
-						cycleContext,
-						priorityRange,
-						dependencies.signal
-					);
-					const observedNextLedger = observedDurableNextLedger(
-						durableNextLedger,
-						receipt,
-						false
-					);
-					nextLedger = observedNextLedger;
-					const finishedAt = dependencies.now();
-					dependencies.emit({
-						at: isoTime(finishedAt),
-						durationMilliseconds: Math.max(0, finishedAt - startedAt),
-						endLedger: receipt.endLedger,
-						event: 'priority-processed',
-						nextLedger: observedNextLedger,
-						sourceObjectCount: receipt.sourceObjectCount,
-						startLedger: receipt.startLedger,
-						typedShardCount: receipt.committedBatches.length
-					});
-				});
-				continue;
-			}
+			if (!(await admitCycle(config, dependencies, config.prioritizeCurrent))) continue;
 			const sourceFrontier = await dependencies.frontier.readLatestRange(
 				cycleContext.config,
 				dependencies.signal
 			);
+			dependencies.signal.throwIfAborted();
+			const rangeOptions = {
+				durableNextLedger,
+				firstAvailableLedger: cycleContext.registeredSource.firstAvailableLedger,
+				latestAvailableLedger: sourceFrontier.endSequence,
+				maximumLedgerCount: config.cycleLedgerCount,
+				networkPassphraseHash: cycleContext.registeredSource.networkPassphraseHash,
+				sourceBatchLedgerCount: cycleContext.config.ledgersPerBatch,
+				typedShardLedgerCount: config.typedShardLedgerCount
+			};
+			const priorityRange =
+				config.lastAvailableLedger === null
+					? await dependencies.priorityRangeReader.readNextRange(rangeOptions)
+					: null;
+			if (priorityRange !== null) {
+				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger,
+					createPendingPlan(cycleContext, config, priorityRange, 'priority'));
+				continue;
+			}
 			const frontier = boundedFrontier(
 				sourceFrontier,
 				config.lastAvailableLedger
 			);
-			if (
-				frontier.endSequence - durableNextLedger + 1 <
-				config.typedShardLedgerCount
-			) {
+			if (config.prioritizeCurrent && !(await admitCycle(config, dependencies))) continue;
+			const range = await dependencies.priorityRangeReader.readNextHistoricalRange({
+				...rangeOptions,
+				latestAvailableLedger: frontier.endSequence
+			});
+			if (range === null) {
 				dependencies.emit(
 					idleEvent(
 						dependencies,
@@ -214,39 +216,8 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				);
 				continue;
 			}
-			const range = cycleRange(
-				durableNextLedger,
-				frontier,
-				config.cycleLedgerCount,
-				config.typedShardLedgerCount
-			);
-			if (!(await admitCycle(config, dependencies))) continue;
-			await runAdmittedAttempt(config, dependencies, async () => {
-				await dependencies.ensureStorageCapacity();
-				const startedAt = dependencies.now();
-				const receipt = await dependencies.ingestion.ingestRange(
-					cycleContext,
-					range,
-					dependencies.signal
-				);
-				const observedNextLedger = observedDurableNextLedger(
-					durableNextLedger,
-					receipt,
-					true
-				);
-				nextLedger = observedNextLedger;
-				const finishedAt = dependencies.now();
-				dependencies.emit({
-					at: isoTime(finishedAt),
-					durationMilliseconds: Math.max(0, finishedAt - startedAt),
-					endLedger: receipt.endLedger,
-					event: 'processed',
-					nextLedger: observedNextLedger,
-					sourceObjectCount: receipt.sourceObjectCount,
-					startLedger: receipt.startLedger,
-					typedShardCount: receipt.committedBatches.length
-				});
-			});
+			nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger,
+				createPendingPlan(cycleContext, config, range, 'historical'));
 		} catch (error) {
 			if (dependencies.signal.aborted) break;
 			reloadDurableState = true;
@@ -264,11 +235,54 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	}
 }
 
+function createPendingPlan(context: FullHistoryLedgerCloseMetaIngestionContext,
+	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig, range: FullHistoryLedgerCloseMetaRange,
+	kind: PendingPlan['kind']): PendingPlan {
+	return {
+		version: 1, kind,
+		networkPassphraseHash: context.registeredSource.networkPassphraseHash,
+		sourceId: context.registeredSource.sourceId,
+		configDigest: context.registeredSource.configDigest,
+		partitionVersion: 'source-aligned-remainder-v1',
+		sourceBatchLedgerCount: context.config.ledgersPerBatch,
+		typedShardLedgerCount: config.typedShardLedgerCount,
+		startLedger: range.startSequence, endLedger: range.endSequence,
+		shards: createShardRanges(range, context.config.ledgersPerBatch, config.typedShardLedgerCount)
+			.map(shard => ({startLedger: shard.startSequence, endLedger: shard.endSequence}))
+	};
+}
+
+async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
+	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies,
+	context: FullHistoryLedgerCloseMetaIngestionContext, previousNextLedger: number,
+	plan: PendingPlan): Promise<number> {
+	let nextLedger = previousNextLedger;
+	await runAdmittedAttempt(config, dependencies, async () => {
+		await dependencies.ensureStorageCapacity();
+		await dependencies.pendingPlans.write(plan);
+		const startedAt = dependencies.now();
+		const receipt = await dependencies.ingestion.ingestRange(context,
+			fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger), dependencies.signal);
+		nextLedger = observedDurableNextLedger(previousNextLedger, receipt,
+			plan.kind === 'historical' && previousNextLedger <= plan.endLedger);
+		await dependencies.pendingPlans.clear();
+		const finishedAt = dependencies.now();
+		dependencies.emit({
+			at: isoTime(finishedAt), durationMilliseconds: Math.max(0, finishedAt - startedAt),
+			endLedger: receipt.endLedger, event: plan.kind === 'priority' ? 'priority-processed' : 'processed',
+			nextLedger, sourceObjectCount: receipt.sourceObjectCount,
+			startLedger: receipt.startLedger, typedShardCount: receipt.committedBatches.length
+		});
+	});
+	return nextLedger;
+}
+
 async function admitCycle(
 	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
-	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies
+	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies,
+	current = false
 ): Promise<boolean> {
-	const decision = await dependencies.admitCycle();
+	const decision = await dependencies.admitCycle(current);
 	if (decision.admitted) return true;
 	dependencies.emit({
 		at: isoTime(dependencies.now()),
@@ -324,28 +338,16 @@ function boundedFrontier(
 	);
 }
 
-function cycleRange(
-	nextLedger: number,
-	frontier: FullHistoryLedgerCloseMetaRange,
-	maximumLedgerCount: number,
-	typedShardLedgerCount: number
-): FullHistoryLedgerCloseMetaRange {
-	const available = frontier.endSequence - nextLedger + 1;
-	const ledgerCount =
-		Math.floor(
-			Math.min(available, maximumLedgerCount) / typedShardLedgerCount
-		) * typedShardLedgerCount;
-	return fullHistoryLedgerCloseMetaRange(
-		nextLedger,
-		nextLedger + ledgerCount - 1
-	);
-}
-
 function observedDurableNextLedger(
 	previousNextLedger: number,
 	receipt: FullHistoryLedgerCloseMetaIngestionReceipt,
 	requireAdvance: boolean
 ): number {
+	for (const commit of receipt.committedBatches) {
+		if (!Number.isSafeInteger(commit.nextLedger) || commit.nextLedger < previousNextLedger) {
+			throw new Error('LedgerCloseMeta durable watermark is invalid or regressed');
+		}
+	}
 	const nextLedger = receipt.committedBatches.reduce(
 		(maximum, commit) => Math.max(maximum, commit.nextLedger),
 		previousNextLedger
@@ -356,11 +358,7 @@ function observedDurableNextLedger(
 	if (requireAdvance && nextLedger === previousNextLedger) {
 		throw new Error('LedgerCloseMeta durable watermark did not advance');
 	}
-	if (nextLedger > receipt.endLedger + 1) {
-		throw new Error(
-			'LedgerCloseMeta durable watermark exceeded processed range'
-		);
-	}
+	// The repository can advance across adjacent batches published by prior cycles.
 	return nextLedger;
 }
 

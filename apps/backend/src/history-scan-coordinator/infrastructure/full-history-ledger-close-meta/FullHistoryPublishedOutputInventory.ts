@@ -1,6 +1,7 @@
 import { lstat, readdir } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import type { FullHistoryBulkStorageUsageReader } from './FullHistoryBulkStorageBudget.js';
+import type { RegisteredOutputInventoryReader } from './TypeOrmRegisteredOutputInventory.js';
 
 export interface FullHistoryPublishedOutputRecorder {
 	recordPublication(
@@ -15,11 +16,16 @@ export class FullHistoryPublishedOutputInventory
 		FullHistoryPublishedOutputRecorder
 {
 	readonly #rootPath: string;
+	readonly #registeredOutputInventoryReader: RegisteredOutputInventoryReader | undefined;
 	#initialization: Promise<void> | null = null;
 	#storedBytes = 0n;
 
-	constructor(rootPath: string) {
+	constructor(
+		rootPath: string,
+		registeredOutputInventoryReader?: RegisteredOutputInventoryReader
+	) {
 		this.#rootPath = safeRoot(rootPath);
+		this.#registeredOutputInventoryReader = registeredOutputInventoryReader;
 	}
 
 	async readStoredBytes(): Promise<bigint> {
@@ -44,13 +50,44 @@ export class FullHistoryPublishedOutputInventory
 	}
 
 	async #readInitialUsage(): Promise<void> {
-		this.#storedBytes = (await readTreeBytes(this.#rootPath, false)) ?? 0n;
+		const reader = this.#registeredOutputInventoryReader;
+		if (reader === undefined) {
+			this.#storedBytes = (await readTreeBytes(this.#rootPath, false, 4)) ?? 0n;
+			return;
+		}
+		const snapshot = await reader.read();
+		if (
+			typeof snapshot.storedBytes !== 'bigint' ||
+			snapshot.storedBytes < 0n ||
+			!Number.isSafeInteger(snapshot.registeredCount) ||
+			snapshot.registeredCount < 0 ||
+			!isReadonlySet(snapshot.registeredDirectories) ||
+			snapshot.registeredCount !== snapshot.registeredDirectories.size
+		) {
+			throw new Error('Invalid registered-output inventory snapshot');
+		}
+		const registeredPaths = new Set<string>();
+		for (const path of snapshot.registeredDirectories) {
+			if (!isRegisteredOutputDirectory(path)) {
+				throw new Error('Invalid registered-output directory');
+			}
+			registeredPaths.add(strictChild(this.#rootPath, resolve(this.#rootPath, path)));
+		}
+		const filesystemBytes = await readTreeBytes(
+			this.#rootPath,
+			false,
+			4,
+			registeredPaths
+		);
+		this.#storedBytes = snapshot.storedBytes + (filesystemBytes ?? 0n);
 	}
 }
 
 async function readTreeBytes(
 	rootPath: string,
-	allowMissing: boolean
+	allowMissing: boolean,
+	maximumWorkers = 1,
+	skipDirectories?: ReadonlySet<string>
 ): Promise<bigint | null> {
 	let root;
 	try {
@@ -66,27 +103,70 @@ async function readTreeBytes(
 	const directories = [rootPath];
 	while (directories.length > 0) {
 		const directory = directories.pop()!;
-		for (const entry of await readdir(directory, { withFileTypes: true })) {
-			const path = resolve(directory, entry.name);
-			if (entry.isDirectory()) {
-				directories.push(path);
-				continue;
-			}
-			if (!entry.isFile()) {
-				throw new Error(
-					'Full-history output inventory contains a special file'
-				);
-			}
-			const value = await lstat(path);
-			if (!value.isFile() || value.isSymbolicLink()) {
-				throw new Error(
-					'Full-history output inventory contains a special file'
-				);
-			}
-			bytes += BigInt(value.size);
-		}
+		const entries = await readdir(directory, { withFileTypes: true });
+		let nextIndex = 0;
+		let hasError = false;
+		let firstError: unknown;
+		const workerSums = await Promise.all(
+			Array.from(
+				{ length: Math.min(maximumWorkers, entries.length) },
+				async () => {
+					let workerSum = 0n;
+					while (!hasError) {
+						const entryIndex = nextIndex;
+						nextIndex += 1;
+						if (entryIndex >= entries.length) return workerSum;
+						const entry = entries[entryIndex];
+						if (entry === undefined) return workerSum;
+						const path = resolve(directory, entry.name);
+						try {
+							if (entry.isDirectory()) {
+								if (!skipDirectories?.has(path)) directories.push(path);
+								continue;
+							}
+							if (!entry.isFile()) {
+								throw new Error(
+									'Full-history output inventory contains a special file'
+								);
+							}
+							const value = await lstat(path);
+							if (!value.isFile() || value.isSymbolicLink()) {
+								throw new Error(
+									'Full-history output inventory contains a special file'
+								);
+							}
+							workerSum += BigInt(value.size);
+						} catch (error) {
+							if (!hasError) {
+								hasError = true;
+								firstError = error;
+							}
+						}
+					}
+					return workerSum;
+				}
+			)
+		);
+		if (hasError) throw firstError;
+		for (const workerSum of workerSums) bytes += workerSum;
 	}
 	return bytes;
+}
+
+function isReadonlySet(value: unknown): value is ReadonlySet<string> {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		'size' in value &&
+		Number.isSafeInteger(value.size) &&
+		Symbol.iterator in value &&
+		typeof value[Symbol.iterator] === 'function'
+	);
+}
+
+function isRegisteredOutputDirectory(value: unknown): value is string {
+	return typeof value === 'string' &&
+		/^[a-f0-9]{64}\/ledger-close-meta\/[1-9][0-9]*-[1-9][0-9]*$/.test(value);
 }
 
 function safeRoot(value: string): string {

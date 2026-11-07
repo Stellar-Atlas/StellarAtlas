@@ -34,6 +34,7 @@ export interface FullHistoryLedgerCloseMetaServiceConfig {
 	readonly networkName: string;
 	readonly networkPassphrase: string;
 	readonly processingConcurrency: number;
+	readonly prioritizeCurrent?: boolean;
 	readonly publicationStagingRoot: string | null;
 	readonly processTimeoutMilliseconds: number;
 	readonly requestTimeoutMilliseconds: number;
@@ -150,6 +151,17 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		0xffff_ffff,
 		'last available ledger'
 	);
+	const prioritizeCurrent = booleanValue(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT,
+		false,
+		'prioritize current'
+	);
+	if (prioritizeCurrent && lastAvailableLedger !== null) {
+		throw new Error('prioritize current cannot be combined with bounded historical replay');
+	}
+	if (prioritizeCurrent && (!admissionEnabled || processingConcurrency !== 1)) {
+		throw new Error('prioritize current requires admission enabled and processing concurrency 1');
+	}
 	if (
 		lastAvailableLedger !== null &&
 		(lastAvailableLedger - firstAvailableLedger + 1) % typedShardLedgerCount !==
@@ -290,6 +302,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			1_024
 		),
 		processingConcurrency,
+		prioritizeCurrent,
 		publicationStagingRoot,
 		processTimeoutMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_PROCESS_TIMEOUT_MS,
