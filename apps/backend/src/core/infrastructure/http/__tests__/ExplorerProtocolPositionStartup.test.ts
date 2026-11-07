@@ -100,6 +100,7 @@ beforeEach(async () => {
 	};
 	delete process.env[enabled];
 	delete process.env[settings];
+	delete process.env.FEDERATION_SCHEDULE_DIRECTORY;
 });
 afterEach(async () => {
 	process.env = originalEnv;
@@ -148,6 +149,7 @@ function config() {
 function kernelFixture(bindCanonical = false) {
 	const container = new Container();
 	const calls: { network: string; sequence: string }[] = [];
+	const federationRead = jest.fn(async () => ({ status: 'unavailable' as const }));
 	const unexpected = () => {
 		throw new Error('Unrelated explorer use case called');
 	};
@@ -159,7 +161,7 @@ function kernelFixture(bindCanonical = false) {
 	});
 	container
 		.bind<unknown>(GetExplorerLocalAccountChanges)
-		.toConstantValue({ execute: unexpected });
+		.toConstantValue({ execute: federationRead });
 	container
 		.bind<unknown>(GetExplorerLocalTrustlineChanges)
 		.toConstantValue({ execute: unexpected });
@@ -182,7 +184,7 @@ function kernelFixture(bindCanonical = false) {
 					};
 				}
 			});
-	return { kernel: { container }, calls };
+	return { kernel: { container }, calls, federationRead };
 }
 
 async function start(bindCanonical = false) {
@@ -201,6 +203,38 @@ function doc(value: object) {
 	const json = JSON.stringify(value);
 	return { json, sha256: hash(json) };
 }
+
+test.each([false, true])(
+	'federation uses its explicit directory opt-in with background work disabled, configured=%s',
+	async (configured) => {
+		process.env.API_BACKGROUND_TASKS_ENABLED = 'false';
+		if (configured) process.env.FEDERATION_SCHEDULE_DIRECTORY = root;
+		const { kernel, federationRead } = kernelFixture();
+		const app = express();
+		const mount = mountExplorerRoutes(app, kernel, config(), undefined, false);
+		if (configured && process.platform === 'win32') {
+			await expect(mount).rejects.toThrow('requires directory sync support');
+			return;
+		}
+		const drain = await mount;
+		await request(app)
+			.get('/v1/explorer/accounts/' + accountId + '/federation')
+			.expect('Cache-Control', 'no-store')
+			.expect(503)
+			.expect({ status: 'temporary_failure', accountId, network: 'mainnet' });
+		expect(federationRead).toHaveBeenCalledTimes(configured ? 1 : 0);
+		await expect(drain()).resolves.toBe(true);
+	}
+);
+
+test('rejects an unsafe federation directory even with background work disabled', async () => {
+	process.env.API_BACKGROUND_TASKS_ENABLED = 'false';
+	process.env.FEDERATION_SCHEDULE_DIRECTORY = 'relative-schedule';
+	const { kernel, federationRead } = kernelFixture();
+	await expect(mountExplorerRoutes(express(), kernel, config(), undefined, false))
+		.rejects.toThrow('must be absolute');
+	expect(federationRead).not.toHaveBeenCalled();
+});
 
 test.each([undefined, 'false'])(
 	'normal startup leaves the route off with switch %s',
