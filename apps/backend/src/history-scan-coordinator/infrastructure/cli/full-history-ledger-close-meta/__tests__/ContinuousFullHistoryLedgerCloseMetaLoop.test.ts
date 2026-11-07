@@ -89,7 +89,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 	});
 
 	it('errors do not erase a due historical offer', async () => {
-		const f = fixture(5);
+		const f = fixture(6);
 		const historical = f.dependencies.priorityRangeReader.readNextHistoricalRange;
 		let failed = false;
 		f.dependencies.priorityRangeReader.readNextHistoricalRange = async options => {
@@ -97,9 +97,25 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 			return historical(options);
 		};
 		await run(f.config, f.dependencies);
-		expect(f.selected.map(r => r.startSequence)).toEqual([1000, 1064, 1128, 1192, 3]);
+		expect(f.selected.map(r => r.startSequence)).toEqual([1000, 1064, 1128, 1192, 1256, 3]);
 		expect(f.events.filter(e => e.event === 'cycle-error')).toHaveLength(1);
 		expect(f.dependencies.ingestion.prepare).toHaveBeenCalledTimes(2);
+	});
+
+	it('a persistently failing unrecorded historical offer does not starve current work', async () => {
+		const f = fixture(7);
+		f.dependencies.priorityRangeReader.readNextHistoricalRange = async () => {
+			f.calls.push('historical-error');
+			throw new Error('Historical gap cannot contain a minimum-sized source shard');
+		};
+		await run(f.config, f.dependencies);
+		expect(f.selected.map(r => r.startSequence)).toEqual([1000, 1064, 1128, 1192, 1256, 1320, 1384]);
+		expect(f.events.filter(e => e.event === 'cycle-error')).toHaveLength(3);
+		expect(f.calls.filter(c => c === 'wait-30')).toHaveLength(3);
+		const offer = f.calls.indexOf('historical-error');
+		expect(f.calls.slice(offer, offer + 4)).toEqual(['historical-error', 'wait-30', 'admit-current', 'priority']);
+		expect(f.events.every(e => e.event !== 'processed')).toBe(true);
+		expect(f.pending).toBeNull();
 	});
 
 	it('null historical selection does not erase a due historical offer', async () => {

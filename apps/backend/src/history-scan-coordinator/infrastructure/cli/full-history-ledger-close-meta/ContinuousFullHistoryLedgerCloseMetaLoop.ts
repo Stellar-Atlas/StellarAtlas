@@ -190,18 +190,31 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				typedShardLedgerCount: config.typedShardLedgerCount
 			};
 			let offeredHistoricalRange: FullHistoryLedgerCloseMetaRange | null | undefined;
+			let historicalOfferFailed = false;
 			if (config.lastAvailableLedger === null &&
 				priorityStreak >= MAXIMUM_CONSECUTIVE_PRIORITY_RANGES) {
 				if (await admitCycle(config, dependencies)) {
-					offeredHistoricalRange = await dependencies.priorityRangeReader.readNextHistoricalRange(rangeOptions);
-					if (offeredHistoricalRange !== null) {
+					try {
+						offeredHistoricalRange = await dependencies.priorityRangeReader.readNextHistoricalRange(rangeOptions);
+					} catch (error) {
+						if (dependencies.signal.aborted) throw error;
+						reloadDurableState = true;
+						historicalOfferFailed = true;
+						dependencies.emit({
+							at: isoTime(dependencies.now()), event: 'cycle-error',
+							message: dependencies.formatError(error),
+							retryInMilliseconds: config.errorBackoffMilliseconds
+						});
+						await dependencies.wait(config.errorBackoffMilliseconds, dependencies.signal);
+					}
+					if (offeredHistoricalRange !== undefined && offeredHistoricalRange !== null) {
 						nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger,
 							createPendingPlan(cycleContext, config, offeredHistoricalRange, 'historical'));
 						priorityStreak = 0;
 						continue;
 					}
 				}
-				// A denied historical offer waits; current admission must be fresh afterward.
+				// An unsuccessful historical offer can wait; recheck current admission.
 				if (!(await admitCycle(config, dependencies, config.prioritizeCurrent))) continue;
 			}
 			const priorityRange =
@@ -214,6 +227,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				priorityStreak = Math.min(priorityStreak + 1, MAXIMUM_CONSECUTIVE_PRIORITY_RANGES);
 				continue;
 			}
+			if (historicalOfferFailed) continue;
 			const frontier = boundedFrontier(
 				sourceFrontier,
 				config.lastAvailableLedger
