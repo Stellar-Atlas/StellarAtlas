@@ -34,6 +34,7 @@ type config struct {
 	pressureGuard        *backfill.PressureGuard
 	currentGuard         *backfill.PressureGuard
 	baselineHistoryGuard *backfill.PressureGuard
+	historyAdmissionHold *backfill.HistoryAdmissionHold
 	reserveCurrent       bool
 	typedOperations      bool
 	readinessGuard       *backfill.WarehouseReadinessGuard
@@ -213,6 +214,7 @@ func loadConfig() (config, error) {
 		pressureGuard:        guard,
 		currentGuard:         currentGuard,
 		baselineHistoryGuard: baselineHistoryGuard,
+		historyAdmissionHold: loadHistoryAdmissionHold(),
 		reserveCurrent:       reserveCurrent,
 		typedOperations:      typedOperations,
 		readinessGuard: &backfill.WarehouseReadinessGuard{
@@ -312,6 +314,7 @@ func backfillConfig(cfg config) backfill.Config {
 		WorkerCount:                  cfg.workers,
 		PressureGuard:                cfg.pressureGuard,
 		BaselineHistoryPressureGuard: cfg.baselineHistoryGuard,
+		HistoryAdmissionHold:         cfg.historyAdmissionHold,
 		ReadinessGuard:               cfg.readinessGuard,
 		Publisher:                    cfg.publisher,
 		OnProgress: func(summary backfill.Summary) {
