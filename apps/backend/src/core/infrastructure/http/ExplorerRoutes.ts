@@ -22,6 +22,7 @@ import { fetchRecentTransactions } from '@network-scan/infrastructure/http/Horiz
 import { hubbleWarehouseFromEnvironment } from '../../../status/infrastructure/http/HubbleWarehouseClient.js';
 import { fetchParsedRecentTransactions } from '@network-scan/use-cases/get-explorer-recent-transactions/ParsedRecentTransactions.js';
 import { createAccountFederation } from '../../../status/infrastructure/http/federation/AccountFederationRouter.js';
+import { createExplorerAccountProvider } from '@network-scan/infrastructure/http/ExplorerAccountProvider.js';
 
 export async function mountExplorerRoutes(
 	api: express.Express,
@@ -50,11 +51,15 @@ export async function mountExplorerRoutes(
 	const getExplorerLocalAccountChanges = kernel.container.get(
 		GetExplorerLocalAccountChanges
 	);
+	const accountProviderService = config.explorerAccountProvider && createExplorerAccountProvider(
+		config.explorerAccountProvider, config.networkConfig.networkPassphrase
+	);
 	const federation = await createAccountFederation(
 		// This explicit opt-in owns demand-driven requests independently of background work.
 		process.env.FEDERATION_SCHEDULE_DIRECTORY,
 		config.networkConfig.networkPassphrase,
-		(query) => getExplorerLocalAccountChanges.execute(query)
+		(query) => getExplorerLocalAccountChanges.execute(query),
+		accountProviderService
 	);
 	api.use('/v1/explorer', federation.router);
 	api.get(
@@ -89,6 +94,7 @@ export async function mountExplorerRoutes(
 	api.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			accountProviderService,
 			accountProvider: config.explorerAccountProvider,
 			accountProtocolPosition,
 			getExplorerLocalAccountChanges,
