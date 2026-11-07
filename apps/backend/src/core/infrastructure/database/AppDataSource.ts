@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { resolveDatabasePoolPolicy } from './DatabasePoolPolicy.js';
 import { managedMigrations } from './ManagedMigrations.js';
+import { apiBackgroundTasksEnabled } from '../http/ApiRuntimeMode.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),
@@ -45,11 +46,15 @@ const databasePool = resolveDatabasePoolPolicy();
 const runMigrations = databaseMigrationsEnabled(
 	process.env.DATABASE_MIGRATIONS_RUN
 );
+const backgroundTasks = apiBackgroundTasksEnabled(process.env);
+if (!backgroundTasks && runMigrations)
+	throw new Error('An API without background ownership cannot run migrations');
 
 const AppDataSource = new DataSource({
 	type: 'postgres',
 	logging: false,
 	synchronize: false,
+	installExtensions: backgroundTasks,
 	connectTimeoutMS: databasePool.connectionTimeoutMs,
 	url: process.env.ACTIVE_DATABASE_URL,
 	entities: ['lib/**/entities/*.js', 'lib/**/domain/**/!(*.test)*.js'],
@@ -59,9 +64,7 @@ const AppDataSource = new DataSource({
 	ssl: useDatabaseSsl,
 	extra: useDatabaseSsl
 		? {
-				ssl: {
-					rejectUnauthorized: false
-				}
+				ssl: { rejectUnauthorized: false }
 			}
 		: undefined,
 	poolSize: databasePool.poolSize

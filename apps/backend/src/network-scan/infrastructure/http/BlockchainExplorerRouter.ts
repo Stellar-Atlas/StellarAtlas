@@ -14,6 +14,7 @@ import { fetchTransactionByHash } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
 import { createExplorerLocalOperationHandler } from './ExplorerLocalOperationHandler.js';
 import { createExplorerClaimablePositionsHandler } from './ExplorerClaimablePositions.js';
+import type { createExplorerAccountProtocolPositionHandler } from './ExplorerAccountProtocolPositionHandler.js';
 import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { GetExplorerLocalAccountChanges } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
@@ -22,6 +23,9 @@ import type { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-
 import type { GetExplorerRecentTransactions } from '../../use-cases/get-explorer-recent-transactions/GetExplorerRecentTransactions.js';
 
 export interface BlockchainExplorerRouterConfig {
+	readonly accountProtocolPosition?: ReturnType<
+		typeof createExplorerAccountProtocolPositionHandler
+	>;
 	readonly getExplorerLocalAccountChanges: Pick<
 		GetExplorerLocalAccountChanges,
 		'execute'
@@ -205,6 +209,12 @@ export const blockchainExplorerRouter = (
 			return res.status(502).json({ error: 'Ledger lookup unavailable' });
 		}
 	});
+
+	if (config.accountProtocolPosition)
+		router.get(
+			'/accounts/:accountId/protocol-positions',
+			config.accountProtocolPosition
+		);
 
 	router.get('/accounts/:accountId/observations', async (req, res) => {
 		const accountId = req.params.accountId.trim();

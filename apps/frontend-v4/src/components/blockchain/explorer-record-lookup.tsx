@@ -16,6 +16,7 @@ import {
 } from '../../api/explorer-record-lookup';
 import { ExplorerAccountAssets } from './explorer-account-assets';
 import { ExplorerClaimablePositions } from './explorer-claimable-positions';
+import { ExplorerAccountProtocolPosition } from './explorer-account-protocol-position';
 import { ExplorerAccountFederation } from './explorer-account-federation';
 import { ExplorerLedgerActivity } from './explorer-ledger-activity';
 import { ExplorerAccountRelations } from './explorer-account-relations';
@@ -25,11 +26,13 @@ import styles from './explorer-entity.module.css';
 export function ExplorerRecordLookup({
 	collection,
 	identifier,
-	claimablePositionsEnabled = false
+	claimablePositionsEnabled = false,
+	protocolPositionsEnabled = false
 }: {
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
 	readonly claimablePositionsEnabled?: boolean;
+	readonly protocolPositionsEnabled?: boolean;
 }): React.JSX.Element {
 	if (collection === 'accounts' && !isClassicAccount(identifier)) {
 		const contract = isContractAccount(identifier);
@@ -48,17 +51,19 @@ export function ExplorerRecordLookup({
 		</div>;
 	}
 	return <RecordLookup key={`${collection}:${identifier}`} collection={collection} identifier={identifier}
-		claimablePositionsEnabled={claimablePositionsEnabled} />;
+		claimablePositionsEnabled={claimablePositionsEnabled} protocolPositionsEnabled={protocolPositionsEnabled} />;
 }
 
 function RecordLookup({
 	collection,
 	identifier,
-	claimablePositionsEnabled
+	claimablePositionsEnabled,
+	protocolPositionsEnabled
 }: {
 	readonly collection: 'accounts' | 'ledgers';
 	readonly identifier: string;
 	readonly claimablePositionsEnabled: boolean;
+	readonly protocolPositionsEnabled: boolean;
 }): React.JSX.Element {
 	const search = useExplorerRequest(
 		initialExplorerSearch,
@@ -154,6 +159,7 @@ function RecordLookup({
 				<ExplorerAccountAssets key={identifier} account={identifier} />
 			)}
 			{collection === 'accounts' && claimablePositionsEnabled && <ExplorerClaimablePositions account={identifier} />}
+			{collection === 'accounts' && protocolPositionsEnabled && <ExplorerAccountProtocolPosition account={identifier} />}
 		</div>
 	);
 }

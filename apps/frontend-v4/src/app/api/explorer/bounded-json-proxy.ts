@@ -5,7 +5,8 @@ const routes = {
 	transaction: ['/v1/analytics/transactions/', ''],
 	'account balance': ['/v1/analytics/accounts/', '/balances'],
 	'current account': ['/v1/explorer/accounts/', ''],
-	'account claimable positions': ['/v1/explorer/accounts/', '/claimable-positions']
+	'account claimable positions': ['/v1/explorer/accounts/', '/claimable-positions'],
+	'account protocol positions': ['/v1/explorer/accounts/', '/protocol-positions']
 } as const;
 
 function configuredExplorerApiBase(): URL {

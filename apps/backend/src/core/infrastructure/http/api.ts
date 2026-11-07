@@ -108,7 +108,10 @@ import { GetLatestFbasProofSets } from '@fbas/use-cases/get-latest-fbas-proof-se
 import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTierHistory.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
-import { mountExplorerRoutes } from './ExplorerRoutes.js';
+import {
+	mountExplorerRoutes,
+	prepareExplorerAccountProtocolPositionHandler
+} from './ExplorerRoutes.js';
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
@@ -117,6 +120,7 @@ import { mountPublicDataRoutes } from '@status/infrastructure/http/PublicDataRou
 import { withHubbleTransactionLedgerHints } from '@status/infrastructure/http/HubbleTransactionLedgerHints.js';
 import { createPostgresHubbleTransactionLedgerLocator } from '@status/infrastructure/http/HubbleTransactionLedgerLocator.js';
 import { corsMiddleware } from './CorsMiddleware.js';
+import { apiBackgroundTasksEnabled, apiListenHost } from './ApiRuntimeMode.js';
 import {
 	stellarRpcRouter,
 	unavailableStellarRpcRouter
@@ -126,6 +130,8 @@ let server: Server;
 const serverSockets = new Set<Socket>();
 let shutdownStarted = false;
 const api = express();
+const backgroundTasks = apiBackgroundTasksEnabled(process.env);
+const listenHost = apiListenHost(process.env);
 api.use(corsMiddleware);
 mountParsedHistoryRequestBodyParser(api);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
@@ -153,6 +159,8 @@ const setup = async (): Promise<{ config: Config; kernel: Kernel }> => {
 };
 const listen = async () => {
 	const { config, kernel } = await setup();
+	const accountProtocolPosition =
+		await prepareExplorerAccountProtocolPositionHandler(kernel, config);
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
 	const hubbleWarehouse = withHubbleTransactionLedgerHints(
@@ -162,7 +170,7 @@ const listen = async () => {
 			config.networkConfig.networkPassphrase
 		)
 	);
-	const stopArchiveBackgroundTasks = startArchiveBackgroundTasks(kernel);
+	const stopArchiveBackgroundTasks = backgroundTasks ? startArchiveBackgroundTasks(kernel) : () => undefined;
 
 	api.use(
 		'/horizon',
@@ -202,6 +210,7 @@ const listen = async () => {
 	);
 
 	mountPublicDataRoutes(api, {
+		backgroundTasksEnabled: backgroundTasks,
 		warehouse: hubbleWarehouse,
 		manager: kernel.container.get(DataSource).manager,
 		networkPassphrase: config.networkConfig.networkPassphrase,
@@ -371,7 +380,13 @@ const listen = async () => {
 		})
 	);
 
-	const drainFederation = await mountExplorerRoutes(api, kernel, config);
+	const drainFederation = await mountExplorerRoutes(
+		api,
+		kernel,
+		config,
+		accountProtocolPosition,
+		backgroundTasks
+	);
 
 	api.use(
 		['/v1/node', '/v1/nodes'],
@@ -417,13 +432,14 @@ const listen = async () => {
 		networkScanRepository: kernel.container.get<NetworkScanRepository>(
 			NETWORK_TYPES.NetworkScanRepository
 		),
-		searchConfig: config.meilisearchNetwork
+		searchConfig: backgroundTasks ? config.meilisearchNetwork : { ...config.meilisearchNetwork, writable: false }
 	});
 	api.use('/v1', networkRoutes);
 
-	server = api.listen(config.apiPort, () => {
+	const onListening = () => {
 		console.log('api listening on port: ' + config.apiPort);
-	});
+	};
+	server = api.listen({ port: config.apiPort, ...(listenHost ? { host: listenHost } : {}) }, onListening);
 	trackServerSockets(server);
 	attachWarehouseLiveWebSocket(server);
 	attachNetworkLiveWebSocket(server, {
