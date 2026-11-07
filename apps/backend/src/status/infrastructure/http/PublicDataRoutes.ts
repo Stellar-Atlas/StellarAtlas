@@ -12,6 +12,8 @@ import { hubbleWarehouseGraphqlHandler } from './HubbleWarehouseGraphql.js';
 import { publicGoodsRouter, type PublicGoodsRouterConfig } from './PublicGoodsRouter.js';
 import { createPublicGoodsReadinessReader } from './PublicGoodsReadinessReader.js';
 import { sorobanDomainRouter } from './soroban-domains/SorobanDomainRouter.js';
+import type { DirectoryReader } from '../directory/DirectoryReader.js';
+import { directoryRoutePrefix, directoryRouter } from './DirectoryRouter.js';
 
 interface PublicDataRouteConfig {
 	readonly warehouse: PublicGoodsRouterConfig['warehouse'];
@@ -19,9 +21,12 @@ interface PublicDataRouteConfig {
 	readonly manager: EntityManager;
 	readonly networkPassphrase: string;
 	readonly backgroundTasksEnabled?: boolean;
+	readonly directory?: DirectoryReader;
 }
 
 export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfig): void {
+	if (config.directory)
+		app.use(directoryRoutePrefix, directoryRouter(config.directory));
 	app.use('/v1/analytics', hubbleWarehouseRouter({ warehouse: config.warehouse }));
 	app.use('/v1', sorobanDomainRouter({
 		rpcUrl: process.env.STELLAR_RPC_URL,
