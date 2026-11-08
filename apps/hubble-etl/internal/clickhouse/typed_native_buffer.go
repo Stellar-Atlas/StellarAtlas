@@ -154,7 +154,13 @@ func (chunk *typedNativeChunk) payload(ctx context.Context) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body := bytes.Join(chunk.blocks, nil)
+	var body []byte
+	if len(chunk.blocks) == 1 {
+		// finishBlock owns immutable bytes; the HTTP reader does not mutate them.
+		body = chunk.blocks[0]
+	} else {
+		body = bytes.Join(chunk.blocks, nil)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
