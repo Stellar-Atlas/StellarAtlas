@@ -15,6 +15,7 @@ import { withExplorerRequestDeadline } from './explorer-request';
 import { useExplorerRequest } from './use-explorer-request';
 import { readWalletCursor } from './wallet-balance-route';
 import { useWalletAssetMetadata } from './explorer-wallet-metadata';
+import { selectWalletInventory, type WalletInventoryOrder } from './wallet-inventory-selection';
 import styles from './explorer-entity.module.css';
 import assets from './explorer-account-assets.module.css';
 
@@ -121,7 +122,9 @@ export function AccountSnapshotEvidence({ snapshot, fetchedAt }: {
 
 export function CurrentAccountInventory({ value }: { readonly value: CurrentAccount }): React.JSX.Element {
 	const [view, setView] = useState<View>('assets'), [page, setPage] = useState(0);
-	const rows = value.balances.filter(row => view === 'trustlines' ? row.kind !== 'native' : row.kind === 'native' || row.balance > 0n);
+	const [draft, setDraft] = useState(''), [query, setQuery] = useState('');
+	const [order, setOrder] = useState<WalletInventoryOrder>('asset');
+	const rows = selectWalletInventory(value.balances, view, query, order);
 	const offset = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1)) * pageSize;
 	const visible = rows.slice(offset, offset + pageSize);
 	const metadata = useWalletAssetMetadata(visible.filter(row => row.kind === 'credit').map(row => row.id));
@@ -133,7 +136,18 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 			{(['assets', 'trustlines'] as const).map(mode => <button key={mode} type="button" aria-pressed={mode === view}
 				onClick={() => { setView(mode); setPage(0); }}>{mode === 'assets' ? 'Assets' : 'Trustlines'}</button>)}
 		</div>
-		{!rows.length ? <p>{!value.snapshot.inventoryComplete ? 'No exact rows to display in this view.'
+		<form className={assets.filters} onSubmit={event => { event.preventDefault(); setQuery(draft.trim()); setPage(0); }}>
+			<label>Find asset or issuer<input type="search" value={draft} maxLength={128} placeholder="XLM, asset code, full issuer or pool ID"
+				onChange={event => setDraft(event.currentTarget.value)} /></label>
+			<button type="submit">Filter balances</button>
+			{query && <button type="button" onClick={() => { setDraft(''); setQuery(''); setPage(0); }}>Clear balance filter</button>}
+			<label>Order balances<select value={order} onChange={event => { setOrder(event.currentTarget.value as WalletInventoryOrder); setPage(0); }}>
+				<option value="asset">Asset (XLM first)</option><option value="balance-desc">Token balance: high to low</option><option value="balance-asc">Token balance: low to high</option>
+			</select></label>
+		</form>
+		{query && <p className={assets.context} role="status">{rows.length} matching {view} · Filter: {query}</p>}
+		{order !== 'asset' && <p className={assets.context}>Sorted by token amount, not market value.</p>}
+		{!rows.length ? <p>{query ? 'No reported rows match this filter.' : !value.snapshot.inventoryComplete ? 'No exact rows to display in this view.'
 			: view === 'trustlines' ? 'No trustlines reported by Horizon.' : 'No asset balances reported by Horizon.'}</p>
 			: <div className={styles.tableWrap}><table className={styles.table} aria-label={view === 'trustlines' ? 'Current trustlines' : 'Current assets'}>
 				<thead><tr><th scope="col">Asset</th><th scope="col">Total balance</th>

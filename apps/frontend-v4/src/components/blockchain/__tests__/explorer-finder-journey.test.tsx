@@ -73,7 +73,7 @@ it('opens actual asset Transfers from paged candidates and restores both pages a
 	const first = readAssetDiscoverySelection(location.searchParams);
 	expect(assetDiscoveryPath(first)).toBe('/v1/assets?symbol=KALE&limit=25');
 
-	const selection = { query: { ...first.query, min_ledger: '100', max_ledger: '140' }, cursor: 'next_page' };
+	const selection = { query: { ...first.query, q: 'KALE', min_ledger: '100', max_ledger: '140' }, cursor: 'next_page' };
 	const paged = new URL(assetDiscoveryHref(location.search, selection), site);
 	location = paged;
 	const results = renderToStaticMarkup(createElement(ExplorerInvestigation, null,
@@ -86,6 +86,10 @@ it('opens actual asset Transfers from paged candidates and restores both pages a
 	const assets = links(results).filter(url => url.pathname.startsWith('/explorer/assets/'));
 	expect(assets.map(url => decodeURIComponent(url.pathname.split('/').at(-1)!))).toEqual([id, 'KALE:' + otherIssuer]);
 	const detail = assets[0]!;
+	// Catalogue text must not become an invalid contract-event search on this asset.
+	expect(detail.searchParams.has('q')).toBe(false);
+	expect(detail.searchParams.has('symbol')).toBe(false);
+	expect(new URL(detail.searchParams.get('return_to')!, site).searchParams.get('q')).toBe('KALE');
 	const transfers = new URL(assetTabHref(detail.pathname, detail.search, 'Transfers'), site);
 	location = new URL(assetActivityHref(transfers.pathname, transfers.search, asset, { before: 140, after: 'transfer_page' }), site);
 	const activity = await renderAssetTransfers();

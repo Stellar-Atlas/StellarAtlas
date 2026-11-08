@@ -18,7 +18,10 @@ const EMPTY_FILTERS: ExplorerFilters = Object.freeze({});
 
 function assetHref(asset: Asset, filters: ExplorerFilters = {}) {
 	const query = new URLSearchParams(
-		Object.entries(filters).filter(([, value]) => value.trim())
+		// Discovery text/issuer/code identify catalogue matches, not event searches.
+		// The investigation return link already retains the complete catalogue query.
+		Object.entries(filters).filter(([key, value]) =>
+			['min_ledger', 'max_ledger', 'start_time', 'end_time'].includes(key) && value.trim())
 	);
 	return (
 		'/explorer/assets/' +
