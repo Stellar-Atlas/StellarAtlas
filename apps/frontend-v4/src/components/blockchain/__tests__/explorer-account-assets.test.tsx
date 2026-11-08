@@ -4,6 +4,7 @@ import { parseCurrentAccount, parseCurrentAccountProvider, fetchCurrentAccount }
 import { publicNetworkPassphrase } from '../../../api/explorer-current-account-snapshot';
 import { currentAccountBreakdown, nativeMinimumReserve } from '../explorer-current-account-breakdown';
 import { executeExplorerRequest } from '../explorer-request';
+import { selectWalletInventory } from '../wallet-inventory-selection';
 
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-account-assets.module.css', () => ({ default: {} }));
@@ -22,6 +23,24 @@ const accountBody = (balances: readonly unknown[]) => ({
 	accountId: account, balances, source: 'horizon', lastModifiedLedger: '100',
 	accounting: { scope: 'horizon_account_balances', networkPassphrase: publicNetworkPassphrase,
 		snapshotStatus: 'ledger_bound', latestLedger: '101', balanceInventoryComplete: true }
+});
+
+it('finds an asset across the bounded wallet inventory, keeps XLM first and sorts exact token amounts without losing zero trustlines', () => {
+	const current = parseCurrentAccount(account, accountBody([
+		creditRow('DUST', '1'), nativeRow('10000000'), creditRow('KALE', '9007199254740993'),
+		creditRow('ZERO', '0'), creditRow('NEXT', '9007199254740994')
+	]));
+	expect(selectWalletInventory(current.balances, 'assets', '', 'asset').map(row => row.id))
+		.toEqual(['native', 'DUST:' + issuer, 'KALE:' + issuer, 'NEXT:' + issuer]);
+	expect(selectWalletInventory(current.balances, 'assets', ' kale ', 'asset').map(row => row.id)).toEqual(['KALE:' + issuer]);
+	expect(selectWalletInventory(current.balances, 'assets', 'xlm', 'asset').map(row => row.id)).toEqual(['native']);
+	expect(selectWalletInventory(current.balances, 'trustlines', 'zero', 'asset')).toHaveLength(1);
+	expect(selectWalletInventory(current.balances, 'assets', 'zero', 'asset')).toHaveLength(0);
+	expect(selectWalletInventory(current.balances, 'assets', issuer.toLowerCase(), 'balance-desc').map(row => row.id))
+		.toEqual(['NEXT:' + issuer, 'KALE:' + issuer, 'DUST:' + issuer]);
+	expect(current.balances[0]?.id).toBe('DUST:' + issuer);
+	const html = renderToStaticMarkup(<CurrentAccountInventory value={current} />);
+	expect(html).toContain('Find asset or issuer'); expect(html).toContain('Filter balances'); expect(html).toContain('Asset (XLM first)');
 });
 
 it('attributes only a validated public provider hostname and keeps native defaults and exact values', async () => {

@@ -71,11 +71,12 @@ function FederationView({
 				{statusMessage(result)}
 			</p>
 			{display && (
-				<FederationEvidence
-					result={display}
-					network={network}
-					indexedObservation={indexedObservation}
-				/>
+				<>
+					<p><strong><bdi>{display.stellarAddress}</bdi></strong>{display.memo && <> · Memo ({display.memo.type}): <bdi style={{ whiteSpace: 'pre-wrap' }}>{display.memo.value}</bdi></>}</p>
+					<details><summary>Federation evidence</summary>
+						<FederationEvidence result={display} network={network} indexedObservation={indexedObservation} />
+					</details>
+				</>
 			)}
 		</section>
 	);
