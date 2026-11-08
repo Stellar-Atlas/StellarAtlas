@@ -9,6 +9,24 @@ Provides user email storage and emailing functionality, ensuring that all emails
 - Accepts email addresses and emails to send via REST endpoints in [`apps/users/src/index.ts`](apps/users/src/index.ts).
 - Delivers emails through Mailgun APIs.
 
+## Authentication health check
+
+`GET /health/auth` uses the same Basic Auth middleware and configured
+`CONSUMER_NAME` / `CONSUMER_SECRET` as the user endpoints. Correct credentials
+return `204 No Content` with `Cache-Control: no-store`; missing or invalid
+credentials return `401`. The response contains no credentials or user data.
+
+This route checks only that the running service accepts consumer authentication.
+It does not read or write users, access the database, contact Mailgun, or send
+email. A successful response does not establish provider authentication or mail
+delivery readiness. Service startup still initializes the existing TypeORM data
+source and runs its configured migrations before listening; assess those
+dependencies separately before starting the service.
+
+Run the isolated authentication tests with
+`pnpm exec jest --selectProjects users --runInBand`. The Users Jest project
+selects only `*.unit.test.ts` files and does not run the legacy mail script.
+
 ## Example Usage Flow
 
 1. **External Application Registers a New User:**
