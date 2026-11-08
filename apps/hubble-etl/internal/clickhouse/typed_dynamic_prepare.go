@@ -204,14 +204,20 @@ func typedRawMessage(raw json.RawMessage, depth int) (any, error) {
 	if raw == nil {
 		return nil, nil
 	}
-	if !json.Valid(raw) {
-		return nil, errDirectDynamicUnsupported
-	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
 		return nil, errDirectDynamicUnsupported
+	}
+	// Decode validates the first value. Reject any second value or trailing
+	// garbage without validating the whole input again or decoding another tree.
+	for _, b := range raw[decoder.InputOffset():] {
+		switch b {
+		case ' ', '\t', '\n', '\r':
+		default:
+			return nil, errDirectDynamicUnsupported
+		}
 	}
 	if value == nil {
 		return nil, nil

@@ -22,6 +22,7 @@ type namedRawMessage json.RawMessage
 func TestTypedRawMessageLeafParity(t *testing.T) {
 	values := []json.RawMessage{
 		nil, json.RawMessage("null"), json.RawMessage(" \n null\t"),
+		json.RawMessage("{\"x\":1} \t\r\n"),
 		json.RawMessage(`true`), json.RawMessage(`"9007199254740993"`),
 		json.RawMessage(`-9223372036854775808`), json.RawMessage(`9223372036854775807`),
 		json.RawMessage(`18446744073709551615`), json.RawMessage(`9007199254740993`),
@@ -51,6 +52,8 @@ func TestTypedRawMessageInvalidAndDepthFallback(t *testing.T) {
 	for _, raw := range []json.RawMessage{
 		{}, json.RawMessage(" "), json.RawMessage(`{`), json.RawMessage(`null true`),
 		json.RawMessage(`1 trailing`), json.RawMessage(`NaN`),
+		json.RawMessage("null\x00"), json.RawMessage("null\u00a0"),
+		json.RawMessage(`{}[]`), json.RawMessage(`{} {`),
 		json.RawMessage(`18446744073709551616`), json.RawMessage(`-9223372036854775809`),
 		json.RawMessage(`1e999`),
 	} {
