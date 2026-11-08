@@ -239,7 +239,7 @@ api.post(
 
 async function listen() {
 	await dataSource.initialize();
-	server = api.listen(port, () =>
+	server = api.listen(Number(port), '127.0.0.1', () =>
 		console.log('api listening on port: ' + port)
 	);
 }
