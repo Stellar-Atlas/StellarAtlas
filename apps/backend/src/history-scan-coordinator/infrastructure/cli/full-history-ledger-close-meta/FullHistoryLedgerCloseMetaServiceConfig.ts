@@ -1,4 +1,8 @@
 import { dirname, relative, resolve, sep } from 'node:path';
+import {
+	parseFullHistoryCurrentCapacityAllowance,
+	type FullHistoryCurrentCapacityAllowance
+} from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
 
 const maximumIngressBytesPerSecond = 187_500_000;
 const maximumFetchConcurrency = 1_024;
@@ -9,6 +13,7 @@ const maximumCycleLedgers = 65_536;
 const sharedMemoryRoot = '/dev/shm';
 
 export interface FullHistoryLedgerCloseMetaServiceConfig {
+	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly admissionCycleCooldownMilliseconds: number;
 	readonly admissionEnabled: boolean;
 	readonly admissionMaximumDatabaseConnectionBasisPoints: number;
@@ -162,6 +167,10 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	if (prioritizeCurrent && (!admissionEnabled || processingConcurrency !== 1)) {
 		throw new Error('prioritize current requires admission enabled and processing concurrency 1');
 	}
+	const currentCapacityAllowance = parseFullHistoryCurrentCapacityAllowance(environment);
+	if (currentCapacityAllowance !== undefined && !prioritizeCurrent) {
+		throw new Error('current capacity allowance requires prioritize current');
+	}
 	if (
 		lastAvailableLedger !== null &&
 		(lastAvailableLedger - firstAvailableLedger + 1) % typedShardLedgerCount !==
@@ -192,6 +201,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		);
 	}
 	return Object.freeze({
+		...(currentCapacityAllowance === undefined ? {} : { currentCapacityAllowance }),
 		admissionCycleCooldownMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_CYCLE_COOLDOWN_MS,
 			30_000,

@@ -30,6 +30,18 @@ describe('TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader', () => {
 		})).resolves.toEqual(range(13977, 15000));
 	});
 
+	it('bounds the temporary current window without changing source alignment or querying an absent frontier', async () => {
+		const f = fixture();
+		await expect(f.reader.readNextRange({ ...options(), minimumPriorityLedger: 64987267 }))
+			.resolves.toBeNull();
+		expect(f.query).not.toHaveBeenCalled();
+		await expect(f.reader.readNextRange({ ...options(), minimumPriorityLedger: 64987100 }))
+			.resolves.toEqual(range(64987100, 64987266));
+		expect(f.query.mock.calls[0]?.[1]?.[1]).toBe(64987100);
+		await expect(f.reader.readNextRange({ ...options(), minimumPriorityLedger: Number.NaN }))
+			.rejects.toThrow(/minimumPriorityLedger/);
+	});
+
 	it.each([1089, 1090])('requires 64 ledgers in a current tail at head %i', async latestAvailableLedger => {
 		const f = fixture([[3, 1026]]);
 		await expect(f.reader.readNextRange({

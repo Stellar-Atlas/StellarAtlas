@@ -2,6 +2,10 @@ import {
 	fullHistoryLedgerCloseMetaRange,
 	type FullHistoryLedgerCloseMetaRange
 } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
+import {
+	isFullHistoryCurrentCapacityAllowanceActive,
+	type FullHistoryCurrentCapacityAllowance
+} from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
 import type { FullHistoryLedgerCloseMetaFrontierPort } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaPorts.js';
 import type {
 	FullHistoryLedgerCloseMetaIngestionContext,
@@ -18,6 +22,7 @@ import type {
 } from '../../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaAdmission.js';
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
+	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly admissionRetryMilliseconds: number;
 	readonly cycleCooldownMilliseconds: number;
 	readonly cycleLedgerCount: number;
@@ -86,7 +91,7 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
 	readonly admitCycle: (current?: boolean) => Promise<FullHistoryLedgerCloseMetaAdmissionDecision>;
 	readonly emit: (event: ContinuousFullHistoryLedgerCloseMetaEvent) => void;
-	readonly ensureStorageCapacity: () => Promise<void>;
+	readonly ensureStorageCapacity: (plan: PendingPlan) => Promise<void>;
 	readonly formatError: (error: unknown) => string;
 	readonly frontier: Pick<
 		FullHistoryLedgerCloseMetaFrontierPort,
@@ -115,6 +120,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	if (config.prioritizeCurrent && config.lastAvailableLedger !== null) {
 		throw new Error('prioritize current cannot be combined with bounded historical replay');
 	}
+	if (config.currentCapacityAllowance !== undefined && !config.prioritizeCurrent) {
+		throw new Error('current capacity allowance requires prioritize current');
+	}
 	let context: FullHistoryLedgerCloseMetaIngestionContext | null = null;
 	let nextLedger: number | null = null;
 	let readyEmitted = false;
@@ -123,6 +131,8 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 
 	while (!dependencies.signal.aborted) {
 		try {
+			const currentCapacityOnly = isFullHistoryCurrentCapacityAllowanceActive(
+				config.currentCapacityAllowance, dependencies.now());
 			if (reloadDurableState) {
 				if (!(await admitCycle(config, dependencies, config.prioritizeCurrent))) continue;
 				context = await dependencies.ingestion.prepare(dependencies.signal);
@@ -145,6 +155,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			const durableNextLedger = nextLedger;
 			const pending = await dependencies.pendingPlans.read();
 			if (pending !== null) {
+				assertCurrentCapacityPlan(config, dependencies, pending);
 				if (pending.endLedger - pending.startLedger + 1 > config.cycleLedgerCount ||
 					(config.lastAvailableLedger !== null && pending.endLedger > config.lastAvailableLedger)) {
 					throw new Error('Pending ingestion plan exceeds configured cycle capacity or replay bound');
@@ -181,6 +192,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			);
 			dependencies.signal.throwIfAborted();
 			const rangeOptions = {
+				...(currentCapacityOnly ? { minimumPriorityLedger: config.currentCapacityAllowance!.minimumLedger } : {}),
 				durableNextLedger,
 				firstAvailableLedger: cycleContext.registeredSource.firstAvailableLedger,
 				latestAvailableLedger: sourceFrontier.endSequence,
@@ -191,7 +203,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			};
 			let offeredHistoricalRange: FullHistoryLedgerCloseMetaRange | null | undefined;
 			let historicalOfferFailed = false;
-			if (config.lastAvailableLedger === null &&
+			if (!currentCapacityOnly && config.lastAvailableLedger === null &&
 				priorityStreak >= MAXIMUM_CONSECUTIVE_PRIORITY_RANGES) {
 				if (await admitCycle(config, dependencies)) {
 					try {
@@ -228,6 +240,11 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				continue;
 			}
 			if (historicalOfferFailed) continue;
+			if (currentCapacityOnly) {
+				dependencies.emit(idleEvent(dependencies, durableNextLedger, sourceFrontier, config.idlePollMilliseconds));
+				await dependencies.wait(config.idlePollMilliseconds, dependencies.signal);
+				continue;
+			}
 			const frontier = boundedFrontier(
 				sourceFrontier,
 				config.lastAvailableLedger
@@ -297,7 +314,8 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 	plan: PendingPlan): Promise<number> {
 	let nextLedger = previousNextLedger;
 	await runAdmittedAttempt(config, dependencies, async () => {
-		await dependencies.ensureStorageCapacity();
+		assertCurrentCapacityPlan(config, dependencies, plan);
+		await dependencies.ensureStorageCapacity(plan);
 		await dependencies.pendingPlans.write(plan);
 		const startedAt = dependencies.now();
 		const receipt = await dependencies.ingestion.ingestRange(context,
@@ -314,6 +332,15 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 		});
 	});
 	return nextLedger;
+}
+
+function assertCurrentCapacityPlan(config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
+	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies, plan: PendingPlan): void {
+	const allowance = config.currentCapacityAllowance;
+	if (allowance !== undefined && isFullHistoryCurrentCapacityAllowanceActive(allowance, dependencies.now()) &&
+		(plan.kind !== 'priority' || plan.startLedger < allowance.minimumLedger)) {
+		throw new Error('Current capacity window refuses non-current pending work; plan preserved');
+	}
 }
 
 async function admitCycle(

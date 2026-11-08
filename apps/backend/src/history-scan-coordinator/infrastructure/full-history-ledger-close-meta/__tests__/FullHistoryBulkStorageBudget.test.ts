@@ -42,6 +42,80 @@ describe('FullHistoryBulkStorageBudget', () => {
 		);
 	});
 
+	it('allows only eligible priority work to borrow the reserve floor before expiry', async () => {
+		const capacityReader = createCapacityReader(3n * tebibyte + tebibyte * 3n / 4n, 60n * tebibyte);
+		const allowance = createAllowance();
+		const budget = createBudget({
+			capacityReader,
+			currentCapacityAllowance: allowance,
+			minimumFreeBasisPoints: 500,
+			minimumFreeBytes: 4n * tebibyte,
+			now: () => 1_000
+		});
+		const priority = { kind: 'priority' as const, startLedger: 1_000, endLedger: 1_063 };
+		await expect(budget.assertCanAllocate(8n * 1024n ** 3n, priority)).resolves.toBeUndefined();
+		for (const allocation of [
+			{ kind: 'historical' as const, startLedger: 1_000, endLedger: 1_063 },
+			{ kind: 'priority' as const, startLedger: 999, endLedger: 1_062 },
+			undefined
+		]) {
+			await expect(budget.assertCanAllocate(8n * 1024n ** 3n, allocation)).rejects.toEqual(
+				new FullHistoryBulkStorageBudgetExceededError('free-space-reserve')
+			);
+		}
+		const expiredBudget = createBudget({
+			capacityReader,
+			currentCapacityAllowance: allowance,
+			minimumFreeBasisPoints: 500,
+			minimumFreeBytes: 4n * tebibyte,
+			now: () => 2_000
+		});
+		await expect(expiredBudget.assertCanAllocate(8n * 1024n ** 3n, priority)).rejects.toEqual(
+			new FullHistoryBulkStorageBudgetExceededError('free-space-reserve')
+		);
+	});
+
+	it('keeps the independent five-percent hard floor and larger ordinary proportional floor', async () => {
+		const allowance = createAllowance();
+		const priority = { kind: 'priority' as const, startLedger: 1_000, endLedger: 1_063 };
+		const outputBytes = 8n * 1024n ** 3n;
+		const hardFloorBudget = createBudget({
+			capacityReader: createCapacityReader(4n * tebibyte, 100n * tebibyte),
+			currentCapacityAllowance: allowance,
+			minimumFreeBasisPoints: 0,
+			minimumFreeBytes: 4n * tebibyte,
+			now: () => 1_000
+		});
+		await expect(hardFloorBudget.assertCanAllocate(outputBytes, priority)).rejects.toEqual(
+			new FullHistoryBulkStorageBudgetExceededError('free-space-reserve')
+		);
+		const proportionalFloorBudget = createBudget({
+			capacityReader: createCapacityReader(9n * tebibyte, 100n * tebibyte),
+			currentCapacityAllowance: allowance,
+			minimumFreeBasisPoints: 1_000,
+			minimumFreeBytes: 4n * tebibyte,
+			now: () => 1_000
+		});
+		await expect(proportionalFloorBudget.assertCanAllocate(outputBytes, priority)).rejects.toEqual(
+			new FullHistoryBulkStorageBudgetExceededError('free-space-reserve')
+		);
+	});
+
+	it('does not let an active allowance bypass the cumulative stored-bytes cap', async () => {
+		const budget = createBudget({
+			currentCapacityAllowance: createAllowance(),
+			maximumStoredBytes: 5n * tebibyte,
+			now: () => 1_000
+		});
+		await expect(
+			budget.assertCanAllocate(8n * 1024n ** 3n, {
+				kind: 'priority',
+				startLedger: 1_000,
+				endLedger: 1_063
+			})
+		).rejects.toEqual(new FullHistoryBulkStorageBudgetExceededError('store-size-limit'));
+	});
+
 	it('rejects relative roots and invalid reserve ratios', () => {
 		expect(() => createBudget({ rootPath: 'relative' })).toThrow(/absolute/);
 		expect(() => createBudget({ minimumFreeBasisPoints: 10_001 })).toThrow(
@@ -62,6 +136,21 @@ describe('FullHistoryBulkStorageBudget', () => {
 			rootPath: '/bulk/full-history',
 			usageReader,
 			...overrides
+		});
+	}
+
+	function createCapacityReader(
+		availableBytes: bigint,
+		totalBytes: bigint
+	): FullHistoryBulkStorageCapacityReader {
+		return { readCapacity: jest.fn(async () => ({ availableBytes, totalBytes })) };
+	}
+
+	function createAllowance() {
+		return Object.freeze({
+			minimumLedger: 1_000,
+			maximumReserveBorrowBytes: 512n * 1024n ** 3n,
+			expiresAtMilliseconds: 2_000
 		});
 	}
 });

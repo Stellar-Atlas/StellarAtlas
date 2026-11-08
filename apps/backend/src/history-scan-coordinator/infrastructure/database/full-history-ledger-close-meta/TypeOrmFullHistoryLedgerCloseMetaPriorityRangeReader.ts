@@ -18,6 +18,7 @@ interface LedgerRangeBounds {
 }
 
 export interface FullHistoryLedgerCloseMetaPriorityRangeOptions {
+	readonly minimumPriorityLedger?: number;
 	readonly durableNextLedger: number;
 	readonly firstAvailableLedger: number;
 	readonly latestAvailableLedger: number;
@@ -90,8 +91,10 @@ export class TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader {
 		const maximumLedger = options.latestAvailableLedger;
 		const searchMinimum = Math.max(
 			options.firstAvailableLedger,
+			options.minimumPriorityLedger ?? options.firstAvailableLedger,
 			maximumLedger - Math.max(options.maximumLedgerCount * 2, 17_280) + 1
 		);
+		if (searchMinimum > maximumLedger) return null;
 		const storedRows = await this.dataSource.query<StoredRangeRow[]>(
 			`select "start_ledger"::text as "startLedger",
 				"end_ledger"::text as "endLedger"
@@ -213,6 +216,11 @@ function validatePlanningOptions(
 		'networkPassphraseHash' | 'latestAvailableLedger'
 	>
 ): void {
+	if (options.minimumPriorityLedger !== undefined &&
+		(!Number.isSafeInteger(options.minimumPriorityLedger) || options.minimumPriorityLedger < 1 ||
+			options.minimumPriorityLedger > 0xffff_ffff)) {
+		throw new RangeError('minimumPriorityLedger must be a positive uint32');
+	}
 	const values = [
 		['durableNextLedger', options.durableNextLedger],
 		['firstAvailableLedger', options.firstAvailableLedger],
