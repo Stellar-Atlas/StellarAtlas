@@ -11,6 +11,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { dataSource } from './data-source.js';
+import { registerAuthHealthRoute } from './AuthHealth.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'users'),
@@ -59,6 +60,7 @@ api.use(
 		users: users
 	})
 );
+registerAuthHealthRoute(api);
 api.post(
 	'/user',
 	[

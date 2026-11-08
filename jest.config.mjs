@@ -129,6 +129,13 @@ export default {
 		project({
 			testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/lib'],
 			preset: 'ts-jest',
+			displayName: 'users',
+			rootDir: 'apps/users',
+			testMatch: ['<rootDir>/src/**/__tests__/*.unit.test.ts']
+		}),
+		project({
+			testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/lib'],
+			preset: 'ts-jest',
 			displayName: 'backend',
 			rootDir: 'apps/backend',
 			moduleNameMapper: {
