@@ -1,9 +1,10 @@
-import { xdr } from '@stellar/stellar-sdk';
+import { Asset, Networks, xdr } from '@stellar/stellar-sdk';
 import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { queryHubbleContractEvents } from '../HubbleContractEventQuery.js';
 import { mapTransactionEvent } from '../HubbleTransactionMapper.js';
+import { eventTokenContext } from '../HubbleEventTokenContext.js';
 import { normalizeHubbleContractEventInput } from '../HubbleContractEventValidation.js';
 import { summarizeHubbleLedgerCoverage } from '../HubbleLedgerCoverage.js';
 import { hubbleWarehouseRouter } from '../HubbleWarehouseRouter.js';
@@ -63,6 +64,22 @@ export function fixture() {
 	return { executor, calls };
 }
 describe('bounded typed contract history', () => {
+	it('derives SAC token identity without trusting an arbitrary emitting contract or topic name', () => {
+		const issuer = 'GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE';
+		const contract = new Asset('KALE', issuer).contractId(Networks.PUBLIC);
+		expect(contract).toBe('CB23WRDQWGSP6YPMY4UV5C4OW5CBTXKYN3XEATG7KJEZCXMJBYEHOUOV');
+		const event = { type: 1, contract_id: contract, topics_decoded: [{ symbol: 'mint' }, { address: issuer }, { string: 'KALE:' + issuer }] };
+		expect(eventTokenContext(event)).toEqual({ contractId: contract, assetId: 'KALE:' + issuer, symbol: 'KALE', decimals: 7 });
+		expect(eventTokenContext({ ...event, topics_decoded: JSON.stringify(event.topics_decoded.map(topic => JSON.stringify(topic))) })).not.toBeNull();
+		for (const change of [{ type: 2 }, { contract_id: Asset.native().contractId(Networks.PUBLIC) },
+			{ topics_decoded: [{ symbol: 'mint' }, { address: issuer }, { string: 'USD:' + issuer }] },
+			{ topics_decoded: [{ symbol: 'other' }, { address: issuer }, { string: 'KALE:' + issuer }] },
+			{ topics_decoded: [{ symbol: 'mint' }, { address: 'G' + 'A'.repeat(55) }, { string: 'KALE:' + issuer }] }])
+			expect(eventTokenContext({ ...event, ...change })).toBeNull();
+		expect(eventTokenContext({ type: 1, contract_id: Asset.native().contractId(Networks.PUBLIC),
+			topics_decoded: [{ symbol: 'transfer' }, { address: issuer }, { address: issuer }, { string: 'native' }] }))
+			.toMatchObject({ assetId: 'native', symbol: 'XLM', decimals: 7 });
+	});
 	it('decodes only bounded, round-trippable embedded ScVal bytes', () => {
 		const bytes = xdr.ScVal.scvMap([
 			new xdr.ScMapEntry({
@@ -190,13 +207,17 @@ describe('bounded typed contract history', () => {
 		{ successful: 'false' },
 		{ inSuccessfulContractCall: 1 },
 		{ startTime: '2026-09-01' },
-		{ minLedger: 1, maxLedger: 1000001 },
+		{ minLedger: 1, maxLedger: 2147483648 },
 		{ limit: 201 },
 		{ account: 'ignored' }
 	])('rejects invalid or ignored filter %j', (extra) => {
 		expect(() =>
 			normalizeHubbleContractEventInput({ contractId, ...extra } as never)
 		).toThrow();
+	});
+	it('accepts the current documented event bounds without requiring a summary', () => {
+		expect(normalizeHubbleContractEventInput({ contractId, minLedger: 1, maxLedger: 1000001 }))
+			.toMatchObject({ minLedger: 1, maxLedger: 1000001, includeSummary: false });
 	});
 	it('returns explicit ingestion coverage with empty unpublished ranges and rejects missing result data', async () => {
 		const { executor, calls } = fixture();

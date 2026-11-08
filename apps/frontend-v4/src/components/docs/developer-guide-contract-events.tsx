@@ -125,6 +125,7 @@ export const contractEventsGuide: DeveloperGuidePage = {
 							number. Set <code>include_summary=true</code> for indexed event
 							and topic counts; the number of items in a page is not the total
 							count.
+							The explorer loads rows without this aggregation by default; use “Load totals &amp; topics” when needed. Cursor paging does not repeat that aggregation.
 						</dd>
 						<dt>
 							<code>min_ledger / max_ledger</code>
@@ -184,6 +185,8 @@ export const contractEventsGuide: DeveloperGuidePage = {
 							integer tokens; JavaScript Number may round them. Do not assume
 							asset decimals from an event payload.
 						</dd>
+						<dt><code>tokenContext</code></dt>
+						<dd>Optional token units for recognized Stellar Asset Contract events. The API verifies the asset’s SDK-derived mainnet SAC address against the emitter before supplying identity and seven decimals. Unknown contracts remain unscaled. The explorer shows human amounts and keeps exact raw integers in Details and the original record.</dd>
 						<dt>
 							<code>classification</code>
 						</dt>

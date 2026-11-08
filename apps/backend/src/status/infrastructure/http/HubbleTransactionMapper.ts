@@ -13,6 +13,7 @@ import {
 	exactDecimalAmount
 } from './HubbleTransactionEnvelope.js';
 import { HubbleWarehouseUnavailableError } from './HubbleWarehouseErrors.js';
+import { eventTokenContext } from './HubbleEventTokenContext.js';
 
 export function transactionString(value: unknown, field: string): string {
 	if (typeof value !== 'string')
@@ -198,6 +199,7 @@ export function mapTransactionEvent(
 		topicsJson: jsonText(row.topics_decoded),
 		dataJson: jsonText(row.data_decoded),
 		decodedBytes: decodedBytes(row.data_decoded),
+		tokenContext: eventTokenContext(row),
 		eventXdr: transactionString(row.contract_event_xdr, 'event XDR'),
 		classification
 	};

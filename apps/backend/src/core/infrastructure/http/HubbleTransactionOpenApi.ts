@@ -111,6 +111,11 @@ export const hubbleTypedEventSchema = object({
 	inSuccessfulContractCall: boolean,
 	topicsJson: text,
 	dataJson: text,
+	tokenContext: {
+		...object({ contractId: text, assetId: text, symbol: text, decimals: { type: 'integer', enum: [7] } }),
+		nullable: true,
+		description: 'SDK-derived mainnet Stellar Asset Contract identity for recognized token events, or null. This supplies token units, not deployment or transaction-success evidence. Raw dataJson and eventXdr are unchanged.'
+	},
 	eventXdr: text,
 	classification
 });

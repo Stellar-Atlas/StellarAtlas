@@ -19,6 +19,7 @@ jest.unstable_mockModule('react', () => ({
 jest.unstable_mockModule('../explorer-contract-event-table.module.css', () => ({
 	default: {}
 }));
+jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 const { ExplorerContractEventTable } =
 	await import('../explorer-contract-event-table');
 
@@ -62,6 +63,36 @@ function openDetails(rows: readonly EntityRecord[]): string {
 }
 
 describe('ExplorerContractEventTable', () => {
+	it('shows an identified SAC mint in human units, semantic roles and unchanged raw data', () => {
+		const contractId = 'CB23WRDQWGSP6YPMY4UV5C4OW5CBTXKYN3XEATG7KJEZCXMJBYEHOUOV';
+		const assetId = 'KALE:GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE';
+		const row = { id: 'kale', contractId, dataJson: '{"i128":"1381691"}',
+			topicsJson: JSON.stringify([{ symbol: 'mint' }, { address: fullAddress }, { string: assetId }]),
+			tokenContext: { contractId, assetId, symbol: 'KALE', decimals: 7 } };
+		const html = openDetails([row]);
+		expect(html.replaceAll('<!-- -->', '')).toContain('0.1381691');
+		expect(html).toContain('href="/explorer/assets/' + encodeURIComponent(assetId) + '"');
+		expect(html).toContain('<dt>Recipient</dt>'); expect(html).toContain('<dt>Asset</dt>');
+		expect(html).toContain('<dt>Raw amount</dt>'); expect(html).toContain('<code>1381691</code>');
+		expect(html).toContain('Original record and XDR');
+		for (const change of [{ tokenContext: null }, { contractId: 'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA' },
+			{ dataJson: '{"string":"1381691"}' }, { dataJson: '{"i128":"170141183460469231731687303715884105728"}' }]) {
+			selected = null;
+			const fallback = openDetails([{ ...row, ...change }]);
+			expect(fallback).not.toContain('0.1381691'); expect(fallback).not.toContain('<dt>Recipient</dt>');
+		}
+	});
+	it('formats only the exact amount field of an identified transfer, not its other integers', () => {
+		const contractId = 'CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA';
+		const html = openDetails([{ id: 'transfer', contractId,
+			tokenContext: { contractId, assetId: 'native', symbol: 'XLM', decimals: 7 },
+			topicsJson: JSON.stringify([{ symbol: 'transfer' }, { address: fullAddress }, { address: fullAddress }, { string: 'native' }]),
+			dataJson: '{"map":[{"key":{"symbol":"amount"},"val":{"i128":"9007199254740993"}},{"key":{"symbol":"to_muxed_id"},"val":{"u64":"9007199254740993"}}]}' }]);
+		expect(html).toContain('900,719,925.4740993');
+		expect(html).toContain('<dt>Sender</dt>'); expect(html).toContain('<dt>Recipient</dt>');
+		expect(html).toContain('<code>9007199254740993</code>');
+		expect(html).toContain('<code>9,007,199,254,740,993</code>');
+	});
 	it('renders decoded embedded XDR as flat exact typed fields and keeps full identifiers', () => {
 		const html = openDetails([
 			{

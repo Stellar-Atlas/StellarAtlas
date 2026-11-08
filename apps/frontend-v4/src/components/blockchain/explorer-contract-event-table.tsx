@@ -27,13 +27,8 @@ import {
 	timestampValue
 } from './explorer-format-values';
 import styles from './explorer-contract-event-table.module.css';
-
-export interface EventTokenContext {
-	readonly contractId: string;
-	readonly assetId: string;
-	readonly symbol: string;
-	readonly decimals: number;
-}
+import { tokenEventAmount, tokenEventTopicLabels, type EventTokenContext } from './event-token-amount';
+export type { EventTokenContext } from './event-token-amount';
 
 function eventTopics(row: EntityRecord): readonly ContractEventValue[] {
 	const topics = decodeContractEventValue(row.topicsJson);
@@ -181,31 +176,24 @@ function PayloadPreview({
 	readonly token?: EventTokenContext;
 }): React.JSX.Element {
 	const value = payload(row);
-	const topic = valueText(
-		eventTopics(row)[0] ?? decodeContractEventValue(null)
-	);
-	const amount = valueText(value);
-	const tokenAmount =
-		token?.contractId === row.contractId &&
-		['mint', 'burn', 'transfer', 'clawback'].includes(topic) &&
-		/^-?\d+$/.test(amount);
+	const tokenAmount = tokenEventAmount(row, value, eventTopics(row), token);
 	if (row.dataJson === 'void' || value.kind === 'void')
 		return <span className={styles.muted}>No value</span>;
 	if (tokenAmount)
 		return (
 			<div className={styles.preview}>
 				<strong>
-					{formatAtomic(amount, token!.decimals)}{' '}
-					<Link href={'/explorer/assets/' + encodeURIComponent(token!.assetId)}>
-						{token!.symbol}
+					{formatAtomic(tokenAmount.raw, tokenAmount.token.decimals)}{' '}
+					<Link href={'/explorer/assets/' + encodeURIComponent(tokenAmount.token.assetId)}>
+						{tokenAmount.token.symbol}
 					</Link>
 				</strong>
 				<span className={styles.muted}>
-					{topic === 'transfer'
+					{tokenAmount.topic === 'transfer'
 						? 'Transferred'
-						: topic === 'mint'
+						: tokenAmount.topic === 'mint'
 							? 'Minted'
-							: topic === 'burn'
+							: tokenAmount.topic === 'burn'
 								? 'Burned'
 								: 'Clawed back'}
 				</span>
@@ -320,6 +308,8 @@ function EventDialog({
 		};
 	}, []);
 	const { fields, truncated } = flattenContractEventValue(payload(row));
+	const tokenAmount = tokenEventAmount(row, payload(row), eventTopics(row), token);
+	const topicLabels = tokenAmount ? tokenEventTopicLabels(tokenAmount.topic, eventTopics(row).length) : [];
 	const summary = summarizeContractEvent(
 		entityText(recordValue(row.classification), 'eventKind'),
 		eventTopics(row)
@@ -380,7 +370,7 @@ function EventDialog({
 			<dl className={styles.fields}>
 				{eventTopics(row).map((topic, index) => (
 					<div className={styles.field} key={index}>
-						<dt>Topic {index + 1}</dt>
+						<dt>{topicLabels[index] ?? `Topic ${index + 1}`}</dt>
 						<dd>
 							<ScalarValue value={topic} />
 						</dd>
@@ -391,9 +381,10 @@ function EventDialog({
 			<dl className={styles.fields}>
 				{fields.map((field, index) => (
 					<div className={styles.field} key={index}>
-						<dt>{field.path.replaceAll('_', ' ')}</dt>
+						<dt>{tokenAmount && ['value', 'amount'].includes(field.path.toLowerCase()) ? 'Raw amount' : field.path.replaceAll('_', ' ')}</dt>
 						<dd>
-							<ScalarValue value={field.value} field={field.path} valueType={field.type} />
+							{tokenAmount && ['value', 'amount'].includes(field.path.toLowerCase()) ? <code>{tokenAmount.raw}</code>
+								: <ScalarValue value={field.value} field={field.path} valueType={field.type} />}
 						</dd>
 					</div>
 				))}
