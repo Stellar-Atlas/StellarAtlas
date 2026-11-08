@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { buildEntityHref } from '../../api/explorer-analytics';
-import { fetchClaimablePage, type ClaimablePage, type ClaimablePosition, type ClaimPredicate } from '../../api/explorer-claimable-positions';
+import { fetchClaimablePage, type ClaimablePage, type ClaimablePageFailure, type ClaimablePosition, type ClaimPredicate } from '../../api/explorer-claimable-positions';
 import type { ClaimableRole } from '../../domain/claimable-positions';
 import { LocalDateTime } from '../local-date-time';
 import { AccountAssetIdentity } from './explorer-account-asset-identity';
@@ -15,7 +15,7 @@ import positions from './explorer-claimable-positions.module.css';
 
 const labels = { claimant: 'Named as claimant', sponsor: 'Sponsoring reserve' } as const;
 type PageRequest = { readonly role: ClaimableRole; readonly cursor: string | null };
-type PageResult = PageRequest & { readonly page: ClaimablePage | 'unsupported' };
+type PageResult = PageRequest & { readonly page: ClaimablePage | ClaimablePageFailure };
 
 export function ExplorerClaimablePositions({ account }: { readonly account: string }): React.JSX.Element {
 	const [open, setOpen] = useState(false);
@@ -50,6 +50,7 @@ function PositionsPanel({ account }: { readonly account: string }): React.JSX.El
 	const current = result && selection?.role === result.role && selection.cursor === result.cursor ? result.page : null;
 	return <>
 		<p className={styles.muted}>Separate from wallet balances. Sponsoring reserve does not identify who created the position. Soroban positions are not included.</p>
+		<p className={styles.muted}>Loading a page sends this account address through Atlas to its configured Horizon provider, which may be an operator-selected external provider.</p>
 		<div className={styles.actions} role="group" aria-label="Position role">
 			{(['claimant', 'sponsor'] as const).map(role => <button key={role} type="button"
 				aria-pressed={selection?.role === role} aria-disabled={loading || selection?.role === role}
@@ -61,8 +62,18 @@ function PositionsPanel({ account }: { readonly account: string }): React.JSX.El
 			<button type="button" onClick={() => load(selection.role, selection.cursor)}>Try again</button>
 			{selection.cursor && <button type="button" onClick={() => load(selection.role, null)}>First page</button>}
 		</div>}
-		{!loading && !error && current === 'unsupported' && <p role="status">Claimable positions are not supported by the configured service.</p>}
-		{!loading && !error && current && current !== 'unsupported' && selection && <>
+		{!loading && !error && current && 'status' in current && selection && <>
+			<ClaimableProviderEvidence value={current} />
+			<p role={current.status === 'unsupported' ? 'status' : 'alert'}>{current.status === 'unsupported'
+				? 'Claimable positions are not supported by the configured service.' : 'Claimable positions could not be loaded.'}
+				{current.retryAfterSeconds !== null && <> Try again after {current.retryAfterSeconds} seconds.</>}</p>
+			<div className={styles.actions}>
+				<button type="button" onClick={() => load(selection.role, selection.cursor)}>Try again</button>
+				{selection.cursor && <button type="button" onClick={() => load(selection.role, null)}>First page</button>}
+			</div>
+		</>}
+		{!loading && !error && current && !('status' in current) && selection && <>
+			<ClaimableProviderEvidence value={current} />
 			<p className={styles.muted}>
 				{current.latestLedger === null ? 'Horizon did not report an as-of ledger.' : <>Horizon ledger <Ledger sequence={current.latestLedger} />.</>}
 				{' '}Freshness is not confirmed. Pages may reflect different ledgers.
@@ -78,6 +89,16 @@ function PositionsPanel({ account }: { readonly account: string }): React.JSX.El
 			</div>}
 		</>}
 	</>;
+}
+
+/** Present on successful pages and attributed provider errors. Never links to an external provider. */
+export function ClaimableProviderEvidence({ value }: { readonly value: ClaimablePage | ClaimablePageFailure }): React.JSX.Element {
+	return <div className={styles.muted}>
+		<p>{value.provider ? <>Provider: {value.provider.hostname} (operator-selected alternate). Atlas sent this account address to this provider.</>
+			: value.transmission === 'native' ? 'Provider: Atlas native Horizon.' : 'The provider for this response could not be confirmed.'}</p>
+		{!('status' in value) && <p>Response observed <LocalDateTime dateTime={value.observation.observedAt} />. This is the response observation time.
+			{' '}The provider network and chain freshness are not independently confirmed for this page.</p>}
+	</div>;
 }
 
 function Ledger({ sequence }: { readonly sequence: string }): React.JSX.Element {

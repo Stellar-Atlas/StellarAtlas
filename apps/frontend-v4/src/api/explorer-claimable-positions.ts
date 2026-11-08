@@ -1,5 +1,5 @@
 import { recordValue } from './explorer-analytics';
-import { classicAssetIdentity, type ClassicAssetIdentity } from './explorer-current-account';
+import { classicAssetIdentity, parseCurrentAccountProvider, type CurrentAccountProvider, type ClassicAssetIdentity } from './explorer-current-account';
 import { currentLedgerSequence, publicNetworkPassphrase } from './explorer-current-account-snapshot';
 import { claimablePageBytes, claimablePageSize, isClaimableCursor, isClaimableRole, type ClaimableRole } from '../domain/claimable-positions';
 import { isClassicAccount } from '../domain/classic-account';
@@ -22,7 +22,17 @@ export interface ClaimablePosition {
 	readonly lastModifiedAt: string | null;
 }
 
+export interface ClaimablePageFailure {
+	readonly status: 'unsupported' | 'unavailable';
+	readonly provider: CurrentAccountProvider | null;
+	readonly transmission: 'native' | 'operator_alternate' | 'unconfirmed';
+	readonly retryAfterSeconds: number | null;
+}
+
 export interface ClaimablePage {
+	readonly provider: CurrentAccountProvider | null;
+	readonly transmission: 'native' | 'operator_alternate';
+	readonly observation: { readonly observedAt: string; readonly networkStatus: 'unconfirmed'; readonly freshness: 'unknown'; readonly latestLedgerClosedAt: null };
 	readonly latestLedger: string | null;
 	readonly partial: boolean;
 	readonly positions: readonly ClaimablePosition[];
@@ -104,6 +114,12 @@ function position(value: unknown, account: string, role: ClaimableRole, latestLe
 export function parseClaimablePage(account: string, role: ClaimableRole, payload: unknown): ClaimablePage {
 	const row = recordValue(payload);
 	const ledger = currentLedgerSequence(row.latestLedger);
+	const provider = parseCurrentAccountProvider(row.provider);
+	if (row.transmission !== (provider ? 'operator_alternate' : 'native')) invalid();
+	const observation = recordValue(row.observation);
+	const observedAt = optionalTime(observation.observedAt);
+	if (observedAt === null || observation.networkStatus !== 'unconfirmed' || observation.freshness !== 'unknown' ||
+		observation.latestLedgerClosedAt !== null || (provider && provider.observedAt !== observedAt)) invalid();
 	if (!isClassicAccount(account) || row.source !== 'horizon' || row.networkPassphrase !== publicNetworkPassphrase ||
 		row.accountId !== account || row.role !== role ||
 		!(row.snapshotStatus === 'ledger_bound' && ledger !== null || row.snapshotStatus === 'ledger_unavailable' && row.latestLedger === null) ||
@@ -122,20 +138,20 @@ export function parseClaimablePage(account: string, role: ClaimableRole, payload
 			duplicate = true;
 		} else unique.set(item.id, item);
 	}
-	return { latestLedger: ledger, partial: duplicate || row.pageStatus === 'partial', positions: [...unique.values()], nextCursor: row.nextCursor };
+	return { provider, transmission: provider ? 'operator_alternate' : 'native', observation: { observedAt, networkStatus: 'unconfirmed', freshness: 'unknown', latestLedgerClosedAt: null }, latestLedger: ledger, partial: duplicate || row.pageStatus === 'partial', positions: [...unique.values()], nextCursor: row.nextCursor };
 }
 
-export async function fetchClaimablePage(account: string, role: ClaimableRole, cursor: string | null, signal: AbortSignal): Promise<ClaimablePage | 'unsupported'> {
+export async function fetchClaimablePage(account: string, role: ClaimableRole, cursor: string | null, signal: AbortSignal): Promise<ClaimablePage | ClaimablePageFailure> {
 	if (!isClassicAccount(account) || !isClaimableRole(role) || (cursor !== null && !isClaimableCursor(cursor))) invalid();
 	const query = new URLSearchParams({ role });
 	if (cursor !== null) query.set('cursor', cursor);
 	const response = await fetch('/api/explorer/claimable-positions/' + account + '?' + query, {
 		headers: { accept: 'application/json' }, credentials: 'omit', cache: 'no-store', redirect: 'error', signal
 	});
-	if (response.status !== 200 || response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json' ||
+	if (response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json' ||
 		Number(response.headers.get('content-length')) > claimablePageBytes || !response.body) {
 		void response.body?.cancel().catch(() => undefined);
-		if (response.status === 501) return 'unsupported';
+		if (response.status === 501) return { status: 'unsupported', provider: null, transmission: 'unconfirmed', retryAfterSeconds: null };
 		invalid();
 	}
 	const reader = response.body.getReader(), decoder = new TextDecoder('utf-8', { fatal: true });
@@ -148,7 +164,17 @@ export async function fetchClaimablePage(account: string, role: ClaimableRole, c
 			if (bytes > claimablePageBytes) invalid();
 			text += decoder.decode(chunk.value, { stream: true });
 		}
-		return parseClaimablePage(account, role, JSON.parse(text + decoder.decode()));
+		const payload: unknown = JSON.parse(text + decoder.decode());
+		if (response.status !== 200) {
+			const row = recordValue(payload), provider = parseCurrentAccountProvider(row.provider);
+			if (provider && row.transmission !== 'operator_alternate') invalid();
+			const retry = response.headers.get('retry-after');
+			const seconds = retry !== null && /^\d{1,3}$/.test(retry) ? Number(retry) : 0;
+			return { status: response.status === 501 ? 'unsupported' : 'unavailable', provider,
+				transmission: provider ? 'operator_alternate' : row.transmission === 'native' ? 'native' : 'unconfirmed',
+				retryAfterSeconds: seconds >= 1 && seconds <= 300 ? seconds : null };
+		}
+		return parseClaimablePage(account, role, payload);
 	} finally {
 		void reader.cancel().catch(() => undefined);
 	}
