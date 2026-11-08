@@ -1,0 +1,35 @@
+{
+  "upstream": {
+    "repository": "https://github.com/stellar/stellar-rpc.git",
+    "commit": "055dc9c7a9a9e038c6807a555c09bd94b85c9e2c"
+  },
+  "correctedSource": {
+    "commit": "1e9c2c0ad9586bb6db779ea3efbd13bc1ec662d4",
+    "tree": "d82c752913cddeb7e5a8e3c0aa2a12d49cfbbb94"
+  },
+  "patch": {
+    "path": "patches/0001-committed-head.patch",
+    "sha256": "bb4e364fcffd131fed48d24f0c95a04a891ee4ea0ef1df2c190f657dbf2f1bec"
+  },
+  "tools": {
+    "go": "go version go1.26.5 linux/amd64",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)"
+  },
+  "target": "x86_64-unknown-linux-gnu",
+  "profile": "release-with-panic-unwind",
+  "locks": {
+    "go.mod": "50d382abacbcc5b03b210dac7203df676694a636257c323f8efd1079a2bbf8b4",
+    "go.sum": "16bcdc5c657dc4835d98ad124c5e94f8111a7d031c75be72e76335e6a0cd850b",
+    "Cargo.toml": "4df8f6e129e7ef657d56a94b497f4f18dd4fb74a050a4e74444b2dd045e00ac1",
+    "Cargo.lock": "a29a83fd30059dcf77f475e167b0cd16d21524b01e3735000fbd883d5c7800b7"
+  },
+  "versionFields": {
+    "Version": "29.0.1-atlas.1",
+    "CommitHash": "1e9c2c0ad9586bb6db779ea3efbd13bc1ec662d4",
+    "BuildTimestamp": "2026-11-08T04:22:36Z",
+    "Branch": "atlas/committed-head",
+    "RSSorobanEnvVersionPrev": "28.0.1",
+    "RSSorobanEnvVersionCurr": "29.0.1"
+  }
+}
