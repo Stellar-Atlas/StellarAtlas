@@ -1,0 +1,341 @@
+From 1e9c2c0ad9586bb6db779ea3efbd13bc1ec662d4 Mon Sep 17 00:00:00 2001
+From: silence <35656692+silence48@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 23:14:31 -0500
+Subject: [PATCH] fix(rpc): isolate committed-head reads from ingestion writes
+
+---
+ cmd/stellar-rpc/internal/db/committed_head.go | 35 +++++++++
+ .../internal/db/committed_head_test.go        | 78 +++++++++++++++++++
+ cmd/stellar-rpc/internal/db/db.go             | 12 +++
+ .../internal/methods/committed_head_test.go   | 73 +++++++++++++++++
+ .../internal/methods/get_health.go            | 34 +++++---
+ cmd/stellar-rpc/internal/methods/util.go      |  6 ++
+ 6 files changed, 228 insertions(+), 10 deletions(-)
+ create mode 100644 cmd/stellar-rpc/internal/db/committed_head.go
+ create mode 100644 cmd/stellar-rpc/internal/db/committed_head_test.go
+ create mode 100644 cmd/stellar-rpc/internal/methods/committed_head_test.go
+
+diff --git a/cmd/stellar-rpc/internal/db/committed_head.go b/cmd/stellar-rpc/internal/db/committed_head.go
+new file mode 100644
+index 0000000..ddce9d3
+--- /dev/null
++++ b/cmd/stellar-rpc/internal/db/committed_head.go
+@@ -0,0 +1,35 @@
++package db
++
++import "github.com/stellar/go-stellar-sdk/xdr"
++
++// CommittedHead contains only immutable scalars from one successful database
++// commit. It is not a claim about the network head or the retained oldest ledger.
++type CommittedHead struct {
++	Sequence        uint32
++	CloseTime       int64
++	ProtocolVersion uint32
++	Hash            xdr.Hash
++	MetaVersion     int32
++}
++
++type committedHeadReader interface {
++	CommittedHead() (CommittedHead, bool)
++}
++
++// ReadCommittedHead never waits for the writer lock or reads SQLite. Readers
++// without this optional cache, including startup before a commit, use their
++// existing authoritative read path. Returning a value prevents cache mutation.
++func ReadCommittedHead(reader LedgerReader) (CommittedHead, bool) {
++	if cached, ok := reader.(committedHeadReader); ok {
++		return cached.CommittedHead()
++	}
++	return CommittedHead{}, false
++}
++
++func (r ledgerReader) CommittedHead() (CommittedHead, bool) {
++	head := r.db.cache.committedHead.Load()
++	if head == nil {
++		return CommittedHead{}, false
++	}
++	return *head, true
++}
+diff --git a/cmd/stellar-rpc/internal/db/committed_head_test.go b/cmd/stellar-rpc/internal/db/committed_head_test.go
+new file mode 100644
+index 0000000..b93e71a
+--- /dev/null
++++ b/cmd/stellar-rpc/internal/db/committed_head_test.go
+@@ -0,0 +1,78 @@
++package db
++
++import (
++	"errors"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++
++	supportdb "github.com/stellar/go-stellar-sdk/support/db"
++	"github.com/stellar/go-stellar-sdk/xdr"
++
++	"github.com/stellar/stellar-rpc/cmd/stellar-rpc/internal/daemon/interfaces"
++)
++
++type rejectedCommit struct{ supportdb.SessionInterface }
++
++func (rejectedCommit) Commit() error { return errors.New("rejected commit") }
++
++func TestCommittedHeadPublication(t *testing.T) {
++	database := NewTestDB(t)
++	reader := NewLedgerReader(database)
++	_, known := ReadCommittedHead(reader)
++	require.False(t, known)
++	writer := NewReadWriter(logger, database, interfaces.MakeNoOpDeamon(), 1, passphrase)
++	commit := func(sequence uint32, reject bool) error {
++		tx, err := writer.NewTx(t.Context())
++		require.NoError(t, err)
++		defer func() { require.NoError(t, tx.Rollback()) }()
++		lcm := createLedger(sequence)
++		lcm.V1.LedgerHeader.Header.LedgerVersion = xdr.Uint32(20 + sequence)
++		lcm.V1.LedgerHeader.Header.ScpValue.CloseTime = xdr.TimePoint(1000 + sequence)
++		lcm.V1.LedgerHeader.Hash[0] = byte(sequence)
++		require.NoError(t, tx.LedgerWriter().InsertLedger(lcm))
++		if reject {
++			w := tx.(writeTx)
++			w.tx = rejectedCommit{w.tx}
++			return w.Commit(lcm, nil)
++		}
++		return tx.Commit(lcm, nil)
++	}
++	require.NoError(t, commit(1, false))
++	first, known := ReadCommittedHead(reader)
++	require.True(t, known)
++	require.Equal(t, CommittedHead{Sequence: 1, CloseTime: 1001, ProtocolVersion: 21,
++		Hash: xdr.Hash{1}, MetaVersion: 1}, first)
++	require.EqualError(t, commit(2, true), "rejected commit")
++	unchanged, known := ReadCommittedHead(reader)
++	require.True(t, known)
++	require.Equal(t, first, unchanged)
++	require.NoError(t, commit(2, false))
++	second, known := ReadCommittedHead(reader)
++	require.True(t, known)
++	require.Equal(t, CommittedHead{Sequence: 2, CloseTime: 1002, ProtocolVersion: 22,
++		Hash: xdr.Hash{2}, MetaVersion: 1}, second)
++	_, found, err := reader.GetLedger(t.Context(), 1)
++	require.NoError(t, err)
++	require.False(t, found, "the cache must not change retention")
++	second.Hash[0] = 99
++	copyAgain, _ := ReadCommittedHead(reader)
++	require.Equal(t, byte(2), copyAgain.Hash[0])
++
++	// A scalar read must complete even while the existing writer mutex is held.
++	database.cache.Lock()
++	completed := make(chan CommittedHead, 1)
++	go func() { h, _ := ReadCommittedHead(reader); completed <- h }()
++	select {
++	case h := <-completed:
++		database.cache.Unlock()
++		require.Equal(t, copyAgain, h)
++	case <-time.After(time.Second):
++		database.cache.Unlock()
++		t.Fatal("committed head waited for writer mutex")
++	}
++	database.ResetCache()
++	_, known = ReadCommittedHead(reader)
++	require.False(t, known)
++}
+diff --git a/cmd/stellar-rpc/internal/db/db.go b/cmd/stellar-rpc/internal/db/db.go
+index 4893962..5c3af1e 100644
+--- a/cmd/stellar-rpc/internal/db/db.go
++++ b/cmd/stellar-rpc/internal/db/db.go
+@@ -10,6 +10,7 @@ import (
+ 	"fmt"
+ 	"strconv"
+ 	"sync"
++	"sync/atomic"
+ 	"time"
+ 
+ 	sq "github.com/Masterminds/squirrel"
+@@ -49,6 +50,7 @@ type WriteTx interface {
+ 
+ type dbCache struct {
+ 	sync.RWMutex
++	committedHead atomic.Pointer[CommittedHead]
+ 
+ 	latestLedgerSeq       uint32
+ 	latestLedgerCloseTime int64
+@@ -73,6 +75,7 @@ type DB struct {
+ func (d *DB) ResetCache() {
+ 	d.cache.Lock()
+ 	defer d.cache.Unlock()
++	d.cache.committedHead.Store(nil)
+ 	d.cache.latestLedgerSeq = 0
+ 	d.cache.latestLedgerCloseTime = 0
+ 	d.cache.firstLedgerSeq = 0
+@@ -486,6 +489,15 @@ func (w writeTx) Commit(ledgerCloseMeta xdr.LedgerCloseMeta, durationMetrics map
+ 				w.globalCache.firstLedgerCloseTime = 0
+ 			}
+ 		}
++		// The database commit succeeded. Keep all head fields together, and do
++		// not regress the head when older history is written after a newer ledger.
++		if ledgerSeq != 0 && ledgerSeq == w.globalCache.latestLedgerSeq {
++			w.globalCache.committedHead.Store(&CommittedHead{
++				Sequence: ledgerSeq, CloseTime: ledgerCloseTime,
++				ProtocolVersion: ledgerCloseMeta.ProtocolVersion(),
++				Hash:            ledgerCloseMeta.LedgerHash(), MetaVersion: ledgerCloseMeta.V,
++			})
++		}
+ 		return nil
+ 	}
+ 	startTime := time.Now()
+diff --git a/cmd/stellar-rpc/internal/methods/committed_head_test.go b/cmd/stellar-rpc/internal/methods/committed_head_test.go
+new file mode 100644
+index 0000000..10dc328
+--- /dev/null
++++ b/cmd/stellar-rpc/internal/methods/committed_head_test.go
+@@ -0,0 +1,73 @@
++package methods
++
++import (
++	"context"
++	"errors"
++	"testing"
++	"time"
++
++	"github.com/creachadair/jrpc2"
++	"github.com/stretchr/testify/require"
++
++	"github.com/stellar/stellar-rpc/cmd/stellar-rpc/internal/db"
++	"github.com/stellar/stellar-rpc/cmd/stellar-rpc/internal/ledgerbucketwindow"
++)
++
++type committedHeadTestReader struct {
++	db.LedgerReader
++	head          db.CommittedHead
++	getRangeCalls int
++	rangeErr      error
++}
++
++func (r *committedHeadTestReader) CommittedHead() (db.CommittedHead, bool) {
++	return r.head, true
++}
++
++func (r *committedHeadTestReader) GetLedgerRange(context.Context) (ledgerbucketwindow.LedgerRange, error) {
++	r.getRangeCalls++
++	return ledgerbucketwindow.LedgerRange{}, r.rangeErr
++}
++
++func TestGetProtocolVersionUsesCommittedHeadWithoutDatabaseRead(t *testing.T) {
++	reader := &committedHeadTestReader{head: db.CommittedHead{
++		ProtocolVersion: 29,
++		MetaVersion:     1,
++	}}
++
++	version, err := getProtocolVersion(t.Context(), reader)
++
++	require.NoError(t, err)
++	require.Equal(t, uint32(29), version)
++	// The embedded LedgerReader is nil, so reaching it would panic.
++}
++
++func TestHealthCheckRejectsStaleCommittedHeadWithoutDatabaseRead(t *testing.T) {
++	reader := &committedHeadTestReader{head: db.CommittedHead{CloseTime: 1}}
++	handler := NewHealthCheck(100, reader, time.Second)
++
++	_, err := handler(t.Context(), &jrpc2.Request{})
++
++	var rpcErr jrpc2.Error
++	require.ErrorAs(t, err, &rpcErr)
++	require.Equal(t, jrpc2.InternalError, rpcErr.Code)
++	require.Contains(t, rpcErr.Message, "latency")
++	require.Zero(t, reader.getRangeCalls)
++}
++
++func TestHealthCheckKeepsLedgerRangeAuthoritativeForRetainedBounds(t *testing.T) {
++	reader := &committedHeadTestReader{
++		head:     db.CommittedHead{CloseTime: time.Now().Unix()},
++		rangeErr: errors.New("range unavailable"),
++	}
++	handler := NewHealthCheck(100, reader, time.Hour)
++
++	_, err := handler(t.Context(), &jrpc2.Request{})
++
++	var rpcErr jrpc2.Error
++	require.ErrorAs(t, err, &rpcErr)
++	require.Equal(t, jrpc2.InternalError, rpcErr.Code)
++	require.Contains(t, rpcErr.Message, "data stores are not initialized")
++	require.Contains(t, rpcErr.Message, "range unavailable")
++	require.Equal(t, 1, reader.getRangeCalls)
++}
+diff --git a/cmd/stellar-rpc/internal/methods/get_health.go b/cmd/stellar-rpc/internal/methods/get_health.go
+index b57f72d..5c7720f 100644
+--- a/cmd/stellar-rpc/internal/methods/get_health.go
++++ b/cmd/stellar-rpc/internal/methods/get_health.go
+@@ -19,6 +19,16 @@ func NewHealthCheck(
+ 	maxHealthyLedgerLatency time.Duration,
+ ) jrpc2.Handler {
+ 	return NewHandler(func(ctx context.Context, _ protocol.GetHealthRequest) (protocol.GetHealthResponse, error) {
++		if err := ctx.Err(); err != nil {
++			return protocol.GetHealthResponse{}, err
++		}
++		if head, ok := db.ReadCommittedHead(ledgerReader); ok {
++			if err := unhealthyLedgerLatency(head.CloseTime, maxHealthyLedgerLatency); err != nil {
++				return protocol.GetHealthResponse{}, err
++			}
++		}
++		// A fresh head is not enough to invent retained range bounds. Keep the
++		// existing authoritative range path and its final freshness check.
+ 		ledgerRange, err := ledgerReader.GetLedgerRange(ctx)
+ 		if err != nil || ledgerRange.LastLedger.Sequence < 1 {
+ 			extra := ""
+@@ -31,16 +41,8 @@ func NewHealthCheck(
+ 			}
+ 		}
+ 
+-		lastKnownLedgerCloseTime := time.Unix(ledgerRange.LastLedger.CloseTime, 0)
+-		lastKnownLedgerLatency := time.Since(lastKnownLedgerCloseTime)
+-		if lastKnownLedgerLatency > maxHealthyLedgerLatency {
+-			roundedLatency := lastKnownLedgerLatency.Round(time.Second)
+-			msg := fmt.Sprintf("latency (%s) since last known ledger closed is too high (>%s)",
+-				roundedLatency, maxHealthyLedgerLatency)
+-			return protocol.GetHealthResponse{}, jrpc2.Error{
+-				Code:    jrpc2.InternalError,
+-				Message: msg,
+-			}
++		if err := unhealthyLedgerLatency(ledgerRange.LastLedger.CloseTime, maxHealthyLedgerLatency); err != nil {
++			return protocol.GetHealthResponse{}, err
+ 		}
+ 		result := protocol.GetHealthResponse{
+ 			Status:                "healthy",
+@@ -53,3 +55,15 @@ func NewHealthCheck(
+ 		return result, nil
+ 	})
+ }
++
++func unhealthyLedgerLatency(closeTime int64, maximum time.Duration) error {
++	latency := time.Since(time.Unix(closeTime, 0))
++	if latency <= maximum {
++		return nil
++	}
++	return jrpc2.Error{
++		Code: jrpc2.InternalError,
++		Message: fmt.Sprintf("latency (%s) since last known ledger closed is too high (>%s)",
++			latency.Round(time.Second), maximum),
++	}
++}
+diff --git a/cmd/stellar-rpc/internal/methods/util.go b/cmd/stellar-rpc/internal/methods/util.go
+index dbd6658..9994a34 100644
+--- a/cmd/stellar-rpc/internal/methods/util.go
++++ b/cmd/stellar-rpc/internal/methods/util.go
+@@ -11,6 +11,12 @@ func getProtocolVersion(
+ 	ctx context.Context,
+ 	ledgerReader db.LedgerReader,
+ ) (uint32, error) {
++	if err := ctx.Err(); err != nil {
++		return 0, err
++	}
++	if head, ok := db.ReadCommittedHead(ledgerReader); ok && (head.MetaVersion == 1 || head.MetaVersion == 2) {
++		return head.ProtocolVersion, nil
++	}
+ 	latestLedger, err := ledgerReader.GetLatestLedgerSequence(ctx)
+ 	if err != nil {
+ 		return 0, err
+-- 
+2.52.0.windows.1
+
