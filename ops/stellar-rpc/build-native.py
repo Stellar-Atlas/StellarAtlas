@@ -15,9 +15,12 @@ def main():
     args = parser.parse_args()
     package = Path(__file__).resolve().parent
     inputs = json.loads((package / 'build-inputs.json').read_text())
-    patch = package / inputs['patch']['path']
-    if hashlib.sha256(patch.read_bytes()).hexdigest() != inputs['patch']['sha256']:
-        raise SystemExit('Patch digest does not match build inputs')
+    patches = []
+    for entry in inputs['patches']:
+        patch = package / entry['path']
+        if hashlib.sha256(patch.read_bytes()).hexdigest() != entry['sha256']:
+            raise SystemExit('Patch digest does not match build inputs')
+        patches.append(patch)
     go = shutil.which('go')
     cargo = shutil.which('cargo')
     rustc = shutil.which('rustc')
@@ -38,7 +41,8 @@ def main():
     run(['git', 'init', '--quiet'])
     run(['git', '-c', 'gc.auto=0', 'fetch', '--depth=1', inputs['upstream']['repository'], inputs['upstream']['commit']])
     run(['git', 'checkout', '--detach', '--quiet', 'FETCH_HEAD'])
-    run(['git', 'apply', '--index', str(patch)])
+    for patch in patches:
+        run(['git', 'apply', '--index', str(patch)])
     tree = subprocess.check_output(['git', 'write-tree'], cwd=source, text=True).strip()
     if tree != inputs['correctedSource']['tree']:
         raise SystemExit('Patched source tree does not match the reviewed source')

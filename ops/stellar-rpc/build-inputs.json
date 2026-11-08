@@ -4,12 +4,9 @@
     "commit": "055dc9c7a9a9e038c6807a555c09bd94b85c9e2c"
   },
   "correctedSource": {
-    "commit": "1e9c2c0ad9586bb6db779ea3efbd13bc1ec662d4",
-    "tree": "d82c752913cddeb7e5a8e3c0aa2a12d49cfbbb94"
-  },
-  "patch": {
-    "path": "patches/0001-committed-head.patch",
-    "sha256": "bb4e364fcffd131fed48d24f0c95a04a891ee4ea0ef1df2c190f657dbf2f1bec"
+    "commit": "1191d4b3040e2eda370e3f6a0849081f6c3d3b3f",
+    "parent": "1e9c2c0ad9586bb6db779ea3efbd13bc1ec662d4",
+    "tree": "c6b8513313678382d0d924b94d650b70777abdd2"
   },
   "tools": {
     "go": "go version go1.26.5 linux/amd64",
@@ -25,11 +22,21 @@
     "Cargo.lock": "a29a83fd30059dcf77f475e167b0cd16d21524b01e3735000fbd883d5c7800b7"
   },
   "versionFields": {
-    "Version": "29.0.1-atlas.1",
-    "CommitHash": "1e9c2c0ad9586bb6db779ea3efbd13bc1ec662d4",
-    "BuildTimestamp": "2026-11-08T04:22:36Z",
-    "Branch": "atlas/committed-head",
+    "Version": "29.0.1-atlas.2",
+    "CommitHash": "1191d4b3040e2eda370e3f6a0849081f6c3d3b3f",
+    "BuildTimestamp": "2026-11-08T05:38:52Z",
+    "Branch": "atlas/opt-in-pager",
     "RSSorobanEnvVersionPrev": "28.0.1",
     "RSSorobanEnvVersionCurr": "29.0.1"
-  }
+  },
+  "patches": [
+    {
+      "path": "patches/0001-committed-head.patch",
+      "sha256": "bb4e364fcffd131fed48d24f0c95a04a891ee4ea0ef1df2c190f657dbf2f1bec"
+    },
+    {
+      "path": "patches/0002-opt-in-pager.patch",
+      "sha256": "955fdf55fe1d55c66878835f4ebb16cf033646165881d01b2255f4da60c6607d"
+    }
+  ]
 }

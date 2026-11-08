@@ -1,0 +1,341 @@
+From 1191d4b3040e2eda370e3f6a0849081f6c3d3b3f Mon Sep 17 00:00:00 2001
+From: silence <35656692+silence48@users.noreply.github.com>
+Date: Sun, 8 Nov 2026 00:29:23 -0500
+Subject: [PATCH] feat(rpc): add opt-in bounded SQLite pager controls
+
+---
+ cmd/stellar-rpc/internal/config/main.go       |  2 +
+ cmd/stellar-rpc/internal/config/options.go    | 12 +++
+ cmd/stellar-rpc/internal/daemon/daemon.go     |  3 +-
+ cmd/stellar-rpc/internal/db/db.go             | 24 +++--
+ cmd/stellar-rpc/internal/db/ledger.go         |  9 +-
+ .../internal/db/sqlite_connections_test.go    | 89 +++++++++++++++++++
+ cmd/stellar-rpc/internal/db/sqlite_options.go | 46 ++++++++++
+ .../internal/db/sqlite_options_test.go        | 39 ++++++++
+ 8 files changed, 215 insertions(+), 9 deletions(-)
+ create mode 100644 cmd/stellar-rpc/internal/db/sqlite_connections_test.go
+ create mode 100644 cmd/stellar-rpc/internal/db/sqlite_options.go
+ create mode 100644 cmd/stellar-rpc/internal/db/sqlite_options_test.go
+
+diff --git a/cmd/stellar-rpc/internal/config/main.go b/cmd/stellar-rpc/internal/config/main.go
+index 063f3d3..a1ec6cc 100644
+--- a/cmd/stellar-rpc/internal/config/main.go
++++ b/cmd/stellar-rpc/internal/config/main.go
+@@ -51,6 +51,8 @@ type Config struct {
+ 	PreflightWorkerQueueSize                       uint
+ 	PreflightEnableDebug                           bool
+ 	SQLiteDBPath                                   string
++	SQLiteCacheKiB                                 uint
++	SQLiteMaxOpenConnections                       uint
+ 	HistoryRetentionWindow                         uint32
+ 	SorobanFeeStatsLedgerRetentionWindow           uint32
+ 	ClassicFeeStatsLedgerRetentionWindow           uint32
+diff --git a/cmd/stellar-rpc/internal/config/options.go b/cmd/stellar-rpc/internal/config/options.go
+index 8cf3fb9..9152f3c 100644
+--- a/cmd/stellar-rpc/internal/config/options.go
++++ b/cmd/stellar-rpc/internal/config/options.go
+@@ -298,6 +298,18 @@ func (cfg *Config) options() Options {
+ 			// TODO: deprecate and rename to stellar_rpc.sqlite
+ 			DefaultValue: "soroban_rpc.sqlite",
+ 		},
++		{
++			Name:         "sqlite-cache-kib",
++			Usage:        "Opt-in SQLite pager target per serving connection in KiB; requires sqlite-max-open-connections. Zero for both preserves defaults; not a process-memory limit.",
++			ConfigKey:    &cfg.SQLiteCacheKiB,
++			DefaultValue: uint(0),
++		},
++		{
++			Name:         "sqlite-max-open-connections",
++			Usage:        "Opt-in SQLite serving-pool limit (2–7); requires sqlite-cache-kib. Includes a separate allowance for one index-build connection within the aggregate pager budget. Zero for both preserves defaults.",
++			ConfigKey:    &cfg.SQLiteMaxOpenConnections,
++			DefaultValue: uint(0),
++		},
+ 		{
+ 			Name:         "ingestion-timeout",
+ 			Usage:        "Ingestion Timeout when bootstrapping data (checkpoint and in-memory initialization) and preparing ledger reads",
+diff --git a/cmd/stellar-rpc/internal/daemon/daemon.go b/cmd/stellar-rpc/internal/daemon/daemon.go
+index 7415632..23a08dc 100644
+--- a/cmd/stellar-rpc/internal/daemon/daemon.go
++++ b/cmd/stellar-rpc/internal/daemon/daemon.go
+@@ -304,7 +304,8 @@ func mustCreateHistoryArchive(cfg *config.Config, logger *supportlog.Entry) *his
+ 
+ func mustOpenDatabase(cfg *config.Config, logger *supportlog.Entry, metricsRegistry *prometheus.Registry) *db.DB {
+ 	dbConn, err := db.OpenSQLiteDBWithPrometheusMetrics(
+-		cfg.SQLiteDBPath, interfaces.PrometheusNamespace, "db", metricsRegistry)
++		cfg.SQLiteDBPath, interfaces.PrometheusNamespace, "db", metricsRegistry,
++		db.SQLiteOptions{CacheKiB: cfg.SQLiteCacheKiB, MaxOpenConnections: cfg.SQLiteMaxOpenConnections})
+ 	if err != nil {
+ 		logger.WithError(err).Fatal("could not open database")
+ 	}
+diff --git a/cmd/stellar-rpc/internal/db/db.go b/cmd/stellar-rpc/internal/db/db.go
+index 5c3af1e..d716402 100644
+--- a/cmd/stellar-rpc/internal/db/db.go
++++ b/cmd/stellar-rpc/internal/db/db.go
+@@ -87,11 +87,23 @@ const (
+ 	indexBuildSQLitePragmas = serveSQLitePragmas + "&_cache_size=-32768" // size CREATE INDEX sorter's memory budget
+ )
+ 
+-func openSQLiteDB(dbFilePath string) (*db.Session, error) {
+-	session, err := db.Open("sqlite3", fmt.Sprintf("file:%s?%s", dbFilePath, serveSQLitePragmas))
++func openSQLiteDB(dbFilePath string, options ...SQLiteOptions) (*db.Session, error) {
++	selected, err := sqliteOptions(options)
++	if err != nil {
++		return nil, err
++	}
++	pragmas := serveSQLitePragmas
++	if selected.CacheKiB != 0 {
++		pragmas += fmt.Sprintf("&_cache_size=-%d", selected.CacheKiB)
++	}
++	session, err := db.Open("sqlite3", fmt.Sprintf("file:%s?%s", dbFilePath, pragmas))
+ 	if err != nil {
+ 		return nil, fmt.Errorf("open failed: %w", err)
+ 	}
++	if selected.MaxOpenConnections != 0 {
++		session.DB.SetMaxOpenConns(int(selected.MaxOpenConnections))
++		session.DB.SetMaxIdleConns(int(selected.MaxOpenConnections))
++	}
+ 
+ 	if err = runSQLMigrations(session.DB.DB, "sqlite3"); err != nil {
+ 		_ = session.Close()
+@@ -238,9 +250,9 @@ func openIndexBuildSession(ctx context.Context, dbFilePath string) (*db.Session,
+ }
+ 
+ func OpenSQLiteDBWithPrometheusMetrics(dbFilePath string, namespace string, sub db.Subservice,
+-	registry *prometheus.Registry,
++	registry *prometheus.Registry, options ...SQLiteOptions,
+ ) (*DB, error) {
+-	session, err := openSQLiteDB(dbFilePath)
++	session, err := openSQLiteDB(dbFilePath, options...)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -251,8 +263,8 @@ func OpenSQLiteDBWithPrometheusMetrics(dbFilePath string, namespace string, sub
+ 	return &result, nil
+ }
+ 
+-func OpenSQLiteDB(dbFilePath string) (*DB, error) {
+-	session, err := openSQLiteDB(dbFilePath)
++func OpenSQLiteDB(dbFilePath string, options ...SQLiteOptions) (*DB, error) {
++	session, err := openSQLiteDB(dbFilePath, options...)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+diff --git a/cmd/stellar-rpc/internal/db/ledger.go b/cmd/stellar-rpc/internal/db/ledger.go
+index aa441e6..0fab1bc 100644
+--- a/cmd/stellar-rpc/internal/db/ledger.go
++++ b/cmd/stellar-rpc/internal/db/ledger.go
+@@ -119,12 +119,17 @@ func NewLedgerReader(db *DB) LedgerReader {
+ }
+ 
+ func (r ledgerReader) NewTx(ctx context.Context) (LedgerReaderTx, error) {
+-	r.db.cache.RLock()
+-	defer r.db.cache.RUnlock()
+ 	txSession := r.db.Clone()
+ 	if err := txSession.BeginTx(ctx, &sql.TxOptions{ReadOnly: true}); err != nil {
+ 		return nil, fmt.Errorf("failed to begin read transaction: %w", err)
+ 	}
++	// Reserve the SQL connection before taking the cache lock. Otherwise an
++	// exhausted pool can leave this reader holding RLock while the writer needs
++	// Lock to commit and release the connection. SQLite's deferred read BEGIN
++	// has not read a database snapshot yet; capture the head under the same
++	// writer-serialization lock after acquisition, before any transaction query.
++	r.db.cache.RLock()
++	defer r.db.cache.RUnlock()
+ 	tx := ledgerReaderTx{
+ 		tx:                    txSession,
+ 		latestLedgerSeq:       r.db.cache.latestLedgerSeq,
+diff --git a/cmd/stellar-rpc/internal/db/sqlite_connections_test.go b/cmd/stellar-rpc/internal/db/sqlite_connections_test.go
+new file mode 100644
+index 0000000..96021fb
+--- /dev/null
++++ b/cmd/stellar-rpc/internal/db/sqlite_connections_test.go
+@@ -0,0 +1,89 @@
++package db
++
++import (
++	"context"
++	"database/sql"
++	"path/filepath"
++	"testing"
++	"time"
++
++	supportdb "github.com/stellar/go-stellar-sdk/support/db"
++	"github.com/stretchr/testify/require"
++
++	"github.com/stellar/stellar-rpc/cmd/stellar-rpc/internal/daemon/interfaces"
++)
++
++func TestSQLiteOptionsAppliedPerConnection(t *testing.T) {
++	session, err := openSQLiteDB(filepath.Join(t.TempDir(), "pager.sqlite"), SQLiteOptions{CacheKiB: 4096, MaxOpenConnections: 3})
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, session.Close()) })
++	require.Equal(t, 3, session.DB.Stats().MaxOpenConnections)
++	connections := make([]*sql.Conn, 0, 3)
++	t.Cleanup(func() {
++		for _, connection := range connections {
++			require.NoError(t, connection.Close())
++		}
++	})
++	for range 3 {
++		connection, err := session.DB.Conn(t.Context())
++		require.NoError(t, err)
++		connections = append(connections, connection)
++		var target int
++		require.NoError(t, connection.QueryRowContext(t.Context(), "PRAGMA cache_size").Scan(&target))
++		require.Equal(t, -4096, target)
++	}
++}
++
++func TestSQLiteOptionsZeroPreservesDefaults(t *testing.T) {
++	baseline, err := openSQLiteDB(filepath.Join(t.TempDir(), "baseline.sqlite"))
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, baseline.Close()) })
++	selected, err := openSQLiteDB(filepath.Join(t.TempDir(), "zero.sqlite"), SQLiteOptions{})
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, selected.Close()) })
++	var before, after int
++	require.NoError(t, baseline.GetRaw(t.Context(), &before, "PRAGMA cache_size"))
++	require.NoError(t, selected.GetRaw(t.Context(), &after, "PRAGMA cache_size"))
++	require.Equal(t, before, after)
++	require.Zero(t, selected.DB.Stats().MaxOpenConnections)
++}
++
++func TestReadConnectionWaitDoesNotBlockWriterCommit(t *testing.T) {
++	database := NewTestDB(t)
++	// Deliberately smaller than any selectable opt-in pool. This reproduces the
++	// previous lock cycle deterministically, without adding a supported cap of 1.
++	session := database.SessionInterface.(*supportdb.Session)
++	session.DB.SetMaxOpenConns(1)
++	writer, err := NewReadWriter(logger, database, interfaces.MakeNoOpDeamon(), 10, passphrase).NewTx(t.Context())
++	require.NoError(t, err)
++	t.Cleanup(func() { require.NoError(t, writer.Rollback()) })
++	ledger := createLedger(1)
++	require.NoError(t, writer.LedgerWriter().InsertLedger(ledger))
++	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
++	defer cancel()
++	type result struct {
++		reader LedgerReaderTx
++		err    error
++	}
++	readers := make(chan result, 1)
++	go func() {
++		reader, err := NewLedgerReader(database).NewTx(ctx)
++		readers <- result{reader: reader, err: err}
++	}()
++	require.Eventually(t, func() bool { return session.DB.Stats().WaitCount > 0 }, time.Second, time.Millisecond)
++	committed := make(chan error, 1)
++	go func() { committed <- writer.Commit(ledger, nil) }()
++	reader := <-readers
++	if reader.reader != nil {
++		// Release the read connection before awaiting postCommit's subsequent
++		// checkpoint acquisition from this deliberately one-connection pool.
++		require.NoError(t, reader.reader.Done())
++	}
++	select {
++	case err := <-committed:
++		require.NoError(t, err)
++	case <-time.After(time.Second):
++		t.Fatal("writer commit did not finish after the read connection was released")
++	}
++	require.NoError(t, reader.err, "connection acquisition must not hold the cache lock needed by the writer")
++}
+diff --git a/cmd/stellar-rpc/internal/db/sqlite_options.go b/cmd/stellar-rpc/internal/db/sqlite_options.go
+new file mode 100644
+index 0000000..f33d77a
+--- /dev/null
++++ b/cmd/stellar-rpc/internal/db/sqlite_options.go
+@@ -0,0 +1,46 @@
++package db
++
++import "fmt"
++
++// SQLiteOptions leaves the existing driver and pool defaults unchanged when
++// both fields are zero. A nonzero pair explicitly opts into bounded pager
++// targets and a serving-pool limit. Pager targets are not process-memory limits.
++type SQLiteOptions struct {
++	CacheKiB           uint
++	MaxOpenConnections uint
++}
++
++const (
++	maxSQLiteConnections = 8
++	indexBuildCacheKiB   = 32 * 1024
++	// Reserve an additional 2 MiB per possible connection for auxiliary pager
++	// targets; this is an allowance, not a bound on native or query allocations.
++	auxiliaryPagerKiB = maxSQLiteConnections * 2 * 1024
++	maxPagerTargetKiB = 2 * 1024 * 1024
++)
++
++func (o SQLiteOptions) validate() error {
++	if o.CacheKiB == 0 && o.MaxOpenConnections == 0 {
++		return nil
++	}
++	if o.CacheKiB == 0 || o.MaxOpenConnections < 2 || o.MaxOpenConnections >= maxSQLiteConnections {
++		return fmt.Errorf("sqlite cache target requires a positive KiB target and 2–7 serving connections; zero for both preserves defaults")
++	}
++	// The separate index-build pool may own one connection concurrently.
++	// Divide before comparing so even a maximal input cannot overflow.
++	if o.CacheKiB > (maxPagerTargetKiB-indexBuildCacheKiB-auxiliaryPagerKiB)/o.MaxOpenConnections {
++		return fmt.Errorf("sqlite suggested pager targets exceed the aggregate 2 GiB budget including index-build and auxiliary allowances")
++	}
++	return nil
++}
++
++func sqliteOptions(options []SQLiteOptions) (SQLiteOptions, error) {
++	if len(options) > 1 {
++		return SQLiteOptions{}, fmt.Errorf("at most one SQLite options value may be supplied")
++	}
++	var selected SQLiteOptions
++	if len(options) == 1 {
++		selected = options[0]
++	}
++	return selected, selected.validate()
++}
+diff --git a/cmd/stellar-rpc/internal/db/sqlite_options_test.go b/cmd/stellar-rpc/internal/db/sqlite_options_test.go
+new file mode 100644
+index 0000000..9255a52
+--- /dev/null
++++ b/cmd/stellar-rpc/internal/db/sqlite_options_test.go
+@@ -0,0 +1,39 @@
++package db
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++func TestSQLiteOptionsValidation(t *testing.T) {
++	const budget = uint(2*1024*1024 - 32*1024 - 8*2*1024)
++	boundary := budget / 2
++
++	tests := []struct {
++		name    string
++		options SQLiteOptions
++		wantErr bool
++	}{
++		{name: "defaults", options: SQLiteOptions{}},
++		{name: "valid", options: SQLiteOptions{CacheKiB: 65536, MaxOpenConnections: 7}},
++		{name: "incomplete cache", options: SQLiteOptions{CacheKiB: 65536}, wantErr: true},
++		{name: "incomplete connections", options: SQLiteOptions{MaxOpenConnections: 2}, wantErr: true},
++		{name: "connection count below minimum", options: SQLiteOptions{CacheKiB: 1, MaxOpenConnections: 1}, wantErr: true},
++		{name: "connection count above maximum", options: SQLiteOptions{CacheKiB: 1, MaxOpenConnections: 8}, wantErr: true},
++		{name: "maximum cache value", options: SQLiteOptions{CacheKiB: ^uint(0), MaxOpenConnections: 2}, wantErr: true},
++		{name: "exact budget boundary", options: SQLiteOptions{CacheKiB: boundary, MaxOpenConnections: 2}},
++		{name: "above budget boundary", options: SQLiteOptions{CacheKiB: boundary + 1, MaxOpenConnections: 2}, wantErr: true},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			err := tt.options.validate()
++			if tt.wantErr {
++				require.Error(t, err)
++			} else {
++				require.NoError(t, err)
++			}
++		})
++	}
++}
+-- 
+2.52.0.windows.1
+
