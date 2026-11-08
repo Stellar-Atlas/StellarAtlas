@@ -31,6 +31,9 @@ const { Client } = createRequire(import.meta.url)('pg') as {
 export class ArchiveBrokerReadyListener {
 	private client: ArchiveBrokerNotificationClient | null = null;
 	private connecting: Promise<void> | null = null;
+	private closing: Promise<void> | null = null;
+	private readonly pendingEnds = new Set<Promise<void>>();
+	private detachedEndFailure: { error: unknown } | null = null;
 	private retry: NodeJS.Timeout | null = null;
 	private stopped = false;
 	private delayMs = 1_000;
@@ -50,7 +53,9 @@ export class ArchiveBrokerReadyListener {
 	async start(): Promise<void> {
 		if (this.stopped || this.connecting !== null || this.client !== null)
 			return;
-		this.connecting = this.connect();
+		this.connecting = Promise.resolve().then(() => {
+			if (!this.stopped) return this.connect();
+		});
 		try {
 			await this.connecting;
 		} finally {
@@ -81,6 +86,7 @@ export class ArchiveBrokerReadyListener {
 		);
 		try {
 			await client.connect();
+			if (this.stopped || this.client !== client) return;
 			await client.query(
 				`listen ${historyArchiveReadyNotificationChannel}; listen ${archiveBrokerRamNotificationChannel}`
 			);
@@ -96,11 +102,17 @@ export class ArchiveBrokerReadyListener {
 		}
 	}
 	private failed(client: ArchiveBrokerNotificationClient, error: Error): void {
-		if (this.client !== client) return;
+		if (this.stopped || this.client !== client) return;
 		this.client = null;
 		this.availability(false);
-		void client.end().catch(() => undefined);
-		if (this.stopped) return;
+		const end = Promise.resolve().then(() => client.end());
+		this.pendingEnds.add(end);
+		const forget = () => this.pendingEnds.delete(end);
+		void end.then(forget, (error: unknown) => {
+			// Do not forget an unconfirmed socket closure before shutdown snapshots pending ends.
+			this.detachedEndFailure ??= { error };
+			forget();
+		});
 		this.logger.error(
 			'Archive ready listener reconnecting; RAM snapshot invalidated',
 			{ errorMessage: error.message }
@@ -110,19 +122,39 @@ export class ArchiveBrokerReadyListener {
 		this.retry = setTimeout(() => {
 			this.retry = null;
 			// An error can arrive before connect() settles. Never lose that retry.
-			void (this.connecting ?? Promise.resolve()).then(() => this.start());
+			void (this.connecting ?? Promise.resolve()).then(() => this.start()).catch((cause: unknown) => {
+				if (!this.stopped) this.logger.error('Archive ready listener reconnect failed', {
+					errorMessage: cause instanceof Error ? cause.message : String(cause)
+				});
+			});
 		}, this.delayMs);
 		this.delayMs = Math.min(30_000, this.delayMs * 2);
 		this.retry.unref();
 	}
-	async close(): Promise<void> {
+	/** Fence connect/LISTEN and reconnect before the dispatcher joins its run loop. */
+	stopAdmission(): void {
 		this.stopped = true;
 		if (this.retry !== null) clearTimeout(this.retry);
 		this.retry = null;
+	}
+	close(): Promise<void> {
+		this.stopAdmission();
+		return (this.closing ??= Promise.resolve().then(() => this.finishClose()));
+	}
+	private async finishClose(): Promise<void> {
 		this.availability(false);
 		const client = this.client;
 		this.client = null;
-		await client?.end().catch(() => undefined);
-		await this.connecting;
+		const connecting = this.connecting ?? Promise.resolve();
+		const results = await Promise.allSettled([
+			connecting,
+			...this.pendingEnds,
+			connecting.catch(() => undefined).then(() => client?.end())
+		]);
+		const failures: unknown[] = results.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
+		if (this.detachedEndFailure !== null && !failures.includes(this.detachedEndFailure.error))
+			failures.push(this.detachedEndFailure.error);
+		if (failures.length === 1) throw failures[0];
+		if (failures.length > 1) throw new AggregateError(failures, 'Archive ready listener close failed');
 	}
 }

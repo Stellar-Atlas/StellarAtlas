@@ -64,9 +64,19 @@ const ranked = (a: Pick, b: Pick): number =>
 	a.rootRank - b.rootRank ||
 	ramCompare(a.entry.remoteId, b.entry.remoteId);
 
+export class ArchiveBrokerRamCapacityError extends Error {
+	constructor(count: number, maxRows: number) {
+		super(
+			`RAM scheduling ceiling exceeded (${count} > ${maxRows}); full reconciliation required`
+		);
+		this.name = 'ArchiveBrokerRamCapacityError';
+	}
+}
+
 /** A rebuildable first-pass read model. take() never consumes a durable claim.
  * Root/category/priority heaps avoid a global candidate walk on capacity wakes.
- * Published/attempted records and evidence payloads never enter these queues. */
+ * Published records and ordinary retries never enter; explicitly admitted header
+ * repairs carry only a boolean scheduling flag. */
 export class ArchiveBrokerRamScheduler {
 	private readonly entries = new Map<string, Entry>();
 	private readonly lanes = new Map<string, Lane>();
@@ -120,7 +130,7 @@ export class ArchiveBrokerRamScheduler {
 		for (const row of rows) {
 			if (
 				row.status !== 'pending' ||
-				row.attempts !== 0 ||
+				(row.attempts !== 0 && row.proofCompletionReserve !== true) ||
 				row.publishedAtUs !== null
 			) {
 				updates.set(row.remoteId, null);
@@ -147,9 +157,7 @@ export class ArchiveBrokerRamScheduler {
 			count += Number(value !== null) - Number(this.entries.has(id));
 		if (count > this.maxRows) {
 			this.clear();
-			throw new Error(
-				`RAM scheduling ceiling exceeded (${count} > ${this.maxRows}); full reconciliation required`
-			);
+			throw new ArchiveBrokerRamCapacityError(count, this.maxRows);
 		}
 		for (const [id, entry] of updates) {
 			this.remove([id]);

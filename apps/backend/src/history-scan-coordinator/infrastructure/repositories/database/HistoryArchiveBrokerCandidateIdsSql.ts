@@ -1,3 +1,5 @@
+import { historyArchiveProofCompletionReserveMemberSql } from './HistoryArchiveProofCompletionReserveSql.js';
+import { historyArchiveReservedHeaderProofRefreshSql } from './HistoryArchiveReservedHeaderProofRefreshSql.js';
 import { historyArchiveCanonicalFirstScopeCteSql } from './HistoryArchiveCanonicalFirst.js';
 import { historyArchiveBrokerFreshEligibilitySql } from './HistoryArchiveBrokerFreshEligibilitySql.js';
 import { historyArchiveBrokerReservationTailSql } from './HistoryArchiveBrokerReservationTailSql.js';
@@ -46,7 +48,9 @@ const candidateSelection = `root_probe_ranked as materialized (
  * at most $1 RAM-selected identities. The caller must hold the dispatcher lock.
  * Ready -> exact durable objects -> root controls is the completion lock order.
  * Locked row versions, not the rebuildable RAM/projection, authorize execution. */
-export function buildReserveBrokerCandidateIdsSql(): string {
+export function buildReserveBrokerCandidateIdsSql(
+	fallbackObjectIdsSql?: string
+): string {
 	return `with ${historyArchiveCanonicalFirstScopeCteSql('$4::text')},
 	ram_input as materialized (
 		select distinct on (input."remoteId") input.* from (
@@ -62,13 +66,15 @@ export function buildReserveBrokerCandidateIdsSql(): string {
 	), ram_objects as materialized (
 		select object."remoteId",object."archiveUrlIdentity",object."hostIdentity",
 			object."objectType",object."checkpointLedger",object."objectOrder",
-			object.status,object.attempts,object."executionDisposition",object."dependencyReady",
+			object.status,object.attempts,object."executionReason",
+			object."executionDisposition",object."dependencyReady",
 			object."transitionEffectsRequiredAt",object."transitionEffectsCompletedAt",
 			object."nextAttemptAt",object."httpStatus",object."errorType",object."errorMessage",
 			object."archiveUrl",object."objectKey",object."objectUrl",object."bucketHash"
 		from ram_ready ready join history_archive_object_queue object
 			on object."remoteId"=ready."objectRemoteId"
-		where object.status='pending' and object.attempts=0
+		where object.status='pending' and (object.attempts=0
+			or ${historyArchiveProofCompletionReserveMemberSql('object')})
 		order by object."archiveUrlIdentity",object."objectType",object."objectKey"
 		for no key update of object skip locked
 	), ram_expected_controls as materialized (
@@ -82,7 +88,7 @@ export function buildReserveBrokerCandidateIdsSql(): string {
 		select control.* from history_archive_root_failure_control control
 		join ram_expected_controls expected using ("archiveUrlIdentity",scope)
 		order by control."archiveUrlIdentity",control.scope for update of control skip locked
-	), active_hosts as materialized (
+	), ${historyArchiveReservedHeaderProofRefreshSql}, active_hosts as materialized (
 		select object."hostIdentity",count(*)::integer as active_count
 		from history_archive_object_ready ready
 		cross join lateral (
@@ -92,7 +98,7 @@ export function buildReserveBrokerCandidateIdsSql(): string {
 	), eligible as materialized (
 		select source.*,input."selectedOrdinal",case when source.control_scope is null then input."firstPassRootReadyAt"
 			else null::timestamptz end as first_pass_root_ready_at
-		from (${historyArchiveBrokerFreshEligibilitySql({ ready: 'ram_ready', object: 'ram_objects', control: 'ram_root_controls' })}) source
+		from (${historyArchiveBrokerFreshEligibilitySql({ ready: 'ram_ready', object: 'ram_objects', control: 'ram_root_controls', fallbackObjectIds: fallbackObjectIdsSql, allowProofCompletionReserve: true })}) source
 		join ram_input input on input."remoteId"=source."objectRemoteId"
 		-- A skipped control is unavailable authority, never an uncontrolled root.
 		where not exists (select 1 from ram_expected_controls expected
@@ -101,6 +107,14 @@ export function buildReserveBrokerCandidateIdsSql(): string {
 				and not exists (select 1 from ram_root_controls locked
 					where locked."archiveUrlIdentity"=expected."archiveUrlIdentity"
 						and locked.scope=expected.scope))
+			and exists (select 1 from ram_objects object
+				where object."remoteId"=source."objectRemoteId"
+					and (object."objectType"<>'ledger'
+						or object."executionReason" is distinct from 'proof-completion-reserve'
+						or exists (
+						select 1 from header_proof_refresh_keys proof_request
+						where proof_request."archiveUrlIdentity"=object."archiveUrlIdentity"
+							and proof_request."checkpointLedger"=object."checkpointLedger")))
 	), ${historyArchiveBrokerReservationTailSql(false, {
 		selectionSql: candidateSelection,
 		lockSql: candidateLocks,
