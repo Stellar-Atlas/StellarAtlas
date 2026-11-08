@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { buildEntityHref, type EntityRecord } from '../../api/explorer-analytics';
 import { fetchCurrentAccount, type CurrentAccount, type CurrentBalance, type CurrentAccountResponse, type CurrentAccountProvider } from '../../api/explorer-current-account';
@@ -73,14 +73,12 @@ function CurrentAccountPanel({ account }: { readonly account: string }): React.J
 		};
 	}, [load]);
 	return <section className={styles.panel} aria-label="Horizon account balances" aria-busy={request.loading}>
-		<h2>Horizon account balances</h2>
-		<CurrentAccountProviderLabel provider={request.result?.provider ?? null} />
-		<div className={styles.actions}>
-			<button type="button" disabled={request.loading} onClick={load}>Refresh current account</button>
+		<div className={assets.heading}><h2>Balances</h2>
+			<button type="button" aria-label="Refresh current account" disabled={request.loading} onClick={load}>Refresh</button>
 		</div>
+		<CurrentAccountProviderLabel provider={request.result?.provider ?? null} />
 		{request.loading && <p role="status">Loading current account…</p>}
 		{request.error && <p role="alert">{request.error}{request.result ? ' Showing the last successful response.' : ''}</p>}
-		{request.result && <p className={assets.context}>Fetched <LocalDateTime dateTime={request.result.fetchedAt} /></p>}
 		<CurrentAccountAbsence result={request.result} failed={request.error !== null} />
 		{request.result?.value && <>
 			<AccountSnapshotEvidence snapshot={request.result.value.snapshot} fetchedAt={request.result.fetchedAt} />
@@ -98,10 +96,12 @@ export function CurrentAccountAbsence({ result, failed }: {
 
 export function CurrentAccountProviderLabel({ provider }: { readonly provider: CurrentAccountProvider | null }): React.JSX.Element {
 	return <div className={assets.context}><p>{provider
-		? <>Source: {provider.hostname} · Operator-selected alternate Horizon · Classic account only</>
+		? <>Source: {provider.hostname} · Wallet address shared with this provider.</>
 		: <>Configured Stellar Horizon service · Classic account only</>}</p>
-		{provider && <p>Wallet addresses are sent to {provider.hostname}.</p>}
-		{provider?.observedAt && <p>Provider response observed <LocalDateTime dateTime={provider.observedAt} /></p>}
+		{provider && <details><summary>Source details</summary><p>Operator-selected alternate Horizon · Classic account only</p>
+			<p>Wallet addresses are sent to {provider.hostname}.</p>
+			{provider.observedAt && <p>Provider response observed <LocalDateTime dateTime={provider.observedAt} /></p>}
+		</details>}
 	</div>;
 }
 
@@ -117,6 +117,7 @@ export function AccountSnapshotEvidence({ snapshot, fetchedAt }: {
 		{freshness === 'stale' && <p className="explorer-state warning" role="status">Horizon snapshot was over 5 minutes old when fetched. These balances are not current.</p>}
 		{freshness === 'unknown' && <p>Snapshot freshness is not known.</p>}
 		{!snapshot.inventoryComplete && <p>Only the exact rows Horizon reported are shown. Inventory completeness is not established.</p>}
+		<details><summary>Snapshot details</summary><p>Fetched <LocalDateTime dateTime={fetchedAt} /></p></details>
 	</div>;
 }
 
@@ -124,22 +125,25 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 	const [view, setView] = useState<View>('assets'), [page, setPage] = useState(0);
 	const [draft, setDraft] = useState(''), [query, setQuery] = useState('');
 	const [order, setOrder] = useState<WalletInventoryOrder>('asset');
+	const searchId = useId();
 	const rows = selectWalletInventory(value.balances, view, query, order);
 	const offset = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1)) * pageSize;
 	const visible = rows.slice(offset, offset + pageSize);
 	const metadata = useWalletAssetMetadata(visible.filter(row => row.kind === 'credit').map(row => row.id));
 	return <>
-		{value.lastModifiedLedger !== null && <p className={assets.context}>Account entry last changed in ledger{' '}
+		{value.lastModifiedLedger !== null && <details className={assets.context}><summary>Account entry</summary><p>Last changed in ledger{' '}
 			<Link href={buildEntityHref('ledgers', String(value.lastModifiedLedger))}>{formatAtomic(String(value.lastModifiedLedger), 0)}</Link>.
-		</p>}
+		</p></details>}
 		<div className={styles.actions} role="group" aria-label="Current account view">
 			{(['assets', 'trustlines'] as const).map(mode => <button key={mode} type="button" aria-pressed={mode === view}
 				onClick={() => { setView(mode); setPage(0); }}>{mode === 'assets' ? 'Assets' : 'Trustlines'}</button>)}
 		</div>
 		<form className={assets.filters} onSubmit={event => { event.preventDefault(); setQuery(draft.trim()); setPage(0); }}>
-			<label>Find asset or issuer<input type="search" value={draft} maxLength={128} placeholder="XLM, asset code, full issuer or pool ID"
-				onChange={event => setDraft(event.currentTarget.value)} /></label>
-			<button type="submit">Filter balances</button>
+			<div className={assets.searchField}><label htmlFor={searchId}>Find asset or issuer</label><div className={assets.searchControl}>
+				<input id={searchId} type="search" value={draft} maxLength={128} placeholder="Asset or full issuer"
+					onChange={event => setDraft(event.currentTarget.value)} />
+				<button type="submit" aria-label="Filter balances">Filter</button>
+			</div></div>
 			{query && <button type="button" onClick={() => { setDraft(''); setQuery(''); setPage(0); }}>Clear balance filter</button>}
 			<label>Order balances<select value={order} onChange={event => { setOrder(event.currentTarget.value as WalletInventoryOrder); setPage(0); }}>
 				<option value="asset">Asset (XLM first)</option><option value="balance-desc">Token balance: high to low</option><option value="balance-asc">Token balance: low to high</option>
@@ -149,7 +153,7 @@ export function CurrentAccountInventory({ value }: { readonly value: CurrentAcco
 		{order !== 'asset' && <p className={assets.context}>Sorted by token amount, not market value.</p>}
 		{!rows.length ? <p>{query ? 'No reported rows match this filter.' : !value.snapshot.inventoryComplete ? 'No exact rows to display in this view.'
 			: view === 'trustlines' ? 'No trustlines reported by Horizon.' : 'No asset balances reported by Horizon.'}</p>
-			: <div className={styles.tableWrap}><table className={styles.table} aria-label={view === 'trustlines' ? 'Current trustlines' : 'Current assets'}>
+			: <div className={styles.tableWrap}><table className={`${styles.table} ${assets.walletTable}`} aria-label={view === 'trustlines' ? 'Current trustlines' : 'Current assets'}>
 				<thead><tr><th scope="col">Asset</th><th scope="col">Total balance</th>
 					<th scope="col">Available</th><th scope="col">Reserved</th>
 					{view === 'trustlines' && <><th scope="col">Limit &amp; receive headroom</th><th scope="col">Authorization &amp; sponsor</th></>}

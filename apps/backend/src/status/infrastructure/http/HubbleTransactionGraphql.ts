@@ -74,6 +74,12 @@ export const hubbleTransactionSchema = `
   sorobanExecutionEvidence: Boolean!
   provenance: String!
  }
+ type HubbleEventTokenContext {
+  contractId: String!
+  assetId: String!
+  symbol: String!
+  decimals: Int!
+ }
  type HubbleTransactionEvent {
   id: String!
   transactionId: String!
@@ -88,6 +94,7 @@ export const hubbleTransactionSchema = `
   inSuccessfulContractCall: Boolean!
   topicsJson: String!
   dataJson: String!
+  tokenContext: HubbleEventTokenContext
   eventXdr: String!
   classification: HubbleEventClassification!
  }

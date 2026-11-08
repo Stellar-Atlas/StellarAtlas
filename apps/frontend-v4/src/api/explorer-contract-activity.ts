@@ -26,7 +26,8 @@ export function contractActivityPath(
 	contractId: string,
 	tab: ContractActivityTab,
 	filters: ExplorerFilters,
-	position = tab === 'events' ? (filters.after ?? '') : ''
+	position = tab === 'events' ? (filters.after ?? '') : '',
+	includeSummary = false
 ): string {
 	const query = new URLSearchParams({
 		limit: filters.limit || String(pageSize)
@@ -54,7 +55,7 @@ export function contractActivityPath(
 	}
 	if (tab === 'events') {
 		query.set('view', 'typed');
-		query.set('include_summary', 'true');
+		if (includeSummary) query.set('include_summary', 'true');
 		if (position) query.set('after', position);
 	} else {
 		if (

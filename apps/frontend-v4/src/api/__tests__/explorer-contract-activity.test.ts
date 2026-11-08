@@ -34,9 +34,14 @@ describe('typed contract activity API contract', () => {
 			min_ledger: '63490364',
 			max_ledger: '63490365',
 			view: 'typed',
-			include_summary: 'true',
 			after: 'opaque+/='
 		});
+		const totals = new URL(contractActivityPath(contractId, 'events', { limit: '1' }, '', true), 'https://example.test');
+		expect(totals.searchParams.get('include_summary')).toBe('true');
+		expect(totals.searchParams.has('after')).toBe(false);
+		const continuedTotals = new URL(contractActivityPath(contractId, 'events', { limit: '1' }, 'bound-cursor', true), 'https://example.test');
+		expect(continuedTotals.searchParams.get('after')).toBe('bound-cursor');
+		expect(continuedTotals.searchParams.get('include_summary')).toBe('true');
 	});
 	it('preserves the separate offset-based state endpoint', () => {
 		const url = new URL(

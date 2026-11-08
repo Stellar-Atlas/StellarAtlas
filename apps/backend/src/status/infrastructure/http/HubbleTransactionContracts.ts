@@ -1,4 +1,5 @@
 import type { HubbleEventClassification } from './HubbleEventClassification.js';
+import type { HubbleEventTokenContext } from './HubbleEventTokenContext.js';
 
 export interface HubbleTransactionInput {
 	readonly transactionHash: string;
@@ -86,6 +87,8 @@ export interface HubbleTransactionEvent {
 	readonly topicsJson: string;
 	readonly dataJson: string;
 	readonly decodedBytes: HubbleJsonValue;
+	/** Present only when SDK-derived mainnet SAC identity matches the emitting contract. */
+	readonly tokenContext: HubbleEventTokenContext | null;
 	readonly eventXdr: string;
 	readonly classification: HubbleEventClassification;
 }

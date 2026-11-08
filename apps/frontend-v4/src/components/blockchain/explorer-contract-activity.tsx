@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { ExplorerFilters } from '../../api/explorer-analytics';
 import {
 	contractActivityPath,
 	requestContractActivity,
-	type ContractActivityTab,
-	type ContractActivityPage
+	type ContractActivityTab
 } from '../../api/explorer-contract-activity';
 import {
 	ExplorerContractEventTable,
@@ -30,6 +29,7 @@ import { contractActivityUrlIdentity, eventControlsHref, eventPositionHref, read
 import { ExplorerInvestigationScope } from './explorer-investigation';
 import { contractActivityTabHref, readContractActivityTab } from './contract-activity-route';
 import { readStateRoute, statePositionHref, type StateRoute } from './contract-state-route';
+import { useContractEventSummary } from './use-contract-event-summary';
 export function ExplorerContractActivity({
 	contractId, filters, token
 }: {
@@ -90,14 +90,10 @@ function ContractActivitySelection({
 	const [search, setSearch] = useState(controls.q);
 	useEffect(() => setSearch(controls.q), [controls.q]);
 	const resultKey = contractId + ':' + tab + ':' + (stateRoute ? stateRoute.identity + ':' + stateRoute.position : JSON.stringify(applied));
-	const [acceptedSummary, setSummary] = useState<{ key: string; value: ContractActivityPage['summary'] }>();
-	const summary = acceptedSummary?.key === resultKey ? acceptedSummary.value : undefined;
-	const onSummary = useCallback(
-		(value: ContractActivityPage['summary']) => setSummary({ key: resultKey, value }),
-		[resultKey]
-	);
 	const position = stateRoute?.position ?? applied.after ?? '';
 	const queryKey = contractId + ':' + JSON.stringify(applyEventControls(applied, controls));
+	const totals = useContractEventSummary(contractId, applied, queryKey, tab === 'events');
+	const summary = totals.summary;
 	const previousPositions = useRef(new Map<string, string>());
 	const previous = stateRoute ? (position ? String(Math.max(0, Number(position) - Number(stateRoute.filters.limit))) : undefined) : previousPositions.current.get(queryKey + ':' + position);
 	const move = (next: string, remember = false): void => {
@@ -178,6 +174,10 @@ function ContractActivitySelection({
 						</label>
 					</div>
 					<div className={ui.topics} aria-label="Named event topics">
+						<button type="button" disabled={totals.loading} onClick={totals.load}
+							title="Counts the selected indexed events; this can take longer than loading a page.">
+							{totals.loading ? 'Loading totals…' : 'Load totals & topics'}
+						</button>
 						<button
 							aria-pressed={!controls.topic}
 							onClick={() =>
@@ -199,6 +199,7 @@ function ContractActivitySelection({
 							</button>
 						))}
 					</div>
+					{totals.error && <p role="alert" className={styles.error}>{totals.error}</p>}
 					<form
 						className={ui.search}
 						onSubmit={(event) => {
@@ -247,7 +248,6 @@ function ContractActivitySelection({
 				token={token}
 				initialPosition={position}
 				pageHref={stateRoute ? statePositionHref(pathname, params.toString(), stateRoute, position) : eventPositionHref(pathname, params.toString(), position)}
-				onSummary={onSummary}
 				onNextPosition={next => move(next, Boolean(next))}
 				onPreviousPosition={previous === undefined ? undefined : () => move(previous)}
 			/>
@@ -260,7 +260,6 @@ function ContractActivityResults({
 	filters,
 	tab,
 	token,
-	onSummary,
 	onNextPosition,
 	onPreviousPosition,
 	initialPosition,
@@ -270,7 +269,6 @@ function ContractActivityResults({
 	readonly filters: ExplorerFilters;
 	readonly tab: ContractActivityTab;
 	readonly token?: EventTokenContext;
-	readonly onSummary: (value: ContractActivityPage['summary']) => void;
 	readonly onNextPosition: (position: string) => void;
 	readonly onPreviousPosition?: () => void;
 	readonly initialPosition: string;
@@ -308,7 +306,6 @@ function ContractActivityResults({
 			.then((page) => {
 				if (current() && !abort.signal.aborted) {
 					dispatch({ type: 'loaded', requestId, page });
-					onSummary(page.summary);
 				}
 			})
 			.catch((error: unknown) => {
@@ -329,7 +326,7 @@ function ContractActivityResults({
 			clearTimeout(timer);
 			abort.abort();
 		};
-	}, [path, contractId, tab, requestedPosition, requestId, onSummary]);
+	}, [path, contractId, tab, requestedPosition, requestId]);
 	const displayedPosition = state.positions[state.pageIndex] ?? '';
 	const view = (
 		<ContractActivityView

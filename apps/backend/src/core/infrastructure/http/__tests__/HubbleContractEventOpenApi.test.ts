@@ -133,6 +133,8 @@ describe('typed contract-event OpenAPI', () => {
 		])
 			expect(record(eventFields[name]).type).toBe('string');
 		expect(record(eventFields.operationId).nullable).toBe(true);
+		expect(record(eventFields.tokenContext).nullable).toBe(true);
+		expect(record(record(record(eventFields.tokenContext).properties).decimals).enum).toEqual([7]);
 		expect(record(eventFields.closedAt).format).toBe('date-time');
 		expect(record(eventFields.successful).type).toBe('boolean');
 		expect(record(eventFields.inSuccessfulContractCall).type).toBe('boolean');

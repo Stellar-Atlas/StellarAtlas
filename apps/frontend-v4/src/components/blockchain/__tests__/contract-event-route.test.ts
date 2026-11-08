@@ -9,7 +9,7 @@ describe('event selection URL contract', () => {
 		const restored = readEventRoute(filters, new URLSearchParams('order=asc&limit=50&after=next'));
 		expect(createEventControls(restored)).toEqual({ order: 'asc', limit: '50', type: 'all', topic: '', q: '' });
 		expect(restored.after).toBe('next');
-		expect(contractActivityPath('C-test', 'events', restored)).toContain('limit=50&min_ledger=100&max_ledger=101&order=asc&view=typed&include_summary=true&after=next');
+	expect(contractActivityPath('C-test', 'events', restored)).toContain('limit=50&min_ledger=100&max_ledger=101&order=asc&view=typed&after=next');
 		expect(readEventRoute(filters, new URLSearchParams())).toEqual({ min_ledger: '100', max_ledger: '101', order: 'desc', limit: '25' });
 	});
 	it('commits controls, clearing only continuation while preserving investigation context', () => {

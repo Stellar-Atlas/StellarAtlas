@@ -30,7 +30,20 @@
 .amount { font-variant-numeric: tabular-nums; }
 .context { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
 .filters { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; margin: 1rem 0; }
-.filters label { display: grid; gap: .35rem; min-width: min(15rem, 100%); flex: 1; }
+.filters > label, .searchField { display: grid; gap: .35rem; min-width: min(15rem, 100%); flex: 1; }
 .filters input, .filters select { width: 100%; min-width: 0; padding: .6rem; color: var(--ink); background: var(--field); border: 1px solid var(--border); border-radius: .4rem; font: inherit; }
 .filters button { padding: .6rem .8rem; min-height: 2.75rem; }
-@media (max-width: 640px) { .filters label { flex-basis: 100%; } }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.heading button, .filters button { color: var(--ink); background: var(--button-secondary); border: 1px solid var(--border); border-radius: .4rem; font: inherit; padding: .6rem .8rem; min-height: 2.75rem; cursor: pointer; }
+.searchControl { display: flex; gap: .5rem; min-width: 0; }
+.searchControl input { flex: 1; width: 0; }
+.searchControl button { flex: none; }
+@media (max-width: 640px) { .filters > label, .searchField { flex-basis: 100%; } }
+@media (min-width: 700px) and (max-width: 960px) {
+	.walletTable tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem .8rem; }
+	.walletTable tbody td { display: block; min-width: 0; }
+	.walletTable tbody td::before { display: block; margin-bottom: .25rem; }
+	.walletTable tbody td:first-child { grid-column: 1 / -1; }
+	.walletTable tbody td:first-child::before { display: none; }
+	.walletTable tbody td:nth-child(n+5) { grid-column: 1 / -1; display: grid; grid-template-columns: 150px minmax(0, 1fr); }
+}

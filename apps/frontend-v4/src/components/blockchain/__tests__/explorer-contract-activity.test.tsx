@@ -121,6 +121,9 @@ describe('typed contract activity presentation', () => {
 		);
 		expect(html).toContain('State changes');
 		expect(html).toContain('All events');
+		expect(html).toContain('Load totals &amp; topics');
+		expect(html).not.toContain('include_summary');
+		expect(html).not.toContain('0 indexed events');
 		expect(html).toContain('Loading…');
 	});
 	it('restores a shared state tab without event controls or event continuation', () => {
@@ -155,7 +158,7 @@ describe('typed contract activity presentation', () => {
 			}));
 			expect(html).toContain('<option value="asc" selected="">Oldest first');
 			expect(html).toContain('<option value="50" selected="">50');
-			expect(html).toContain('type_code=1&amp;order=asc&amp;topic=mint&amp;q=account&amp;view=typed&amp;include_summary=true&amp;after=next');
+			expect(html).toContain('type_code=1&amp;order=asc&amp;topic=mint&amp;q=account&amp;view=typed&amp;after=next');
 			expect(html).not.toContain('events?limit=10');
 		} finally { search = ''; }
 	});
