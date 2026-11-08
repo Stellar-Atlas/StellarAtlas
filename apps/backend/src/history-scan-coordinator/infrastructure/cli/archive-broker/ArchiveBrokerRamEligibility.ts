@@ -85,7 +85,8 @@ export class ArchiveBrokerRamEligibility {
 			row.dispatchToken === null &&
 			this.context.canonicalRoot !== null &&
 			this.context.canonicalIncomplete &&
-			row.archiveUrlIdentity !== this.context.canonicalRoot
+			row.archiveUrlIdentity !== this.context.canonicalRoot &&
+			!this.context.fallbackObjectIds.includes(row.remoteId)
 		)
 			return null;
 		let controlScope: string | null = null,

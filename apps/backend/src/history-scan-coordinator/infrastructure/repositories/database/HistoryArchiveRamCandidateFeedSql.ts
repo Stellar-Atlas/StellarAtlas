@@ -1,4 +1,6 @@
 import { historyArchiveCanonicalFirstScopeSelectSql } from './HistoryArchiveCanonicalFirst.js';
+import { historyArchiveCheckpointBucketDependenciesSql } from './HistoryArchiveCheckpointDependencyReadSql.js';
+import { historyArchiveProofCompletionReserveMemberSql } from './HistoryArchiveProofCompletionReserveSql.js';
 
 const us = (value: string): string =>
 	`(extract(epoch from ${value})*1000000)::bigint::text`;
@@ -35,6 +37,11 @@ cross join lateral (select ${metadataColumns
 const candidateFields = `ready."objectRemoteId" as "remoteId",ready."archiveUrlIdentity",
   object."hostIdentity",object."objectType",object."checkpointLedger",object."objectOrder",
   object.status,object.attempts,object."executionDisposition",object."dependencyReady",
+  case when object.status='pending' and object.attempts>0 then exists (
+    select 1 from history_archive_object_queue marked
+    where marked."remoteId"=ready."objectRemoteId"
+      and ${historyArchiveProofCompletionReserveMemberSql('marked')}
+  ) else false end as "proofCompletionReserve",
   ${us('object."transitionEffectsRequiredAt"')} as "transitionEffectsRequiredAtUs",
   ${us('object."transitionEffectsCompletedAt"')} as "transitionEffectsCompletedAtUs",
   ${us('object."nextAttemptAt"')} as "nextAttemptAtUs",
@@ -65,6 +72,45 @@ order by ready."objectRemoteId"`;
  * evidence/XDR or historical queue scans. Root collation ranks use RAM's keys. */
 export const historyArchiveRamContextSql = `
 with canonical as (${historyArchiveCanonicalFirstScopeSelectSql('$1::text')}),
+fallback_targets as materialized (
+  select target."remoteId",target."archiveUrlIdentity",target."checkpointLedger"
+  from jsonb_to_recordset($3::jsonb) as target(
+    "remoteId" uuid,"archiveUrlIdentity" text,"checkpointLedger" integer)
+  join history_archive_object_queue marked
+    on marked."remoteId"=target."remoteId"
+    and marked."archiveUrlIdentity"=target."archiveUrlIdentity"
+    and marked."checkpointLedger"=target."checkpointLedger"
+    and marked."objectType"='checkpoint-state'
+    and marked."executionReason"='canonical-frontier-alternate'
+    and marked.status in ('pending','scanning','verified')
+), fallback_objects as materialized (
+  select target."archiveUrlIdentity",target."checkpointLedger",object."remoteId"
+  from fallback_targets target
+  join history_archive_object_queue object
+    on object."archiveUrlIdentity"=target."archiveUrlIdentity"
+    and object."checkpointLedger"=target."checkpointLedger"
+    and object."objectType" in ('checkpoint-state','ledger','transactions','results')
+  union
+  select target."archiveUrlIdentity",target."checkpointLedger",bucket."remoteId"
+  from fallback_targets target
+  cross join lateral (
+    ${historyArchiveCheckpointBucketDependenciesSql(
+					'target."archiveUrlIdentity"',
+					'target."checkpointLedger"'
+				)}
+  ) dependency
+  join history_archive_object_queue bucket
+    on bucket."archiveUrlIdentity"=target."archiveUrlIdentity"
+    and bucket."objectType"='bucket'
+    and bucket."bucketHash"=dependency."bucketHash"
+), fallback_ready as materialized (
+  select target."remoteId" as "objectRemoteId"
+  from fallback_targets target
+  union
+  select distinct ready."objectRemoteId"
+  from fallback_objects object
+  join history_archive_object_ready ready on ready."objectRemoteId"=object."remoteId"
+),
 published as materialized (
   select ready."archiveUrlIdentity",object."objectType",object."hostIdentity"
   from history_archive_object_ready ready
@@ -108,4 +154,5 @@ coalesce((select jsonb_agg(row) from (
 ) row),'[]') as "activeScopes",
 coalesce((select jsonb_agg(row) from (
   select root as "archiveUrlIdentity",(row_number() over(order by root))::integer as "sortRank" from roots
-) row),'[]') as "rootSortRanks"`;
+) row),'[]') as "rootSortRanks",
+coalesce((select jsonb_agg("objectRemoteId") from fallback_ready),'[]') as "fallbackObjectIds"`;

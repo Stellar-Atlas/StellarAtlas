@@ -28,6 +28,7 @@ import {
 import { ArchiveBrokerReadyListener } from './ArchiveBrokerReadyListener.js';
 import { ArchiveBrokerRamDispatch } from './ArchiveBrokerRamDispatch.js';
 import { getHistoryArchiveRetryPhase } from '../../repositories/database/HistoryArchiveFirstPassPolicy.js';
+import { reserveCanonicalRetryWhenIdle } from '../../repositories/database/HistoryArchiveCanonicalSubstitutionRetry.js';
 import {
 	createArchiveBrokerConsumerStateReporter,
 	readArchiveBrokerOccupancy
@@ -44,6 +45,7 @@ export {
 } from './ArchiveBrokerBuffer.js';
 
 const orphanedPublishedReplayAgeMs = 30_000;
+const dispatcherDrainDeadlineMs = 30_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
@@ -144,6 +146,9 @@ export class HistoryArchiveBrokerDispatcher {
 	private wakeVersion = 0;
 	private readonly wakeWaiters = new Set<() => void>();
 	private stopping = false;
+	private runPromise: Promise<void> | null = null;
+	private closePromise: Promise<void> | null = null;
+	private closeSettlement: Promise<void> | null = null;
 	private readonly reportConsumerState;
 	private readonly frontierMaintenance: ArchiveBrokerFrontierMaintenance;
 	private readonly adaptiveMaintenance: ArchiveBrokerAdaptiveMaintenance;
@@ -157,12 +162,13 @@ export class HistoryArchiveBrokerDispatcher {
 			config.ramQueueEnabled === true
 				? new ArchiveBrokerRamDispatch(
 						repository.createRamCandidateFeed(),
-						(ids, root) =>
+						(ids, root, fallbackObjectIds) =>
 							repository.reserveCandidateIds(
 								ids,
 								config.maximumPerHost,
 								config.maximumPriority,
-								root
+								root,
+								fallbackObjectIds
 							),
 						config,
 						logger,
@@ -182,64 +188,95 @@ export class HistoryArchiveBrokerDispatcher {
 			() => this.signalWork()
 		);
 	}
-	async run(): Promise<void> {
+	run(): Promise<void> {
+		return (this.runPromise ??= Promise.resolve().then(() => this.runLoop()));
+	}
+	private async runLoop(): Promise<void> {
+		if (this.stopping) return;
 		await this.initialize();
+		if (this.stopping) return;
 		await this.initializeReadyListener();
 		while (!this.stopping) {
 			let observedWakeVersion = this.wakeVersion;
 			try {
 				const broker = await this.getBrokerCapacity();
+				if (this.stopping) return;
 				const capacity = broker.availableCapacity;
 				if (capacity < 1) {
 					await this.waitForWork(observedWakeVersion);
 					continue;
 				}
 				if (await this.replayOrphanedPublishedJobs(broker)) continue;
+				if (this.stopping) return;
 				const limit = Math.min(capacity, this.config.batchSize);
+				let emptyCanonicalDurable = false;
 				const reserve = async (root = this.config.canonicalFirstRoot) => {
+					if (this.stopping) return [];
 					// Consume only wakes preceding this SELECT; later events must survive.
 					observedWakeVersion = this.wakeVersion;
+					const afterEmptyCanonicalDurable = root === null && emptyCanonicalDurable;
+					if (root === null) emptyCanonicalDurable = false;
 					const ramJobs =
 						getHistoryArchiveRetryPhase() === 'first-pass'
-							? await this.ram?.reserve(limit, root)
+							? await this.ram?.reserve(limit, root, afterEmptyCanonicalDurable)
 							: null;
 					if (ramJobs !== undefined && ramJobs !== null) return ramJobs;
-					return this.repository.reserveJobs(
+					if (this.stopping) return [];
+					const durableJobs = await this.repository.reserveJobs(
 						limit,
 						this.config.maximumPerHost,
 						this.config.maximumPriority,
 						root
 					);
+					if (root !== null && root === this.config.canonicalFirstRoot)
+						emptyCanonicalDurable = durableJobs.length === 0;
+					return durableJobs;
 				};
 				await this.repository.admitDailyTransientSourceRetries(limit);
+				if (this.stopping) return;
 				const adaptive = this.adaptiveMaintenance.run(limit);
 				let jobs = await reserve();
-				if (jobs.length === 0) {
+				if (!this.stopping && jobs.length === 0) {
 					const changed = await adaptive;
 					if (changed > 0 || this.wakeVersion !== observedWakeVersion)
 						jobs = await reserve();
 				}
-				if (jobs.length === 0) {
+				if (!this.stopping && jobs.length === 0) {
 					const changed = await this.frontierMaintenance.run();
 					if (changed > 0 || this.wakeVersion !== observedWakeVersion)
 						jobs = await reserve();
 				}
-				if (jobs.length === 0) {
+				if (!this.stopping && jobs.length === 0) {
 					const changed = await this.repository.ensureFrontier(
 						this.config.canonicalFirstRoot
 					);
 					if (changed > 0 || this.wakeVersion !== observedWakeVersion)
 						jobs = await reserve();
 				}
-				if (jobs.length === 0 && this.config.canonicalFirstRoot !== null) {
+				if (!this.stopping && jobs.length === 0 && this.config.canonicalFirstRoot !== null) {
 					await this.repository.ensurePrefetch(null);
 					// A broader root scope also requires a SELECT even without new work.
 					jobs = await reserve(null);
-					if (jobs.length === 0) {
+					if (!this.stopping && jobs.length === 0) {
 						const changed = await this.repository.ensureFrontier(null);
 						if (changed > 0 || this.wakeVersion !== observedWakeVersion)
 							jobs = await reserve(null);
 					}
+				}
+				if (!this.stopping && jobs.length === 0) {
+					jobs = await reserveCanonicalRetryWhenIdle({
+						currentJobs: jobs,
+						capacity,
+						admitOne: async () => this.stopping ? 0 :
+							await this.repository.admitCanonicalSubstitutionRetry(),
+						reserveOne: async () =>
+							this.stopping ? [] : await this.repository.reserveJobs(
+								1,
+								this.config.maximumPerHost,
+								this.config.maximumPriority,
+								null
+							)
+					});
 				}
 				if (jobs.length === 0) {
 					await this.waitForWork(observedWakeVersion);
@@ -250,6 +287,7 @@ export class HistoryArchiveBrokerDispatcher {
 				this.logger.error('Archive broker dispatch iteration failed', {
 					errorMessage: error instanceof Error ? error.message : String(error)
 				});
+				if (this.stopping) throw error;
 				await this.waitForWork(observedWakeVersion);
 			}
 		}
@@ -278,6 +316,7 @@ export class HistoryArchiveBrokerDispatcher {
 			);
 			if (requeued > 0) return true;
 		}
+		if (this.stopping) return false;
 		const reclaimed = await reconcileSuppressedPublications(
 			this.repository,
 			() => this.requireManager(),
@@ -285,6 +324,7 @@ export class HistoryArchiveBrokerDispatcher {
 			new Date(now - orphanedPublishedReplayAgeMs)
 		);
 		if (reclaimed > 0) return true;
+		if (this.stopping) return false;
 		// Do not put optional frontier I/O ahead of already-admitted fresh work.
 		void this.frontierMaintenance.run();
 		const jobs = await this.repository.findPublishedJobs(
@@ -297,24 +337,61 @@ export class HistoryArchiveBrokerDispatcher {
 		await this.publish(jobs);
 		return true;
 	}
-	async close(): Promise<void> {
+	close(timeoutMs = dispatcherDrainDeadlineMs): Promise<void> {
+		if (this.closePromise !== null) return this.closePromise;
 		this.stopping = true;
+		this.ram?.stopAdmission();
+		this.readyListener?.stopAdmission();
 		this.signalWork();
-		await Promise.all([
-			this.frontierMaintenance.close(),
-			this.adaptiveMaintenance.close()
-		]);
+		const settlement = Promise.resolve().then(() => this.finishClose());
+		this.closeSettlement = settlement;
+		this.closePromise = new Promise<void>((resolve, reject) => {
+			const timer = setTimeout(() => reject(new Error(
+				`Archive broker drain timed out after ${timeoutMs}ms; handoff is not safe`
+			)), timeoutMs);
+			settlement.then(
+				() => { clearTimeout(timer); resolve(); },
+				(error: unknown) => { clearTimeout(timer); reject(error); }
+			);
+		});
+		return this.closePromise;
+	}
+	/** A deadline reports failure, but it does not authorize closing a live DataSource. */
+	waitForShutdown(): Promise<void> {
+		return this.closeSettlement ?? Promise.reject(new Error('Archive broker close was not requested'));
+	}
+	private async finishClose(): Promise<void> {
+		const failures: unknown[] = [];
+		const settle = async (...operations: (() => unknown)[]) => {
+			for (const result of await Promise.allSettled(operations.map(
+				(operation) => Promise.resolve().then(operation)
+			))) if (result.status === 'rejected') failures.push(result.reason);
+		};
+		// Both maintenance closes stop admission and join their tasks; neither closes a shared handle.
+		await settle(
+			() => this.frontierMaintenance.close(),
+			() => this.adaptiveMaintenance.close(),
+			() => this.runPromise
+		);
 		const readyListener = this.readyListener;
 		this.readyListener = null;
-		if (readyListener !== null) await readyListener.close();
-		await this.ram?.close();
-		this.capacitySubscription?.unsubscribe();
+		await settle(() => readyListener?.close(), () => this.ram?.close());
+		const subscription = this.capacitySubscription;
 		this.capacitySubscription = null;
+		await settle(() => subscription?.unsubscribe());
 		const connection = this.connection;
+		if (connection !== null) {
+			try { await connection.drain(); }
+			catch (error) {
+				failures.push(error);
+				await settle(() => connection.close());
+			}
+		}
 		this.connection = null;
 		this.jetStream = null;
 		this.manager = null;
-		if (connection !== null) await connection.drain();
+		if (failures.length === 1) throw failures[0];
+		if (failures.length > 1) throw new AggregateError(failures, 'Archive broker shutdown failed');
 	}
 	private async initializeReadyListener(): Promise<void> {
 		const connectionString = process.env.ACTIVE_DATABASE_URL;
@@ -354,33 +431,29 @@ export class HistoryArchiveBrokerDispatcher {
 			servers: [...this.config.servers],
 			...(this.config.token === undefined ? {} : { token: this.config.token })
 		});
-		try {
-			const jetStream = connection.jetstream();
-			const manager = await jetStream.jetstreamManager();
-			this.connection = connection;
-			this.jetStream = jetStream;
-			this.manager = manager;
-			await this.ensureStream(manager);
-			await this.ensureConsumer(manager);
-			this.listenForCapacity(connection);
-			await replayPublishedHistoryArchiveBrokerJobs(
-				jetStream,
-				this.repository,
-				this.config.subject,
-				Math.min(
-					this.config.highWatermark,
-					(await this.getBrokerCapacity()).availableCapacity
-				),
-				this.config.maximumPriority,
-				this.config.canonicalFirstRoot
-			);
-		} catch (error) {
-			this.connection = null;
-			this.jetStream = null;
-			this.manager = null;
-			await connection.close();
-			throw error;
-		}
+		// Transfer ownership before the next await, including a stop during connect.
+		this.connection = connection;
+		if (this.stopping) return;
+		const jetStream = connection.jetstream();
+		const manager = await jetStream.jetstreamManager();
+		if (this.stopping) return;
+		this.jetStream = jetStream;
+		this.manager = manager;
+		await this.ensureStream(manager);
+		if (this.stopping) return;
+		await this.ensureConsumer(manager);
+		if (this.stopping) return;
+		this.listenForCapacity(connection);
+		const { availableCapacity } = await this.getBrokerCapacity();
+		if (this.stopping) return;
+		await replayPublishedHistoryArchiveBrokerJobs(
+			jetStream,
+			this.repository,
+			this.config.subject,
+			Math.min(this.config.highWatermark, availableCapacity),
+			this.config.maximumPriority,
+			this.config.canonicalFirstRoot
+		);
 	}
 	private listenForCapacity(connection: NatsConnection): void {
 		const subscription = connection.subscribe(
@@ -418,10 +491,12 @@ export class HistoryArchiveBrokerDispatcher {
 		};
 		try {
 			await manager.streams.info(this.config.stream);
+			if (this.stopping) return false;
 			await manager.streams.update(this.config.stream, desired);
 			return false;
 		} catch (error) {
 			if (!isNotFound(error)) throw error;
+			if (this.stopping) return false;
 			await manager.streams.add(desired);
 			return true;
 		}
@@ -443,6 +518,7 @@ export class HistoryArchiveBrokerDispatcher {
 		};
 		try {
 			await manager.consumers.info(this.config.stream, this.config.consumer);
+			if (this.stopping) return;
 			await manager.consumers.update(
 				this.config.stream,
 				this.config.consumer,
@@ -450,6 +526,7 @@ export class HistoryArchiveBrokerDispatcher {
 			);
 		} catch (error) {
 			if (!isNotFound(error)) throw error;
+			if (this.stopping) return;
 			await manager.consumers.add(this.config.stream, desired);
 		}
 	}

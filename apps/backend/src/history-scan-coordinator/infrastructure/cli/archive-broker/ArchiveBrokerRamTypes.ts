@@ -9,6 +9,7 @@ export interface ArchiveBrokerRamCandidate {
 	readonly priority: number;
 	readonly status: string;
 	readonly attempts: number;
+	readonly proofCompletionReserve?: boolean;
 	readonly executionDisposition: string;
 	readonly dependencyReady: boolean;
 	readonly transitionEffectsRequiredAtUs: string | null;
@@ -32,6 +33,8 @@ export interface ArchiveBrokerRamContext {
 	readonly databaseNowUs: string;
 	readonly canonicalRoot: string | null;
 	readonly canonicalIncomplete: boolean;
+	/** Exact ready IDs for one authoritative marked alternate at the canonical frontier. */
+	readonly fallbackObjectIds: readonly string[];
 	readonly controls: readonly ArchiveBrokerRamControl[];
 	readonly activeHosts: readonly {
 		hostIdentity: string;

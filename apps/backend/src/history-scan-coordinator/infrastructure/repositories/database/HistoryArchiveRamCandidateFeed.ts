@@ -9,6 +9,7 @@ import {
 	historyArchiveRamRefreshIdsSql,
 	historyArchiveRamSnapshotPageSql
 } from './HistoryArchiveRamCandidateFeedSql.js';
+import { getCanonicalFrontierAlternateTargets } from './HistoryArchiveCanonicalFallbackTargets.js';
 
 export interface HistoryArchiveRamCandidatePage {
 	readonly rows: readonly ArchiveBrokerRamCandidate[];
@@ -24,7 +25,7 @@ function requireUuid(value: string): string {
 function fresh(row: ArchiveBrokerRamCandidate): boolean {
 	return (
 		row.status === 'pending' &&
-		row.attempts === 0 &&
+		(row.attempts === 0 || row.proofCompletionReserve === true) &&
 		typeof row.hostIdentity === 'string' &&
 		typeof row.objectType === 'string'
 	);
@@ -69,12 +70,19 @@ export class HistoryArchiveRamCandidateFeed {
 		canonicalRoot: string | null,
 		roots: readonly string[] = []
 	): Promise<ArchiveBrokerRamContext> {
+		const fallbackTargets = await getCanonicalFrontierAlternateTargets({
+			query: (sql, parameters) => this.dataSource.query(sql, parameters)
+		});
 		const [context] = await this.dataSource.query<
 			Omit<
 				ArchiveBrokerRamContext,
 				'canonicalRoot' | 'excludedHosts' | 'excludedRoots'
 			>[]
-		>(historyArchiveRamContextSql, [canonicalRoot, [...new Set(roots)]]);
+		>(historyArchiveRamContextSql, [
+			canonicalRoot,
+			[...new Set(roots)],
+			JSON.stringify(fallbackTargets)
+		]);
 		if (context === undefined)
 			throw new Error('RAM scheduling context unavailable');
 		return {

@@ -26,6 +26,7 @@ import {
 	admitDailyTransientSourceRetries,
 	historyArchiveManualOrAutomaticSourceRetrySql
 } from './HistoryArchiveTransientSourceRetry.js';
+import { HistoryArchiveCanonicalSubstitutionRetry } from './HistoryArchiveCanonicalSubstitutionRetry.js';
 import { recoverMissingFrontierReady } from './HistoryArchiveMissingFrontierReady.js';
 import { withBoundedArchiveBrokerMaintenance } from './BoundedArchiveBrokerMaintenance.js';
 import {
@@ -121,6 +122,8 @@ const requeueOrphanedPublishedBrokerJobsSql = `
 export class HistoryArchiveBrokerFrontierRepository {
 	private readonly candidateProjection =
 		new HistoryArchiveBrokerCandidateProjection();
+	private readonly canonicalSubstitutionRetry =
+		new HistoryArchiveCanonicalSubstitutionRetry();
 	private preferRetryOnSingleSlot = false;
 	private readonly reservationSql = new Map<string, string>();
 	constructor(
@@ -134,7 +137,8 @@ export class HistoryArchiveBrokerFrontierRepository {
 		selected: readonly ArchiveBrokerRamSelected[],
 		maximumPerHost: number,
 		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority,
-		canonicalFirstRoot: string | null = null
+		canonicalFirstRoot: string | null = null,
+		fallbackObjectIds: readonly string[] = []
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (selected.length === 0 || getHistoryArchiveRetryPhase() !== 'first-pass')
 			return [];
@@ -143,12 +147,13 @@ export class HistoryArchiveBrokerFrontierRepository {
 				await manager.query("set local lock_timeout = '250ms'");
 				await this.takeDispatcherLock(manager);
 				await manager.query("set local work_mem = '32MB'");
-				const rows = (await manager.query(buildReserveBrokerCandidateIdsSql(), [
+				const rows = (await manager.query(buildReserveBrokerCandidateIdsSql('$6::uuid[]'), [
 					selected.length,
 					Math.max(1, Math.floor(maximumPerHost)),
 					requirePriority(maximumPriority),
 					canonicalFirstRoot,
-					JSON.stringify(selected)
+					JSON.stringify(selected),
+					[...new Set(fallbackObjectIds)]
 				])) as readonly BrokerJobRow[];
 				return mapAndOrderBrokerJobs(rows);
 			});
@@ -204,6 +209,14 @@ export class HistoryArchiveBrokerFrontierRepository {
 			result.nextSweepAt
 		);
 		return result.admitted;
+	}
+	async admitCanonicalSubstitutionRetry(): Promise<number> {
+		return await withBoundedArchiveBrokerMaintenance(
+			this.dataSource,
+			(manager) => this.canonicalSubstitutionRetry.admitOne(manager),
+			0,
+			this.onMaintenanceDeferred
+		);
 	}
 	async ensurePrefetch(
 		archiveUrlIdentity: string | null = null
