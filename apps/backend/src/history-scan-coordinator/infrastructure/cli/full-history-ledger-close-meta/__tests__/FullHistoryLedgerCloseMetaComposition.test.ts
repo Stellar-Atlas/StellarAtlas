@@ -1,13 +1,33 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFullHistoryLedgerCloseMetaServiceConfig } from '../FullHistoryLedgerCloseMetaServiceConfig.js';
+import { managedMigrations } from '@core/infrastructure/database/ManagedMigrations.js';
 import {
 	assertFullHistoryLedgerCloseMetaMemoryEnvelope,
 	composeFullHistoryLedgerCloseMetaService,
+	createFullHistoryLedgerCloseMetaDataSource,
 	FULL_HISTORY_LEDGER_CLOSE_META_SERVICE_MEMORY_LIMIT_BYTES
 } from '../FullHistoryLedgerCloseMetaComposition.js';
 
 describe('FullHistoryLedgerCloseMetaComposition', () => {
+	it('retains every migration except the three independent feature migrations', () => {
+		const dataSource = createFullHistoryLedgerCloseMetaDataSource({
+			admissionEnabled: false,
+			admissionMaximumDatabaseProbeMilliseconds: 1_000
+		});
+		const unrelatedNames = new Set([
+			'HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000',
+			'AtlasAccountVerification1794091000000',
+			'AtlasVerificationAuthentication1794092000000'
+		]);
+		expect(dataSource.options.migrations).toEqual(
+			managedMigrations.filter((migration) => !unrelatedNames.has(migration.name))
+		);
+		expect(dataSource.options.migrations).toHaveLength(managedMigrations.length - 3);
+		expect(dataSource.options.migrationsRun).toBe(false);
+		expect(dataSource.options.synchronize).toBe(false);
+	});
+
 	it.each([
 		'ops/systemd/stellaratlas-full-history-ledger-close-meta.service',
 		'ops/systemd/host/stellaratlas-full-history-ledger-close-meta.service'
