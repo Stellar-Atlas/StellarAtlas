@@ -41,6 +41,7 @@ export interface FullHistoryLedgerCloseMetaAdmissionRecoveryOptions {
 	readonly maximumIoFullPressureBasisPoints: number;
 	readonly maximumIoSomePressureBasisPoints: number;
 	readonly maximumMd0InflightRequests: number;
+	readonly skipMd0InflightLimit?: boolean;
 	readonly recoveryHealthySamplesRequired: number;
 }
 
@@ -146,7 +147,10 @@ export class FullHistoryLedgerCloseMetaAdmissionRecovery {
 		) {
 			reasons.push('io-some-pressure');
 		}
-		if (values.md0InflightRequests > this.#options.maximumMd0InflightRequests) {
+		if (
+			this.#options.skipMd0InflightLimit !== true &&
+			values.md0InflightRequests > this.#options.maximumMd0InflightRequests
+		) {
 			reasons.push('md0-inflight-pressure');
 		}
 		return reasons;
