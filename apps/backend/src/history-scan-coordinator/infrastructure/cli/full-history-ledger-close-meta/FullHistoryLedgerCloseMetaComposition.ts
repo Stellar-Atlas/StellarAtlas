@@ -27,6 +27,7 @@ import { FullHistoryPublishedOutputInventory } from '../../full-history-ledger-c
 import { TypeOrmRegisteredOutputInventory } from '../../full-history-ledger-close-meta/TypeOrmRegisteredOutputInventory.js';
 import { typeOrmFullHistoryLedgerCloseMetaDatabasePool } from '../../full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaDatabasePool.js';
 import type { FullHistoryLedgerCloseMetaServiceConfig } from './FullHistoryLedgerCloseMetaServiceConfig.js';
+import { fullHistoryLedgerCloseMetaMigrations } from './FullHistoryLedgerCloseMetaMigrations.js';
 
 export interface FullHistoryLedgerCloseMetaComposition {
 	readonly admission: FullHistoryLedgerCloseMetaAdmissionPort;
@@ -218,6 +219,7 @@ export function createFullHistoryLedgerCloseMetaDataSource(
 				}
 			: options.extra,
 		migrationsRun: false,
+		migrations: fullHistoryLedgerCloseMetaMigrations,
 		poolSize: 4,
 		synchronize: false
 	});
