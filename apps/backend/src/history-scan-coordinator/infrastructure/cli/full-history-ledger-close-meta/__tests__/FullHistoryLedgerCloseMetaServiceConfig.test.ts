@@ -34,6 +34,20 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		);
 	});
 
+	it('wires a complete finite current allowance only with current priority enabled', () => {
+		const values = {
+			...environment(),
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_MIN_LEDGER: '1000',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_RESERVE_BORROW_BYTES: '549755813888',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_EXPIRES_AT: new Date(Date.now() + 3_600_000).toISOString()
+		};
+		expect(() => parseFullHistoryLedgerCloseMetaServiceConfig(values)).toThrow(/requires prioritize current/);
+		const config = parseFullHistoryLedgerCloseMetaServiceConfig({ ...values,
+			FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'true' });
+		expect(config.currentCapacityAllowance?.minimumLedger).toBe(1000);
+		expect(config.currentCapacityAllowance?.maximumReserveBorrowBytes).toBe(512n * 1024n ** 3n);
+	});
+
 	it('accepts multiple admitted shards with bounded parallel processing', () => {
 		const config = parseFullHistoryLedgerCloseMetaServiceConfig({
 			...environment(),

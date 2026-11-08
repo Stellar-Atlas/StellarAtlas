@@ -154,6 +154,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 			);
 			await dependencies.runLoop(
 				{
+					...(config.currentCapacityAllowance === undefined ? {} : {
+						currentCapacityAllowance: config.currentCapacityAllowance
+					}),
 					admissionRetryMilliseconds: config.admissionRetryMilliseconds,
 					cycleCooldownMilliseconds: config.admissionEnabled
 						? config.admissionCycleCooldownMilliseconds
@@ -176,9 +179,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 						return admission.evaluate(abortController.signal);
 					},
 					emit: (event) => writeEvent(dependencies.stdout, event),
-					ensureStorageCapacity: () =>
+					ensureStorageCapacity: (plan) =>
 						activeComposition.storageBudget.assertCanAllocate(
-							cycleOutputReservation(config)
+							cycleOutputReservation(config), plan
 						),
 					formatError: safeMessage,
 					frontier: activeComposition.frontier,

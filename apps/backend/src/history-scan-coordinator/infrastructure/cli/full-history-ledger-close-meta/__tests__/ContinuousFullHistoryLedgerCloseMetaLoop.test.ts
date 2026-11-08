@@ -168,6 +168,51 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.events).toContainEqual(expect.objectContaining({ event: 'cycle-error', message: 'Error: disk full' }));
 	});
 
+	it('uses the finite current window without historical offers and passes the exact plan to capacity admission', async () => {
+		const f = fixture(7);
+		f.config = { ...f.config, currentCapacityAllowance: allowance() };
+		const plans: PendingPlan[] = [];
+		f.dependencies.ensureStorageCapacity = async pending => { plans.push(pending); };
+		await run(f.config, f.dependencies);
+		expect(f.selected).toHaveLength(7);
+		expect(f.calls).not.toContain('historical');
+		expect(plans.map(p => [p.kind, p.startLedger, p.endLedger])).toEqual(
+			f.selected.map(r => ['priority', r.startSequence, r.endSequence]));
+	});
+
+	it.each([plan('historical', 3), plan('priority', 900)])(
+		'preserves and refuses a non-current pending plan during the window', async pending => {
+			const f = fixture(1);
+			f.pending = pending;
+			f.config = { ...f.config, currentCapacityAllowance: allowance() };
+			f.dependencies.wait = async () => { f.controller.abort(); };
+			await run(f.config, f.dependencies);
+			expect(f.selected).toEqual([]);
+			expect(f.pending).toBe(pending);
+			expect(f.calls).not.toContain('pending-write');
+		});
+
+	it('idles without a historical fallback while the current window has no work', async () => {
+		const f = fixture(1);
+		f.config = { ...f.config, currentCapacityAllowance: allowance() };
+		f.dependencies.priorityRangeReader.readNextRange = async options => {
+			expect(options.minimumPriorityLedger).toBe(1000);
+			return null;
+		};
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.calls).not.toContain('historical');
+		expect(f.selected).toEqual([]);
+	});
+
+	it('restores ordinary historical fairness at the exact expiry boundary', async () => {
+		const f = fixture(5);
+		f.config = { ...f.config, currentCapacityAllowance: allowance() };
+		f.dependencies.now = () => f.selected.length >= 4 ? 2000 : 1000;
+		await run(f.config, f.dependencies);
+		expect(f.selected.map(r => r.startSequence)).toEqual([1000, 1064, 1128, 1192, 3]);
+	});
+
 	it.each([65, 66])('retains 64-ledger historical minimum at source head %i', async head => {
 		const f = fixture(1);
 		f.dependencies.frontier.readLatestRange = async () => range(head, head);
@@ -177,6 +222,11 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.selected).toEqual(head === 66 ? [range(3, 66)] : []);
 	});
 });
+
+function allowance() {
+	return { minimumLedger: 1000, maximumReserveBorrowBytes: 512n * 1024n ** 3n,
+		expiresAtMilliseconds: 2000 };
+}
 
 type Dependencies = { -readonly [K in keyof ContinuousFullHistoryLedgerCloseMetaLoopDependencies]:
 	ContinuousFullHistoryLedgerCloseMetaLoopDependencies[K] };

@@ -160,6 +160,9 @@ export function composeFullHistoryLedgerCloseMetaService(
 		priorityRangeReader:
 			new TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader(dataSource),
 		storageBudget: new FullHistoryBulkStorageBudget({
+			...(config.currentCapacityAllowance === undefined ? {} : {
+				currentCapacityAllowance: config.currentCapacityAllowance
+			}),
 			maximumStoredBytes: config.maximumStoredBytes,
 			minimumFreeBasisPoints: config.minimumFreeBasisPoints,
 			minimumFreeBytes: config.minimumFreeBytes,
