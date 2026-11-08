@@ -6,7 +6,7 @@ import { publicNetworkPassphrase } from '../../../api/explorer-current-account-s
 jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-account-assets.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-claimable-positions.module.css', () => ({ default: {} }));
-const { ExplorerClaimablePositions } = await import('../explorer-claimable-positions');
+const { ExplorerClaimablePositions, ClaimableProviderEvidence } = await import('../explorer-claimable-positions');
 const account = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const other = 'GBDVX4VELCDSQ54KQJYTNHXAHFLBCA77ZY2USQBM4CSHTTV7DME7KALE';
 const claim = {
@@ -18,6 +18,7 @@ const claim = {
 	]
 };
 const payload = {
+	transmission: 'native', observation: { observedAt: '2026-11-08T00:00:00.000Z', networkStatus: 'unconfirmed', freshness: 'unknown', latestLedgerClosedAt: null },
 	source: 'horizon', networkPassphrase: publicNetworkPassphrase, accountId: account, role: 'claimant',
 	latestLedger: '101', snapshotStatus: 'ledger_bound', pageStatus: 'available', positions: [claim], nextCursor: 'page_2'
 };
@@ -67,9 +68,36 @@ it('does not request a page on initial render, and distinguishes unsupported fro
 		expect(fetch).not.toHaveBeenCalled();
 		fetch.mockResolvedValueOnce(Response.json({}, { status: 501 })).mockResolvedValueOnce(Response.json({}, { status: 502 }));
 		const { signal } = new AbortController();
-		await expect(fetchClaimablePage(account, 'sponsor', null, signal)).resolves.toBe('unsupported');
-		await expect(fetchClaimablePage(account, 'claimant', 'page_2', signal)).rejects.toThrow();
+		await expect(fetchClaimablePage(account, 'sponsor', null, signal)).resolves.toMatchObject({ status: 'unsupported', provider: null });
+		await expect(fetchClaimablePage(account, 'claimant', 'page_2', signal)).resolves.toMatchObject({ status: 'unavailable' });
 		expect(fetch).toHaveBeenCalledTimes(2);
 		expect(fetch.mock.calls[1]?.[0]).toBe('/api/explorer/claimable-positions/' + account + '?role=claimant&cursor=page_2');
 	} finally { fetch.mockRestore(); }
+});
+
+it('validates provider/transmission and unknown freshness without treating observation time as chain freshness', () => {
+ const provider = { mode: 'operator_alternate', hostname: 'provider.example.org', observedAt: payload.observation.observedAt };
+ const page = parseClaimablePage(account, 'claimant', { ...payload, provider, transmission: 'operator_alternate' });
+ const html = renderToStaticMarkup(<ClaimableProviderEvidence value={page} />);
+ expect(html).toContain('provider.example.org');
+ expect(html).toContain('Atlas sent this account address');
+ expect(html).toContain('response observation time');
+ expect(html).toContain('not independently confirmed');
+ for (const bad of [ { provider, transmission: 'native' }, { provider: { ...provider, hostname: 'evil/path' }, transmission: 'operator_alternate' },
+  { observation: { ...payload.observation, freshness: 'fresh' } }, { observation: { ...payload.observation, networkStatus: 'verified' } },
+  { observation: { ...payload.observation, observedAt: null } }, { observation: { ...payload.observation, latestLedgerClosedAt: payload.observation.observedAt } } ])
+  expect(() => parseClaimablePage(account, 'claimant', { ...payload, ...bad })).toThrow();
+});
+
+it('retains validated attribution on provider cooldown and unsupported responses without browser-direct provider calls', async () => {
+ const provider = { mode: 'operator_alternate', hostname: 'provider.example.org' };
+ const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ provider, transmission: 'operator_alternate' }, { status: 503, headers: { 'Retry-After': '120' } }))
+  .mockResolvedValueOnce(Response.json({ provider, transmission: 'operator_alternate' }, { status: 501 }));
+ try {
+  const failure = await fetchClaimablePage(account, 'claimant', null, new AbortController().signal);
+  expect(failure).toMatchObject({ status: 'unavailable', provider, retryAfterSeconds: 120 });
+  expect(renderToStaticMarkup(<ClaimableProviderEvidence value={failure} />)).toContain('provider.example.org');
+  expect(await fetchClaimablePage(account, 'sponsor', null, new AbortController().signal)).toMatchObject({ status: 'unsupported', provider });
+  expect(fetch.mock.calls.every(call => String(call[0]).startsWith('/api/explorer/claimable-positions/'))).toBe(true);
+ } finally { fetch.mockRestore(); }
 });

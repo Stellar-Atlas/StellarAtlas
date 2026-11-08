@@ -1,5 +1,6 @@
 import type { ExplorerAccountProviderConfig } from '../../../core/config/ExplorerAccountProviderConfig.js';
 import { fetchExplorerAccount, type ExplorerAccountDTO } from './ExplorerAccountClient.js';
+import { fetchExplorerClaimablePage, ClaimablePositionsUnsupportedError, type ClaimablePageQuery, type PositionPage } from './ExplorerClaimablePage.js';
 import { HorizonAccountReadError } from './HorizonAccountResponse.js';
 
 // Per router/process, not a distributed provider quota. No queue, timers or writes.
@@ -15,7 +16,7 @@ export class ExplorerAccountProviderError extends Error {
 	}
 }
 
-type Value = ExplorerAccountDTO | null;
+type Value = { readonly operation: 'account'; readonly value: ExplorerAccountDTO | null } | { readonly operation: 'claimable'; readonly value: PositionPage };
 interface Entry {
 	readonly controller: AbortController;
 	readonly promise: Promise<Value>;
@@ -28,10 +29,11 @@ interface Cached { readonly value: Value; readonly bytes: number; readonly until
 export function createExplorerAccountProvider(
 	config: ExplorerAccountProviderConfig,
 	networkPassphrase: string,
-	options: { readonly now?: () => number; readonly fetchAccount?: typeof fetchExplorerAccount } = {}
-): { readonly provider: NonNullable<ExplorerAccountDTO['provider']>; readonly read: (account: string, signal: AbortSignal) => Promise<Value> } {
+	options: { readonly now?: () => number; readonly fetchAccount?: typeof fetchExplorerAccount; readonly fetchClaimablePage?: typeof fetchExplorerClaimablePage } = {}
+): { readonly provider: NonNullable<ExplorerAccountDTO['provider']>; readonly read: (account: string, signal: AbortSignal) => Promise<ExplorerAccountDTO | null>; readonly readClaimablePage: (query: ClaimablePageQuery, signal: AbortSignal) => Promise<PositionPage> } {
 	const now = options.now ?? Date.now;
 	const fetchAccount = options.fetchAccount ?? fetchExplorerAccount;
+	const fetchClaimablePage = options.fetchClaimablePage ?? fetchExplorerClaimablePage;
 	const provider = Object.freeze({ mode: 'operator_alternate' as const, hostname: config.hostname });
 	const running = new Map<string, Entry>(), cached = new Map<string, Cached>();
 	let cachedBytes = 0, waiters = 0, failures = 0, retryAt = 0;
@@ -53,7 +55,7 @@ export function createExplorerAccountProvider(
 			if (oldest === undefined) break;
 			remove(oldest);
 		}
-		cached.set(key, { value, bytes, until: now() + (value ? accountProviderLimits.ttlMs : accountProviderLimits.absentTtlMs) });
+		cached.set(key, { value, bytes, until: now() + (value.value === null ? accountProviderLimits.absentTtlMs : accountProviderLimits.ttlMs) });
 		cachedBytes += bytes;
 	};
 	const join = (entry: Entry, signal: AbortSignal): Promise<Value> => {
@@ -76,15 +78,15 @@ export function createExplorerAccountProvider(
 			if (signal.aborted) abort();
 		});
 	};
-	const read = async (account: string, signal: AbortSignal): Promise<Value> => {
+	const admit = async (key: string, load: (signal: AbortSignal) => Promise<Value>, signal: AbortSignal): Promise<Value> => {
 		signal.throwIfAborted();
 		prune();
-		const item = cached.get(account);
+		const item = cached.get(key);
 		if (item) {
-			cached.delete(account); cached.set(account, item);
+			cached.delete(key); cached.set(key, item);
 			return item.value;
 		}
-		const existing = running.get(account);
+		const existing = running.get(key);
 		if (existing) return join(existing, signal);
 		if (retryAt > now()) throw new ExplorerAccountProviderError(503, Math.max(1, Math.ceil((retryAt - now()) / 1000)));
 		const refill = Math.floor(Math.max(0, now() - tokenTime) / accountProviderLimits.refillMs);
@@ -97,26 +99,45 @@ export function createExplorerAccountProvider(
 		const entry: Entry = { controller, waiters: 0, settled: false,
 			promise: Promise.resolve().then(() => {
 				controller.signal.throwIfAborted();
-				return fetchAccount(config.url, account, { networkPassphrase, signal: controller.signal });
-			}).then(accountValue => {
+				return load(controller.signal);
+			}).then(value => {
 				controller.signal.throwIfAborted();
-				const value = accountValue ? { ...accountValue, provider: { ...provider, observedAt: new Date(now()).toISOString() } } : null;
-				remember(account, value);
+				remember(key, value);
 				failures = 0;
 				return value;
 			}).catch((error: unknown) => {
 				if (controller.signal.aborted) throw controller.signal.reason;
+				if (error instanceof ClaimablePositionsUnsupportedError) throw error;
 				failures = Math.min(5, failures + 1);
 				const delay = Math.max(Math.min(60, 5 * 2 ** (failures - 1)), error instanceof HorizonAccountReadError ? error.retryAfterSeconds : 5);
 				retryAt = Math.max(retryAt, now() + delay * 1000);
 				throw new ExplorerAccountProviderError(503, Math.max(1, Math.ceil((retryAt - now()) / 1000)));
 			}).finally(() => {
 				entry.settled = true;
-				if (running.get(account) === entry) running.delete(account);
+				if (running.get(key) === entry) running.delete(key);
 			})
 		};
-		running.set(account, entry);
+		running.set(key, entry);
 		return join(entry, signal);
 	};
-	return { provider, read };
+	const read = async (account: string, signal: AbortSignal): Promise<ExplorerAccountDTO | null> => {
+		const result = await admit(JSON.stringify(['account', networkPassphrase, account]), async upstream => {
+			const value = await fetchAccount(config.url, account, { networkPassphrase, signal: upstream });
+			return { operation: 'account', value: value ? { ...value, provider: { ...provider, observedAt: new Date(now()).toISOString() } } : null };
+		}, signal);
+		if (result.operation !== 'account') throw new HorizonAccountReadError();
+		return result.value;
+	};
+	const readClaimablePage = async (query: ClaimablePageQuery, signal: AbortSignal): Promise<PositionPage> => {
+		// Fixed operation identity includes every page selector; shares account/federation quota and cooldown.
+		const key = JSON.stringify(['claimable', networkPassphrase, query.accountId, query.role, query.limit, query.after]);
+		const result = await admit(key, async upstream => {
+			const value = await fetchClaimablePage(config.url, query, { networkPassphrase, signal: upstream });
+			const observedAt = new Date(now()).toISOString();
+			return { operation: 'claimable', value: { ...value, provider: { ...provider, observedAt }, transmission: 'operator_alternate', observation: { ...value.observation, observedAt } } };
+		}, signal);
+		if (result.operation !== 'claimable') throw new HorizonAccountReadError();
+		return result.value;
+	};
+	return { provider, read, readClaimablePage };
 }

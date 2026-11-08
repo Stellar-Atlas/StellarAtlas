@@ -246,7 +246,7 @@ export const blockchainExplorerRouter = (
 
 	router.get(
 		'/accounts/:accountId/claimable-positions',
-		createExplorerClaimablePositionsHandler(config)
+		createExplorerClaimablePositionsHandler({ ...config, accountProvider })
 	);
 
 	router.get('/accounts/:accountId', async (req, res) => {

@@ -84,6 +84,8 @@ it('projects an exact claimant page with both roles and every claimant condition
 		.expect('Cache-Control', 'no-store');
 	expect(response.body).toEqual({
 		source: 'horizon',
+		transmission: 'native',
+		observation: { observedAt: expect.any(String), networkStatus: 'unconfirmed', freshness: 'unknown', latestLedgerClosedAt: null },
 		accountId,
 		networkPassphrase: network,
 		role: 'claimant',
