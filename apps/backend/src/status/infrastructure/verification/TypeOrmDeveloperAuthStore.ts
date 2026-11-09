@@ -206,7 +206,13 @@ export class TypeOrmDeveloperAuthStore implements DeveloperAuthStore {
 		this.inFlight++;
 		try {
 			return await this.database.transaction(async (manager) => {
-				await manager.query('SET TRANSACTION READ WRITE');
+				const [mode] = await manager.query<{ transaction_read_only: string }[]>(
+					'SHOW transaction_read_only'
+				);
+				if (mode?.transaction_read_only !== 'off')
+					throw new Error(
+						'Developer authentication requires a read-write transaction'
+					);
 				await manager.query("SET LOCAL lock_timeout='1s'");
 				await manager.query("SET LOCAL statement_timeout='2s'");
 				return run(manager);

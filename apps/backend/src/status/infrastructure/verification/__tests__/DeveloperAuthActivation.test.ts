@@ -66,7 +66,7 @@ it('requires explicit ingress redaction and a pinned credential path before star
 it('exposes no-store capabilities only after writable storage admission', async () => {
 	const query = jest
 		.fn()
-		.mockResolvedValueOnce([])
+		.mockResolvedValueOnce([{ transaction_read_only: 'off' }])
 		.mockResolvedValueOnce([])
 		.mockResolvedValueOnce([])
 		.mockResolvedValueOnce([{ ready: true }]);
@@ -80,7 +80,7 @@ it('exposes no-store capabilities only after writable storage admission', async 
 	>();
 	const router = await createAtlasDeveloperAuth(config, database, provider);
 	expect(router).not.toBeNull();
-	expect(query).toHaveBeenNthCalledWith(1, 'SET TRANSACTION READ WRITE');
+	expect(query).toHaveBeenNthCalledWith(1, 'SHOW transaction_read_only');
 	await supertest(express().use(developerAuthPath, router!))
 		.get(developerAuthPath + '/capabilities')
 		.expect('Cache-Control', 'private, no-store')
@@ -93,4 +93,16 @@ it('exposes no-store capabilities only after writable storage admission', async 
 		257
 	);
 	expect(provider).not.toHaveBeenCalled();
+});
+
+it('refuses read-only transactions before checking table privileges', async () => {
+	const query = jest.fn().mockResolvedValue([{ transaction_read_only: 'on' }]);
+	const transaction = jest.fn((run: (manager: unknown) => unknown) =>
+		run({ query })
+	);
+	const database = { transaction } as unknown as DataSource;
+	await expect(createAtlasDeveloperAuth(config, database)).rejects.toThrow(
+		'protected GitHub credentials and writable storage'
+	);
+	expect(query.mock.calls).toEqual([['SHOW transaction_read_only']]);
 });
