@@ -216,7 +216,8 @@ export const managedMigrations = [
 	HistoryArchiveFailureSummaryRevision1793577600000,
 	AtlasAccountVerification1794091000000,
 	AtlasVerificationAuthentication1794092000000,
-	ContractVerificationCatalogue1794228000000
+	ContractVerificationCatalogue1794228000000,
+	AtlasDeveloperAuthentication1794232800000
 ] as const;
 import { HistoryArchiveTransientSourceRetryMigration1791072000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791072000000-HistoryArchiveTransientSourceRetryMigration.js';
 import { HistoryArchiveManualRecheckIntentMigration1791088200000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791088200000-HistoryArchiveManualRecheckIntentMigration.js';
@@ -231,3 +232,4 @@ import { HistoryArchiveFailureSummaryRevision1793577600000 } from '../../../hist
 import { AtlasAccountVerification1794091000000 } from './migrations/1794091000000-AtlasAccountVerification.js';
 import { AtlasVerificationAuthentication1794092000000 } from './migrations/1794092000000-AtlasVerificationAuthentication.js';
 import { ContractVerificationCatalogue1794228000000 } from './migrations/1794228000000-ContractVerificationCatalogue.js';
+import { AtlasDeveloperAuthentication1794232800000 } from './migrations/1794232800000-AtlasDeveloperAuthentication.js';

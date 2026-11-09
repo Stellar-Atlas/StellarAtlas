@@ -120,6 +120,12 @@ it('authenticates one browser-bound PKCE flow and issues a revocable Atlas sessi
 	expect(authorization.href).not.toContain(config.clientSecret);
 
 	const callback = supertest(app());
+	await callback
+		.head(callbackPath)
+		.set('Cookie', browser)
+		.query({ state, code: 'single-use-code' })
+		.expect(405);
+	expect(provider).not.toHaveBeenCalled();
 	const result = await callback
 		.get(callbackPath)
 		.set('Cookie', browser)
@@ -246,6 +252,36 @@ it.each([
 		expect(sessions.size).toBe(0);
 	}
 );
+
+it('strips sensitive request fields before downstream diagnostics', async () => {
+	const { store, provider } = fixture();
+	const { router } = developerAuthRouter(config, store, provider);
+	const api = express()
+		.use(developerAuthPath, router)
+		.use((req, res) => {
+			res.json({
+				url: req.originalUrl,
+				query: req.query,
+				cookie: req.get('Cookie') ?? null,
+				authorization: req.get('Authorization') ?? null,
+				rawHeaders: req.rawHeaders
+			});
+		});
+	const response = await supertest(api)
+		.get(developerAuthPath + '/unmatched?state=private-state&code=private-code')
+		.set('Cookie', '__Host-atlas-developer-oauth=private-cookie')
+		.set('Authorization', 'Bearer private-token')
+		.expect(200);
+	expect(response.body).toMatchObject({
+		url: developerAuthPath + '/unmatched',
+		query: {},
+		cookie: null,
+		authorization: null
+	});
+	expect(JSON.stringify(response.body)).not.toMatch(
+		/private-(state|code|cookie|token)/
+	);
+});
 
 it('rejects an identity without a stable numeric user ID', async () => {
 	const { sessions, provider, app, begin } = fixture();

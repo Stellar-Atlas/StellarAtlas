@@ -68,11 +68,40 @@ export function developerAuthRouter(
 	const github = developerGithubOAuth(config, request);
 	const { origin } = config;
 	const router = express.Router();
+	const inputs = new WeakMap<
+		Request,
+		{
+			readonly query: Request['query'];
+			readonly browser: string | null;
+			readonly session: string | null;
+		}
+	>();
 	let activeExchanges = 0;
-	router.use((_req, res, next) => {
+	router.use((req, res, next) => {
+		inputs.set(req, {
+			query: req.query,
+			browser: readCookie(req, flowCookie),
+			session: readCookie(req, sessionCookie)
+		});
+		// Keep callback and cookie credentials out of downstream request
+		// diagnostics. Ingress must already redact its own logs and telemetry.
+		req.query = {};
+		req.originalUrl = req.originalUrl.split('?', 1)[0]!;
+		req.url = req.url.split('?', 1)[0]!;
+		delete req.headers.cookie;
+		delete req.headers.authorization;
+		for (let index = req.rawHeaders.length - 2; index >= 0; index -= 2) {
+			const name = req.rawHeaders[index]?.toLowerCase();
+			if (name === 'cookie' || name === 'authorization')
+				req.rawHeaders.splice(index, 2);
+		}
 		res.set('Cache-Control', 'private, no-store');
 		res.set('Referrer-Policy', 'no-referrer');
 		next();
+	});
+
+	router.get('/capabilities', (_req, res) => {
+		res.json({ available: true, provider: 'github' });
 	});
 
 	router.post('/oauth/github/start', async (req, res) => {
@@ -104,9 +133,13 @@ export function developerAuthRouter(
 		}
 	});
 
+	router.head('/oauth/github/callback', (_req, res) => {
+		res.set('Allow', 'GET').status(405).end();
+	});
 	router.get('/oauth/github/callback', async (req, res) => {
-		const { state, code, error } = req.query;
-		const browser = readCookie(req, flowCookie);
+		const input = inputs.get(req);
+		const { state, code, error } = input?.query ?? {};
+		const browser = input?.browser;
 		const redirect = (result: 'complete' | 'rejected' | 'unavailable') =>
 			res.redirect(303, origin + '/developer/verification?signIn=' + result);
 		const denied = error === 'access_denied' && code === undefined;
@@ -161,7 +194,8 @@ export function developerAuthRouter(
 			req.get('Origin') !== origin
 		)
 			return null;
-		const token = readCookie(req, sessionCookie);
+		const input = inputs.get(req);
+		const token = input ? input.session : readCookie(req, sessionCookie);
 		const session = token ? await store.session(hash(token)) : null;
 		if (!session || session.expiresAt <= Date.now()) return null;
 		return {
@@ -189,7 +223,7 @@ export function developerAuthRouter(
 			return;
 		}
 		try {
-			const token = readCookie(req, sessionCookie);
+			const token = inputs.get(req)?.session;
 			if (token) await store.revokeSession(hash(token));
 			res.clearCookie(sessionCookie, cookieOptions).status(204).end();
 		} catch {

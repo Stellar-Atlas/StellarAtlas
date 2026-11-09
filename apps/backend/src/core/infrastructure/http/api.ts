@@ -1,5 +1,7 @@
 import express from 'express';
 import { createAtlasVerification } from '../../../status/infrastructure/verification/VerificationActivation.js';
+import { createAtlasDeveloperAuth } from '../../../status/infrastructure/verification/DeveloperAuthActivation.js';
+import { developerAuthPath } from '../../../status/infrastructure/verification/DeveloperGithubOAuth.js';
 import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
 import { resolve } from 'node:path';
@@ -152,7 +154,10 @@ const setup = async (): Promise<{ config: Config; kernel: Kernel }> => {
 
 	const config = configResult.value;
 	const kernel = await Kernel.getInstance(config);
-	api.use('/v1/account-verification', createAtlasVerification(process.env, kernel.container.get(DataSource)));
+	const database = kernel.container.get(DataSource);
+	api.use('/v1/account-verification', createAtlasVerification(process.env, database));
+	const developerAuth = await createAtlasDeveloperAuth(process.env, database);
+	if (developerAuth) api.use(developerAuthPath, developerAuth);
 
 	return {
 		config: config,

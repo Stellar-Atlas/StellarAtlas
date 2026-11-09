@@ -1,13 +1,5 @@
-import {
-	closeSync,
-	constants,
-	fstatSync,
-	lstatSync,
-	openSync,
-	readSync,
-	type Stats
-} from 'node:fs';
 import { Keypair } from '@stellar/stellar-sdk';
+import { readProtectedVerificationCredential } from './ProtectedVerificationCredential.js';
 import { record, target, type Network } from './VerificationApplication.js';
 import {
 	principal,
@@ -16,11 +8,6 @@ import {
 
 export const verificationSigningFile =
 	'/etc/stellaratlas/account-verification/server.seed';
-function protectedSigningFile(info: Stats): boolean {
-	return info.isFile() && info.nlink === 1 && info.size > 0 && info.size <= 128 &&
-		(info.mode & 0o077) === 0 &&
-		(info.uid === 0 || info.uid === process.getuid?.());
-}
 
 export function verificationAuthConfig(environment: NodeJS.ProcessEnv): {
 	config: StellarAuthConfig;
@@ -65,28 +52,9 @@ export function verificationAuthConfig(environment: NodeJS.ProcessEnv): {
 		if (reviewers.size !== raw.length) throw new Error();
 		if (environment.ATLAS_VERIFICATION_SERVER_SEED_FILE !== verificationSigningFile)
 			throw new Error();
-		for (const parent of ['/', '/etc', '/etc/stellaratlas', '/etc/stellaratlas/account-verification']) {
-			const info = lstatSync(parent);
-			if (!info.isDirectory() || info.uid !== 0 || (info.mode & 0o022) !== 0)
-				throw new Error();
-		}
-		const fd = openSync(
-			'/etc/stellaratlas/account-verification/server.seed',
-			constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+		const server = Keypair.fromSecret(
+			readProtectedVerificationCredential(verificationSigningFile, 128)
 		);
-		let server: Keypair;
-		try {
-			const stat = fstatSync(fd);
-			if (!protectedSigningFile(stat))
-				throw new Error();
-			const bytes = Buffer.alloc(129);
-			const count = readSync(fd, bytes, 0, bytes.length, 0);
-			if (count !== stat.size || fstatSync(fd).size !== stat.size)
-				throw new Error();
-			server = Keypair.fromSecret(bytes.subarray(0, count).toString('utf8').trim());
-		} finally {
-			closeSync(fd);
-		}
 		if (
 			server.publicKey() !== environment.ATLAS_VERIFICATION_SERVER_ACCOUNT ||
 			[...reviewers].some((value) => value.endsWith(':' + server.publicKey()))
