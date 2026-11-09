@@ -146,6 +146,16 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 		expect(sync).toHaveBeenCalledTimes(2);
 	});
 
+	it('keeps the installed inode identity through the post-staging lease fence', async () => {
+		const store = new Store(file);
+		const installed = await store.installVerified(plan, async () => {});
+		expect(installed).toEqual(plan);
+		await expect(store.confirmRecorded(installed, async () => {
+			lstatSync.mockReturnValueOnce({ ...fileVersion, ino: 8n });
+		})).rejects.toThrow(/refusing to resume/);
+		expect(unlinkSync).not.toHaveBeenCalled();
+	});
+
 	it('confirms an installed plan after a failed install directory sync on restart', async () => {
 		const events: string[] = [];
 		sync.mockImplementationOnce(async () => { events.push('sync'); })

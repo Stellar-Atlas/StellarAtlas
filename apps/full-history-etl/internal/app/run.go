@@ -112,6 +112,11 @@ func Run(ctx context.Context, config Config) (ProcessingReceipt, error) {
 			return ProcessingReceipt{}, lockErr
 		}
 		defer releasePublicationLock(lock)
+		if config.CurrentBulkCommitGuard {
+			if err := checkCurrentBulkCommitBudget(stage, parent); err != nil {
+				return ProcessingReceipt{}, err
+			}
+		}
 		copiedStage, err = copyPublicationStage(ctx, stage, parent, filepath.Base(publishPath))
 		if err != nil {
 			return ProcessingReceipt{}, err

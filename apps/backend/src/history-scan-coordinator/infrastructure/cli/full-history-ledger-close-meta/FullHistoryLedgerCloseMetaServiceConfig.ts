@@ -12,6 +12,7 @@ import {
 	type PairedCurrentAdmissionPolicy
 } from './FullHistoryPairedCurrentAdmission.js';
 import { parseScopedCurrentAttemptPolicy, type ScopedCurrentAttemptPolicy } from './FullHistoryScopedCurrentAttempt.js';
+import { parseCurrentPublisherReadyPath } from './FullHistoryCurrentPublisherReady.js';
 
 const maximumIngressBytesPerSecond = 187_500_000;
 const maximumFetchConcurrency = 1_024;
@@ -26,6 +27,7 @@ export interface FullHistoryLedgerCloseMetaServiceConfig {
 	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
 	readonly pairedCurrentAdmission?: PairedCurrentAdmissionPolicy;
 	readonly scopedCurrentAttempt?: ScopedCurrentAttemptPolicy;
+	readonly currentBulkCommitGuard?: { readonly publisherReadyPath: string };
 	readonly admissionCycleCooldownMilliseconds: number;
 	readonly admissionEnabled: boolean;
 	readonly admissionMaximumDatabaseConnectionBasisPoints: number;
@@ -191,8 +193,13 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	const currentOnlyCapacity = parseFullHistoryCurrentOnlyCapacity(
 		environment, minimumFreeBytes, firstAvailableLedger
 	);
+	const currentBulkCommitGuard = booleanValue(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_BULK_COMMIT_GUARD,
+		false, 'current bulk commit guard'
+	);
 	const pairedCurrentAdmission = parsePairedCurrentAdmissionPolicy(
-		environment.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION,
+		currentBulkCommitGuard
 	);
 	const scopedCurrentAttempt = parseScopedCurrentAttemptPolicy(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT
@@ -201,6 +208,16 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS,
 		1_000, 0, 10_000, 'minimum free basis points'
 	);
+	if (currentBulkCommitGuard &&
+		(currentOnlyCapacity === undefined || pairedCurrentAdmission === undefined ||
+			scopedCurrentAttempt !== undefined || publicationStagingRoot === null ||
+			minimumFreeBasisPoints !== 500 || typedShardLedgerCount !== 128 ||
+			cycleLedgerCount !== 128 || processingConcurrency !== 1)) {
+		throw new Error('Current bulk commit guard requires the standing paired 128-ledger mode, five-percent floor and separate staging');
+	}
+	const publisherReadyPath = currentBulkCommitGuard ? parseCurrentPublisherReadyPath(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_PUBLISHER_READY_FILE
+	) : undefined;
 	if (scopedCurrentAttempt !== undefined &&
 		(currentOnlyCapacity === undefined || pairedCurrentAdmission === undefined ||
 			currentOnlyCapacity.minimumFreeBytes !== SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES ||
@@ -257,6 +274,9 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			? currentOnlyCapacity : Object.freeze({ ...currentOnlyCapacity, scopedReserve: true as const }) }),
 		...(pairedCurrentAdmission === undefined ? {} : { pairedCurrentAdmission }),
 		...(scopedCurrentAttempt === undefined ? {} : { scopedCurrentAttempt }),
+		...(publisherReadyPath === undefined ? {} : {
+			currentBulkCommitGuard: Object.freeze({ publisherReadyPath })
+		}),
 		admissionCycleCooldownMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_CYCLE_COOLDOWN_MS,
 			30_000,

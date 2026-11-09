@@ -81,6 +81,21 @@ describe('paired current source admission', () => {
 		expect(() => check(reservedPolicy, scoped, { ...available, unreserved_space: String(start - 1n) })).toThrow(/reserve refused/);
 	});
 
+	it('computes the standing current gate from the physical floor and separate remaining allowances', () => {
+		const minimum = 3_311_714_749_645n;
+		const disk = { ...before, total: 64_000_911_998_976n, available: minimum };
+		const cfg = { ...config, currentBulkCommitGuard: true, sourceOutputBytes: 8n << 30n };
+		const paired = { ...policy, minimumUnreservedBytes: 1n };
+		const diskRow = { ...row, total_space: String(disk.total), free_space: String(minimum) };
+		const check = (unreserved: bigint, minimumOverride = paired.minimumUnreservedBytes) =>
+			assertPairedCapacity({ ...paired, minimumUnreservedBytes: minimumOverride }, cfg,
+				disk, disk, disk, { ...disk, inode: 12n },
+				{ ...diskRow, unreserved_space: String(unreserved) }, 1);
+		expect(() => check(minimum)).not.toThrow();
+		expect(() => check(minimum - 1n)).toThrow(/reserve refused/);
+		expect(() => check(minimum, minimum + 1n)).toThrow(/reserve refused/);
+	});
+
 	it('requires one exact completed manifest with the same source digest, range and all 20 dataset counts', () => {
 		const source = { id: '00', digest: 'aa'.repeat(32), start: 100, end: 163 };
 		const datasets = {

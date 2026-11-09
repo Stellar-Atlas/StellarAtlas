@@ -101,6 +101,39 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		expect(config.processingConcurrency).toBe(12);
 	});
 
+	it('renews the boot identity only for the guarded standing current path', () => {
+		const paired = JSON.stringify({
+			bootId: 'current', warehouseReportedPath: '/bulk/warehouse',
+			warehouseMetadataPath: '/run/warehouse-metadata', warehouseMetadataInode: '1',
+			minimumUnreservedBytes: '3311714749645'
+		});
+		const values = {
+			...environment(),
+			FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'true',
+			FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '128',
+			FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '128',
+			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '4398046511104',
+			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '500',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '65366208',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '3200045599949',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION: paired,
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_BULK_COMMIT_GUARD: 'true',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_PUBLISHER_READY_FILE: '/run/publisher/current.json',
+			FULL_HISTORY_LEDGER_CLOSE_META_PUBLICATION_STAGING_ROOT: '/other/filesystem'
+		};
+		const config = parseFullHistoryLedgerCloseMetaServiceConfig(values);
+		expect(config.currentBulkCommitGuard).toEqual({ publisherReadyPath: '/run/publisher/current.json' });
+		expect(config.pairedCurrentAdmission?.bootId).toBe('current');
+		expect(config.currentOnlyCapacity?.scopedReserve).toBeUndefined();
+		for (const override of [
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_BULK_COMMIT_GUARD: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_PUBLICATION_STAGING_ROOT: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_PUBLISHER_READY_FILE: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '472' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '64', FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '64' }
+		]) expect(() => parseFullHistoryLedgerCloseMetaServiceConfig({ ...values, ...override })).toThrow();
+	});
+
 	it('allows the scoped reserve only with the exact ordinary policy, 128 geometry and full paired allowance', () => {
 		const values = {
 			...environment(),

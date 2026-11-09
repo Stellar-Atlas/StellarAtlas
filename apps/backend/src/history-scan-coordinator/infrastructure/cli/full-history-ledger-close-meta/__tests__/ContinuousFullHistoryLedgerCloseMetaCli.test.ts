@@ -3,8 +3,60 @@ import type { FullHistoryLedgerCloseMetaComposition } from '../FullHistoryLedger
 import { parseFullHistoryLedgerCloseMetaServiceConfig } from '../FullHistoryLedgerCloseMetaServiceConfig.js';
 import {
 	monitorFullHistoryLedgerCloseMetaRuntimeCleanup,
-	runContinuousFullHistoryLedgerCloseMetaCli
+	runContinuousFullHistoryLedgerCloseMetaCli,
+	type ContinuousFullHistoryLedgerCloseMetaCliDependencies
 } from '../ContinuousFullHistoryLedgerCloseMetaCli.js';
+
+describe('continuous source paired boot binding', () => {
+	it.each(['stale', 'unreadable'])('refuses a %s paired boot before runtime initialization', async (fault) => {
+		const f = bootFixture(false);
+		if (fault === 'unreadable') f.isPairedCurrentBoot.mockRejectedValueOnce(new Error('boot ID unavailable'));
+		const env = pairedEnvironment();
+		const original = { ...env };
+
+		await expect(runContinuousFullHistoryLedgerCloseMetaCli(env, f.dependencies)).resolves.toBe(64);
+
+		expect(f.isPairedCurrentBoot).toHaveBeenCalledTimes(1);
+		expect(f.registerSignals).not.toHaveBeenCalled();
+		expect(f.ensureRuntime).not.toHaveBeenCalled();
+		expect(f.compose).not.toHaveBeenCalled();
+		expect(f.initialize).not.toHaveBeenCalled();
+		expect(f.acquireLeadership).not.toHaveBeenCalled();
+		expect(f.resetOwnedRuntime).not.toHaveBeenCalled();
+		expect(f.runLoop).not.toHaveBeenCalled();
+		expect(env).toEqual(original);
+		expect(f.stderr.write).toHaveBeenCalledWith(expect.stringContaining('"status":"refused"'));
+		if (fault === 'stale') expect(f.stderr.write).toHaveBeenCalledWith(
+			expect.stringContaining('Paired current admission belongs to another boot; preserve any pending plan')
+		);
+	});
+
+	it('starts a matching paired boot with the original current-only geometry', async () => {
+		const f = bootFixture(true);
+		const env = pairedEnvironment();
+
+		await expect(runContinuousFullHistoryLedgerCloseMetaCli(env, f.dependencies)).resolves.toBe(0);
+
+		expect(f.isPairedCurrentBoot).toHaveBeenCalledWith(expect.objectContaining({ bootId: pairedBootId }));
+		expect(f.initialize).toHaveBeenCalledTimes(1);
+		expect(f.runLoop).toHaveBeenCalledWith(expect.objectContaining({
+			cycleLedgerCount: 128, typedShardLedgerCount: 128,
+			currentOnlyCapacity: { minimumLedger: 1000, minimumFreeBytes: 4000n }
+		}), expect.objectContaining({ pairedCurrentAdmission: expect.anything() }));
+	});
+
+	it('starts ordinary mode without consulting the paired boot binding', async () => {
+		const f = bootFixture(false);
+
+		await expect(runContinuousFullHistoryLedgerCloseMetaCli(environment(), f.dependencies)).resolves.toBe(0);
+
+		expect(f.isPairedCurrentBoot).not.toHaveBeenCalled();
+		expect(f.initialize).toHaveBeenCalledTimes(1);
+		expect(f.runLoop).toHaveBeenCalledWith(expect.objectContaining({
+			cycleLedgerCount: 1024, typedShardLedgerCount: 1024
+		}), expect.not.objectContaining({ pairedCurrentAdmission: expect.anything() }));
+	});
+});
 
 describe('monitorFullHistoryLedgerCloseMetaRuntimeCleanup', () => {
 	it('does not reset owned runtime paths without exclusive leadership', async () => {
@@ -147,6 +199,52 @@ describe('monitorFullHistoryLedgerCloseMetaRuntimeCleanup', () => {
 		);
 	});
 });
+
+const pairedBootId = 'abcdabcd-abcd-abcd-abcd-abcdabcdabcd';
+
+function pairedEnvironment(): NodeJS.ProcessEnv {
+	return {
+		...environment(),
+		FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'true',
+		FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '128',
+		FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '128',
+		FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '5000',
+		FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '1000',
+		FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '4000',
+		FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION: JSON.stringify({
+			bootId: pairedBootId, warehouseReportedPath: '/bulk/warehouse',
+			warehouseMetadataPath: '/run/warehouse-metadata', warehouseMetadataInode: '1',
+			minimumUnreservedBytes: '10000000000'
+		}),
+		HUBBLE_CLICKHOUSE_URL: 'http://127.0.0.1:8123/',
+		HUBBLE_CLICKHOUSE_DATABASE: 'hubble'
+	};
+}
+
+function bootFixture(matches: boolean) {
+	const initialize = jest.fn(async () => undefined);
+	const dataSource = { initialize, isInitialized: false } as unknown as DataSource;
+	const dependencies = {
+		acquireLeadership: jest.fn(async () => ({
+			acquired: true, assertHeld: async () => undefined, release: async () => undefined
+		})),
+		checkReadiness: async () => ({ missingSchemaObjects: [], pendingMigrations: false, ready: true }),
+		compose: jest.fn(() => ({
+			dataSource, frontier: { destroy: jest.fn() }
+		}) as unknown as FullHistoryLedgerCloseMetaComposition),
+		ensureRuntime: jest.fn(async () => undefined),
+		isPairedCurrentBoot: jest.fn(async () => matches),
+		now: () => 123_456,
+		reconcileRuntime: async () => undefined,
+		registerSignals: jest.fn(() => () => undefined),
+		resetOwnedRuntime: jest.fn(async () => undefined),
+		runLoop: jest.fn(async () => undefined),
+		stderr: { write: jest.fn() },
+		stdout: { write: jest.fn() },
+		wait: async () => { throw new Error('fixture has no periodic waits'); }
+	} satisfies ContinuousFullHistoryLedgerCloseMetaCliDependencies;
+	return { ...dependencies, initialize, dependencies };
+}
 
 function config() {
 	return parseFullHistoryLedgerCloseMetaServiceConfig(environment());

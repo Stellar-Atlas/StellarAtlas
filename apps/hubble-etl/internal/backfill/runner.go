@@ -34,6 +34,8 @@ type Config struct {
 	BaselineHistoryPressureGuard *PressureGuard
 	HistoryAdmissionHold         *HistoryAdmissionHold
 	HistoryStoragePolicy         *clickhouse.HistoricalStoragePolicy
+	CurrentWriteBudgetBytes      uint64
+	CurrentWriteMinimumLedger    uint32
 	ReadinessGuard               *WarehouseReadinessGuard
 	Publisher                    *publication.WarehousePublisher
 	OnProgress                   func(Summary)

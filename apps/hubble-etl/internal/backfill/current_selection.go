@@ -97,6 +97,7 @@ type laneSelection struct {
 	current              bool
 	claims               *currentClaims
 	minimum              uint32
+	maximum              uint32
 	history              []catalog.Batch
 	position             int
 	loadedAt             time.Time
@@ -151,6 +152,11 @@ func (s *laneSelection) next(ctx context.Context, io currentWorkerIO) (catalog.B
 			return catalog.Batch{}, false, err
 		}
 		for _, batch := range pending {
+			if s.maximum != 0 && batch.LedgerCount > s.maximum {
+				// This batch can age into the independent historical lane; it
+				// must not prevent selecting a newer bounded current batch.
+				continue
+			}
 			ok, err := s.claims.reserve(batch, true)
 			if ok || err != nil {
 				return batch, ok, err

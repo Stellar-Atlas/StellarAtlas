@@ -14,15 +14,17 @@ import (
 )
 
 type Request struct {
-	Path              string
-	BatchID           string
-	SourceSHA256      string
-	ExpectedStart     uint32
-	MaximumEnd        uint32
-	NetworkPassphrase string
-	DecodeLimits      lcmbatch.Limits
-	WriterLimits      clickhouse.WriterLimits
-	Publisher         *publication.WarehousePublisher
+	Path                      string
+	BatchID                   string
+	SourceSHA256              string
+	ExpectedStart             uint32
+	MaximumEnd                uint32
+	NetworkPassphrase         string
+	DecodeLimits              lcmbatch.Limits
+	WriterLimits              clickhouse.WriterLimits
+	Publisher                 *publication.WarehousePublisher
+	CurrentWriteBudgetBytes   uint64
+	CheckCurrentWriteCapacity func(context.Context) error
 }
 
 type Receipt struct {
@@ -74,6 +76,16 @@ func File(
 		StartLedger:  batch.Start,
 		EndLedger:    batch.End,
 	}
+	if request.CurrentWriteBudgetBytes != 0 || request.CheckCurrentWriteCapacity != nil {
+		if request.WriterLimits.RecoveryNamespace != "" || batch.LedgerCount < 64 || batch.LedgerCount > 128 ||
+			batch.End != request.MaximumEnd {
+			return receipt, fmt.Errorf("bounded current publication requires one exact 64..128 ledger source batch")
+		}
+		ctx, err = clickhouse.WithCurrentWriteBudget(ctx, request.CurrentWriteBudgetBytes, request.CheckCurrentWriteCapacity)
+		if err != nil {
+			return receipt, err
+		}
+	}
 	if request.WriterLimits.RecoveryNamespace != "" {
 		// A recovery is deliberately not an automatic retry: partial/completed
 		// recovery data requires operator review, never a blind second replay.
@@ -105,7 +117,9 @@ func File(
 		if finalErr == nil {
 			return
 		}
-		failureContext, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		// Keep the same range budget when recording a failed guarded attempt;
+		// a cancelled insert or ambiguous response must not refund its debit.
+		failureContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 		defer cancel()
 		status.Status = "failed"
 		status.Error = truncate(finalErr.Error(), 4096)

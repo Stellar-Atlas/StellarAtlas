@@ -78,6 +78,7 @@ export function composeFullHistoryLedgerCloseMetaService(
 	);
 	const processor = new GoFullHistoryLedgerCloseMetaProcessor({
 		executablePath: config.executablePath,
+		...(config.currentBulkCommitGuard === undefined ? {} : { currentBulkCommitGuard: true }),
 		limits: {
 			maximumCompressedBytes:
 				FULL_HISTORY_LEDGER_CLOSE_META_SHARD_COMPRESSED_BYTES_LIMIT,

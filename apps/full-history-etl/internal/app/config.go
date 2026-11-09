@@ -47,6 +47,7 @@ type Config struct {
 	MaxLedgers                uint64
 	MaxRows                   uint64
 	CompactLedgerEntryChanges bool
+	CurrentBulkCommitGuard    bool
 }
 
 type repeatedStrings []string
@@ -71,6 +72,7 @@ func ParseConfig(args []string, stderr io.Writer) (Config, error) {
 	flags.StringVar(&config.TypedOutputRoot, "typed-output-root", "", "root used to resolve published storage keys")
 	flags.StringVar(&config.OutputPath, "output", "", "new output directory to publish atomically")
 	flags.StringVar(&config.PublicationStagingRoot, "publication-staging-root", "", "optional fast local root used to stage output before serialized atomic publication")
+	flags.BoolVar(&config.CurrentBulkCommitGuard, "current-bulk-commit-guard", false, "require separate-device staging and source filesystem headroom for current bulk publication")
 	flags.StringVar(&config.NetworkName, "network", "", "stable network label")
 	flags.StringVar(&config.NetworkPassphrase, "network-passphrase", "", "Stellar network passphrase")
 	flags.Uint64Var(&start, "start-ledger", 0, "expected inclusive start ledger")
@@ -168,6 +170,17 @@ func (c Config) Validate() error {
 	}
 	if count > c.MaxLedgers {
 		return fmt.Errorf("expected ledger count %d exceeds limit %d", count, c.MaxLedgers)
+	}
+	if c.CurrentBulkCommitGuard {
+		if c.PublicationStagingRoot == "" {
+			return fmt.Errorf("current bulk commit guard requires a separate publication staging root")
+		}
+		if count > currentBulkMaxLedgers {
+			return fmt.Errorf("current bulk commit guard: expected ledger count %d exceeds %d", count, currentBulkMaxLedgers)
+		}
+		if c.MaxOutputBytes > currentBulkMaxOutputBytes {
+			return fmt.Errorf("current bulk commit guard: output byte limit %d exceeds %d", c.MaxOutputBytes, currentBulkMaxOutputBytes)
+		}
 	}
 	return nil
 }

@@ -112,9 +112,10 @@ The paired policy is a JSON object with `bootId`, the exact
 `warehouseReportedPath`, a service-private read-only `warehouseMetadataPath`,
 its `warehouseMetadataInode` as a decimal string, and the measured
 `minimumUnreservedBytes` as a decimal string. Set it only for a supervised
-activation. The source uses the explicitly configured local
-`HUBBLE_CLICKHOUSE_URL` and `HUBBLE_CLICKHOUSE_DATABASE` with the existing
-warehouse credential. A boot change restores ordinary source policy.
+activation unless using the standing mode below. The source uses the explicitly
+configured local `HUBBLE_CLICKHOUSE_URL` and `HUBBLE_CLICKHOUSE_DATABASE` with the
+existing warehouse credential. A mismatched fixed boot ID refuses startup
+without falling back to ordinary range geometry or replacing a pending plan.
 
 The separate absolute floor must be positive and below the ordinary absolute
 floor. The larger configured proportional floor (with a minimum of five
@@ -124,8 +125,28 @@ checked before saving the plan and again before conversion. The existing plan
 is retained until the warehouse confirms the same batch, range, source digest
 and all twenty dataset declarations. An uncommitted eligible plan can resume;
 incompatible plans are refused and preserved. Verify advancing source and warehouse
-publication after activation. This is a source admission check, not a disk
-quota or a bound on concurrent warehouse writes.
+publication after activation. A final ownership, leadership and paired-space
+check runs after input staging, immediately before native conversion.
+
+The coordinated standing mode also sets
+`FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_BULK_COMMIT_GUARD=true`. It requires a
+128-ledger single-shard configuration, a five-percent floor, and separate
+publication staging, and must be released together with the bounded current
+publisher. With a systemd-managed read-only metadata mount that is present on
+each boot, `bootId: "current"` renews only the boot identity at startup; the
+expected inode, path and filesystem checks still apply before writes. The
+source must be able to read the matching publisher's runtime readiness file
+using `FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_PUBLISHER_READY_FILE`. Capture
+waits if the file does not identify the running bounded publisher in this boot
+with the same minimum ledger. The checked identity is revalidated immediately
+before installing the pending plan and launching conversion. An exit after
+that final check can still leave the exact captured range waiting for its
+publication; it is not a signal to replay or advance the plan. The
+paired gate reserves the full 8 GiB source cap, 64 GiB warehouse runway and
+32 GiB operating cushion above the unchanged proportional floor. Native
+publication independently checks available physical blocks immediately before
+copying the staged result. These gates do not allocate space or limit
+unrelated processes writing to the same filesystem.
 
 A separate, default-off scoped current attempt can be prepared with
 `FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT` (version 1, a unique

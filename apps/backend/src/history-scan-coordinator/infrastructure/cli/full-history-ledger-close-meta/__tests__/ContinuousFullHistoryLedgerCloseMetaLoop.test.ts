@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
 	fullHistoryLedgerCloseMetaRange as range,
 	fullHistoryLedgerCloseMetaSha256Digest as digest,
@@ -11,7 +14,8 @@ import {
 	type ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	type ContinuousFullHistoryLedgerCloseMetaLoopDependencies
 } from '../ContinuousFullHistoryLedgerCloseMetaLoop.js';
-import type { PendingPlan } from '../FullHistoryLedgerCloseMetaPendingPlan.js';
+import { performance } from 'node:perf_hooks';
+import { PendingPlanChangedError, type PendingPlan } from '../FullHistoryLedgerCloseMetaPendingPlan.js';
 
 describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 	it('offers one historical range after every four successful current ranges', async () => {
@@ -202,7 +206,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.pending).toBeNull();
 	});
 
-	it.each([1, 2])('refuses a failed paired capacity check at boundary %i before any conversion', async boundary => {
+	it.each([1, 2, 3])('refuses a failed paired capacity check at boundary %i before any conversion', async boundary => {
 		const f = fixture(1);
 		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
 		let checks = 0;
@@ -215,9 +219,103 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		};
 		f.dependencies.wait = async () => { f.controller.abort(); };
 		await run(f.config, f.dependencies);
-		expect(f.calls.filter(call => call === 'pending-write')).toHaveLength(boundary - 1);
+		expect(f.calls.filter(call => call === 'pending-write')).toHaveLength(boundary === 1 ? 0 : 1);
 		expect(f.pending).toEqual(boundary === 1 ? null : plan('priority', 1000));
 		expect(f.selected).toHaveLength(0);
+	});
+
+	it.each(['install lease', 'launch lease', 'launch handoff'] as const)(
+		'refuses native launch when the checked standing marker disappears at the %s',
+		async boundary => {
+			const f = fixture(1);
+			usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+			const directory = mkdtempSync(join(tmpdir(), 'current-publisher-fence-'));
+			const marker = join(directory, 'ready.json');
+			const unavailable = 'Waiting for the bounded current publisher in the same server boot';
+			const assertMarker = () => { if (!existsSync(marker)) throw new Error(unavailable); };
+			let leases = 0;
+			f.dependencies.pairedCurrentAdmission = {
+				assertCapacity: async () => { assertMarker(); return assertMarker; },
+				pendingPublication: async () => 'not-captured',
+				assertHeld: async () => {
+					const lease = ++leases;
+					await Promise.resolve();
+					if ((lease === 1 && boundary === 'install lease') ||
+						(lease === 2 && boundary === 'launch lease')) unlinkSync(marker);
+				}
+			};
+			if (boundary === 'launch handoff') {
+				const ingest = f.dependencies.ingestion.ingestRange;
+				f.dependencies.ingestion.ingestRange = (context, selectedRange, signal, beforeConversion) =>
+					ingest(context, selectedRange, signal, async () => {
+						const assertAtLaunch = await beforeConversion?.();
+						unlinkSync(marker);
+						return assertAtLaunch;
+					});
+			}
+			f.dependencies.wait = async () => { f.controller.abort(); };
+			try {
+				writeFileSync(marker, '{}');
+				await run(f.config, f.dependencies);
+				expect(f.selected).toEqual([]);
+				expect(f.pending).toEqual(boundary === 'install lease' ? null : plan('priority', 1000));
+				expect(f.events).toContainEqual(expect.objectContaining({
+					event: 'cycle-error', message: `Error: ${unavailable}`
+				}));
+			} finally {
+				rmSync(directory, { recursive: true, force: true });
+			}
+		}
+	);
+
+	it('preserves a byte-identical foreign pending plan installed during staging without launching', async () => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		const ingest = f.dependencies.ingestion.ingestRange;
+		let replacement: PendingPlan | null = null;
+		f.dependencies.ingestion.ingestRange = async (...args) => {
+			if (f.pending === null) throw new Error('fixture did not install a pending plan');
+			replacement = { ...f.pending };
+			f.pending = replacement;
+			return ingest(...args);
+		};
+		await expect(run(f.config, f.dependencies)).rejects.toThrow(PendingPlanChangedError);
+		expect(f.pending).toBe(replacement);
+		expect(f.pending).toEqual(plan('priority', 1000));
+		expect(f.selected).toEqual([]);
+	});
+
+	it.each([
+		['lease', 'Error: post-staging lease lost'],
+		['role', 'Error: Paired launch no longer has a current-only priority plan; preserved'],
+		['age', 'Error: Paired current launch evidence expired after staging']
+	])('preserves the paired pending plan when its post-staging %s fence fails', async (fault, message) => {
+		const f = fixture(1);
+		const policy = currentOnlyCapacity();
+		usePolicy(f, { currentOnlyCapacity: policy });
+		let now = 0;
+		const clock = jest.spyOn(performance, 'now').mockImplementation(() => now);
+		let leaseChecks = 0;
+		f.dependencies.pairedCurrentAdmission = {
+			assertCapacity: async () => {},
+			pendingPublication: async () => 'not-captured',
+			assertHeld: async () => {
+				if (++leaseChecks !== 2) return;
+				if (fault === 'lease') throw new Error('post-staging lease lost');
+				if (fault === 'role') policy.minimumLedger = 1001;
+				if (fault === 'age') now = 4_001;
+			}
+		};
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		try {
+			await run(f.config, f.dependencies);
+		} finally {
+			clock.mockRestore();
+		}
+		expect(leaseChecks).toBe(2);
+		expect(f.selected).toEqual([]);
+		expect(f.pending).toEqual(plan('priority', 1000));
+		expect(f.events).toContainEqual(expect.objectContaining({ event: 'cycle-error', message }));
 	});
 
 	it('keeps the exact prior plan across a restart and waits for full publication before a new cycle', async () => {
@@ -442,7 +540,7 @@ function fixture(stopAfter: number) {
 			prepare: jest.fn(async () => context(durableNextLedger)),
 			ingestRange: async (_context, selectedRange, _signal, assertBeforeConversion) => {
 				if (assertBeforeConversion !== undefined) {
-					await assertBeforeConversion();
+					(await assertBeforeConversion())?.();
 					calls.push('conversion-fence');
 				}
 				calls.push('ingest');
@@ -469,12 +567,25 @@ function fixture(stopAfter: number) {
 			matchesConsumedScopedAttempt: (_permit, pending) => f.spent === pending && f.pending === pending,
 			write: async pending => { calls.push('pending-write'); f.pending = pending; },
 			installVerified: async (pending, assertHeld) => {
-				await assertHeld();
+				(await assertHeld())?.();
 				if (f.pending !== null) throw new Error('unexpected competing plan in fixture');
 				calls.push('pending-write');
 				f.pending = pending;
+				return pending;
 			},
-			confirmRecorded: async (_pending, assertHeld) => { calls.push('pending-confirm'); await assertHeld(); },
+			confirmRecorded: async (expected, assertHeld) => {
+				calls.push('pending-confirm');
+				const assertNamed = () => {
+					if (f.pending !== expected) throw new PendingPlanChangedError();
+				};
+				assertNamed();
+				const assertReady = await assertHeld();
+				assertNamed();
+				if (assertReady !== undefined) {
+					assertReady();
+					return () => { assertNamed(); assertReady(); };
+				}
+			},
 			clear: async () => { f.pending = null; },
 			clearVerified: async (expected, assertHeld) => {
 				await assertHeld();
