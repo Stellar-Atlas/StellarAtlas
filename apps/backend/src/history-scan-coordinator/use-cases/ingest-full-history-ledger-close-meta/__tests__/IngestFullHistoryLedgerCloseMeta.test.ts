@@ -92,6 +92,18 @@ describe('IngestFullHistoryLedgerCloseMeta', () => {
 		expect(manifest.batches).toEqual([]);
 	});
 
+	it('forwards the held-session fence after fetch and does not commit when the fence refuses', async () => {
+		const ingestion = createIngestion();
+		const signal = new AbortController().signal;
+		const context = await ingestion.prepare(signal);
+		await expect(ingestion.ingestRange(context, fullHistoryLedgerCloseMetaRange(3, 66), signal, async () => {
+			expect(source.requestedLedgers).toHaveLength(64);
+			throw new Error('leadership lost after fetch');
+		})).rejects.toThrow('leadership lost after fetch');
+		expect(processor.processedShardStarts).toEqual([]);
+		expect(manifest.batches).toEqual([]);
+	});
+
 	it('preserves a completed shard when another source object is missing', async () => {
 		source.missingLedgers.add(67);
 		const ingestion = createIngestion();
@@ -300,11 +312,14 @@ class FixtureProcessor implements FullHistoryLedgerCloseMetaProcessorPort {
 	failureShardStart: number | null = null;
 	readonly processedShardStarts: number[] = [];
 
-	processAndCommit(
+	async processAndCommit(
 		request: Parameters<
 			FullHistoryLedgerCloseMetaProcessorPort['processAndCommit']
-		>[0]
+		>[0],
+		_signal: AbortSignal,
+		assertBeforeConversion?: () => Promise<void>
 	) {
+		if (assertBeforeConversion !== undefined) await assertBeforeConversion();
 		const decoded = request.inputs.map((input) => ({
 			batch: this.#decoder.decode({
 				compressedPayload: input.object.bytes,

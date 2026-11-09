@@ -181,7 +181,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				if (paired !== undefined && await settlePairedPendingPublication(paired, pending, config, dependencies)) continue;
 				if (!(await admitCycle(config, dependencies,
 					config.prioritizeCurrent && pending.kind === 'priority'))) continue;
-				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger, pending);
+				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger, pending, true);
 				priorityStreak = pending.kind === 'priority'
 					? Math.min(priorityStreak + 1, MAXIMUM_CONSECUTIVE_PRIORITY_RANGES)
 					: 0;
@@ -326,19 +326,28 @@ function createPendingPlan(context: FullHistoryLedgerCloseMetaIngestionContext,
 async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies,
 	context: FullHistoryLedgerCloseMetaIngestionContext, previousNextLedger: number,
-	plan: PendingPlan): Promise<number> {
+	plan: PendingPlan, alreadyRecorded = false): Promise<number> {
 	let nextLedger = previousNextLedger;
 	await runAdmittedAttempt(config, dependencies, async () => {
 		assertCurrentCapacityPlan(config, dependencies, plan);
 		await dependencies.ensureStorageCapacity(plan);
 		const paired = dependencies.pairedCurrentAdmission;
-		if (paired !== undefined) await paired.assertCapacity(plan, dependencies.signal);
-		await dependencies.pendingPlans.write(plan);
-		// Plan durability can be slow on a busy filesystem; recheck at converter admission.
-		if (paired !== undefined) await paired.assertCapacity(plan, dependencies.signal);
+		if (paired === undefined) {
+			await dependencies.pendingPlans.write(plan);
+		} else {
+			await paired.assertCapacity(plan, dependencies.signal);
+			if (!alreadyRecorded) {
+				await dependencies.pendingPlans.installVerified(plan, () => paired.assertHeld(dependencies.signal));
+				// Plan durability can be slow on a busy filesystem; recheck before fetching input.
+				await paired.assertCapacity(plan, dependencies.signal);
+			}
+		}
 		const startedAt = dependencies.now();
-		const receipt = await dependencies.ingestion.ingestRange(context,
-			fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger), dependencies.signal);
+		const range = fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger);
+		const receipt = paired === undefined
+			? await dependencies.ingestion.ingestRange(context, range, dependencies.signal)
+			: await dependencies.ingestion.ingestRange(context, range, dependencies.signal,
+				() => paired.assertHeld(dependencies.signal));
 		nextLedger = observedDurableNextLedger(previousNextLedger, receipt,
 			plan.kind === 'historical' && previousNextLedger <= plan.endLedger);
 		if (paired === undefined) await dependencies.pendingPlans.clear();

@@ -246,6 +246,18 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.pending).toEqual(plan('priority', 1064));
 	});
 
+	it('resumes an unpublished paired plan without reinstalling it and passes the held-session fence', async () => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		const recorded = plan('priority', 1000);
+		f.pending = recorded;
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1000, 1063)]);
+		expect(f.pending).toBe(recorded);
+		expect(f.calls).not.toContain('pending-write');
+		expect(f.calls).toContain('conversion-fence');
+	});
+
 	describe.each(currentOnlyPolicies())('non-current work under %s', (_name, policy) => {
 		it.each([plan('historical', 3), plan('priority', 900)])(
 			'preserves and refuses a non-current pending plan', async pending => {
@@ -352,7 +364,11 @@ function fixture(stopAfter: number) {
 		frontier: { readLatestRange: async () => { calls.push('frontier'); return range(10000, 10000); } },
 		ingestion: {
 			prepare: jest.fn(async () => context(durableNextLedger)),
-			ingestRange: async (_context, selectedRange) => {
+			ingestRange: async (_context, selectedRange, _signal, assertBeforeConversion) => {
+				if (assertBeforeConversion !== undefined) {
+					await assertBeforeConversion();
+					calls.push('conversion-fence');
+				}
 				calls.push('ingest');
 				selected.push(selectedRange);
 				if (selected.length >= stopAfter) controller.abort();
@@ -364,6 +380,12 @@ function fixture(stopAfter: number) {
 		pendingPlans: {
 			read: async () => f.pending,
 			write: async pending => { calls.push('pending-write'); f.pending = pending; },
+			installVerified: async (pending, assertHeld) => {
+				await assertHeld();
+				if (f.pending !== null) throw new Error('unexpected competing plan in fixture');
+				calls.push('pending-write');
+				f.pending = pending;
+			},
 			clear: async () => { f.pending = null; },
 			clearVerified: async (expected, assertHeld) => {
 				await assertHeld();

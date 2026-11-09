@@ -1,6 +1,12 @@
 import { EventEmitter } from 'node:events';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { jest } from '@jest/globals';
+import {
+	fullHistoryLedgerCloseMetaRange,
+	fullHistoryLedgerCloseMetaSha256Digest
+} from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 
 let nextChild: FakeChildProcess;
 const spawn = jest.fn(
@@ -17,6 +23,7 @@ const {
 	FULL_HISTORY_ETL_TERMINATION_GRACE_MILLISECONDS,
 	runBoundedGoFullHistoryProcess
 } = await import('../GoFullHistoryLedgerCloseMetaProcessRunner.js');
+const { GoFullHistoryLedgerCloseMetaProcessor } = await import('../GoFullHistoryLedgerCloseMetaProcessor.js');
 
 describe('runBoundedGoFullHistoryProcess', () => {
 	beforeEach(() => {
@@ -57,6 +64,51 @@ describe('runBoundedGoFullHistoryProcess', () => {
 		nextChild.emitSpawn();
 		nextChild.emitClose(0, null);
 		await expect(completion).resolves.toEqual(Buffer.alloc(0));
+	});
+
+	it('does not spawn the native parser when the held session is lost after staging', async () => {
+		const root = await mkdtemp('/dev/shm/ledger-launch-fence-');
+		const input = join(root, 'input');
+		try {
+			const processor = new GoFullHistoryLedgerCloseMetaProcessor({
+				executablePath: '/tmp/full-history-etl',
+				limits: {
+					maximumCompressedBytes: 256 << 20,
+					maximumDecodedMemoryBytes: 512 << 20,
+					maximumLedgers: 1,
+					maximumOutputBytes: 1 << 30,
+					maximumRows: 1_000_000,
+					maximumUncompressedBytes: 512 << 20
+				},
+				maximumConcurrency: 1, maximumQueueDepth: 1, minimumLedgers: 1,
+				networkName: 'pubnet', processTimeoutMilliseconds: 120_000,
+				temporaryInputRoot: input, typedOutputRoot: join(root, 'typed')
+			});
+			const rejected = new Error('leadership lost before native launch');
+			await expect(processor.processAndCommit({
+				inputs: [{
+					expectedRange: fullHistoryLedgerCloseMetaRange(3, 3),
+					object: {
+						bytes: Buffer.from('unused staged fixture'),
+						identity: {
+							generation: 'fixture', objectKey: 'fixture.xdr.zstd',
+							sourceUri: 'https://fixture.invalid/fixture.xdr.zstd'
+						}
+					}
+				}],
+				networkPassphrase: 'Public Global Stellar Network ; September 2015',
+				source: { configDigest: fullHistoryLedgerCloseMetaSha256Digest('11'.repeat(32)), sourceId: 'fixture' }
+			}, new AbortController().signal, async () => {
+				const directories = await readdir(input);
+				expect(directories).toHaveLength(1);
+				expect(await readdir(join(input, directories[0]!))).toContain('0000.xdr.zstd');
+				throw rejected;
+			})).rejects.toBe(rejected);
+			expect(spawn).not.toHaveBeenCalled();
+			expect(await readdir(input)).toEqual([]);
+		} finally {
+			await rm(root, { force: true, recursive: true });
+		}
 	});
 
 	it('waits for close after an error from an already-spawned child', async () => {

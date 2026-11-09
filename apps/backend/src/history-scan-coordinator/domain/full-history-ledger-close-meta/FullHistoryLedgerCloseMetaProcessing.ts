@@ -133,7 +133,8 @@ export interface FullHistoryLedgerCloseMetaDatasetOutput {
 export interface FullHistoryLedgerCloseMetaProcessorPort {
 	processAndCommit(
 		request: FullHistoryLedgerCloseMetaProcessingRequest,
-		signal: AbortSignal
+		signal: AbortSignal,
+		assertBeforeConversion?: () => Promise<void>
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt>;
 }
 

@@ -1,4 +1,4 @@
-import { constants as fsConstants, lstatSync, unlinkSync, type BigIntStats } from 'node:fs';
+import { constants as fsConstants, linkSync, lstatSync, unlinkSync, type BigIntStats } from 'node:fs';
 import {
 	open,
 	rename,
@@ -25,6 +25,7 @@ export interface PendingPlan {
 export interface PendingPlanStore {
 	read(): Promise<PendingPlan | null>;
 	write(plan: PendingPlan): Promise<void>;
+	installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
 	clear(): Promise<void>;
 	clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
 }
@@ -131,6 +132,46 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			if (created && !renamed) await unlink(temporary).catch((error: unknown) => {
 				if (!isCode(error, 'ENOENT')) throw error;
 			});
+		}
+	}
+
+	async installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+		const validated = validatePendingPlan(plan);
+		const directory = dirname(this.file);
+		const temporary = join(directory, `.${basename(this.file)}.${process.pid}.${randomUUID()}.tmp`);
+		let handle: FileHandle | undefined;
+		let installed = false;
+		try {
+			handle = await open(temporary, 'wx', 0o600);
+			try {
+				await handle.writeFile(`${JSON.stringify(validated)}\n`, 'utf8');
+				await handle.sync();
+			} finally {
+				await handle.close();
+			}
+			await assertHeld();
+			// The complete inode becomes visible atomically. No await or replacing rename here.
+			try {
+				linkSync(temporary, this.file);
+				installed = true;
+			} catch (error) {
+				if (isCode(error, 'EEXIST')) {
+					throw new PendingPlanChangedError('Pending plan appeared before installation; refusing to replace it');
+				}
+				throw error;
+			}
+		} finally {
+			if (handle !== undefined) await unlink(temporary).catch((error: unknown) => {
+				if (isCode(error, 'ENOENT')) return;
+				if (installed) throw new PendingPlanChangedError('Pending plan installation could not be made durable');
+				throw error;
+			});
+		}
+		try {
+			await syncDirectory(directory);
+		} catch {
+			// The name may already be durable. Preserve it for the next owner to inspect.
+			throw new PendingPlanChangedError('Pending plan installation could not be made durable');
 		}
 	}
 
