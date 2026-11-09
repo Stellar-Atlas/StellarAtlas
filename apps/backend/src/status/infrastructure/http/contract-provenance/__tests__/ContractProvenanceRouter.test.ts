@@ -74,7 +74,9 @@ it('reports catalogue unavailability separately from an available empty page', a
 
 describe('contract provenance RPC path', () => {
 	afterEach(() => fetchRpc.mockReset());
-	it('reads matching instance and code evidence and caches the bounded result', async () => {
+	const endpoint = 'http://127.0.0.1:9000/stellar/rpc';
+	const networkPassphrase = 'test';
+	function rpcFixture() {
 		const id = StrKey.encodeContract(new Uint8Array(32).fill(7));
 		const wasm = Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]);
 		const hash = createHash('sha256').update(wasm).digest('hex');
@@ -110,23 +112,33 @@ describe('contract provenance RPC path', () => {
 				code: wasm
 			})
 		);
-		const endpoint = 'http://127.0.0.1:9000/stellar/rpc';
-		function evidence(key: xdr.LedgerKey, entry: xdr.LedgerEntryData) {
+		function evidence(
+			key: xdr.LedgerKey,
+			entry: xdr.LedgerEntryData,
+			requestId = 1,
+			latestLedger = 150,
+			lastModifiedLedgerSeq = 100
+		) {
 			return {
 				jsonrpc: '2.0',
-				id: 1,
+				id: requestId,
 				result: {
-					latestLedger: 150,
+					latestLedger,
 					entries: [
 						{
 							key: key.toXDR('base64'),
 							xdr: entry.toXDR('base64'),
-							lastModifiedLedgerSeq: 100
+							lastModifiedLedgerSeq,
+							liveUntilLedgerSeq: 200
 						}
 					]
 				}
 			};
 		}
+		return { id, hash, instanceKey, instance, codeKey, code, evidence };
+	}
+	it('reads matching instance and code evidence and caches the bounded result', async () => {
+		const { id, hash, instanceKey, instance, codeKey, code, evidence } = rpcFixture();
 		fetchRpc
 			.mockResolvedValueOnce(evidence(instanceKey, instance))
 			.mockResolvedValueOnce(evidence(codeKey, code));
@@ -163,6 +175,92 @@ describe('contract provenance RPC path', () => {
 			])
 		);
 	});
+
+	function nativeCatalogueApp() {
+		const observe = jest.fn(async () => {});
+		const app = express().use(
+			'/v1',
+			contractProvenanceRouter({
+				rpcUrl: endpoint,
+				approvedNativeRpcUrl: endpoint,
+				networkPassphrase,
+				observe
+			})
+		);
+		return { app, observe };
+	}
+
+	const networkReply = {
+		jsonrpc: '2.0',
+		id: 1,
+		result: { passphrase: networkPassphrase, protocolVersion: 29 }
+	};
+	it('binds native Wasm to the RPC network and the instance observation ledger', async () => {
+		const { id, hash, instanceKey, instance, codeKey, code, evidence } = rpcFixture();
+		fetchRpc
+			.mockResolvedValueOnce(networkReply)
+			.mockResolvedValueOnce(evidence(instanceKey, instance, 2))
+			.mockResolvedValueOnce(evidence(codeKey, code, 3, 151));
+		const { app, observe } = nativeCatalogueApp();
+		const result = await request(app).get('/v1/contracts/' + id + '/provenance').expect(200);
+		expect(result.body).toMatchObject({
+			contractId: id,
+			networkPassphrase,
+			observedLedger: 150,
+			instanceModifiedLedger: 100,
+			wasmSha256: hash,
+			ledgerEvidence: 'configured_rpc_observation',
+			build: { status: 'metadata_missing' }
+		});
+		expect(result.body).not.toHaveProperty('freshUntil');
+		expect(observe).not.toHaveBeenCalled();
+		const rpc = fetchRpc.mock.calls[0]?.[0];
+		expect(rpc).toMatchObject({ href: endpoint, scope: 'native' });
+		expect(fetchRpc.mock.calls.map(([target, body]) => {
+			expect(target).toBe(rpc);
+			return body;
+		})).toEqual([
+			{ jsonrpc: '2.0', id: 1, method: 'getNetwork' },
+			{ jsonrpc: '2.0', id: 2, method: 'getLedgerEntries', params: { keys: [instanceKey.toXDR('base64')] } },
+			{ jsonrpc: '2.0', id: 3, method: 'getLedgerEntries', params: { keys: [codeKey.toXDR('base64')] } }
+		]);
+	});
+
+	it.each([
+		{ ...networkReply, result: { ...networkReply.result, passphrase: 'wrong network' } },
+		{ ...networkReply, result: { passphrase: networkPassphrase } },
+		{ ...networkReply, id: 2 }
+	])('rejects a native RPC reply without matching network evidence (%#)', async (reply) => {
+		fetchRpc.mockResolvedValueOnce(reply);
+		const { app, observe } = nativeCatalogueApp();
+		await request(app).get('/v1/contracts/' + rpcFixture().id + '/provenance').expect(503);
+		expect(fetchRpc).toHaveBeenCalledTimes(1);
+		expect(observe).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{ ledger: 149, modified: 100, tamper: false },
+		{ ledger: 159, modified: 100, tamper: false },
+		{ ledger: 151, modified: 151, tamper: false },
+		{ ledger: 151, modified: 100, tamper: true }
+	])('rejects an inconsistent native instance and Wasm observation (%#)', async ({ ledger, modified, tamper }) => {
+		const { id, hash, instanceKey, instance, codeKey, code, evidence } = rpcFixture();
+		const codeEntry = tamper
+			? xdr.LedgerEntryData.contractCode(new xdr.ContractCodeEntry({
+					ext: xdr.ContractCodeEntryExt.v0(),
+					hash,
+					code: Buffer.from('tampered')
+				}))
+			: code;
+		fetchRpc
+			.mockResolvedValueOnce(networkReply)
+			.mockResolvedValueOnce(evidence(instanceKey, instance, 2))
+			.mockResolvedValueOnce(evidence(codeKey, codeEntry, 3, ledger, modified));
+		const { app, observe } = nativeCatalogueApp();
+		await request(app).get('/v1/contracts/' + id + '/provenance').expect(503);
+		expect(observe).not.toHaveBeenCalled();
+	});
+
 	it('rejects invalid addresses and returns uncached unavailability when RPC is unconfigured', async () => {
 		const app = express().use(
 			'/v1',
