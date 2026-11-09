@@ -28,11 +28,14 @@ import type { RequestHandler } from 'express';
 import type { HubbleAggregateFunction } from './HubbleAggregateContracts.js';
 import {
 	buildSchema,
+	getOperationAST,
 	GraphQLError,
 	GraphQLScalarType,
+	Kind,
 	valueFromASTUntyped
 } from 'graphql';
 import { createHandler } from 'graphql-http/lib/use/express';
+import { allowsProgrammaticAnalytics, recordAtlasResponse } from './AtlasEventAnalytics.js';
 import {
 	HubbleWarehouseInputError,
 	HubbleWarehouseUnavailableError,
@@ -217,6 +220,18 @@ export function hubbleWarehouseGraphqlHandler(
 ): RequestHandler {
 	return createHandler({
 		schema,
+		onOperation: (request, args, result) => {
+			if (!process.env.ATLAS_ANALYTICS_ORIGIN || request.method !== 'POST' ||
+				!allowsProgrammaticAnalytics(request.raw.headers) || result.errors?.length) return;
+			const operation = getOperationAST(args.document, args.operationName);
+			const data = result.data;
+			// Recognize data operations, not status, catalogue or introspection.
+			if (data && operation?.selectionSet.selections.some(selection => selection.kind === Kind.FIELD &&
+				selection.name.value.startsWith('hubble') &&
+				selection.name.value !== 'hubbleStatus' && selection.name.value !== 'hubbleDatasets' &&
+				Object.hasOwn(data, selection.alias?.value ?? selection.name.value)))
+				recordAtlasResponse('graphql', request.raw.headers, request.context.res);
+		},
 		validationRules: (_request, _args, specifiedRules) => [
 			...specifiedRules,
 			validateHubbleGraphqlBudget

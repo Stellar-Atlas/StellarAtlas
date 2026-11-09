@@ -4,6 +4,7 @@ import type { Duplex } from 'stream';
 import { parse as parseDotenv } from 'dotenv';
 import { connect, type NatsConnection, type Subscription } from 'nats';
 import { WebSocket, WebSocketServer } from 'ws';
+import { allowsProgrammaticAnalytics, recordAtlasApiEvent } from './AtlasEventAnalytics.js';
 
 const subject = 'stellaratlas.warehouse.published';
 const path = '/v1/stream/data';
@@ -214,7 +215,7 @@ export function attachWarehouseLiveWebSocket(server: Server): void {
 		for (const client of clients) send(client, payload);
 	};
 
-	webSocketServer.on('connection', (socket) => {
+	webSocketServer.on('connection', (socket, request: IncomingMessage) => {
 		const client = socket as LiveClient;
 		client.isAlive = true;
 		clients.add(client);
@@ -227,7 +228,9 @@ export function attachWarehouseLiveWebSocket(server: Server): void {
 		client.on('error', () => {
 			clients.delete(client);
 		});
-		send(client, JSON.stringify({ version: 1, event: 'ready' }));
+		if (send(client, JSON.stringify({ version: 1, event: 'ready' })) &&
+			allowsProgrammaticAnalytics(request.headers))
+			recordAtlasApiEvent('websocket', request.headers);
 		if (heartbeat === undefined) {
 			heartbeat = setInterval(() => {
 				for (const item of clients) {

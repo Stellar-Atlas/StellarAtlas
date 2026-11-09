@@ -3,7 +3,7 @@ import type { HubbleWarehouse } from './HubbleWarehouseContracts.js';
 import type { HubbleContractEventInput } from './HubbleContractEventContracts.js';
 import { normalizeHubbleContractEventInput } from './HubbleContractEventValidation.js';
 import { withHubbleRequestCancellation } from './HubbleRequestCancellation.js';
-import { recordSuccessfulEventQuery } from './AtlasEventAnalytics.js';
+import { allowsProgrammaticAnalytics, recordAtlasResponse } from './AtlasEventAnalytics.js';
 import {
 	HubbleWarehouseInputError,
 	HubbleWarehouseUnavailableError
@@ -45,10 +45,8 @@ export function registerHubbleContractEventRoutes(
 					() => warehouse.contractEvents(input)
 				);
 				if (!response.destroyed) {
-					response.once('finish', () => {
-						if (response.statusCode >= 200 && response.statusCode < 300)
-							recordSuccessfulEventQuery();
-					});
+					if (allowsProgrammaticAnalytics(request.headers))
+						recordAtlasResponse('contractEvents', request.headers, response);
 					response.json(page);
 				}
 			} catch (error) {

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { explorerSearchNavigation } from '../../api/explorer-search-route';
 import { ISSUER_DOMAIN_MAX_INPUT } from '../../api/issuer-domain';
 import { MAX_SOROBAN_DOMAIN_NAME_LENGTH } from '../../domain/soroban-domain-name';
+import { recordAtlasView } from '../atlas-analytics';
 
 const searchTypes = ['auto', 'transaction', 'account', 'ledger', 'operation', 'asset', 'contract', 'pool', 'issuer-domain', 'soroban-domain'] as const;
 const inputLimit = (type: string): number => type === 'issuer-domain' ? ISSUER_DOMAIN_MAX_INPUT :
@@ -38,6 +39,7 @@ function SearchForm({ initialQuery, initialType }: {
 				return;
 			}
 			// Save the submitted search in this history entry, not on every keystroke.
+			recordAtlasView('explorerSearch');
 			window.history.replaceState(null, '', navigation.origin);
 			router.push(navigation.destination);
 		}}>

@@ -13,10 +13,17 @@ async function listen(server) {
 const events = [
 	['Documentation use', '/docs'],
 	['Archive inspection', '/archives'],
-	['Successful event query', '/explorer/contract-events']
+	['Network view', '/overview'],
+	['Explorer list view', '/explorer'],
+	['Explorer record view', '/explorer'],
+	['Explorer search submitted', '/explorer'],
+	['Successful event query', '/explorer/contract-events'],
+	['Public REST use', '/docs/api'],
+	['Public GraphQL use', '/docs/graphql'],
+	['Public WebSocket connection', '/docs/live-updates']
 ].map(([name, path]) => ({ name, url: 'https://stellaratlas.io' + path, domain: 'stellaratlas.io' }));
 
-test('reconstructs the three event shapes and rejects extraneous requests before forwarding', async () => {
+test('reconstructs every allowed event and drops private or extraneous requests before forwarding', async () => {
 	const captured = [];
 	let drop = false;
 	const collector = createServer(async (request, response) => {
@@ -35,9 +42,9 @@ test('reconstructs the three event shapes and rejects extraneous requests before
 	try {
 		for (const [index, event] of events.entries()) {
 			const result = await send(event, {
-				type: index === 2 ? 'application/json' : 'text/plain',
+				type: index >= 6 ? 'application/json' : 'text/plain',
 				headers: {
-					...(index === 2 ? {} : { Origin: 'https://stellaratlas.io' }),
+					...(index >= 6 ? {} : { Origin: 'https://stellaratlas.io' }),
 					'User-Agent': 'private-client',
 					'X-Forwarded-For': '192.0.2.15',
 					Authorization: 'Bearer fixture', Cookie: 'credential=fixture',
@@ -45,6 +52,9 @@ test('reconstructs the three event shapes and rejects extraneous requests before
 				}
 			});
 			assert.equal(result.status, 202);
+			assert.equal(result.headers.get('access-control-allow-origin'),
+				index >= 6 ? null : 'https://stellaratlas.io');
+			assert.equal(result.headers.get('vary'), 'Origin');
 		}
 		assert.deepEqual(captured.map(x => x.body), events);
 		for (const { url, headers } of captured) {
@@ -59,8 +69,10 @@ test('reconstructs the three event shapes and rejects extraneous requests before
 		assert.equal((await send({ ...events[0], domain: 'other.example.test' })).status, 400);
 		assert.equal((await send(events[0], { path: '/api/event?query=fixture' })).status, 404);
 		assert.equal((await send(events[0], { headers: { Origin: 'https://other.example.test' } })).status, 403);
+		assert.equal((await send(events[0], { headers: { Origin: 'null' } })).status, 403);
 		assert.equal((await send({ ...events[0], extra: 'x'.repeat(512) })).status, 413);
-		assert.equal(captured.length, 3);
+		assert.equal((await send(events[0], { headers: { 'Sec-GPC': '0, 1' } })).status, 204);
+		assert.equal(captured.length, events.length);
 		drop = true;
 		assert.equal((await send(events[0])).status, 502);
 	} finally {
