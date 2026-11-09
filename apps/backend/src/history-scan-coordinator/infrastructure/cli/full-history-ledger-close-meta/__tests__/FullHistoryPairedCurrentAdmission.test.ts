@@ -8,6 +8,7 @@ import {
 import type { PendingPlan } from '../FullHistoryLedgerCloseMetaPendingPlan.js';
 import fsModule, { promises as fs } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { readScopedCurrentArm, type ScopedCurrentAttemptPolicy } from '../FullHistoryScopedCurrentAttempt.js';
 
 describe('paired current source admission', () => {
@@ -105,7 +106,7 @@ describe('scoped current-attempt arm binding', () => {
 		const permitId = '123e4567-e89b-42d3-a456-426614174000';
 		const bootId = 'abcdabcd-abcd-abcd-abcd-abcdabcdabcd';
 		const invocationId = 'a'.repeat(32);
-		const entryPath = '/opt/oroute/bin/ledger-close.js';
+		const entryPath = fileURLToPath(new URL('../run-continuous-full-history-ledger-close-meta.js', import.meta.url));
 		const entryBytes = Buffer.from('trusted entrypoint');
 		const holdBytes = Buffer.from('held');
 		const policy: ScopedCurrentAttemptPolicy = { permitId, bulkDevice: 7n, startLedger: 65_366_208, endLedger: 65_366_335 };
@@ -156,6 +157,8 @@ describe('scoped current-attempt arm binding', () => {
 		try {
 			const gate = await readScopedCurrentArm(policy, bootId, invocationId, entryPath, () => nowMs);
 			expect(gate).toEqual(expect.any(Function));
+			await expect(readScopedCurrentArm(policy, bootId, invocationId, '/unexpected/entry.js', () => nowMs)).resolves.toBeNull();
+			expect(realpath).not.toHaveBeenCalledWith('/unexpected/entry.js');
 			expect(await gate!()).not.toThrow();
 			// The invocation is part of the arm binding.
 			expect(await readScopedCurrentArm(policy, bootId, 'b'.repeat(32), entryPath, () => nowMs)).toBeNull();

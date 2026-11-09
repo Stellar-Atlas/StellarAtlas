@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import fsModule, { constants as fsConstants, promises as fs, type BigIntStats } from 'node:fs';
 import { posix as path } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface ScopedCurrentAttemptPolicy {
 	readonly permitId: string;
@@ -15,6 +16,7 @@ const ARM_PATH = '/run/stellaratlas-history-admission/current-attempt.json';
 const HOLD_PATH = '/run/stellaratlas-history-admission/hold';
 const RUN_PATH = '/run';
 const ADMISSION_DIR = '/run/stellaratlas-history-admission';
+const ENTRY_PATH = fileURLToPath(new URL('./run-continuous-full-history-ledger-close-meta.js', import.meta.url));
 const TMPFS_MAGIC = 0x01021994n;
 const MAX_CONTROL_BYTES = 4096;
 const MAX_ENTRY_BYTES = 1024 * 1024;
@@ -95,11 +97,11 @@ async function readPinnedFile(filePath: string, maxBytes: number): Promise<{ byt
 	let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
 	try {
 		if (fsConstants.O_NOFOLLOW === undefined || fsConstants.O_NONBLOCK === undefined) return null;
-		const before = await fs.lstat(filePath, { bigint: true });
-		if (!secureFile(before, maxBytes)) return null;
 		handle = await fs.open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
 		const opened = await handle.stat({ bigint: true });
-		if (!secureFile(opened, maxBytes) || !fileVersion(before, opened)) return null;
+		if (!secureFile(opened, maxBytes)) return null;
+		const named = await fs.lstat(filePath, { bigint: true });
+		if (!secureFile(named, maxBytes) || !fileVersion(opened, named)) return null;
 		const bytes = Buffer.alloc(Number(opened.size));
 		let total = 0;
 		while (total < bytes.length) {
@@ -144,11 +146,11 @@ export async function readScopedCurrentArm(
 	entryPath: string | undefined, now: () => number,
 ): Promise<ScopedCurrentArm | null> {
 	try {
-		if (!invocationId || !entryPath || !/^[0-9a-f]{32}$/.test(invocationId)) return null;
+		if (!invocationId || entryPath !== ENTRY_PATH || !/^[0-9a-f]{32}$/.test(invocationId)) return null;
 		const parentsBefore = await safeParents();
 		if (!parentsBefore) return null;
-		const actualEntry = await fs.realpath(entryPath);
-		if (actualEntry !== entryPath || !path.isAbsolute(actualEntry)) return null;
+		const actualEntry = ENTRY_PATH;
+		if ((await fs.realpath(actualEntry)) !== actualEntry || !path.isAbsolute(actualEntry)) return null;
 		const entry = await readPinnedFile(actualEntry, MAX_ENTRY_BYTES);
 		if (!entry) return null;
 		const armRead = await readPinnedFile(ARM_PATH, MAX_CONTROL_BYTES);
