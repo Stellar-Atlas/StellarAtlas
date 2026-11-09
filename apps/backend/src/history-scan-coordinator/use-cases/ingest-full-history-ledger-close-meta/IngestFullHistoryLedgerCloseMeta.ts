@@ -167,7 +167,8 @@ export class IngestFullHistoryLedgerCloseMeta {
 	async ingestRange(
 		context: FullHistoryLedgerCloseMetaIngestionContext,
 		rangeInput: FullHistoryLedgerCloseMetaRange,
-		signal: AbortSignal
+		signal: AbortSignal,
+		assertBeforeConversion?: () => Promise<void>
 	): Promise<FullHistoryLedgerCloseMetaIngestionReceipt> {
 		const range = validateIngestionRange(
 			context.config,
@@ -199,7 +200,7 @@ export class IngestFullHistoryLedgerCloseMeta {
 				offset + this.#processingConcurrency
 			);
 			const outcomes = await Promise.allSettled(
-				group.map((shard) => this.#processShard(context, shard, signal))
+				group.map((shard) => this.#processShard(context, shard, signal, assertBeforeConversion))
 			);
 			for (const outcome of outcomes) {
 				if (outcome.status === 'fulfilled') {
@@ -230,7 +231,8 @@ export class IngestFullHistoryLedgerCloseMeta {
 	async #processShard(
 		context: FullHistoryLedgerCloseMetaIngestionContext,
 		range: FullHistoryLedgerCloseMetaRange,
-		signal: AbortSignal
+		signal: AbortSignal,
+		assertBeforeConversion?: () => Promise<void>
 	): Promise<{
 		readonly processing: FullHistoryLedgerCloseMetaProcessingReceipt;
 		readonly sourceObjectCount: number;
@@ -248,7 +250,8 @@ export class IngestFullHistoryLedgerCloseMeta {
 					sourceId: context.registeredSource.sourceId
 				}
 			},
-			signal
+			signal,
+			assertBeforeConversion
 		);
 		assertFullHistoryLedgerCloseMetaProcessingReceipt(processing);
 		assertProcessingMatchesInputs(range, inputs, processing);

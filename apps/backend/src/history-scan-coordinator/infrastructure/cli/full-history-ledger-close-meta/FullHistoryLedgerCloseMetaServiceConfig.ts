@@ -5,6 +5,10 @@ import {
 	type FullHistoryCurrentCapacityAllowance,
 	type FullHistoryCurrentOnlyCapacity
 } from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
+import {
+	parsePairedCurrentAdmissionPolicy,
+	type PairedCurrentAdmissionPolicy
+} from './FullHistoryPairedCurrentAdmission.js';
 
 const maximumIngressBytesPerSecond = 187_500_000;
 const maximumFetchConcurrency = 1_024;
@@ -17,6 +21,7 @@ const sharedMemoryRoot = '/dev/shm';
 export interface FullHistoryLedgerCloseMetaServiceConfig {
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
+	readonly pairedCurrentAdmission?: PairedCurrentAdmissionPolicy;
 	readonly admissionCycleCooldownMilliseconds: number;
 	readonly admissionEnabled: boolean;
 	readonly admissionMaximumDatabaseConnectionBasisPoints: number;
@@ -182,10 +187,19 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	const currentOnlyCapacity = parseFullHistoryCurrentOnlyCapacity(
 		environment, minimumFreeBytes, firstAvailableLedger
 	);
+	const pairedCurrentAdmission = parsePairedCurrentAdmissionPolicy(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION
+	);
+	if ((currentOnlyCapacity === undefined) !== (pairedCurrentAdmission === undefined)) {
+		throw new Error('current-only capacity and paired admission must be configured together');
+	}
 	if (currentOnlyCapacity !== undefined) {
 		if (!prioritizeCurrent) throw new Error('current-only capacity requires prioritize current');
 		if (currentCapacityAllowance !== undefined) {
 			throw new Error('current-only capacity cannot be combined with an expiring allowance');
+		}
+		if (cycleLedgerCount !== typedShardLedgerCount) {
+			throw new Error('paired current admission requires one typed shard per cycle');
 		}
 	}
 	if (
@@ -220,6 +234,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	return Object.freeze({
 		...(currentCapacityAllowance === undefined ? {} : { currentCapacityAllowance }),
 		...(currentOnlyCapacity === undefined ? {} : { currentOnlyCapacity }),
+		...(pairedCurrentAdmission === undefined ? {} : { pairedCurrentAdmission }),
 		admissionCycleCooldownMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_CYCLE_COOLDOWN_MS,
 			30_000,
