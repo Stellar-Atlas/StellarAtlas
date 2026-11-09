@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+// The alias may stand in only for the exact disk path reported by ClickHouse.
+func TestHistoryStorageMetadataBindingRejectsReportedPathDrift(t *testing.T) {
+	policy := HistoricalStoragePolicy{
+		ClickHouseReportedPath: "/bulk/warehouse", ClickHouseMetadataPath: "/run/private/warehouse", ClickHouseMetadataInode: 42,
+	}
+	for _, reported := range []string{"/bulk/warehouse", "/bulk/warehouse/"} {
+		if got, err := policy.clickHouseCapacityPath(reported); err != nil || got != "/run/private/warehouse" {
+			t.Errorf("exact metadata binding refused for %q: path=%q, error=%v", reported, got, err)
+		}
+	}
+	for _, reported := range []string{
+		"/bulk/other",
+		"/bulk/./warehouse",
+		"/bulk//warehouse",
+		"/bulk/warehouse//",
+		"/bulk/link/../warehouse",
+	} {
+		if _, err := policy.clickHouseCapacityPath(reported); err == nil {
+			t.Errorf("non-exact reported directory %q was accepted", reported)
+		}
+	}
+}
+
 func TestHistoryStorageBudgetsBothSlotsAndProtectsSourceReserve(t *testing.T) {
 	const GiB = uint64(1) << 30
 	policy := HistoricalStoragePolicy{

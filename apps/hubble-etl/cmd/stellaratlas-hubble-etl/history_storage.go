@@ -25,13 +25,17 @@ func loadHistoryStoragePolicy(reserveCurrent bool) (*clickhouse.HistoricalStorag
 	}
 	var policy clickhouse.HistoricalStoragePolicy
 	decoder := json.NewDecoder(strings.NewReader(value))
-	invalid := fmt.Errorf("%s must contain one capacity policy object with all six exact fields", historyStoragePolicyEnv)
+	invalid := fmt.Errorf("%s must contain one capacity policy object with the exact required fields", historyStoragePolicyEnv)
 	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
 		return nil, invalid
 	}
 	keys := map[string]bool{
 		"bulkRoot": false, "sourceMinimumFreeBytes": false, "sourceMinimumFreeBasisPoints": false,
 		"sourceCycleOutputBytes": false, "currentWarehouseMarginBytes": false, "unreservedGrowthPerHistorySlotBytes": false,
+	}
+	optional := []string{"clickhouseReportedPath", "clickhouseMetadataPath", "clickhouseMetadataInode"}
+	for _, key := range optional {
+		keys[key] = false
 	}
 	for decoder.More() {
 		token, err := decoder.Token()
@@ -45,12 +49,25 @@ func loadHistoryStoragePolicy(reserveCurrent bool) (*clickhouse.HistoricalStorag
 	if token, err := decoder.Token(); err != nil || token != json.Delim('}') || decoder.Decode(new(any)) != io.EOF {
 		return nil, invalid
 	}
+	bindingFields := 0
+	for _, key := range optional {
+		if keys[key] {
+			bindingFields++
+		}
+		delete(keys, key)
+	}
+	if bindingFields != 0 && bindingFields != len(optional) {
+		return nil, invalid
+	}
 	for _, seen := range keys {
 		if !seen {
 			return nil, invalid
 		}
 	}
 	if err := json.Unmarshal([]byte(value), &policy); err != nil {
+		return nil, invalid
+	}
+	if bindingFields != 0 && policy.ClickHouseMetadataInode == 0 {
 		return nil, invalid
 	}
 	if err := policy.Validate(); err != nil {

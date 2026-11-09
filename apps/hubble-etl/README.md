@@ -81,6 +81,16 @@ an admission check, not an allocation or quota; other writers can still consume
 space. Current work and admitted imports keep their existing checks and
 lifecycle. History retries automatically after capacity recovers.
 
+If service isolation denies the reported directory's parent paths, optionally
+set all three of `clickhouseReportedPath`, `clickhouseMetadataPath`, and
+`clickhouseMetadataInode`. The metadata path must be a service-private
+read-only bind of that exact directory, with searchable parents but no read
+or search permission on the directory itself for the publisher. A read-only
+mount by itself does not prevent reading database files. The publisher checks
+the reported path, bound inode, effective permissions, and shared filesystem
+before accepting capacity. Do not grant directory read/search access to enable
+this check.
+
 ## Optional one-time retained batch priority
 
 Set `HUBBLE_ETL_PRIORITY_BATCH_ID` in the existing host file

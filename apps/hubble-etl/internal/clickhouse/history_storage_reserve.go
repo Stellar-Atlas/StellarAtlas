@@ -22,6 +22,9 @@ type HistoricalStoragePolicy struct {
 	SourceCycleOutputBytes              uint64 `json:"sourceCycleOutputBytes"`
 	CurrentWarehouseMarginBytes         uint64 `json:"currentWarehouseMarginBytes"`
 	UnreservedGrowthPerHistorySlotBytes uint64 `json:"unreservedGrowthPerHistorySlotBytes"`
+	ClickHouseReportedPath              string `json:"clickhouseReportedPath,omitempty"`
+	ClickHouseMetadataPath              string `json:"clickhouseMetadataPath,omitempty"`
+	ClickHouseMetadataInode             uint64 `json:"clickhouseMetadataInode,omitempty"`
 }
 
 func (p HistoricalStoragePolicy) Validate() error {
@@ -30,7 +33,29 @@ func (p HistoricalStoragePolicy) Validate() error {
 		p.CurrentWarehouseMarginBytes == 0 || p.UnreservedGrowthPerHistorySlotBytes == 0 {
 		return fmt.Errorf("history storage policy requires an absolute bulk root and explicit, valid byte budgets")
 	}
+	if p.ClickHouseReportedPath != "" || p.ClickHouseMetadataPath != "" || p.ClickHouseMetadataInode != 0 {
+		if !metadataDirectoryPath(p.ClickHouseReportedPath) || !metadataDirectoryPath(p.ClickHouseMetadataPath) ||
+			p.ClickHouseMetadataPath == p.ClickHouseReportedPath || p.ClickHouseMetadataPath == filepath.Clean(p.BulkRoot) ||
+			p.ClickHouseMetadataInode == 0 {
+			return fmt.Errorf("history storage metadata binding requires two distinct absolute directory paths and the expected inode")
+		}
+	}
 	return nil
+}
+
+func metadataDirectoryPath(path string) bool {
+	return filepath.IsAbs(path) && filepath.Clean(path) == path && filepath.Dir(path) != path &&
+		!strings.ContainsAny(path, "\x00\r\n\t")
+}
+
+func (p HistoricalStoragePolicy) clickHouseCapacityPath(reported string) (string, error) {
+	if p.ClickHouseMetadataPath == "" {
+		return reported, nil
+	}
+	if reported != p.ClickHouseReportedPath && reported != p.ClickHouseReportedPath+"/" {
+		return "", fmt.Errorf("historical bulk capacity probe reported a different ClickHouse directory")
+	}
+	return p.ClickHouseMetadataPath, nil
 }
 
 func (p HistoricalStoragePolicy) requiredBytes(total uint64, historySlots int) (uint64, error) {
@@ -113,7 +138,11 @@ func (c *Client) CheckHistoricalBulkReserve(ctx context.Context, policy Historic
 	if freeErr != nil || unreservedErr != nil {
 		return fmt.Errorf("historical bulk capacity probe is unavailable or malformed")
 	}
-	clickhousePath, err := readBulkFilesystemCapacity(fields[0])
+	path, err := policy.clickHouseCapacityPath(fields[0])
+	if err != nil {
+		return err
+	}
+	clickhousePath, err := readBulkCapacityDirectory(path, policy.ClickHouseMetadataInode)
 	if err != nil {
 		return err
 	}

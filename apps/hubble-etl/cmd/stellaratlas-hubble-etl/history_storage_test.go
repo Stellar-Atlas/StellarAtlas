@@ -38,3 +38,25 @@ func TestHistoryStoragePolicyIsOptInAndRequiresReservedCurrent(t *testing.T) {
 		}
 	}
 }
+
+func TestHistoryStorageMetadataBindingRequiresAllExactFields(t *testing.T) {
+	required := `{"bulkRoot":"/bulk","sourceMinimumFreeBytes":100,"sourceMinimumFreeBasisPoints":500,"sourceCycleOutputBytes":8,"currentWarehouseMarginBytes":32,"unreservedGrowthPerHistorySlotBytes":16,`
+	binding := `"clickhouseReportedPath":"/bulk/warehouse","clickhouseMetadataPath":"/run/private/warehouse","clickhouseMetadataInode":42}`
+	t.Setenv(historyStoragePolicyEnv, required+binding)
+	policy, err := loadHistoryStoragePolicy(true)
+	if err != nil || policy.ClickHouseMetadataInode != 42 {
+		t.Fatalf("valid metadata binding was not parsed: policy=%v, error=%v", policy, err)
+	}
+	for _, invalid := range []string{
+		strings.Replace(binding, `,"clickhouseMetadataInode":42`, "", 1),
+		strings.Replace(binding, `"clickhouseMetadataInode":42`, `"clickhouseMetadataInode":null`, 1),
+		strings.Replace(binding, `"clickhouseMetadataPath"`, `"ClickHouseMetadataPath"`, 1),
+		strings.Replace(binding, `"clickhouseMetadataInode":42`, `"clickhouseMetadataInode":42,"clickhouseMetadataInode":43`, 1),
+		strings.Replace(binding, "/run/private/warehouse", "/bulk/warehouse", 1),
+	} {
+		t.Setenv(historyStoragePolicyEnv, required+invalid)
+		if _, err := loadHistoryStoragePolicy(true); err == nil {
+			t.Fatal("an incomplete or ambiguous metadata binding was accepted")
+		}
+	}
+}
