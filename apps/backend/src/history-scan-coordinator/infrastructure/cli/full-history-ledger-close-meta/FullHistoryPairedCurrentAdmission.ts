@@ -3,6 +3,7 @@ import { isAbsolute, normalize } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { DataSource } from 'typeorm';
 import type { PendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
+import { assertCurrentPublisherReady } from './FullHistoryCurrentPublisherReady.js';
 import { readCurrentSourcePublication } from './FullHistoryPairedSourceManifest.js';
 import {
 	SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES, SCOPED_CURRENT_RESERVE_BASIS_POINTS,
@@ -22,7 +23,7 @@ export interface PairedCurrentAdmissionPolicy {
 }
 
 export interface PairedCurrentAdmission {
-	assertCapacity(plan: PendingPlan, signal: AbortSignal): Promise<void>;
+	assertCapacity(plan: PendingPlan, signal: AbortSignal): Promise<void | (() => void)>;
 	pendingPublication(plan: PendingPlan, signal: AbortSignal): Promise<
 		'not-captured' | 'waiting' | 'published'
 	>;
@@ -70,9 +71,14 @@ interface AdmissionConfig {
 	readonly currentMinimumFreeBytes: bigint;
 	readonly sourceOutputBytes: bigint;
 	readonly scopedBulkDevice?: bigint;
+	readonly currentBulkCommitGuard?: boolean;
+	readonly publisherReadyPath?: string;
+	readonly currentMinimumLedger?: number;
 }
 
 const maximumEvidenceAgeMs = 4_000;
+// The publisher's per-insert fence retains these same two cushions.
+const guardedCurrentPublisherAndStartupAllowanceBytes = 96n * 1024n ** 3n;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const datasets = [
 	'account_signers', 'accounts', 'claimable_balances', 'config_settings',
@@ -83,7 +89,8 @@ const datasets = [
 ] as const;
 
 export function parsePairedCurrentAdmissionPolicy(
-	raw: string | undefined
+	raw: string | undefined,
+	allowBootRebind = false
 ): PairedCurrentAdmissionPolicy | undefined {
 	if (raw === undefined) return undefined;
 	let input: Record<string, unknown>;
@@ -96,7 +103,8 @@ export function parsePairedCurrentAdmissionPolicy(
 	const fields = ['bootId', 'warehouseReportedPath', 'warehouseMetadataPath',
 		'warehouseMetadataInode', 'minimumUnreservedBytes'];
 	if (Object.keys(input).length !== fields.length || fields.some((k) => !Object.hasOwn(input, k)) ||
-		typeof input.bootId !== 'string' || !uuid.test(input.bootId) ||
+		typeof input.bootId !== 'string' ||
+		(!uuid.test(input.bootId) && !(allowBootRebind && input.bootId === 'current')) ||
 		!canonicalPath(input.warehouseReportedPath) || !canonicalPath(input.warehouseMetadataPath) ||
 		!input.warehouseMetadataPath.startsWith('/run/') ||
 		input.warehouseReportedPath === input.warehouseMetadataPath) {
@@ -143,6 +151,13 @@ export function createPairedCurrentAdmission(
 			assertSingleShard(plan);
 			const started = performance.now();
 			if (!(await isPairedCurrentBoot(policy))) throw new Error('Paired current admission boot binding changed');
+			let assertPublisher: (() => void) | undefined;
+			if (config.currentBulkCommitGuard === true) {
+				if (config.publisherReadyPath === undefined || config.currentMinimumLedger === undefined)
+					throw new Error('Standing current publisher identity is not configured');
+				assertPublisher = await assertCurrentPublisherReady(
+					config.publisherReadyPath, policy.bootId, config.currentMinimumLedger, caller);
+			}
 			const before = await filesystem(config.bulkRoot);
 			const rows = await select(
 				"SELECT path, total_space, free_space, unreserved_space FROM system.disks WHERE name='default' LIMIT 2 FORMAT JSON",
@@ -157,6 +172,7 @@ export function createPairedCurrentAdmission(
 			caller.throwIfAborted();
 			assertPairedCapacity(policy, config, before, after, typed, warehouse,
 				rows[0], performance.now() - started);
+			return assertPublisher;
 		},
 		async pendingPublication(plan, caller) {
 			assertSingleShard(plan);
@@ -216,7 +232,13 @@ export function createPairedCurrentAdmission(
 }
 
 export async function isPairedCurrentBoot(policy: PairedCurrentAdmissionPolicy): Promise<boolean> {
-	return (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim() === policy.bootId;
+	return await readPairedCurrentBootId() === policy.bootId;
+}
+
+export async function readPairedCurrentBootId(): Promise<string> {
+	const current = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
+	if (!uuid.test(current)) throw new Error('Paired current boot identity is unavailable');
+	return current;
 }
 
 export async function settlePairedPendingPublication(
@@ -281,10 +303,13 @@ export function assertPairedCapacity(
 	const ratioFloor = (total * bps + 9_999n) / 10_000n;
 	const absoluteFloor = scoped ? SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES : config.currentMinimumFreeBytes;
 	const sourceFloor = ratioFloor > absoluteFloor ? ratioFloor : absoluteFloor;
-	const allowance = scoped ? SCOPED_CURRENT_START_ALLOWANCE_BYTES : config.sourceOutputBytes;
-	if (policy.minimumUnreservedBytes < sourceFloor + allowance)
+	const allowance = scoped ? SCOPED_CURRENT_START_ALLOWANCE_BYTES : config.sourceOutputBytes +
+		(config.currentBulkCommitGuard === true ? guardedCurrentPublisherAndStartupAllowanceBytes : 0n);
+	const required = sourceFloor + allowance;
+	if (config.currentBulkCommitGuard !== true && policy.minimumUnreservedBytes < required)
 		throw new Error('Paired current minimum must cover the source floor and full cycle output');
-	if (paired < policy.minimumUnreservedBytes)
+	const minimum = required > policy.minimumUnreservedBytes ? required : policy.minimumUnreservedBytes;
+	if (paired < minimum)
 		throw new Error('Paired current free-space reserve refused allocation');
 }
 

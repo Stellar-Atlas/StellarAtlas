@@ -26,7 +26,9 @@ type currentWorkerIO struct {
 	admit           func(context.Context, bool) error
 	baselineAdmit   func(context.Context) error
 	ingest          func(context.Context, catalog.Batch) (ingestion.Receipt, error)
+	ingestCurrent   func(context.Context, catalog.Batch) (ingestion.Receipt, error)
 	capacity        func(context.Context) error
+	currentCapacity func(context.Context) error
 	historyCapacity func(context.Context) error
 	wait            func(context.Context) error
 	notice          func(bool, string, error)
@@ -41,6 +43,57 @@ func RunCurrentWorkers(ctx context.Context, config Config, currentGuard *Pressur
 	}
 	if config.PriorityBatchID != "" {
 		return Summary{}, fmt.Errorf("explicit batch recovery cannot use continuous current workers")
+	}
+	var currentCapacity func(context.Context) error
+	if config.CurrentWriteBudgetBytes != 0 {
+		if config.HistoryStoragePolicy == nil || config.CurrentWriteMinimumLedger == 0 ||
+			config.CurrentWriteBudgetBytes < 1<<30 || config.CurrentWriteBudgetBytes > 32<<30 {
+			return Summary{}, fmt.Errorf("bounded current publication requires the paired history gate, an explicit minimum ledger and a 1..32 GiB payload budget")
+		}
+		policy := *config.HistoryStoragePolicy
+		if err := clickhouse.ValidateCurrentPublicationPolicy(policy); err != nil {
+			return Summary{}, err
+		}
+		currentCapacity = func(ctx context.Context) error {
+			return config.Client.CheckCurrentPublicationBulkReserve(ctx, policy)
+		}
+	}
+	ingest := func(ctx context.Context, batch catalog.Batch, bounded bool) (ingestion.Receipt, error) {
+		path, err := sourcePath(config.StorageRoot, batch.StorageKey)
+		if err != nil {
+			return ingestion.Receipt{}, err
+		}
+		request := ingestion.Request{
+			Path: path, BatchID: batch.ID, SourceSHA256: batch.SourceSHA256,
+			ExpectedStart: batch.StartLedger, MaximumEnd: batch.EndLedger,
+			NetworkPassphrase: config.NetworkPassphrase, DecodeLimits: config.DecodeLimits,
+			WriterLimits: config.WriterLimits, Publisher: config.Publisher,
+		}
+		if bounded {
+			request.DecodeLimits.MaxLedgers = 128
+			// A fresh check fences one synchronous INSERT; never let two
+			// overlapping requests both see the same unreserved space.
+			request.WriterLimits.MaximumPendingInserts = 0
+			request.WriterLimits.MaximumPendingInsertBytes = 0
+			request.CurrentWriteBudgetBytes = config.CurrentWriteBudgetBytes
+			request.CheckCurrentWriteCapacity = func(writeCtx context.Context) error {
+				// Only new writes wait; an admitted HTTP request retains existing
+				// cancellation/settlement semantics. Never replay the batch here.
+				for {
+					err := currentCapacity(writeCtx)
+					if !errors.Is(err, clickhouse.ErrCurrentBulkHeadroom) {
+						return err
+					}
+					if currentGuard.Log != nil {
+						currentGuard.Log("current-write-capacity-deferred", err.Error())
+					}
+					if err := waitReadiness(writeCtx, 15*time.Second); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return ingestion.File(ctx, config.Client, request)
 	}
 	currentConfig := config
 	currentConfig.PressureGuard = currentGuard
@@ -63,16 +116,7 @@ func RunCurrentWorkers(ctx context.Context, config Config, currentGuard *Pressur
 			return waitBatchAdmission(ctx, config)
 		},
 		ingest: func(ctx context.Context, batch catalog.Batch) (ingestion.Receipt, error) {
-			path, err := sourcePath(config.StorageRoot, batch.StorageKey)
-			if err != nil {
-				return ingestion.Receipt{}, err
-			}
-			return ingestion.File(ctx, config.Client, ingestion.Request{
-				Path: path, BatchID: batch.ID, SourceSHA256: batch.SourceSHA256,
-				ExpectedStart: batch.StartLedger, MaximumEnd: batch.EndLedger,
-				NetworkPassphrase: config.NetworkPassphrase, DecodeLimits: config.DecodeLimits,
-				WriterLimits: config.WriterLimits, Publisher: config.Publisher,
-			})
+			return ingest(ctx, batch, false)
 		},
 		capacity: config.Client.CheckBulkReserve,
 		wait:     func(ctx context.Context) error { return waitReadiness(ctx, 15*time.Second) },
@@ -89,6 +133,12 @@ func RunCurrentWorkers(ctx context.Context, config Config, currentGuard *Pressur
 				guard.Log(event, reason)
 			}
 		},
+	}
+	if currentCapacity != nil {
+		io.currentCapacity = currentCapacity
+		io.ingestCurrent = func(ctx context.Context, batch catalog.Batch) (ingestion.Receipt, error) {
+			return ingest(ctx, batch, true)
+		}
 	}
 	if config.HistoryStoragePolicy != nil {
 		policy := *config.HistoryStoragePolicy
@@ -129,6 +179,10 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 		selector := historySelector
 		if current {
 			selector = &laneSelection{current: true, claims: claims, minimum: config.MinimumStartLedger}
+			if io.ingestCurrent != nil {
+				selector.maximum = 128
+				selector.minimum = max(selector.minimum, config.CurrentWriteMinimumLedger)
+			}
 		}
 		workers.Add(1)
 		go func(current, baseline bool, selector *laneSelection) {
@@ -190,11 +244,14 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 				if config.ReadinessGuard != nil {
 					err = config.ReadinessGuard.Wait(selectionCtx)
 				}
-				historyCapacityDeferred := false
+				capacityDeferred := false
 				if err == nil {
 					if !current && io.historyCapacity != nil {
 						err = io.historyCapacity(selectionCtx)
-						historyCapacityDeferred = err != nil
+						capacityDeferred = err != nil
+					} else if current && io.currentCapacity != nil {
+						err = io.currentCapacity(selectionCtx)
+						capacityDeferred = errors.Is(err, clickhouse.ErrCurrentBulkHeadroom)
 					} else if io.capacity != nil {
 						err = io.capacity(selectionCtx)
 					}
@@ -208,7 +265,7 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 					if admissionCtx.Err() != nil {
 						return
 					}
-					if config.ReadinessGuard != nil && !historyCapacityDeferred {
+					if config.ReadinessGuard != nil && !capacityDeferred {
 						config.ReadinessGuard.Invalidate(err)
 					}
 					if io.notice != nil {
@@ -229,7 +286,11 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 				}
 				// Only process shutdown cancels admitted imports. A metadata error
 				// in the other lane stops new admission and lets this write finish.
-				receipt, importErr := io.ingest(ctx, batch)
+				importBatch := io.ingest
+				if current && io.ingestCurrent != nil {
+					importBatch = io.ingestCurrent
+				}
+				receipt, importErr := importBatch(ctx, batch)
 				if config.ReadinessGuard != nil {
 					config.ReadinessGuard.Invalidate(importErr)
 				}

@@ -21,25 +21,28 @@ import (
 const publicNetworkPassphrase = "Public Global Stellar Network ; September 2015"
 
 type config struct {
-	client               *clickhouse.Client
-	databaseURL          string
-	maximumBatches       int
-	recentBatches        int
-	minimumStartLedger   uint32
-	priorityBatchID      string
-	networkPassphrase    string
-	once                 bool
-	storageRoot          string
-	workers              int
-	pressureGuard        *backfill.PressureGuard
-	currentGuard         *backfill.PressureGuard
-	baselineHistoryGuard *backfill.PressureGuard
-	historyAdmissionHold *backfill.HistoryAdmissionHold
-	historyStoragePolicy *clickhouse.HistoricalStoragePolicy
-	reserveCurrent       bool
-	typedOperations      bool
-	readinessGuard       *backfill.WarehouseReadinessGuard
-	publisher            *publication.WarehousePublisher
+	client                    *clickhouse.Client
+	databaseURL               string
+	maximumBatches            int
+	recentBatches             int
+	minimumStartLedger        uint32
+	priorityBatchID           string
+	networkPassphrase         string
+	once                      bool
+	storageRoot               string
+	workers                   int
+	pressureGuard             *backfill.PressureGuard
+	currentGuard              *backfill.PressureGuard
+	baselineHistoryGuard      *backfill.PressureGuard
+	historyAdmissionHold      *backfill.HistoryAdmissionHold
+	historyStoragePolicy      *clickhouse.HistoricalStoragePolicy
+	currentWriteBudgetBytes   uint64
+	currentWriteMinimumLedger uint32
+	currentWriteReadyPath     string
+	reserveCurrent            bool
+	typedOperations           bool
+	readinessGuard            *backfill.WarehouseReadinessGuard
+	publisher                 *publication.WarehousePublisher
 }
 
 func main() {
@@ -215,14 +218,25 @@ func loadConfig() (config, error) {
 	if err != nil {
 		return result, err
 	}
+	currentWriteBudget, currentWriteMinimum, err := loadCurrentWriteBudget(reserveCurrent, historyStoragePolicy)
+	if err != nil {
+		return result, err
+	}
+	currentWriteReadyPath, err := loadCurrentWriteReadyPath(currentWriteBudget)
+	if err != nil {
+		return result, err
+	}
 	result = config{
-		pressureGuard:        guard,
-		currentGuard:         currentGuard,
-		baselineHistoryGuard: baselineHistoryGuard,
-		historyAdmissionHold: loadHistoryAdmissionHold(),
-		historyStoragePolicy: historyStoragePolicy,
-		reserveCurrent:       reserveCurrent,
-		typedOperations:      typedOperations,
+		pressureGuard:             guard,
+		currentGuard:              currentGuard,
+		baselineHistoryGuard:      baselineHistoryGuard,
+		historyAdmissionHold:      loadHistoryAdmissionHold(),
+		historyStoragePolicy:      historyStoragePolicy,
+		currentWriteBudgetBytes:   currentWriteBudget,
+		currentWriteMinimumLedger: currentWriteMinimum,
+		currentWriteReadyPath:     currentWriteReadyPath,
+		reserveCurrent:            reserveCurrent,
+		typedOperations:           typedOperations,
 		readinessGuard: &backfill.WarehouseReadinessGuard{
 			Probe: client.CheckReady,
 			Log: func(event, reason string) {
@@ -251,6 +265,24 @@ func loadConfig() (config, error) {
 
 func runBackfill(ctx context.Context, cfg config) error {
 	if cfg.reserveCurrent {
+		if cfg.currentWriteBudgetBytes != 0 {
+			// Successful initialization is not enough when required tables or
+			// the paired device binding are absent. Low capacity alone should
+			// leave the selected publisher running and able to recover.
+			readyCtx, cancelReady := context.WithTimeout(ctx, 8*time.Second)
+			err := cfg.client.CheckReady(readyCtx)
+			if err == nil {
+				err = checkCurrentWriterReady(readyCtx, cfg)
+			}
+			cancelReady()
+			if err != nil {
+				return err
+			}
+			if err := publishCurrentWriterReady(cfg.currentWriteReadyPath,
+				cfg.currentWriteMinimumLedger, cfg.currentWriteBudgetBytes); err != nil {
+				return err
+			}
+		}
 		baselineWorkers, baselineFull, baselineSome := 0, 0, 0
 		if cfg.baselineHistoryGuard != nil {
 			baselineWorkers, baselineFull, baselineSome = 1, cfg.baselineHistoryGuard.MaximumFullBasisPoints, cfg.baselineHistoryGuard.MaximumSomeBasisPoints
@@ -267,6 +299,7 @@ func runBackfill(ctx context.Context, cfg config) error {
 			"baselineHistorySomePressureBasisPoints": baselineSome,
 			"maximumInflight":                        cfg.currentGuard.MaximumInflight,
 			"bulkReserveBytes":                       uint64(500) << 30,
+			"currentWriteBudgetBytes":                cfg.currentWriteBudgetBytes,
 		})
 		// A controlled upgrade can drain admission without cancelling writes.
 		// Normal termination still uses the parent process context.
@@ -322,6 +355,8 @@ func backfillConfig(cfg config) backfill.Config {
 		BaselineHistoryPressureGuard: cfg.baselineHistoryGuard,
 		HistoryAdmissionHold:         cfg.historyAdmissionHold,
 		HistoryStoragePolicy:         cfg.historyStoragePolicy,
+		CurrentWriteBudgetBytes:      cfg.currentWriteBudgetBytes,
+		CurrentWriteMinimumLedger:    cfg.currentWriteMinimumLedger,
 		ReadinessGuard:               cfg.readinessGuard,
 		Publisher:                    cfg.publisher,
 		OnProgress: func(summary backfill.Summary) {

@@ -1,5 +1,5 @@
 import type { DataSource } from 'typeorm';
-import { createPairedCurrentAdmission, fencePairedCurrentAdmission, isPairedCurrentBoot } from './FullHistoryPairedCurrentAdmission.js';
+import { createPairedCurrentAdmission, fencePairedCurrentAdmission, isPairedCurrentBoot, readPairedCurrentBootId } from './FullHistoryPairedCurrentAdmission.js';
 import { join } from 'node:path';
 import { FileFullHistoryLedgerCloseMetaPendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import { readScopedCurrentArm } from './FullHistoryScopedCurrentAttempt.js';
@@ -49,6 +49,8 @@ export interface ContinuousFullHistoryLedgerCloseMetaCliDependencies {
 	readonly ensureRuntime: (
 		config: FullHistoryLedgerCloseMetaServiceConfig
 	) => Promise<void>;
+	readonly isPairedCurrentBoot?: typeof isPairedCurrentBoot;
+	readonly readPairedCurrentBootId?: typeof readPairedCurrentBootId;
 	readonly now: () => number;
 	readonly reconcileRuntime: (
 		config: FullHistoryLedgerCloseMetaServiceConfig,
@@ -87,15 +89,21 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 	let config: FullHistoryLedgerCloseMetaServiceConfig;
 	try {
 		config = parseFullHistoryLedgerCloseMetaServiceConfig(environment);
-		if (config.pairedCurrentAdmission !== undefined && !(await isPairedCurrentBoot(config.pairedCurrentAdmission))) {
-			if (config.scopedCurrentAttempt !== undefined)
-				throw new Error('Scoped current attempt belongs to another boot; preserve any pending plan for owner review');
-			// A boot-bound qualification cannot carry reduced admission into another boot.
-			const ordinary = { ...environment };
-			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION;
-			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER;
-			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES;
-			config = parseFullHistoryLedgerCloseMetaServiceConfig(ordinary);
+		const matchesPairedBoot = dependencies.isPairedCurrentBoot ?? isPairedCurrentBoot;
+		if (config.pairedCurrentAdmission?.bootId === 'current') {
+			// Only the standing guard may renew the boot identity. The expected
+			// warehouse mount inode and path are immutable; capacity checks
+			// re-prove them before writes under the existing leadership lease.
+			const bootId = await (dependencies.readPairedCurrentBootId ?? readPairedCurrentBootId)();
+			config = Object.freeze({ ...config, pairedCurrentAdmission: Object.freeze({
+				...config.pairedCurrentAdmission, bootId
+			}) });
+		}
+		if (config.pairedCurrentAdmission !== undefined && !(await matchesPairedBoot(config.pairedCurrentAdmission))) {
+			// A server boot qualifier must re-prove boot, source/warehouse identity, service access, capacity/pressure and applicable history fences.
+			// Reconcile exact pending ownership/geometry under the singleton lease before replacing the binding; this CLI does not rebind.
+			const mode = config.scopedCurrentAttempt === undefined ? 'Paired current admission' : 'Scoped current attempt';
+			throw new Error(`${mode} belongs to another boot; preserve any pending plan for owner review`);
 		}
 	} catch (error) {
 		writeEvent(dependencies.stderr, {
@@ -156,6 +164,11 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					minimumFreeBasisPoints: config.minimumFreeBasisPoints,
 					currentMinimumFreeBytes: config.currentOnlyCapacity.minimumFreeBytes,
 					sourceOutputBytes: cycleOutputReservation(config),
+					...(config.currentBulkCommitGuard === undefined ? {} : {
+						currentBulkCommitGuard: true,
+						publisherReadyPath: config.currentBulkCommitGuard.publisherReadyPath,
+						currentMinimumLedger: config.currentOnlyCapacity.minimumLedger
+					}),
 					...(scoped === undefined ? {} : { scopedBulkDevice: scoped.bulkDevice })
 				}, environment, activeComposition.dataSource), async () => {
 					try {

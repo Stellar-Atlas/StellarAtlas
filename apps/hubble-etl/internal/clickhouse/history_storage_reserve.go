@@ -107,15 +107,30 @@ func historicalUnreservedBytes(before, after, clickhousePath bulkFilesystemCapac
 // CheckHistoricalBulkReserve is the opt-in, same-device per-batch history gate.
 // The current lane continues to use CheckBulkReserve independently.
 func (c *Client) CheckHistoricalBulkReserve(ctx context.Context, policy HistoricalStoragePolicy, historySlots int) error {
-	if err := policy.Validate(); err != nil {
+	total, available, err := c.readPairedBulkCapacity(ctx, policy)
+	if err != nil {
 		return err
 	}
+	required, err := policy.requiredBytes(total, historySlots)
+	if err != nil {
+		return err
+	}
+	if available < required {
+		return fmt.Errorf("historical bulk headroom: %d unreserved bytes, require %d for current work and %d history slots", available, required, historySlots)
+	}
+	return ctx.Err()
+}
+
+func (c *Client) readPairedBulkCapacity(ctx context.Context, policy HistoricalStoragePolicy) (uint64, uint64, error) {
+	if err := policy.Validate(); err != nil {
+		return 0, 0, err
+	}
 	if host := net.ParseIP(c.endpoint.Hostname()); host == nil || !host.IsLoopback() {
-		return fmt.Errorf("historical bulk capacity requires a local ClickHouse endpoint")
+		return 0, 0, fmt.Errorf("paired bulk capacity requires a local ClickHouse endpoint")
 	}
 	before, err := readBulkFilesystemCapacity(policy.BulkRoot)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -123,46 +138,39 @@ func (c *Client) CheckHistoricalBulkReserve(ctx context.Context, policy Historic
 		"param_disk": {"default"}, "max_execution_time": {"2"},
 	}, nil)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	if len(body) > 8192 {
-		return fmt.Errorf("historical bulk capacity probe is unavailable or malformed")
+		return 0, 0, fmt.Errorf("paired bulk capacity probe is unavailable or malformed")
 	}
 	row := strings.TrimSuffix(string(body), "\n")
 	fields := strings.Split(row, "\t")
 	if strings.ContainsAny(row, "\r\n") || len(fields) != 3 || !filepath.IsAbs(fields[0]) {
-		return fmt.Errorf("historical bulk capacity probe is unavailable or malformed")
+		return 0, 0, fmt.Errorf("paired bulk capacity probe is unavailable or malformed")
 	}
 	free, freeErr := strconv.ParseUint(fields[1], 10, 64)
 	unreserved, unreservedErr := strconv.ParseUint(fields[2], 10, 64)
 	if freeErr != nil || unreservedErr != nil {
-		return fmt.Errorf("historical bulk capacity probe is unavailable or malformed")
+		return 0, 0, fmt.Errorf("paired bulk capacity probe is unavailable or malformed")
 	}
 	path, err := policy.clickHouseCapacityPath(fields[0])
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	clickhousePath, err := readBulkCapacityDirectory(path, policy.ClickHouseMetadataInode)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	after, err := readBulkFilesystemCapacity(policy.BulkRoot)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	available, err := historicalUnreservedBytes(before, after, clickhousePath, free, unreserved)
 	if err != nil {
-		return err
-	}
-	required, err := policy.requiredBytes(after.total, historySlots)
-	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return 0, 0, err
 	}
-	if available < required {
-		return fmt.Errorf("historical bulk headroom: %d unreserved bytes, require %d for current work and %d history slots", available, required, historySlots)
-	}
-	return nil
+	return after.total, available, nil
 }

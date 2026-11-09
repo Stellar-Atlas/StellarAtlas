@@ -9,6 +9,7 @@ import {
 import type { FullHistoryLedgerCloseMetaSourcePort } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaPorts.js';
 import {
 	assertFullHistoryLedgerCloseMetaProcessingReceipt,
+	type FullHistoryLedgerCloseMetaConversionGate,
 	type FullHistoryLedgerCloseMetaProcessingReceipt,
 	type FullHistoryLedgerCloseMetaProcessorPort
 } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
@@ -168,7 +169,7 @@ export class IngestFullHistoryLedgerCloseMeta {
 		context: FullHistoryLedgerCloseMetaIngestionContext,
 		rangeInput: FullHistoryLedgerCloseMetaRange,
 		signal: AbortSignal,
-		assertBeforeConversion?: () => Promise<void>
+		assertBeforeConversion?: FullHistoryLedgerCloseMetaConversionGate
 	): Promise<FullHistoryLedgerCloseMetaIngestionReceipt> {
 		const range = validateIngestionRange(
 			context.config,
@@ -232,7 +233,7 @@ export class IngestFullHistoryLedgerCloseMeta {
 		context: FullHistoryLedgerCloseMetaIngestionContext,
 		range: FullHistoryLedgerCloseMetaRange,
 		signal: AbortSignal,
-		assertBeforeConversion?: () => Promise<void>
+		assertBeforeConversion?: FullHistoryLedgerCloseMetaConversionGate
 	): Promise<{
 		readonly processing: FullHistoryLedgerCloseMetaProcessingReceipt;
 		readonly sourceObjectCount: number;

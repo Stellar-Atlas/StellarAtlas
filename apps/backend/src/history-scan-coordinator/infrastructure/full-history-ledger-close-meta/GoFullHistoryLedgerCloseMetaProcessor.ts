@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import type {
+	FullHistoryLedgerCloseMetaConversionGate,
 	FullHistoryLedgerCloseMetaProcessingReceipt,
 	FullHistoryLedgerCloseMetaProcessingRequest,
 	FullHistoryLedgerCloseMetaProcessorPort
@@ -19,6 +20,7 @@ const sharedMemoryRoot = '/dev/shm';
 
 export interface GoFullHistoryLedgerCloseMetaProcessorOptions {
 	readonly executablePath: string;
+	readonly currentBulkCommitGuard?: true;
 	readonly limits: GoFullHistoryLedgerCloseMetaProcessorLimits;
 	readonly maximumConcurrency: number;
 	readonly maximumQueueDepth: number;
@@ -42,6 +44,7 @@ export interface GoFullHistoryLedgerCloseMetaProcessorLimits {
 
 export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerCloseMetaProcessorPort {
 	readonly #executablePath: string;
+	readonly #currentBulkCommitGuard: boolean;
 	readonly #limits: GoFullHistoryLedgerCloseMetaProcessorLimits;
 	readonly #minimumLedgers: number;
 	readonly #networkName: string;
@@ -55,6 +58,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 	constructor(options: GoFullHistoryLedgerCloseMetaProcessorOptions) {
 		assertOptions(options);
 		this.#executablePath = resolve(options.executablePath);
+		this.#currentBulkCommitGuard = options.currentBulkCommitGuard === true;
 		this.#limits = Object.freeze({ ...options.limits });
 		this.#minimumLedgers = options.minimumLedgers;
 		this.#networkName = options.networkName;
@@ -76,7 +80,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 	processAndCommit(
 		request: FullHistoryLedgerCloseMetaProcessingRequest,
 		signal: AbortSignal,
-		assertBeforeConversion?: () => Promise<void>
+		assertBeforeConversion?: FullHistoryLedgerCloseMetaConversionGate
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt> {
 		return this.#pool.run(signal, () => this.#process(request, signal, assertBeforeConversion));
 	}
@@ -84,7 +88,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 	async #process(
 		request: FullHistoryLedgerCloseMetaProcessingRequest,
 		signal: AbortSignal,
-		assertBeforeConversion?: () => Promise<void>
+		assertBeforeConversion?: FullHistoryLedgerCloseMetaConversionGate
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt> {
 		const range = requestRange(request, this.#minimumLedgers);
 		signal.throwIfAborted();
@@ -105,7 +109,11 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 			);
 			const args = this.#arguments(request, inputPaths, outputPath, range);
 			// Fetching input, waiting for the pool and staging it can outlast the held session.
-			if (assertBeforeConversion !== undefined) await assertBeforeConversion();
+			if (assertBeforeConversion !== undefined) {
+				const assertAtLaunch = await assertBeforeConversion();
+				// No await between this exact identity check and the runner's synchronous spawn.
+				assertAtLaunch?.();
+			}
 			launchAttempted = true;
 			const stdout = await runBoundedGoFullHistoryProcess(
 				this.#executablePath,
@@ -162,6 +170,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		const limits = this.#limits;
 		return [
 			...sourceArguments,
+			...(this.#currentBulkCommitGuard ? ['--current-bulk-commit-guard'] : []),
 			...(this.#publicationStagingRoot === null
 				? []
 				: ['--publication-staging-root', this.#publicationStagingRoot]),

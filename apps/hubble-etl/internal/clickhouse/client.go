@@ -352,11 +352,19 @@ func (c *Client) executeTimed(ctx context.Context, query string, params url.Valu
 			values.Add(key, entry)
 		}
 	}
+	if isGuardedCurrentInsert(ctx, query) {
+		// Pin the per-query setting for auxiliary INSERT SELECT as well as
+		// ordinary payload INSERTs, without changing historical queries.
+		values.Set("async_insert", "0")
+	}
 	request.URL.RawQuery = values.Encode()
 	if c.user != "" {
 		request.SetBasicAuth(c.user, c.password)
 	}
 	request.Header.Set("Content-Type", "application/octet-stream")
+	if err := admitCurrentWrite(ctx, quoted(c.database), query, len(body)); err != nil {
+		return nil, err
+	}
 	if timings != nil {
 		var finish func()
 		request, finish = traceInsertRequest(request, timings)

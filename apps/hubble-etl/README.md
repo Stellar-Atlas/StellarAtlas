@@ -91,6 +91,27 @@ the reported path, bound inode, effective permissions, and shared filesystem
 before accepting capacity. Do not grant directory read/search access to enable
 this check.
 
+`HUBBLE_ETL_CURRENT_WRITE_BUDGET_BYTES` opts the reserved current slot into
+bounded publication. It requires `HUBBLE_ETL_CURRENT_WRITE_MIN_LEDGER` (current
+slot only), the paired
+history policy with the full 8 GiB source cap and 64 GiB warehouse runway, and
+one source batch of 64–128 ledgers. Use canonical decimal bytes (1–32 GiB)
+and enable it together with the source's standing bulk commit guard. The
+publisher writes `HUBBLE_ETL_CURRENT_WRITE_READY_FILE` into its systemd
+runtime directory after initialization. Give the source read-only access to
+that same file at the matching path; let systemd remove the runtime directory
+on service stop. The source rejects a missing or previous-boot publisher.
+The
+configured cap covers cumulative INSERT bodies, a debit for the staged
+holder and pool promotions, and a small reserved status allowance; it is not
+a limit on bytes ClickHouse writes to disk. Current inserts are synchronous
+and each takes a fresh paired capacity measurement. A known low-capacity
+result pauses new writes and retries the check without replaying the batch.
+The independent history threshold and ordinary publishing remain unchanged
+when this mode is not configured. Do not qualify a smaller storage runway
+from serialized payload length alone: check actual part and reservation
+growth with the installed ClickHouse configuration before enabling it.
+
 ## Optional one-time retained batch priority
 
 Set `HUBBLE_ETL_PRIORITY_BATCH_ID` in the existing host file

@@ -133,11 +133,13 @@ export interface FullHistoryLedgerCloseMetaDatasetOutput {
 	readonly storageKey: string;
 }
 
+export type FullHistoryLedgerCloseMetaConversionGate = () => Promise<void | (() => void)>;
+
 export interface FullHistoryLedgerCloseMetaProcessorPort {
 	processAndCommit(
 		request: FullHistoryLedgerCloseMetaProcessingRequest,
 		signal: AbortSignal,
-		assertBeforeConversion?: () => Promise<void>
+		assertBeforeConversion?: FullHistoryLedgerCloseMetaConversionGate
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt>;
 }
 

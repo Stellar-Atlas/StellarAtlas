@@ -5,6 +5,7 @@ import {
 	fullHistoryLedgerCloseMetaRange,
 	type FullHistoryLedgerCloseMetaRange
 } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
+import type { FullHistoryLedgerCloseMetaConversionGate } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import {
 	isCurrentCapacityRange,
 	isFullHistoryCurrentCapacityAllowanceActive,
@@ -123,6 +124,7 @@ export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
 }
 
 const MAXIMUM_CONSECUTIVE_PRIORITY_RANGES = 4;
+const PAIRED_LAUNCH_MAXIMUM_EVIDENCE_AGE_MS = 4_000;
 
 export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
@@ -386,7 +388,7 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 		await dependencies.ensureStorageCapacity(plan);
 		const paired = dependencies.pairedCurrentAdmission;
 		const scoped = dependencies.scopedCurrentAttempt;
-		let beforeConversion: (() => Promise<void>) | undefined;
+		let beforeConversion: FullHistoryLedgerCloseMetaConversionGate | undefined;
 		if (paired === undefined) {
 			await dependencies.pendingPlans.write(plan);
 		} else if (scoped !== undefined) {
@@ -401,7 +403,7 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 				dependencies.signal.throwIfAborted();
 				checkArm();
 				checkPlan?.();
-				if (performance.now() - started > 4_000)
+				if (performance.now() - started > PAIRED_LAUNCH_MAXIMUM_EVIDENCE_AGE_MS)
 					throw new Error('Scoped current capacity or authority evidence expired');
 			};
 			const installed = await dependencies.pendingPlans.installScopedAttempt(scoped.policy.permitId, plan, assertScopedAuthority);
@@ -411,15 +413,46 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 				}
 			});
 		} else {
-			await paired.assertCapacity(plan, dependencies.signal);
-			if (!alreadyRecorded) {
-				await dependencies.pendingPlans.installVerified(plan, () => paired.assertHeld(dependencies.signal));
+			const signal = dependencies.signal;
+			const assertHeld = () => paired.assertHeld(signal);
+			const assertPublisher = await paired.assertCapacity(plan, signal);
+			const installGate = async () => {
+				await assertHeld();
+				return assertPublisher;
+			};
+			let recorded = plan;
+			if (alreadyRecorded) {
+				await dependencies.pendingPlans.confirmRecorded(recorded, installGate);
 			} else {
-				await dependencies.pendingPlans.confirmRecorded(plan, () => paired.assertHeld(dependencies.signal));
+				recorded = await dependencies.pendingPlans.installVerified(plan, installGate);
 			}
-			// Either durability check can be slow; refresh capacity before fetching input.
-			await paired.assertCapacity(plan, dependencies.signal);
-			beforeConversion = () => paired.assertHeld(dependencies.signal);
+			// Keep the existing prefetch check; this does not authorize native launch.
+			await paired.assertCapacity(recorded, signal);
+			beforeConversion = async () => {
+				const started = performance.now();
+				const assertAtLaunch = await dependencies.pendingPlans.confirmRecorded(recorded, async () => {
+					// confirmRecorded rechecks the original pathname synchronously
+					// after this fresh capacity and final held-session fence.
+					const assertPublisher = await paired.assertCapacity(recorded, signal);
+					await assertHeld();
+					return assertPublisher;
+				});
+				signal.throwIfAborted();
+				const currentOnly = config.currentOnlyCapacity;
+				if (!config.prioritizeCurrent || currentOnly === undefined || currentOnly.scopedReserve === true ||
+					!isCurrentCapacityRange(recorded, currentOnly.minimumLedger)) {
+					throw new Error('Paired launch no longer has a current-only priority plan; preserved');
+				}
+				const assertFresh = () => {
+					if (performance.now() - started > PAIRED_LAUNCH_MAXIMUM_EVIDENCE_AGE_MS)
+						throw new Error('Paired current launch evidence expired after staging');
+				};
+				assertFresh();
+				if (assertAtLaunch !== undefined) return () => {
+					assertFresh();
+					assertAtLaunch();
+				};
+			};
 		}
 		const startedAt = dependencies.now();
 		const range = fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger);

@@ -25,13 +25,15 @@ export interface PendingPlan {
 export interface PendingPlanStore {
 	read(): Promise<PendingPlan | null>;
 	write(plan: PendingPlan): Promise<void>;
-	installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
-	confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
+	installVerified(plan: PendingPlan, assertHeld: PendingPlanGate): Promise<PendingPlan>;
+	confirmRecorded(plan: PendingPlan, assertHeld: PendingPlanGate): Promise<void | (() => void)>;
 	clear(): Promise<void>;
 	clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
 	installScopedAttempt(permitId: string, plan: PendingPlan, assertHeld: () => Promise<void>): Promise<PendingPlan>;
 	matchesConsumedScopedAttempt(permitId: string, plan: PendingPlan): boolean;
 }
+
+type PendingPlanGate = () => Promise<void | (() => void)>;
 
 export class PendingPlanChangedError extends Error {
 	constructor(message = 'Verified pending plan changed or could not be identified; refusing to clear it') {
@@ -138,8 +140,8 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		}
 	}
 
-	async installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
-		await this.#installVerified(plan, assertHeld);
+	async installVerified(plan: PendingPlan, assertHeld: PendingPlanGate): Promise<PendingPlan> {
+		return this.#installVerified(plan, assertHeld);
 	}
 
 	async installScopedAttempt(permitId: string, plan: PendingPlan, assertHeld: () => Promise<void>): Promise<PendingPlan> {
@@ -151,7 +153,7 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		return installed;
 	}
 
-	async #installVerified(plan: PendingPlan, assertHeld: () => Promise<void>, spent?: string): Promise<PendingPlan> {
+	async #installVerified(plan: PendingPlan, assertHeld: PendingPlanGate, spent?: string): Promise<PendingPlan> {
 		const validated = validatePendingPlan(plan);
 		const directory = dirname(this.file);
 		const temporary = join(directory, `.${basename(this.file)}.${process.pid}.${randomUUID()}.tmp`);
@@ -163,11 +165,11 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			try {
 				await handle.writeFile(`${JSON.stringify(validated)}\n`, 'utf8');
 				await handle.sync();
-				if (spent !== undefined) staged = await handle.stat({ bigint: true });
+				staged = await handle.stat({ bigint: true });
 			} finally {
 				await handle.close();
 			}
-			await assertHeld();
+			let assertReady = await assertHeld();
 			if (spent !== undefined) {
 				try {
 					// The spent name and the authoritative plan must reference this same inode.
@@ -176,9 +178,10 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 				} catch {
 					throw new PendingPlanChangedError('Scoped current attempt is spent or could not be made durable');
 				}
-				await assertHeld();
+				assertReady = await assertHeld();
 			}
 			// The complete inode becomes visible atomically. No await or replacing rename here.
+			assertReady?.();
 			try {
 				linkSync(temporary, this.file);
 				installed = true;
@@ -201,19 +204,21 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			// The name may already be durable. Preserve it for the next owner to inspect.
 			throw new PendingPlanChangedError('Pending plan installation could not be made durable');
 		}
-		if (staged !== undefined) {
-			const named = lstatSync(this.file, { bigint: true });
-			// Linking and removing the temporary name change ctime, not contents.
-			if (!named.isFile() || staged.dev !== named.dev || staged.ino !== named.ino ||
-				staged.size !== named.size || staged.mtimeNs !== named.mtimeNs) {
-				throw new PendingPlanChangedError('Scoped pending plan changed during installation; preserved');
-			}
-			this.#observed.set(validated, named);
+		const changed = () => new PendingPlanChangedError('Pending plan changed during verified installation; preserved');
+		let named: BigIntStats;
+		try {
+			named = lstatSync(this.file, { bigint: true });
+		} catch {
+			throw changed();
 		}
+		// Linking and removing the temporary name change ctime, not contents.
+		if (staged === undefined || !named.isFile() || staged.dev !== named.dev || staged.ino !== named.ino ||
+			staged.size !== named.size || staged.mtimeNs !== named.mtimeNs) throw changed();
+		this.#observed.set(validated, named);
 		return validated;
 	}
 
-	async confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+	async confirmRecorded(plan: PendingPlan, assertHeld: PendingPlanGate): Promise<void | (() => void)> {
 		const observed = this.#observed.get(plan);
 		const changed = () => new PendingPlanChangedError('Recorded pending plan changed or could not be identified; refusing to resume');
 		if (observed === undefined) throw changed();
@@ -237,9 +242,16 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		} catch {
 			throw new PendingPlanChangedError('Recorded pending plan durability could not be confirmed');
 		}
-		await assertHeld();
+		const assertReady = await assertHeld();
 		// Recheck the original name synchronously after the fsync and lease awaits.
 		assertNamed();
+		if (assertReady !== undefined) {
+			assertReady();
+			return () => {
+				assertNamed();
+				assertReady();
+			};
+		}
 	}
 
 	async clear(): Promise<void> {
