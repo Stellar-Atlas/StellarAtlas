@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { Networks, StrKey } from '@stellar/stellar-sdk';
 import {
 	assessExpertValidationObservation,
@@ -27,8 +26,10 @@ const detail = {
 	versions: 2,
 	validation
 };
-const networkId = (passphrase: string) =>
-	createHash('sha256').update(passphrase).digest('hex');
+const publicNetworkId =
+	'7ac33997544e3175d266bd022439b22cdb16508c01163f26e5cb2a3e1045a979';
+const testnetNetworkId =
+	'cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472';
 
 it('maps the documented identity, attribution, immutable source and UNIX validation time', () => {
 	const report = mapStellarExpertContractReport(detail, capture);
@@ -37,7 +38,7 @@ it('maps the documented identity, attribution, immutable source and UNIX validat
 		source: 'stellar-expert/verification',
 		publisher: 'StellarExpert',
 		recordId: `public:${contractId}`,
-		networkId: networkId(Networks.PUBLIC),
+		networkId: publicNetworkId,
 		contractId,
 		fetchedAt,
 		reportedAt: '2026-11-05T15:55:00.000Z',
@@ -53,7 +54,7 @@ it('maps the documented identity, attribution, immutable source and UNIX validat
 	});
 	expect(testnet).toMatchObject({
 		recordId: `testnet:${contractId}`,
-		networkId: networkId(Networks.TESTNET)
+		networkId: testnetNetworkId
 	});
 	expect(testnet?.envelopeSha256).not.toBe(report?.envelopeSha256);
 });

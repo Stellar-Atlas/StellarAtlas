@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import { Networks, StrKey } from '@stellar/stellar-sdk';
+import { hash, Networks, StrKey } from '@stellar/stellar-sdk';
 import { record } from '../contract-provenance/ContractBuildAttestation.js';
 import {
 	InvalidExpertObservation,
@@ -70,14 +69,17 @@ export function mapStellarExpertContractReport(
 		reportedAt = new Date(ts * 1000).toISOString();
 	}
 
-	const passphrase = network === 'public' ? Networks.PUBLIC : Networks.TESTNET;
+	const networkName = network === 'public' ? Networks.PUBLIC : Networks.TESTNET;
+	const networkId = Buffer.from(hash(Buffer.from(networkName, 'utf8'))).toString(
+		'hex'
+	);
 	return parseExpertValidationObservation(
 		Buffer.from(
 			JSON.stringify({
 				version: 1,
 				publisher: 'StellarExpert',
 				recordId: `${network}:${contractId}`,
-				networkId: createHash('sha256').update(passphrase).digest('hex'),
+				networkId,
 				contractId,
 				// ContractInfo.wasm describes the instance, while validation has no digest.
 				wasmSha256: null,

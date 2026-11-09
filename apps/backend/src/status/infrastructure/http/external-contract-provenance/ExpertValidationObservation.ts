@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { StrKey } from '@stellar/stellar-sdk';
+import { hash, StrKey } from '@stellar/stellar-sdk';
 import { githubRepository } from '../contract-provenance/ContractBuildAttestation.js';
 import type { ContractProvenance } from '../contract-provenance/ContractProvenanceService.js';
 
@@ -181,9 +181,9 @@ export function assessExpertValidationObservation(
 	if (!Number.isSafeInteger(policy.maxAgeMs) || policy.maxAgeMs < 1)
 		throw new InvalidExpertObservation('Invalid verification freshness policy');
 	if (!observation || !reference) return 'unavailable';
-	const networkId = createHash('sha256')
-		.update(reference.networkPassphrase)
-		.digest('hex');
+	const networkId = Buffer.from(
+		hash(Buffer.from(reference.networkPassphrase, 'utf8'))
+	).toString('hex');
 	if (observation.networkId !== networkId) return 'network_mismatch';
 	if (observation.contractId !== reference.contractId)
 		return 'contract_mismatch';
