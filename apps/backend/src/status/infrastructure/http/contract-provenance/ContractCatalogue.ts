@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import { StrKey } from '@stellar/stellar-sdk';
+import { hash, StrKey } from '@stellar/stellar-sdk';
 import {
 	githubRepository,
 	type ContractBuildRecord
@@ -47,8 +46,10 @@ export interface ContractCatalogueQuery {
 
 const repositoryPrefix = /^[a-z0-9][a-z0-9-]{0,38}(?:\/[a-z0-9_.-]{0,100})?$/;
 const cursorPattern = /^[A-Za-z0-9_-]{1,512}$/;
+// Stellar network passphrases are public identifiers. Keep the network ID
+// digest and the existing cursor encoding byte-for-byte.
 const sha256 = (value: string): string =>
-	createHash('sha256').update(value).digest('hex');
+	Buffer.from(hash(Buffer.from(value, 'utf8'))).toString('hex');
 
 export const catalogueNetworkKey = sha256;
 
