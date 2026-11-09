@@ -94,7 +94,7 @@ export function developerAuthRouter(
 		}
 	>();
 	let activeExchanges = 0;
-	function sealCookie(name: string, value: string): string {
+	function encryptCookie(name: string, value: string): string {
 		const nonce = randomBytes(12);
 		const cipher = createCipheriv('aes-256-gcm', cookieKey, nonce);
 		cipher.setAAD(Buffer.from(name));
@@ -200,7 +200,7 @@ export function developerAuthRouter(
 						.json({ code: 'sign_in_busy' });
 					return;
 				}
-				res.cookie(flowCookie, sealCookie(flowCookie, browser), {
+				res.cookie(flowCookie, encryptCookie(flowCookie, browser), {
 					httpOnly: true,
 					secure: true,
 					sameSite: 'lax',
@@ -258,7 +258,7 @@ export function developerAuthRouter(
 			const token = secret();
 			const expiresAt = Date.now() + sessionLifetimeMs;
 			await store.createSession(hash(token), { providerUserId, expiresAt });
-			res.cookie(sessionCookie, sealCookie(sessionCookie, token), {
+			res.cookie(sessionCookie, encryptCookie(sessionCookie, token), {
 				httpOnly: true,
 				secure: true,
 				sameSite: 'lax',
