@@ -24,8 +24,44 @@ const request = {
 	offset: 0,
 	direction: 'reset' as const
 };
+const contract = 'CBQSUF57OYX4RIMCZV62DKN6JFOTEKPHIZASMJYOUOCNHGNG2P3XQLSE';
+const windowMiss = {
+	entity: 'contracts', source: 'stellar_hubble', record: null,
+	window: { minLedger: 100, maxLedger: 200 },
+	error: 'Record was not found in the selected parsed window'
+};
 
 describe('explorer entity request lifecycle', () => {
+	it.each([
+		[404, 'hubble_record_not_found', 'complete'],
+		[409, 'hubble_range_not_fully_ingested', 'partial_or_unknown']
+	] as const)('preserves the returned contract activity window for HTTP %i', async (status, code, coverageStatus) => {
+		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+			Response.json({ ...windowMiss, code, coverageStatus }, { status })
+		);
+		try {
+			const session = new ExplorerEntityRequest('contracts', contract);
+			await expect(session.run({ ...request, filters: { limit: '10' } })).resolves.toMatchObject({
+				ok: false, windowMiss: { ...windowMiss.window, coverage: coverageStatus }
+			});
+			expect(fetch).toHaveBeenCalledTimes(1);
+			expect(fetch.mock.calls[0]?.[0]).toBe('/v1/contracts/' + contract + '?limit=10&offset=0');
+		} finally { fetch.mockRestore(); }
+	});
+	it('does not reinterpret generic 404, upstream 503 or transport errors as scoped contract misses', async () => {
+		const fetch = jest.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(Response.json({ error: 'Not found' }, { status: 404 }))
+			.mockResolvedValueOnce(Response.json({ ...windowMiss, code: 'hubble_record_not_found', coverageStatus: 'complete' }, { status: 503 }))
+			.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+		try {
+			const session = new ExplorerEntityRequest('contracts', contract);
+			const selection = { ...request, filters: { min_ledger: '100', max_ledger: '200' } };
+			for (const message of ['HTTP 404: Not found', 'HTTP 503: ' + windowMiss.error, 'Failed to fetch']) {
+				await expect(session.run(selection)).resolves.toEqual({ ok: false, message });
+			}
+			expect(session.retryRequest).toEqual(selection);
+		} finally { fetch.mockRestore(); }
+	});
 	it('restores bounded URL selection without treating return context as API filters or revisiting a pinned accepted query', () => {
 		const restored = readExplorerPageSelection('seller=GA&min_ledger=100&max_ledger=200&limit=10&offset=20&return_to=%2Fexplorer', {}, 0, false);
 		expect(restored).toEqual({ filters: { seller: 'GA', min_ledger: '100', max_ledger: '200', limit: '10' }, offset: 20 });

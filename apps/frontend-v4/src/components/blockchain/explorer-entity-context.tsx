@@ -1,7 +1,23 @@
 import Link from 'next/link';
 import { Fragment } from 'react';
 import { buildEntityApiPath, entityText, recordValue, type AnalyticsCollection, type AnalyticsEntityPage, type ExplorerFilters } from '../../api/explorer-analytics';
+import type { ContractActivityWindowMiss } from './explorer-entity-request';
 import styles from './explorer-entity.module.css';
+
+export function ExplorerContractWindowNotice({ window }: {
+	readonly window: ContractActivityWindowMiss;
+}): React.JSX.Element {
+	const complete = window.coverage === 'complete';
+	return <div role="status">
+		<p>{complete ? 'No parsed activity found for this contract in the selected window.'
+			: 'Parsed activity is unavailable for this contract in the selected window.'}</p>
+		<p className={styles.muted}>
+			Ledgers {window.minLedger.toLocaleString('en-US')}–{window.maxLedger.toLocaleString('en-US')}.{' '}
+			{complete ? 'Selected window fully published.' : 'Coverage is incomplete or unknown.'}
+		</p>
+		<p className={styles.muted}>Build provenance is separate. Use Date &amp; ledger range to check another window.</p>
+	</div>;
+}
 
 /** Accepted response context, never the controls' unsubmitted range. */
 export function ExplorerEntityContext({collection,identifier,page,submitted,elapsed,sourceRecord=false}:{
