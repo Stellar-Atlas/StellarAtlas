@@ -258,6 +258,69 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.calls).toContain('conversion-fence');
 	});
 
+	it('consumes one scoped attempt before recording it and cannot readmit after exact publication', async () => {
+		const f = fixture(2);
+		const arms = scopedPolicy(f, async () => {});
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1000, 1063)]);
+		expect(f.pending).toBeNull();
+		expect(arms).toHaveBeenCalledTimes(1);
+		expect(f.calls.filter(call => ['scope-consume', 'pending-write', 'conversion-fence', 'ingest'].includes(call)))
+			.toEqual(['scope-consume', 'pending-write', 'conversion-fence', 'ingest']);
+	});
+
+	it('refuses native launch on a lost post-staging fence and retains the spent plan without retry', async () => {
+		const f = fixture(2);
+		let boundaries = 0;
+		scopedPolicy(f, async () => {
+			if (++boundaries === 3) throw new Error('owned hold disappeared after staging');
+		});
+		f.dependencies.wait = async ms => { if (ms >= 30_000) f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(boundaries).toBe(3);
+		expect(f.selected).toEqual([]);
+		expect(f.pending).toEqual(f.spent);
+		expect(f.pending?.typedShardLedgerCount).toBe(128);
+		expect(f.events).toContainEqual(expect.objectContaining({ message: 'Error: owned hold disappeared after staging' }));
+	});
+
+	it('refuses native launch if a same-content replacement appears during staging', async () => {
+		const f = fixture(2);
+		let boundaries = 0;
+		scopedPolicy(f, async () => {
+			if (++boundaries === 3 && f.pending !== null) f.pending = { ...f.pending };
+		});
+		f.dependencies.wait = async ms => { if (ms >= 30_000) f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(boundaries).toBe(3);
+		expect(f.selected).toEqual([]);
+		expect(f.pending).toEqual(f.spent);
+		expect(f.pending).not.toBe(f.spent);
+		expect(f.events).toContainEqual(expect.objectContaining({ message: expect.stringContaining('lost its spent-inode binding') }));
+	});
+
+	it.each(['published', 'not-captured'] as const)(
+		'a disarmed restart settles only exact published work (%s), without pressure or provider preparation',
+		async publication => {
+			const f = fixture(1);
+			const arms = scopedPolicy(f, null);
+			f.pending = f.spent = { ...plan('priority', 1000), typedShardLedgerCount: 128 };
+			f.dependencies.pairedCurrentAdmission = {
+				assertHeld: async () => {},
+				assertCapacity: async () => { throw new Error('capture is disarmed'); },
+				pendingPublication: async () => publication
+			};
+			f.dependencies.wait = async () => { f.controller.abort(); };
+			await run(f.config, f.dependencies);
+			expect(f.pending).toBe(publication === 'published' ? null : f.spent);
+			expect(f.dependencies.ingestion.prepare).not.toHaveBeenCalled();
+			expect(f.selected).toEqual([]);
+			expect(f.calls).not.toContain('admit-current');
+			expect(arms).toHaveBeenCalledTimes(publication === 'published' ? 1 : 0);
+		}
+	);
+
 	describe.each(currentOnlyPolicies())('non-current work under %s', (_name, policy) => {
 		it.each([plan('historical', 3), plan('priority', 900)])(
 			'preserves and refuses a non-current pending plan', async pending => {
@@ -331,6 +394,19 @@ function usePolicy(f: ReturnType<typeof fixture>, policy: Partial<ContinuousFull
 	};
 }
 
+function scopedPolicy(f: ReturnType<typeof fixture>, arm: (() => Promise<(() => void) | void>) | null) {
+	usePolicy(f, { cycleLedgerCount: 128, typedShardLedgerCount: 128,
+		currentOnlyCapacity: { ...currentOnlyCapacity(), scopedReserve: true } });
+	const readArm = jest.fn(async () => arm === null ? null : async () => (await arm()) ?? (() => {}));
+	f.dependencies.scopedCurrentAttempt = {
+		policy: { permitId: '123e4567-e89b-42d3-a456-426614174000', bulkDevice: 4n,
+			startLedger: 1000, endLedger: 1063 },
+		readArm
+	};
+	f.dependencies.frontier = { readLatestRange: async () => range(1000, 1063) };
+	return readArm;
+}
+
 type Dependencies = { -readonly [K in keyof ContinuousFullHistoryLedgerCloseMetaLoopDependencies]:
 	ContinuousFullHistoryLedgerCloseMetaLoopDependencies[K] };
 
@@ -342,7 +418,7 @@ function fixture(stopAfter: number) {
 	let priorityReads = 0;
 	let durableNextLedger = 3;
 	const f = {
-		controller, selected, events, calls, pending: null as PendingPlan | null,
+		controller, selected, events, calls, pending: null as PendingPlan | null, spent: null as PendingPlan | null,
 		config: {
 			admissionRetryMilliseconds: 10, cycleCooldownMilliseconds: 0,
 			cycleLedgerCount: 64, errorBackoffMilliseconds: 30, idlePollMilliseconds: 20,
@@ -379,6 +455,18 @@ function fixture(stopAfter: number) {
 		now: () => 1000,
 		pendingPlans: {
 			read: async () => f.pending,
+			installScopedAttempt: async (_permit, pending, assertHeld) => {
+				await assertHeld();
+				if (f.spent !== null) throw new Error('permit already spent');
+				f.calls.push('scope-consume');
+				f.spent = pending;
+				await assertHeld();
+				if (f.pending !== null) throw new Error('unexpected competing plan in fixture');
+				calls.push('pending-write');
+				f.pending = pending;
+				return pending;
+			},
+			matchesConsumedScopedAttempt: (_permit, pending) => f.spent === pending && f.pending === pending,
 			write: async pending => { calls.push('pending-write'); f.pending = pending; },
 			installVerified: async (pending, assertHeld) => {
 				await assertHeld();

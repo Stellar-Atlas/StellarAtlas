@@ -29,6 +29,8 @@ export interface PendingPlanStore {
 	confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
 	clear(): Promise<void>;
 	clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
+	installScopedAttempt(permitId: string, plan: PendingPlan, assertHeld: () => Promise<void>): Promise<PendingPlan>;
+	matchesConsumedScopedAttempt(permitId: string, plan: PendingPlan): boolean;
 }
 
 export class PendingPlanChangedError extends Error {
@@ -137,20 +139,45 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 	}
 
 	async installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+		await this.#installVerified(plan, assertHeld);
+	}
+
+	async installScopedAttempt(permitId: string, plan: PendingPlan, assertHeld: () => Promise<void>): Promise<PendingPlan> {
+		if (!isCanonicalUuid(permitId)) throw new Error('Scoped attempt permit ID must be a canonical UUID');
+		const installed = await this.#installVerified(plan, assertHeld, `${this.file}.${permitId}.spent`);
+		if (!this.matchesConsumedScopedAttempt(permitId, installed)) {
+			throw new PendingPlanChangedError('Scoped pending plan lost its spent-inode binding; preserved');
+		}
+		return installed;
+	}
+
+	async #installVerified(plan: PendingPlan, assertHeld: () => Promise<void>, spent?: string): Promise<PendingPlan> {
 		const validated = validatePendingPlan(plan);
 		const directory = dirname(this.file);
 		const temporary = join(directory, `.${basename(this.file)}.${process.pid}.${randomUUID()}.tmp`);
 		let handle: FileHandle | undefined;
 		let installed = false;
+		let staged: BigIntStats | undefined;
 		try {
 			handle = await open(temporary, 'wx', 0o600);
 			try {
 				await handle.writeFile(`${JSON.stringify(validated)}\n`, 'utf8');
 				await handle.sync();
+				if (spent !== undefined) staged = await handle.stat({ bigint: true });
 			} finally {
 				await handle.close();
 			}
 			await assertHeld();
+			if (spent !== undefined) {
+				try {
+					// The spent name and the authoritative plan must reference this same inode.
+					linkSync(temporary, spent);
+					await syncDirectory(directory);
+				} catch {
+					throw new PendingPlanChangedError('Scoped current attempt is spent or could not be made durable');
+				}
+				await assertHeld();
+			}
 			// The complete inode becomes visible atomically. No await or replacing rename here.
 			try {
 				linkSync(temporary, this.file);
@@ -174,6 +201,16 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			// The name may already be durable. Preserve it for the next owner to inspect.
 			throw new PendingPlanChangedError('Pending plan installation could not be made durable');
 		}
+		if (staged !== undefined) {
+			const named = lstatSync(this.file, { bigint: true });
+			// Linking and removing the temporary name change ctime, not contents.
+			if (!named.isFile() || staged.dev !== named.dev || staged.ino !== named.ino ||
+				staged.size !== named.size || staged.mtimeNs !== named.mtimeNs) {
+				throw new PendingPlanChangedError('Scoped pending plan changed during installation; preserved');
+			}
+			this.#observed.set(validated, named);
+		}
+		return validated;
 	}
 
 	async confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
@@ -239,6 +276,22 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			throw new PendingPlanChangedError('Verified pending plan clear could not be made durable');
 		}
 	}
+
+	matchesConsumedScopedAttempt(permitId: string, plan: PendingPlan): boolean {
+		const observed = this.#observed.get(plan);
+		if (!isCanonicalUuid(permitId) || observed === undefined) return false;
+		try {
+			const spent = lstatSync(`${this.file}.${permitId}.spent`, { bigint: true });
+			const named = lstatSync(this.file, { bigint: true });
+			return spent.nlink >= 2n && sameFileVersion(observed, spent) && sameFileVersion(observed, named);
+		} catch {
+			return false;
+		}
+	}
+}
+
+function isCanonicalUuid(value: string): boolean {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 }
 
 function sameFileVersion(expected: BigIntStats, observed: BigIntStats): boolean {

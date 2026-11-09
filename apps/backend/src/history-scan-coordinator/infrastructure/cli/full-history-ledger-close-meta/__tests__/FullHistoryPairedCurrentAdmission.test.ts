@@ -6,6 +6,10 @@ import {
 	type PairedFilesystem
 } from '../FullHistoryPairedCurrentAdmission.js';
 import type { PendingPlan } from '../FullHistoryLedgerCloseMetaPendingPlan.js';
+import fsModule, { promises as fs } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { readScopedCurrentArm, type ScopedCurrentAttemptPolicy } from '../FullHistoryScopedCurrentAttempt.js';
 
 describe('paired current source admission', () => {
 	const policy: PairedCurrentAdmissionPolicy = {
@@ -62,6 +66,21 @@ describe('paired current source admission', () => {
 			.toThrow(/reserve refused/);
 	});
 
+	it('keeps all 328 GiB above the scoped floor and refuses another bulk device', () => {
+		const start = 3_375_844_294_656n;
+		const disk = { ...before, total: 64_000_911_998_976n, available: start };
+		const reservedPolicy = { ...policy, minimumUnreservedBytes: start };
+		const scoped = { ...config, scopedBulkDevice: disk.device };
+		const available = { ...row, total_space: String(disk.total), free_space: String(start),
+			unreserved_space: String(start) };
+		const check = (policyValue = reservedPolicy, cfg = scoped, rowValue = available) =>
+			assertPairedCapacity(policyValue, cfg, disk, disk, disk, { ...disk, inode: 12n }, rowValue, 1);
+		expect(() => check()).not.toThrow();
+		expect(() => check({ ...reservedPolicy, minimumUnreservedBytes: start - 1n })).toThrow(/floor/);
+		expect(() => check(reservedPolicy, { ...scoped, scopedBulkDevice: 5n })).toThrow(/bulk device/);
+		expect(() => check(reservedPolicy, scoped, { ...available, unreserved_space: String(start - 1n) })).toThrow(/reserve refused/);
+	});
+
 	it('requires one exact completed manifest with the same source digest, range and all 20 dataset counts', () => {
 		const source = { id: '00', digest: 'aa'.repeat(32), start: 100, end: 163 };
 		const datasets = {
@@ -79,5 +98,80 @@ describe('paired current source admission', () => {
 		expect(matchesFullPublication({ ...manifest, status: 'started' }, source)).toBe(false);
 		expect(matchesFullPublication({ ...manifest, datasets: { ...datasets, ttl: undefined } }, source)).toBe(false);
 		expect(matchesFullPublication({ ...manifest, datasets: { ...datasets, history_ledgers: '63' } }, source)).toBe(false);
+	});
+});
+
+describe('scoped current-attempt arm binding', () => {
+	it('binds invocation and rejects a same-content hold inode swap at the gate', async () => {
+		const permitId = '123e4567-e89b-42d3-a456-426614174000';
+		const bootId = 'abcdabcd-abcd-abcd-abcd-abcdabcdabcd';
+		const invocationId = 'a'.repeat(32);
+		const entryPath = fileURLToPath(new URL('../run-continuous-full-history-ledger-close-meta.js', import.meta.url));
+		const entryBytes = Buffer.from('trusted entrypoint');
+		const holdBytes = Buffer.from('held');
+		const policy: ScopedCurrentAttemptPolicy = { permitId, bulkDevice: 7n, startLedger: 65_366_208, endLedger: 65_366_335 };
+		const expiry = '2026-11-09T18:10:00.000Z';
+		let nowMs = Date.parse('2026-11-09T18:00:00.000Z');
+		let holdInode = 22n;
+		const fileBytes = new Map<string, Buffer>();
+		const fakeFileStat = (filePath: string) => {
+			const data = fileBytes.get(filePath)!;
+			const inode = filePath.endsWith('/hold') ? holdInode : filePath === entryPath ? 33n : 44n;
+			return { dev: 1n, ino: inode, uid: 0n, gid: 0n, mode: 0o100444n, nlink: 1n,
+				size: BigInt(data.length), ctimeNs: 1n, mtimeNs: 1n,
+				isFile: () => true, isDirectory: () => false };
+		};
+		const dirStat = (inode: bigint) => ({ dev: 1n, ino: inode, uid: 0n, gid: 0n, mode: 0o40755n,
+			isDirectory: () => true, isFile: () => false });
+		const arm = () => JSON.stringify({ version: 1, permitId, bootId, invocationId, bulkDevice: '7',
+			startLedger: policy.startLedger, endLedger: policy.endLedger, entryPath,
+			entrySha256: createHash('sha256').update(entryBytes).digest('hex'), expiresAt: expiry,
+			holdDevice: '1', holdInode: '22', holdSha256: createHash('sha256').update(holdBytes).digest('hex') });
+		fileBytes.set(entryPath, entryBytes);
+		fileBytes.set('/run/stellaratlas-history-admission/hold', holdBytes);
+		fileBytes.set('/run/stellaratlas-history-admission/current-attempt.json', Buffer.from(arm()));
+		const realpath = jest.spyOn(fs, 'realpath').mockImplementation(async target => String(target));
+		const lstat = jest.spyOn(fs, 'lstat').mockImplementation(async target => {
+			const targetPath = String(target);
+			if (targetPath === '/run') return dirStat(1n) as never;
+			if (targetPath === '/run/stellaratlas-history-admission') return dirStat(2n) as never;
+			return fakeFileStat(targetPath) as never;
+		});
+		const statfs = jest.spyOn(fs, 'statfs').mockResolvedValue({ type: 0x01021994n } as never);
+		const lstatSync = jest.spyOn(fsModule, 'lstatSync').mockImplementation(target => fakeFileStat(String(target)) as never);
+		const readFile = jest.spyOn(fs, 'readFile').mockResolvedValue(bootId as never);
+		const open = jest.spyOn(fs, 'open').mockImplementation(async target => {
+			const targetPath = String(target);
+			const bytes = fileBytes.get(targetPath)!;
+			const handle = {
+				stat: async () => fakeFileStat(targetPath), close: async () => undefined,
+				read: async (buffer: Buffer, offset: number, length: number, position: number | null) => {
+					const readPosition = position ?? 0;
+					const count = Math.min(length, bytes.length - readPosition);
+					if (count > 0) bytes.copy(buffer, offset, readPosition, readPosition + count);
+					return { bytesRead: count, buffer };
+				},
+			};
+			return handle as never;
+		});
+		try {
+			const gate = await readScopedCurrentArm(policy, bootId, invocationId, entryPath, () => nowMs);
+			expect(gate).toEqual(expect.any(Function));
+			await expect(readScopedCurrentArm(policy, bootId, invocationId, '/unexpected/entry.js', () => nowMs)).resolves.toBeNull();
+			expect(realpath).not.toHaveBeenCalledWith('/unexpected/entry.js');
+			expect(await gate!()).not.toThrow();
+			// The invocation is part of the arm binding.
+			expect(await readScopedCurrentArm(policy, bootId, 'b'.repeat(32), entryPath, () => nowMs)).toBeNull();
+			lstatSync.mockImplementationOnce(target => {
+				nowMs = Date.parse(expiry);
+				return fakeFileStat(String(target)) as never;
+			});
+			expect(await gate!()).toThrow(/no longer valid/);
+			nowMs -= 10_000;
+			holdInode = 23n;
+			await expect(gate!()).rejects.toThrow(/no longer valid/);
+		} finally {
+			open.mockRestore(); readFile.mockRestore(); lstatSync.mockRestore(); statfs.mockRestore(); lstat.mockRestore(); realpath.mockRestore();
+		}
 	});
 });

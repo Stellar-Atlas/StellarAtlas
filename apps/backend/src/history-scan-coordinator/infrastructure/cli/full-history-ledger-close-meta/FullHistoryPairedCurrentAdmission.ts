@@ -4,6 +4,10 @@ import { performance } from 'node:perf_hooks';
 import type { DataSource } from 'typeorm';
 import type { PendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import { readCurrentSourcePublication } from './FullHistoryPairedSourceManifest.js';
+import {
+	SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES, SCOPED_CURRENT_RESERVE_BASIS_POINTS,
+	SCOPED_CURRENT_START_ALLOWANCE_BYTES
+} from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
 import type {
 	ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	ContinuousFullHistoryLedgerCloseMetaLoopDependencies
@@ -65,6 +69,7 @@ interface AdmissionConfig {
 	readonly minimumFreeBasisPoints: number;
 	readonly currentMinimumFreeBytes: bigint;
 	readonly sourceOutputBytes: bigint;
+	readonly scopedBulkDevice?: bigint;
 }
 
 const maximumEvidenceAgeMs = 4_000;
@@ -218,7 +223,8 @@ export async function settlePairedPendingPublication(
 	paired: FencedPairedCurrentAdmission,
 	plan: PendingPlan,
 	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
-	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies
+	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies,
+	assertOwnsPlan?: () => void
 ): Promise<boolean> {
 	const started = performance.now();
 	const status = await paired.pendingPublication(plan, dependencies.signal);
@@ -228,6 +234,7 @@ export async function settlePairedPendingPublication(
 		await dependencies.pendingPlans.clearVerified(plan, async () => {
 			await paired.assertHeld(dependencies.signal);
 			assertFreshAfterLease(started);
+			assertOwnsPlan?.();
 		});
 		return true;
 	}
@@ -267,11 +274,15 @@ export function assertPairedCapacity(
 	const physical = [before.available, after.available, typed.available, warehouse.available, free]
 		.reduce((minimum, bytes) => bytes < minimum ? bytes : minimum);
 	const paired = physical - (free - unreserved);
-	const bps = BigInt(Math.max(500, config.minimumFreeBasisPoints));
+	const scoped = config.scopedBulkDevice !== undefined;
+	if (scoped && before.device !== config.scopedBulkDevice)
+		throw new Error('Scoped current bulk device binding changed');
+	const bps = BigInt(scoped ? SCOPED_CURRENT_RESERVE_BASIS_POINTS : Math.max(500, config.minimumFreeBasisPoints));
 	const ratioFloor = (total * bps + 9_999n) / 10_000n;
-	const sourceFloor = ratioFloor > config.currentMinimumFreeBytes
-		? ratioFloor : config.currentMinimumFreeBytes;
-	if (policy.minimumUnreservedBytes < sourceFloor + config.sourceOutputBytes)
+	const absoluteFloor = scoped ? SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES : config.currentMinimumFreeBytes;
+	const sourceFloor = ratioFloor > absoluteFloor ? ratioFloor : absoluteFloor;
+	const allowance = scoped ? SCOPED_CURRENT_START_ALLOWANCE_BYTES : config.sourceOutputBytes;
+	if (policy.minimumUnreservedBytes < sourceFloor + allowance)
 		throw new Error('Paired current minimum must cover the source floor and full cycle output');
 	if (paired < policy.minimumUnreservedBytes)
 		throw new Error('Paired current free-space reserve refused allocation');

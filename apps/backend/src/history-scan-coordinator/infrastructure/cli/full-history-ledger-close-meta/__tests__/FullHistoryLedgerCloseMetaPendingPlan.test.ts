@@ -15,7 +15,7 @@ const payload = Buffer.from(JSON.stringify(plan));
 let cursor = 0;
 const close = jest.fn(async () => {});
 const fileVersion = { isFile: () => true, size: BigInt(payload.byteLength),
-	dev: 4n, ino: 7n, mtimeNs: 10n, ctimeNs: 11n };
+	dev: 4n, ino: 7n, mtimeNs: 10n, ctimeNs: 11n, nlink: 2n };
 const stat = jest.fn(async () => fileVersion);
 const linkSync = jest.fn();
 const lstatSync = jest.fn(() => fileVersion);
@@ -166,5 +166,30 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 		await resumed.confirmRecorded(recorded, async () => { events.push('resume-lease'); });
 		expect(events).toEqual(['sync', 'install-lease', 'sync', 'sync', 'resume-lease']);
 		expect(lstatSync).toHaveBeenCalledTimes(2);
+	});
+
+	it('keeps a scoped permit spent across restart and refuses to claim a byte-identical foreign inode', async () => {
+		const permitId = '123e4567-e89b-42d3-a456-426614174000';
+		const spent = `${file}.${permitId}.spent`;
+		const first = new Store(file);
+		const installed = await first.installScopedAttempt(permitId, plan, async () => {});
+		expect(first.matchesConsumedScopedAttempt(permitId, installed)).toBe(true);
+		const temporary = open.mock.calls[0]?.[0];
+		expect(linkSync.mock.calls).toEqual([[temporary, spent], [temporary, file]]);
+		expect(sync).toHaveBeenCalledTimes(3);
+
+		const restarted = new Store(file);
+		const recorded = await restarted.read();
+		if (recorded === null) throw new Error('fixture must retain the installed plan');
+		expect(restarted.matchesConsumedScopedAttempt(permitId, recorded)).toBe(true);
+		lstatSync.mockReturnValueOnce({ ...fileVersion, ino: 8n });
+		expect(restarted.matchesConsumedScopedAttempt(permitId, recorded)).toBe(false);
+
+		linkSync.mockImplementationOnce(() => { throw Object.assign(new Error('already spent'), { code: 'EEXIST' }); });
+		await expect(restarted.installScopedAttempt(permitId, plan, async () => {})).rejects.toThrow(/attempt is spent/);
+		expect(linkSync).toHaveBeenCalledTimes(3);
+		expect(unlinkSync).not.toHaveBeenCalled();
+		expect(unlink.mock.calls.flat()).not.toContain(spent);
+		expect(unlink.mock.calls.flat()).not.toContain(file);
 	});
 });

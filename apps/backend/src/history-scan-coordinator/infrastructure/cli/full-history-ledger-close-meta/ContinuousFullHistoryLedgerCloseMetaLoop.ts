@@ -1,4 +1,6 @@
 import { settlePairedPendingPublication, type FencedPairedCurrentAdmission } from './FullHistoryPairedCurrentAdmission.js';
+import { performance } from 'node:perf_hooks';
+import type { ScopedCurrentArm, ScopedCurrentAttemptPolicy } from './FullHistoryScopedCurrentAttempt.js';
 import {
 	fullHistoryLedgerCloseMetaRange,
 	type FullHistoryLedgerCloseMetaRange
@@ -94,6 +96,10 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
 	readonly pairedCurrentAdmission?: FencedPairedCurrentAdmission;
+	readonly scopedCurrentAttempt?: {
+		readonly policy: ScopedCurrentAttemptPolicy;
+		readArm(): Promise<ScopedCurrentArm | null>;
+	};
 	readonly admitCycle: (current?: boolean) => Promise<FullHistoryLedgerCloseMetaAdmissionDecision>;
 	readonly emit: (event: ContinuousFullHistoryLedgerCloseMetaEvent) => void;
 	readonly ensureStorageCapacity: (plan: PendingPlan) => Promise<void>;
@@ -135,6 +141,13 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	if ((config.currentOnlyCapacity === undefined) !== (dependencies.pairedCurrentAdmission === undefined)) {
 		throw new Error('current-only capacity requires paired admission checks');
 	}
+	const scoped = dependencies.scopedCurrentAttempt;
+	const paired = dependencies.pairedCurrentAdmission;
+	if ((config.currentOnlyCapacity?.scopedReserve === true) !== (scoped !== undefined) ||
+		(scoped !== undefined && (config.cycleLedgerCount !== 128 || config.typedShardLedgerCount !== 128))) {
+		throw new Error('Scoped current attempt requires the paired 128-ledger configuration');
+	}
+	let scopedAttemptStarted = false;
 	let context: FullHistoryLedgerCloseMetaIngestionContext | null = null;
 	let nextLedger: number | null = null;
 	let readyEmitted = false;
@@ -143,6 +156,33 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 
 	while (!dependencies.signal.aborted) {
 		try {
+			let scopedArm: ScopedCurrentArm | undefined;
+			if (scoped !== undefined && paired !== undefined) {
+				const pending = await dependencies.pendingPlans.read();
+				if (pending !== null) {
+					// Settlement needs no admission permit or provider preparation. A spent or
+					// invalid arm can never turn a not-captured plan back into native work.
+					assertScopedPlan(pending, scoped.policy);
+					const ownsPlan = () => dependencies.pendingPlans.matchesConsumedScopedAttempt(scoped.policy.permitId, pending);
+					if (ownsPlan() && await settlePairedPendingPublication(
+						paired, pending, config, dependencies, () => {
+							if (!ownsPlan())
+								throw new PendingPlanChangedError('Scoped pending plan lost its spent-inode binding; preserved');
+						}
+					)) continue;
+					await dependencies.wait(Math.max(30_000, config.idlePollMilliseconds), dependencies.signal);
+					continue;
+				}
+				const arm = scopedAttemptStarted ? null : await scoped.readArm();
+				if (arm === null) {
+					await dependencies.wait(config.idlePollMilliseconds, dependencies.signal);
+					continue;
+				}
+				// A failed preflight is terminal for this invocation. The arm binds it
+				// to this invocation and the durable receipt also prevents reuse.
+				scopedAttemptStarted = true;
+				scopedArm = arm;
+			}
 			const minimumPriorityLedger = currentCapacityMinimumLedger(config, dependencies.now());
 			const currentCapacityOnly = minimumPriorityLedger !== undefined;
 			if (reloadDurableState) {
@@ -167,6 +207,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			const durableNextLedger = nextLedger;
 			const pending = await dependencies.pendingPlans.read();
 			if (pending !== null) {
+				if (scoped !== undefined) continue; // Handle only through the settlement branch.
 				assertCurrentCapacityPlan(config, dependencies, pending);
 				if (pending.endLedger - pending.startLedger + 1 > config.cycleLedgerCount ||
 					(config.lastAvailableLedger !== null && pending.endLedger > config.lastAvailableLedger)) {
@@ -205,11 +246,16 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				dependencies.signal
 			);
 			dependencies.signal.throwIfAborted();
+			if (scoped !== undefined && (sourceFrontier.endSequence < scoped.policy.endLedger ||
+				sourceFrontier.endSequence - scoped.policy.endLedger > 128)) {
+				throw new Error('Scoped current attempt does not match a fresh near-head frontier');
+			}
 			const rangeOptions = {
-				...(minimumPriorityLedger === undefined ? {} : { minimumPriorityLedger }),
+				...(scoped !== undefined ? { minimumPriorityLedger: scoped.policy.startLedger }
+					: minimumPriorityLedger === undefined ? {} : { minimumPriorityLedger }),
 				durableNextLedger,
 				firstAvailableLedger: cycleContext.registeredSource.firstAvailableLedger,
-				latestAvailableLedger: sourceFrontier.endSequence,
+				latestAvailableLedger: scoped?.policy.endLedger ?? sourceFrontier.endSequence,
 				maximumLedgerCount: config.cycleLedgerCount,
 				networkPassphraseHash: cycleContext.registeredSource.networkPassphraseHash,
 				sourceBatchLedgerCount: cycleContext.config.ledgersPerBatch,
@@ -249,7 +295,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 					: null;
 			if (priorityRange !== null) {
 				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger,
-					createPendingPlan(cycleContext, config, priorityRange, 'priority'));
+					createPendingPlan(cycleContext, config, priorityRange, 'priority'), false, scopedArm);
 				priorityStreak = Math.min(priorityStreak + 1, MAXIMUM_CONSECUTIVE_PRIORITY_RANGES);
 				continue;
 			}
@@ -289,7 +335,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				createPendingPlan(cycleContext, config, range, 'historical'));
 			priorityStreak = 0;
 		} catch (error) {
-			if (error instanceof PendingPlanChangedError) throw error;
+			if (error instanceof PendingPlanChangedError && scoped === undefined) throw error;
 			if (dependencies.signal.aborted) break;
 			reloadDurableState = true;
 			dependencies.emit({
@@ -303,6 +349,13 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				dependencies.signal
 			);
 		}
+	}
+}
+
+function assertScopedPlan(plan: PendingPlan, policy: ScopedCurrentAttemptPolicy): void {
+	if (plan.kind !== 'priority' || plan.typedShardLedgerCount !== 128 || plan.shards.length !== 1 ||
+		plan.startLedger !== policy.startLedger || plan.endLedger !== policy.endLedger) {
+		throw new Error('Scoped current pending plan does not match the authorized range and geometry; preserved');
 	}
 }
 
@@ -326,14 +379,37 @@ function createPendingPlan(context: FullHistoryLedgerCloseMetaIngestionContext,
 async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies,
 	context: FullHistoryLedgerCloseMetaIngestionContext, previousNextLedger: number,
-	plan: PendingPlan, alreadyRecorded = false): Promise<number> {
+	plan: PendingPlan, alreadyRecorded = false, scopedArm?: ScopedCurrentArm): Promise<number> {
 	let nextLedger = previousNextLedger;
 	await runAdmittedAttempt(config, dependencies, async () => {
 		assertCurrentCapacityPlan(config, dependencies, plan);
 		await dependencies.ensureStorageCapacity(plan);
 		const paired = dependencies.pairedCurrentAdmission;
+		const scoped = dependencies.scopedCurrentAttempt;
+		let beforeConversion: (() => Promise<void>) | undefined;
 		if (paired === undefined) {
 			await dependencies.pendingPlans.write(plan);
+		} else if (scoped !== undefined) {
+			if (scopedArm === undefined || alreadyRecorded)
+				throw new Error('Scoped current attempt is disarmed; no conversion authorized');
+			assertScopedPlan(plan, scoped.policy);
+			const assertScopedAuthority = async (checkPlan?: () => void) => {
+				const started = performance.now();
+				await paired.assertCapacity(plan, dependencies.signal);
+				const checkArm = await scopedArm();
+				await paired.assertHeld(dependencies.signal);
+				dependencies.signal.throwIfAborted();
+				checkArm();
+				checkPlan?.();
+				if (performance.now() - started > 4_000)
+					throw new Error('Scoped current capacity or authority evidence expired');
+			};
+			const installed = await dependencies.pendingPlans.installScopedAttempt(scoped.policy.permitId, plan, assertScopedAuthority);
+			beforeConversion = () => assertScopedAuthority(() => {
+				if (!dependencies.pendingPlans.matchesConsumedScopedAttempt(scoped.policy.permitId, installed)) {
+					throw new PendingPlanChangedError('Scoped pending plan lost its spent-inode binding; preserved');
+				}
+			});
 		} else {
 			await paired.assertCapacity(plan, dependencies.signal);
 			if (!alreadyRecorded) {
@@ -343,13 +419,13 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 			}
 			// Either durability check can be slow; refresh capacity before fetching input.
 			await paired.assertCapacity(plan, dependencies.signal);
+			beforeConversion = () => paired.assertHeld(dependencies.signal);
 		}
 		const startedAt = dependencies.now();
 		const range = fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger);
-		const receipt = paired === undefined
+		const receipt = beforeConversion === undefined
 			? await dependencies.ingestion.ingestRange(context, range, dependencies.signal)
-			: await dependencies.ingestion.ingestRange(context, range, dependencies.signal,
-				() => paired.assertHeld(dependencies.signal));
+			: await dependencies.ingestion.ingestRange(context, range, dependencies.signal, beforeConversion);
 		nextLedger = observedDurableNextLedger(previousNextLedger, receipt,
 			plan.kind === 'historical' && previousNextLedger <= plan.endLedger);
 		if (paired === undefined) await dependencies.pendingPlans.clear();

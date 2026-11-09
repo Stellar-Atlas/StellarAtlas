@@ -127,6 +127,21 @@ incompatible plans are refused and preserved. Verify advancing source and wareho
 publication after activation. This is a source admission check, not a disk
 quota or a bound on concurrent warehouse writes.
 
+A separate, default-off scoped current attempt can be prepared with
+`FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT` (version 1, a unique
+permit ID, exact bulk device and exact current ledger range). It requires the
+paired configuration, one shard of up to 128 ledgers and an operator-owned,
+expiring arm bound to the running entrypoint, invocation and owned history hold. It retains the
+full source, warehouse, drain and startup allowances. Do not set it as a
+persistent boot configuration. The attempt is consumed durably before capture;
+restart or disarm can settle exact published work but cannot retry conversion.
+Preserve an ambiguous plan and its spent receipt for operator-reviewed recovery
+with the same geometry. Before arming, separately verify the entire release,
+protected warehouse and publisher generations, the publisher's effective hold
+and that already-admitted history has drained. A hold file alone does not prove
+that drain or cap independent writes. Keep the hold through a clean drain and
+verified ordinary source restoration; the source does not create or remove it.
+
 ### Run tests
 
 The test folder contains both unit and integration tests. A test database is
