@@ -26,6 +26,7 @@ export interface PendingPlanStore {
 	read(): Promise<PendingPlan | null>;
 	write(plan: PendingPlan): Promise<void>;
 	installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
+	confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
 	clear(): Promise<void>;
 	clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
 }
@@ -173,6 +174,35 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			// The name may already be durable. Preserve it for the next owner to inspect.
 			throw new PendingPlanChangedError('Pending plan installation could not be made durable');
 		}
+	}
+
+	async confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+		const observed = this.#observed.get(plan);
+		const changed = () => new PendingPlanChangedError('Recorded pending plan changed or could not be identified; refusing to resume');
+		if (observed === undefined) throw changed();
+		const current = await this.read().catch(() => { throw changed(); });
+		const currentFile = current === null ? undefined : this.#observed.get(current);
+		if (current === null || currentFile === undefined || !samePlan(plan, current) ||
+			!sameFileVersion(observed, currentFile)) throw changed();
+
+		const assertNamed = (): void => {
+			let named: BigIntStats;
+			try {
+				named = lstatSync(this.file, { bigint: true });
+			} catch {
+				throw changed();
+			}
+			if (!sameFileVersion(observed, named)) throw changed();
+		};
+		assertNamed();
+		try {
+			await syncDirectory(dirname(this.file));
+		} catch {
+			throw new PendingPlanChangedError('Recorded pending plan durability could not be confirmed');
+		}
+		await assertHeld();
+		// Recheck the original name synchronously after the fsync and lease awaits.
+		assertNamed();
 	}
 
 	async clear(): Promise<void> {

@@ -386,6 +386,7 @@ function fixture(stopAfter: number) {
 				calls.push('pending-write');
 				f.pending = pending;
 			},
+			confirmRecorded: async (_pending, assertHeld) => { calls.push('pending-confirm'); await assertHeld(); },
 			clear: async () => { f.pending = null; },
 			clearVerified: async (expected, assertHeld) => {
 				await assertHeld();

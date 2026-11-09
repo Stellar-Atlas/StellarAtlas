@@ -145,4 +145,26 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 		expect(open).toHaveBeenNthCalledWith(2, '/mock', 'r');
 		expect(sync).toHaveBeenCalledTimes(2);
 	});
+
+	it('confirms an installed plan after a failed install directory sync on restart', async () => {
+		const events: string[] = [];
+		sync.mockImplementationOnce(async () => { events.push('sync'); })
+			.mockImplementationOnce(async () => {
+				events.push('sync');
+				throw new Error('directory sync failed');
+			});
+		await expect(new Store(file).installVerified(plan, async () => { events.push('install-lease'); }))
+			.rejects.toThrow(/could not be made durable/);
+		expect(linkSync).toHaveBeenCalledWith(open.mock.calls[0]?.[0], file);
+
+		// A new store models restart: only the descriptor read establishes the inode
+		// identity that may be durably confirmed by the next owner.
+		sync.mockImplementationOnce(async () => { events.push('sync'); });
+		const resumed = new Store(file);
+		const recorded = await resumed.read();
+		if (recorded === null) throw new Error('fixture must retain the installed plan');
+		await resumed.confirmRecorded(recorded, async () => { events.push('resume-lease'); });
+		expect(events).toEqual(['sync', 'install-lease', 'sync', 'sync', 'resume-lease']);
+		expect(lstatSync).toHaveBeenCalledTimes(2);
+	});
 });

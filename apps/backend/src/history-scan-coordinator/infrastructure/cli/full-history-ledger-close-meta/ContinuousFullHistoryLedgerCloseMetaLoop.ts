@@ -338,9 +338,11 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 			await paired.assertCapacity(plan, dependencies.signal);
 			if (!alreadyRecorded) {
 				await dependencies.pendingPlans.installVerified(plan, () => paired.assertHeld(dependencies.signal));
-				// Plan durability can be slow on a busy filesystem; recheck before fetching input.
-				await paired.assertCapacity(plan, dependencies.signal);
+			} else {
+				await dependencies.pendingPlans.confirmRecorded(plan, () => paired.assertHeld(dependencies.signal));
 			}
+			// Either durability check can be slow; refresh capacity before fetching input.
+			await paired.assertCapacity(plan, dependencies.signal);
 		}
 		const startedAt = dependencies.now();
 		const range = fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger);
