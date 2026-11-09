@@ -22,6 +22,19 @@ export const restoreFullHistoryLedgerCloseMetaCoreDatasetSetSql =
 export const enableFullHistoryLedgerCloseMetaStateDatasetSetSql =
 	composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(true, true);
 
+export const compactLedgerEntryChangeDatasetPredicateSql = `
+	"dataset" = 'ledger-entry-changes'
+	and "schema_version" = 'stellar-atlas.full-history.ledger-entry-changes.v4'`;
+
+export const fullHistoryLedgerCloseMetaCompactDatasetContractPredicateSql = `
+	(${fullHistoryLedgerCloseMetaStateProjectionDatasetContractPredicateSql})
+	or (${compactLedgerEntryChangeDatasetPredicateSql}
+		and "media_type" = 'application/vnd.apache.parquet'
+		and "representation" = 'typed-projection')`;
+
+export const enableFullHistoryLedgerCloseMetaCompactDatasetSetSql =
+	composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(true, true, true);
+
 export const createFullHistoryLedgerCloseMetaDatasetContractSql = `
 	alter table "full_history_ledger_close_meta_dataset"
 		add constraint "chk_full_history_lcm_dataset_contract" check (
@@ -100,11 +113,15 @@ function composeFullHistoryLedgerCloseMetaDatasetContractPredicateSql(
 
 function composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(
 	acceptStateProjection: boolean,
-	replace: boolean
+	replace: boolean,
+	acceptCompactProjection = false
 ): string {
+	const legacyBatchCompactGuard = acceptCompactProjection
+		? ' and compact_projection_count = 0'
+		: '';
 	const validDatasetSet = acceptStateProjection
 		? `((dataset_count = 8 and core_dataset_count = 8
-				and state_dataset_count = 0
+				and state_dataset_count = 0${legacyBatchCompactGuard}
 				and ((legacy_projection_count = 2 and complete_projection_count = 0)
 					or (legacy_projection_count = 0 and complete_projection_count = 2)))
 			or (dataset_count = 10 and core_dataset_count = 8
@@ -124,7 +141,7 @@ function composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(
 		core_dataset_count bigint;
 		state_dataset_count bigint;
 		legacy_projection_count bigint;
-		complete_projection_count bigint;
+		complete_projection_count bigint;${acceptCompactProjection ? '\n\t\tcompact_projection_count bigint;' : ''}
 		canonical_records bigint;
 		ledger_records bigint;
 		transaction_records bigint;
@@ -153,14 +170,15 @@ function composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(
 					and "schema_version" = 'stellar-atlas.full-history.contract-events.v3')
 				or ("dataset" = 'ledger-entry-changes'
 					and "schema_version" = 'stellar-atlas.full-history.ledger-entry-changes.v3')
-			),
+				${acceptCompactProjection ? `or (${compactLedgerEntryChangeDatasetPredicateSql})` : ''}
+			),${acceptCompactProjection ? `\n\t\t\tcount(*) filter (where ${compactLedgerEntryChangeDatasetPredicateSql}),` : ''}
 			max("record_count") filter (where "dataset" = 'ledger-close-meta'),
 			max("record_count") filter (where "dataset" = 'ledgers'),
 			max("record_count") filter (where "dataset" = 'transactions'),
 			max("record_count") filter (where "dataset" = 'transaction-results'),
 			max("record_count") filter (where "dataset" = 'transaction-meta')
 		into dataset_count, core_dataset_count, state_dataset_count,
-			legacy_projection_count, complete_projection_count,
+			legacy_projection_count, complete_projection_count,${acceptCompactProjection ? '\n\t\t\tcompact_projection_count,' : ''}
 			canonical_records, ledger_records, transaction_records,
 			result_records, meta_records
 		from "full_history_ledger_close_meta_dataset"

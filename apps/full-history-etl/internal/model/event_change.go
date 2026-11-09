@@ -48,3 +48,38 @@ type LedgerEntryChange struct {
 	HasPostEntry      bool   `parquet:"name=has_post_entry, type=BOOLEAN"`
 	PostEntryXDR      string `parquet:"name=post_entry_xdr, type=BYTE_ARRAY"`
 }
+
+// CompactLedgerEntryChange retains the identity and presence flags for entries
+// found by replaying this batch's canonical LedgerCloseMeta with the same transform.
+type CompactLedgerEntryChange struct {
+	LedgerSequence    int64  `parquet:"name=ledger_sequence, type=INT64, convertedtype=UINT_64"`
+	TransactionIndex  int64  `parquet:"name=transaction_index, type=INT64, convertedtype=UINT_64"`
+	ChangeIndex       int64  `parquet:"name=change_index, type=INT64, convertedtype=UINT_64"`
+	TransactionHash   string `parquet:"name=transaction_hash, type=BYTE_ARRAY, convertedtype=UTF8"`
+	Reason            string `parquet:"name=reason, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
+	OperationIndex    int64  `parquet:"name=operation_index, type=INT64, convertedtype=UINT_64"`
+	HasOperationIndex bool   `parquet:"name=has_operation_index, type=BOOLEAN"`
+	UpgradeIndex      int64  `parquet:"name=upgrade_index, type=INT64, convertedtype=UINT_64"`
+	HasUpgradeIndex   bool   `parquet:"name=has_upgrade_index, type=BOOLEAN"`
+	EntryType         int32  `parquet:"name=entry_type, type=INT32"`
+	EntryTypeString   string `parquet:"name=entry_type_string, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
+	ChangeType        int32  `parquet:"name=change_type, type=INT32"`
+	ChangeTypeString  string `parquet:"name=change_type_string, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
+	LedgerKeySHA256   string `parquet:"name=ledger_key_sha256, type=BYTE_ARRAY, convertedtype=UTF8"`
+	LedgerKeyXDR      string `parquet:"name=ledger_key_xdr, type=BYTE_ARRAY"`
+	HasPreEntry       bool   `parquet:"name=has_pre_entry, type=BOOLEAN"`
+	HasPostEntry      bool   `parquet:"name=has_post_entry, type=BOOLEAN"`
+}
+
+func (r LedgerEntryChange) Compact() CompactLedgerEntryChange {
+	return CompactLedgerEntryChange{
+		LedgerSequence: r.LedgerSequence, TransactionIndex: r.TransactionIndex,
+		ChangeIndex: r.ChangeIndex, TransactionHash: r.TransactionHash, Reason: r.Reason,
+		OperationIndex: r.OperationIndex, HasOperationIndex: r.HasOperationIndex,
+		UpgradeIndex: r.UpgradeIndex, HasUpgradeIndex: r.HasUpgradeIndex,
+		EntryType: r.EntryType, EntryTypeString: r.EntryTypeString,
+		ChangeType: r.ChangeType, ChangeTypeString: r.ChangeTypeString,
+		LedgerKeySHA256: r.LedgerKeySHA256, LedgerKeyXDR: r.LedgerKeyXDR,
+		HasPreEntry: r.HasPreEntry, HasPostEntry: r.HasPostEntry,
+	}
+}

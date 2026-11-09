@@ -3,6 +3,7 @@ import {
 	fullHistoryLedgerCloseMetaSha256Digest
 } from '../../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import {
+	COMPACT_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION,
 	FULL_HISTORY_LEDGER_CLOSE_META_CANONICAL_MEDIA_TYPE,
 	FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
 	FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
@@ -28,6 +29,23 @@ describe('full-history LedgerCloseMeta dataset schema contract', () => {
 
 	it('rejects state projections paired with v2 projection schemas', () => {
 		expect(isValid(stateOutputs(legacySchemas))).toBe(false);
+	});
+
+	it('admits the compact schema only with the complete state output set', () => {
+		const compactSchemas = {
+			...completeSchemas,
+			'ledger-entry-changes': COMPACT_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION
+		};
+		expect(isValid(stateOutputs(compactSchemas))).toBe(true);
+		expect(isValid(coreOutputs(compactSchemas))).toBe(false);
+		expect(
+			isValid(
+				stateOutputs({
+					...compactSchemas,
+					'contract-events': legacySchemas['contract-events']
+				})
+			)
+		).toBe(false);
 	});
 });
 

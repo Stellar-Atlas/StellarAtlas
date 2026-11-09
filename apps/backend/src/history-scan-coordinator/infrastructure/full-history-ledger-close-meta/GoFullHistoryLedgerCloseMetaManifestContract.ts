@@ -1,4 +1,5 @@
 import {
+	COMPACT_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION,
 	FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
 	FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
 	FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS,
@@ -8,11 +9,13 @@ import {
 const manifestVersionV6 = 'stellar-atlas.full-history-etl.manifest.v6' as const;
 const manifestVersionV7 = 'stellar-atlas.full-history-etl.manifest.v7' as const;
 const manifestVersionV8 = 'stellar-atlas.full-history-etl.manifest.v8' as const;
+const manifestVersionV9 = 'stellar-atlas.full-history-etl.manifest.v9' as const;
 
 export type GoFullHistoryLedgerCloseMetaManifestVersion =
 	| typeof manifestVersionV6
 	| typeof manifestVersionV7
-	| typeof manifestVersionV8;
+	| typeof manifestVersionV8
+	| typeof manifestVersionV9;
 
 const unsupportedV7 = [
 	'ledger-close-upgrades-and-extension-values',
@@ -67,7 +70,8 @@ export function goFullHistoryLedgerCloseMetaManifestVersion(
 	if (
 		value === manifestVersionV6 ||
 		value === manifestVersionV7 ||
-		value === manifestVersionV8
+		value === manifestVersionV8 ||
+		value === manifestVersionV9
 	) {
 		return value;
 	}
@@ -87,7 +91,7 @@ export function assertLedgerCloseMetaManifestProjection(
 	outputs: readonly FullHistoryLedgerCloseMetaDatasetOutput[]
 ): void {
 	const expectedDatasets =
-		version === manifestVersionV8
+		version === manifestVersionV8 || version === manifestVersionV9
 			? FULL_HISTORY_LEDGER_CLOSE_META_DATASETS
 			: FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS;
 	const actualDatasets = new Set(outputs.map((output) => output.dataset));
@@ -120,11 +124,17 @@ function expectedSchemaVersions(
 				? 'stellar-atlas.full-history.contract-events.v2'
 				: FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events'],
 		'ledger-entry-changes':
-			version === manifestVersionV6
-				? 'stellar-atlas.full-history.ledger-entry-changes.v2'
-				: FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-entry-changes']
+			version === manifestVersionV9
+				? COMPACT_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION
+				: version === manifestVersionV6
+					? 'stellar-atlas.full-history.ledger-entry-changes.v2'
+					: FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS[
+							'ledger-entry-changes'
+						]
 	};
-	if (version !== manifestVersionV8) return projectionSchemas;
+	if (version !== manifestVersionV8 && version !== manifestVersionV9) {
+		return projectionSchemas;
+	}
 	return {
 		...projectionSchemas,
 		'account-state-changes':

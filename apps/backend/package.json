@@ -57,6 +57,7 @@
 		"exception-logger": "workspace:*",
 		"express": "4.22.2",
 		"express-basic-auth": "^1.2.1",
+		"express-rate-limit": "8.7.3",
 		"express-validator": "^7.3.2",
 		"graphql": "16.11.0",
 		"graphql-http": "1.22.4",
