@@ -1,3 +1,4 @@
+import { settlePairedPendingPublication, type PairedCurrentAdmission } from './FullHistoryPairedCurrentAdmission.js';
 import {
 	fullHistoryLedgerCloseMetaRange,
 	type FullHistoryLedgerCloseMetaRange
@@ -92,6 +93,7 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 	  };
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
+	readonly pairedCurrentAdmission?: PairedCurrentAdmission;
 	readonly admitCycle: (current?: boolean) => Promise<FullHistoryLedgerCloseMetaAdmissionDecision>;
 	readonly emit: (event: ContinuousFullHistoryLedgerCloseMetaEvent) => void;
 	readonly ensureStorageCapacity: (plan: PendingPlan) => Promise<void>;
@@ -129,6 +131,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	if (config.currentOnlyCapacity !== undefined &&
 		(!config.prioritizeCurrent || config.currentCapacityAllowance !== undefined)) {
 		throw new Error('current-only capacity requires prioritize current without an expiring allowance');
+	}
+	if ((config.currentOnlyCapacity === undefined) !== (dependencies.pairedCurrentAdmission === undefined)) {
+		throw new Error('current-only capacity requires paired admission checks');
 	}
 	let context: FullHistoryLedgerCloseMetaIngestionContext | null = null;
 	let nextLedger: number | null = null;
@@ -172,6 +177,8 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				if (JSON.stringify(pending) !== JSON.stringify(expected)) {
 					throw new Error('Pending ingestion plan does not match source identity or partition configuration');
 				}
+				const paired = dependencies.pairedCurrentAdmission;
+				if (paired !== undefined && await settlePairedPendingPublication(paired, pending, config, dependencies)) continue;
 				if (!(await admitCycle(config, dependencies,
 					config.prioritizeCurrent && pending.kind === 'priority'))) continue;
 				nextLedger = await processRecordedRange(config, dependencies, cycleContext, durableNextLedger, pending);
@@ -323,13 +330,17 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 	await runAdmittedAttempt(config, dependencies, async () => {
 		assertCurrentCapacityPlan(config, dependencies, plan);
 		await dependencies.ensureStorageCapacity(plan);
+		const paired = dependencies.pairedCurrentAdmission;
+		if (paired !== undefined) await paired.assertCapacity(plan, dependencies.signal);
 		await dependencies.pendingPlans.write(plan);
+		// Plan durability can be slow on a busy filesystem; recheck at converter admission.
+		if (paired !== undefined) await paired.assertCapacity(plan, dependencies.signal);
 		const startedAt = dependencies.now();
 		const receipt = await dependencies.ingestion.ingestRange(context,
 			fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger), dependencies.signal);
 		nextLedger = observedDurableNextLedger(previousNextLedger, receipt,
 			plan.kind === 'historical' && previousNextLedger <= plan.endLedger);
-		await dependencies.pendingPlans.clear();
+		if (paired === undefined) await dependencies.pendingPlans.clear();
 		const finishedAt = dependencies.now();
 		dependencies.emit({
 			at: isoTime(finishedAt), durationMilliseconds: Math.max(0, finishedAt - startedAt),

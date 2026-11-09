@@ -170,7 +170,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 
 	it.each(currentOnlyPolicies())('uses %s without historical offers and passes the exact plan to capacity admission', async (_name, policy) => {
 		const f = fixture(7);
-		f.config = { ...f.config, ...policy };
+		usePolicy(f, policy);
 		const plans: PendingPlan[] = [];
 		f.dependencies.ensureStorageCapacity = async pending => { plans.push(pending); };
 		await run(f.config, f.dependencies);
@@ -183,17 +183,17 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 	it('replays the exact eligible durable plan before discovery, without a time-based fallback', async () => {
 		const f = fixture(1);
 		f.pending = plan('priority', 1000);
-		f.config = { ...f.config, currentOnlyCapacity: currentOnlyCapacity() };
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
 		f.dependencies.now = () => 3000;
 		await run(f.config, f.dependencies);
 		expect(f.selected).toEqual([range(1000, 1063)]);
 		expect(f.calls).not.toContain('frontier');
-		expect(f.pending).toBeNull();
+		expect(f.pending).toEqual(plan('priority', 1000));
 	});
 
 	it('rejects a newly offered range below the durable boundary before storage or pending writes', async () => {
 		const f = fixture(1);
-		f.config = { ...f.config, currentOnlyCapacity: currentOnlyCapacity() };
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
 		f.dependencies.priorityRangeReader.readNextRange = async () => range(999, 1062);
 		f.dependencies.wait = async () => { f.controller.abort(); };
 		await run(f.config, f.dependencies);
@@ -202,12 +202,54 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.pending).toBeNull();
 	});
 
+	it.each([1, 2])('refuses a failed paired capacity check at boundary %i before any conversion', async boundary => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		let checks = 0;
+		f.dependencies.pairedCurrentAdmission = {
+			pendingPublication: async () => 'not-captured',
+			assertCapacity: async () => {
+				if (++checks === boundary) throw new Error('stale paired sample');
+			}
+		};
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.calls.filter(call => call === 'pending-write')).toHaveLength(boundary - 1);
+		expect(f.pending).toEqual(boundary === 1 ? null : plan('priority', 1000));
+		expect(f.selected).toHaveLength(0);
+	});
+
+	it('keeps the exact prior plan across a restart and waits for full publication before a new cycle', async () => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		f.pending = plan('priority', 1000);
+		let waiting = true;
+		f.dependencies.pairedCurrentAdmission = {
+			assertCapacity: async () => {},
+			pendingPublication: async pending => {
+				expect(pending).toEqual(plan('priority', 1000));
+				return waiting ? 'waiting' : 'published';
+			}
+		};
+		f.dependencies.wait = async ms => {
+			expect(ms).toBe(30_000);
+			expect(f.pending).toEqual(plan('priority', 1000));
+			expect(f.calls).not.toContain('frontier');
+			expect(f.selected).toEqual([]);
+			waiting = false;
+		};
+		f.dependencies.priorityRangeReader.readNextRange = async () => range(1064, 1127);
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1064, 1127)]);
+		expect(f.pending).toEqual(plan('priority', 1064));
+	});
+
 	describe.each(currentOnlyPolicies())('non-current work under %s', (_name, policy) => {
 		it.each([plan('historical', 3), plan('priority', 900)])(
 			'preserves and refuses a non-current pending plan', async pending => {
 				const f = fixture(1);
 				f.pending = pending;
-				f.config = { ...f.config, ...policy };
+				usePolicy(f, policy);
 				f.dependencies.wait = async () => { f.controller.abort(); };
 				await run(f.config, f.dependencies);
 				expect(f.selected).toEqual([]);
@@ -218,7 +260,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 
 		it('idles without a historical fallback when there is no current work', async () => {
 			const f = fixture(1);
-			f.config = { ...f.config, ...policy };
+			usePolicy(f, policy);
 			f.dependencies.priorityRangeReader.readNextRange = async options => {
 				expect(options.minimumPriorityLedger).toBe(1000);
 				return null;
@@ -262,6 +304,16 @@ function currentOnlyPolicies(): [string, Partial<ContinuousFullHistoryLedgerClos
 		['finite allowance', { currentCapacityAllowance: allowance() }],
 		['durable current-only mode', { currentOnlyCapacity: currentOnlyCapacity() }]
 	];
+}
+
+function usePolicy(f: ReturnType<typeof fixture>, policy: Partial<ContinuousFullHistoryLedgerCloseMetaLoopConfig>): void {
+	f.config = { ...f.config, ...policy };
+	if (policy.currentOnlyCapacity !== undefined) f.dependencies.pairedCurrentAdmission = {
+		assertCapacity: async () => {},
+		pendingPublication: async pending => f.selected.some(item =>
+			item.startSequence === pending.startLedger && item.endSequence === pending.endLedger)
+			? 'published' : 'not-captured'
+	};
 }
 
 type Dependencies = { -readonly [K in keyof ContinuousFullHistoryLedgerCloseMetaLoopDependencies]:

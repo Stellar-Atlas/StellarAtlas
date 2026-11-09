@@ -1,4 +1,5 @@
 import type { DataSource } from 'typeorm';
+import { createPairedCurrentAdmission, isPairedCurrentBoot } from './FullHistoryPairedCurrentAdmission.js';
 import { join } from 'node:path';
 import { FileFullHistoryLedgerCloseMetaPendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import {
@@ -85,6 +86,14 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 	let config: FullHistoryLedgerCloseMetaServiceConfig;
 	try {
 		config = parseFullHistoryLedgerCloseMetaServiceConfig(environment);
+		if (config.pairedCurrentAdmission !== undefined && !(await isPairedCurrentBoot(config.pairedCurrentAdmission))) {
+			// A boot-bound qualification cannot carry reduced admission into another boot.
+			const ordinary = { ...environment };
+			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION;
+			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER;
+			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES;
+			config = parseFullHistoryLedgerCloseMetaServiceConfig(ordinary);
+		}
 	} catch (error) {
 		writeEvent(dependencies.stderr, {
 			event: 'runtime',
@@ -134,6 +143,16 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 			exitCode = 75;
 		} else if (leadership?.acquired === true) {
 			await leadership.assertHeld();
+			const lease = leadership;
+			const paired = config.pairedCurrentAdmission !== undefined && config.currentOnlyCapacity !== undefined
+				? createPairedCurrentAdmission(config.pairedCurrentAdmission, {
+					bulkRoot: config.bulkRoot,
+					typedOutputRoot: config.typedOutputRoot,
+					minimumFreeBasisPoints: config.minimumFreeBasisPoints,
+					currentMinimumFreeBytes: config.currentOnlyCapacity.minimumFreeBytes,
+					sourceOutputBytes: cycleOutputReservation(config)
+				}, environment, activeComposition.dataSource)
+				: undefined;
 			await dependencies.resetOwnedRuntime(config);
 			await dependencies.reconcileRuntime(config, dependencies.now());
 			leadershipMonitor = monitorLeadership(
@@ -186,6 +205,18 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 						activeComposition.storageBudget.assertCanAllocate(
 							cycleOutputReservation(config), plan
 						),
+					...(paired === undefined ? {} : {
+						pairedCurrentAdmission: {
+							assertCapacity: async (plan, signal) => {
+								await lease.assertHeld();
+								await paired.assertCapacity(plan, signal);
+							},
+							pendingPublication: async (plan, signal) => {
+								await lease.assertHeld();
+								return paired.pendingPublication(plan, signal);
+							}
+						}
+					}),
 					formatError: safeMessage,
 					frontier: activeComposition.frontier,
 					ingestion: activeComposition.ingestion,
