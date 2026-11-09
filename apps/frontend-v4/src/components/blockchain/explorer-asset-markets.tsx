@@ -20,11 +20,43 @@ import { ExplorerAssetMarketPairs } from './explorer-asset-market-pairs';
 import { assetMarketRouteHref, assetTradeSideHref, defaultAssetMarketRoute, readAssetMarketRoute, type AssetMarketRoute } from './asset-market-route';
 
 type View = 'trades' | 'liquidity-pools';
-type Result = {
-	assetId: string;
+type TradeSide = 'selling_asset' | 'buying_asset';
+type TradePreview = {
 	rows: readonly EntityRecord[];
-	pages: readonly [AnalyticsEntityPage, AnalyticsEntityPage];
+	pages: readonly [AnalyticsEntityPage | null, AnalyticsEntityPage | null];
+	window: AnalyticsEntityPage['window'];
+	unavailable: { side: 'Buy' | 'Sell'; message: string } | null;
 };
+type Result = TradePreview & { assetId: string };
+
+function tradeFailure(reason: unknown): string {
+	return reason instanceof Error ? reason.message : 'Trade request failed.';
+}
+
+export async function loadAssetTradePreview(
+	loadSide: (side: TradeSide) => Promise<AnalyticsEntityPage>
+): Promise<TradePreview> {
+	const [sell, buy] = await Promise.allSettled([loadSide('selling_asset'), loadSide('buying_asset')]);
+	if (sell.status === 'rejected' && buy.status === 'rejected') throw new Error(tradeFailure(sell.reason));
+	const sellPage = sell.status === 'fulfilled' ? sell.value : null;
+	const buyPage = buy.status === 'fulfilled' ? buy.value : null;
+	const window = (sellPage ?? buyPage)?.window;
+	if (!window) throw new Error('Trade ledger window unavailable.');
+	if (sellPage && buyPage && (buyPage.window.minLedger !== window.minLedger || buyPage.window.maxLedger !== window.maxLedger))
+		throw new Error('Trade sides returned different ledger ranges. Try again.');
+	const pages = [sellPage, buyPage] as const;
+	const seen = new Set<string>();
+	const rows = pages.flatMap((page) => page?.rows ?? []).filter((row) => {
+		const key = entityText(row, 'id') + ':' + entityText(row, 'ledgerSequence') + ':' +
+			entityText(recordValue(row.sourceRecord), 'rowNumber');
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	}).sort((a, b) => Number(b.ledgerSequence) - Number(a.ledgerSequence));
+	const unavailable = sell.status === 'rejected' ? { side: 'Sell' as const, message: tradeFailure(sell.reason) }
+		: buy.status === 'rejected' ? { side: 'Buy' as const, message: tradeFailure(buy.reason) } : null;
+	return { pages, window, rows, unavailable };
+}
 
 /** Shows published observations, not an asserted current market inventory. */
 export function ExplorerAssetMarkets({
@@ -59,7 +91,7 @@ export function ExplorerAssetMarkets({
 		const current = ++generation.current;
 		setBusy(true);
 		setError(null);
-		const loadSide = async (side: 'selling_asset' | 'buying_asset') => {
+		const loadSide = async (side: TradeSide) => {
 			const params = new URLSearchParams({
 				view: 'typed',
 				[side]: asset.id,
@@ -69,29 +101,10 @@ export function ExplorerAssetMarkets({
 			});
 			return parseEntityPage(await requestExplorerJson('/v1/trades?' + params, abort.signal));
 		};
-		void Promise.all([loadSide('selling_asset'), loadSide('buying_asset')])
-			.then((pages) => {
+		void loadAssetTradePreview(loadSide)
+			.then((preview) => {
 				if (abort.signal.aborted || current !== generation.current) return;
-				if (pages[0].window.minLedger !== pages[1].window.minLedger ||
-					pages[0].window.maxLedger !== pages[1].window.maxLedger) {
-					throw new Error('Trade sides returned different ledger ranges. Try again.');
-				}
-				const seen = new Set<string>();
-				const rows = pages
-					.flatMap((page) => page.rows)
-					.filter((row) => {
-						const key =
-							entityText(row, 'id') +
-							':' +
-							entityText(row, 'ledgerSequence') +
-							':' +
-							entityText(recordValue(row.sourceRecord), 'rowNumber');
-						if (seen.has(key)) return false;
-						seen.add(key);
-						return true;
-					})
-					.sort((a, b) => Number(b.ledgerSequence) - Number(a.ledgerSequence));
-				setResult({ assetId: asset.id, rows, pages });
+				setResult({ assetId: asset.id, ...preview });
 			})
 			.catch((cause: unknown) => {
 				if (!abort.signal.aborted)
@@ -176,22 +189,26 @@ export function ExplorerAssetMarkets({
 			{view === 'trades' && result && (
 				<>
 					<div className={ui.holderSummary}>
-						<span>{result.rows.length} observations in preview</span>
+						<span>{result.rows.length} {result.rows.length === 1 ? 'observation' : 'observations'} in preview</span>
 						<span title="Returned trade window; the latest default is anchored to the asset’s last observed ledger, not a live-market watermark.">
-							Trade ledgers {result.pages[0].window.minLedger.toLocaleString('en-US')}–{result.pages[0].window.maxLedger.toLocaleString('en-US')}
+							Trade ledgers {result.window.minLedger.toLocaleString('en-US')}–{result.window.maxLedger.toLocaleString('en-US')}
 						</span>
 						<span>
-							{result.pages.some((page) => page.coverageStatus !== 'complete')
+							{result.pages.some((page) => page && page.coverageStatus !== 'complete')
 								? 'Partial history'
-								: 'Selected range indexed'}
+								: result.unavailable ? 'Loaded side: selected range indexed' : 'Selected range indexed'}
 						</span>
 					</div>
-					<ExplorerAssetMarketPairs asset={asset.id} origin={origin} rows={result.rows} window={result.pages[0].window} />
+					{result.unavailable ? (
+						<p role="status" className={styles.muted}>
+							{result.unavailable.side}-side trades unavailable. Showing the other side only. {result.unavailable.message}
+						</p>
+					) : <ExplorerAssetMarketPairs asset={asset.id} origin={origin} rows={result.rows} window={result.window} />}
 					<p className={styles.muted}>
-						Preview: up to 25 trades per side. Browse either side for more.
+						{result.unavailable ? 'Preview: up to 25 trades on the loaded side.' : 'Preview: up to 25 trades per side. Browse either side for more.'}
 					</p>
 					<div className={styles.actions}>
-						{result.pages.map((page, side) => (
+						{result.pages.map((page, side) => page && (
 							<Link
 								key={side}
 								href={assetTradeSideHref(asset.id, side === 0 ? 'sell' : 'buy', page.window, origin)}
@@ -200,10 +217,10 @@ export function ExplorerAssetMarkets({
 							</Link>
 						))}
 					</div>
-					<ExplorerAssetTradeTable asset={asset.id} origin={origin} rows={result.rows} window={result.pages[0].window} />
+					<ExplorerAssetTradeTable asset={asset.id} origin={origin} rows={result.rows} window={result.window} />
 					<p className={styles.muted} title="Parsed trade amounts are floating-point observations, not exact raw-unit amounts.">Amounts: source Float64 precision.</p>
 					{result.rows.length === 0 && (
-						<p className={styles.muted}>No observations in this range.</p>
+						<p className={styles.muted}>{result.unavailable ? 'No observations on the loaded side.' : 'No observations in this range.'}</p>
 					)}
 
 				</>
