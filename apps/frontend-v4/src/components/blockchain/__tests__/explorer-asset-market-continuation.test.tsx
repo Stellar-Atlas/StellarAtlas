@@ -1,12 +1,16 @@
 import * as ReactActual from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it, jest } from '@jest/globals';
+import { parseEntityPage } from '../../../api/explorer-analytics';
 
 const page = { rows: [], window: { minLedger: 99, maxLedger: 101 }, coverageStatus: 'complete' };
 let nullStates = 0;
 let selection = 'tab=markets';
 let failure: string | null = null;
 let loading = false;
+let preview: Awaited<ReturnType<typeof loadAssetTradePreview>> = {
+	rows: [], pages: [parseEntityPage(page), parseEntityPage(page)], window: page.window, unavailable: null
+};
 
 jest.unstable_mockModule('react', () => ({
 	...ReactActual,
@@ -14,7 +18,7 @@ jest.unstable_mockModule('react', () => ({
 	useState: (initial: unknown) => {
 		let value = initial;
 		if (initial === null) value = ++nullStates === 1
-			? { assetId: 'native', rows: [], pages: [page, page], view: 'trades' }
+			? { assetId: 'native', ...preview }
 			: failure;
 		if (initial === false) value = loading;
 		return [value, () => undefined];
@@ -28,10 +32,44 @@ jest.unstable_mockModule('../explorer-entity.module.css', () => ({ default: {} }
 jest.unstable_mockModule('../explorer-asset-workspace.module.css', () => ({ default: {} }));
 jest.unstable_mockModule('../explorer-pool-browser', () => ({ ExplorerPoolBrowser: () => null }));
 jest.unstable_mockModule('../explorer-asset-trade-table', () => ({ ExplorerAssetTradeTable: () => null }));
-const { ExplorerAssetMarkets } = await import('../explorer-asset-markets');
+const { ExplorerAssetMarkets, loadAssetTradePreview } = await import('../explorer-asset-markets');
 const { ExplorerAssetMarketPairs } = await import('../explorer-asset-market-pairs');
 
-beforeEach(() => { nullStates = 0; });
+beforeEach(() => {
+	nullStates = 0;
+	selection = 'tab=markets';
+	failure = null;
+	loading = false;
+	preview = { rows: [], pages: [parseEntityPage(page), parseEntityPage(page)], window: page.window, unavailable: null };
+});
+
+it('renders the usable buy side when the sell side fails without claiming a complete pair comparison', async () => {
+	const buyPage = parseEntityPage({ ...page, rows: [{ id: 'trade-1', ledgerSequence: 100 }] });
+	const load = jest.fn(async (side: string) => {
+		if (side === 'selling_asset') throw new Error('HTTP 503: Temporarily unavailable');
+		return buyPage;
+	});
+	preview = await loadAssetTradePreview(load);
+	expect(load.mock.calls).toEqual([['selling_asset'], ['buying_asset']]);
+	expect(preview.pages).toEqual([null, buyPage]);
+	expect(preview.rows).toEqual(buyPage.rows);
+	const html = renderToStaticMarkup(ReactActual.createElement(ExplorerAssetMarkets, {
+		asset: { id: 'native', kind: 'native', code: 'XLM', lastObservedLedger: 101 }
+	}));
+	expect(html).toContain('Sell-side trades unavailable. Showing the other side only.');
+	expect(html).toContain('1 observation in preview');
+	expect(html).toContain('Browse buy-side trades');
+	expect(html).not.toContain('Browse sell-side trades');
+	expect(html).not.toContain('Observed pair activity');
+});
+
+it('preserves the failure when neither trade side loads, or both results disagree on the window', async () => {
+	await expect(loadAssetTradePreview(async () => { throw new Error('HTTP 503: Temporarily unavailable'); }))
+		.rejects.toThrow('HTTP 503: Temporarily unavailable');
+	await expect(loadAssetTradePreview(async (side) => parseEntityPage({
+		...page, window: side === 'selling_asset' ? page.window : { minLedger: 100, maxLedger: 102 }
+	}))).rejects.toThrow('Trade sides returned different ledger ranges');
+});
 
 it.each([
 	{ name: 'failed changed window', query: 'tab=markets&market_trade_min=2&market_trade_max=98', error: 'Request unavailable', busy: false, previous: true },
