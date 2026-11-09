@@ -170,7 +170,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 
 	it.each(currentOnlyPolicies())('uses %s without historical offers and passes the exact plan to capacity admission', async (_name, policy) => {
 		const f = fixture(7);
-		f.config = { ...f.config, ...policy };
+		usePolicy(f, policy);
 		const plans: PendingPlan[] = [];
 		f.dependencies.ensureStorageCapacity = async pending => { plans.push(pending); };
 		await run(f.config, f.dependencies);
@@ -183,17 +183,17 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 	it('replays the exact eligible durable plan before discovery, without a time-based fallback', async () => {
 		const f = fixture(1);
 		f.pending = plan('priority', 1000);
-		f.config = { ...f.config, currentOnlyCapacity: currentOnlyCapacity() };
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
 		f.dependencies.now = () => 3000;
 		await run(f.config, f.dependencies);
 		expect(f.selected).toEqual([range(1000, 1063)]);
 		expect(f.calls).not.toContain('frontier');
-		expect(f.pending).toBeNull();
+		expect(f.pending).toEqual(plan('priority', 1000));
 	});
 
 	it('rejects a newly offered range below the durable boundary before storage or pending writes', async () => {
 		const f = fixture(1);
-		f.config = { ...f.config, currentOnlyCapacity: currentOnlyCapacity() };
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
 		f.dependencies.priorityRangeReader.readNextRange = async () => range(999, 1062);
 		f.dependencies.wait = async () => { f.controller.abort(); };
 		await run(f.config, f.dependencies);
@@ -202,12 +202,131 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.pending).toBeNull();
 	});
 
+	it.each([1, 2])('refuses a failed paired capacity check at boundary %i before any conversion', async boundary => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		let checks = 0;
+		f.dependencies.pairedCurrentAdmission = {
+			assertHeld: async () => {},
+			pendingPublication: async () => 'not-captured',
+			assertCapacity: async () => {
+				if (++checks === boundary) throw new Error('stale paired sample');
+			}
+		};
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.calls.filter(call => call === 'pending-write')).toHaveLength(boundary - 1);
+		expect(f.pending).toEqual(boundary === 1 ? null : plan('priority', 1000));
+		expect(f.selected).toHaveLength(0);
+	});
+
+	it('keeps the exact prior plan across a restart and waits for full publication before a new cycle', async () => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		f.pending = plan('priority', 1000);
+		let waiting = true;
+		f.dependencies.pairedCurrentAdmission = {
+			assertHeld: async () => {},
+			assertCapacity: async () => {},
+			pendingPublication: async pending => {
+				expect(pending).toEqual(plan('priority', 1000));
+				return waiting ? 'waiting' : 'published';
+			}
+		};
+		f.dependencies.wait = async ms => {
+			expect(ms).toBe(30_000);
+			expect(f.pending).toEqual(plan('priority', 1000));
+			expect(f.calls).not.toContain('frontier');
+			expect(f.selected).toEqual([]);
+			waiting = false;
+		};
+		f.dependencies.priorityRangeReader.readNextRange = async () => range(1064, 1127);
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1064, 1127)]);
+		expect(f.pending).toEqual(plan('priority', 1064));
+	});
+
+	it('resumes an unpublished paired plan without reinstalling it and passes the held-session fence', async () => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		const recorded = plan('priority', 1000);
+		f.pending = recorded;
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1000, 1063)]);
+		expect(f.pending).toBe(recorded);
+		expect(f.calls).not.toContain('pending-write');
+		expect(f.calls).toContain('conversion-fence');
+	});
+
+	it('consumes one scoped attempt before recording it and cannot readmit after exact publication', async () => {
+		const f = fixture(2);
+		const arms = scopedPolicy(f, async () => {});
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1000, 1063)]);
+		expect(f.pending).toBeNull();
+		expect(arms).toHaveBeenCalledTimes(1);
+		expect(f.calls.filter(call => ['scope-consume', 'pending-write', 'conversion-fence', 'ingest'].includes(call)))
+			.toEqual(['scope-consume', 'pending-write', 'conversion-fence', 'ingest']);
+	});
+
+	it('refuses native launch on a lost post-staging fence and retains the spent plan without retry', async () => {
+		const f = fixture(2);
+		let boundaries = 0;
+		scopedPolicy(f, async () => {
+			if (++boundaries === 3) throw new Error('owned hold disappeared after staging');
+		});
+		f.dependencies.wait = async ms => { if (ms >= 30_000) f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(boundaries).toBe(3);
+		expect(f.selected).toEqual([]);
+		expect(f.pending).toEqual(f.spent);
+		expect(f.pending?.typedShardLedgerCount).toBe(128);
+		expect(f.events).toContainEqual(expect.objectContaining({ message: 'Error: owned hold disappeared after staging' }));
+	});
+
+	it('refuses native launch if a same-content replacement appears during staging', async () => {
+		const f = fixture(2);
+		let boundaries = 0;
+		scopedPolicy(f, async () => {
+			if (++boundaries === 3 && f.pending !== null) f.pending = { ...f.pending };
+		});
+		f.dependencies.wait = async ms => { if (ms >= 30_000) f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(boundaries).toBe(3);
+		expect(f.selected).toEqual([]);
+		expect(f.pending).toEqual(f.spent);
+		expect(f.pending).not.toBe(f.spent);
+		expect(f.events).toContainEqual(expect.objectContaining({ message: expect.stringContaining('lost its spent-inode binding') }));
+	});
+
+	it.each(['published', 'not-captured'] as const)(
+		'a disarmed restart settles only exact published work (%s), without pressure or provider preparation',
+		async publication => {
+			const f = fixture(1);
+			const arms = scopedPolicy(f, null);
+			f.pending = f.spent = { ...plan('priority', 1000), typedShardLedgerCount: 128 };
+			f.dependencies.pairedCurrentAdmission = {
+				assertHeld: async () => {},
+				assertCapacity: async () => { throw new Error('capture is disarmed'); },
+				pendingPublication: async () => publication
+			};
+			f.dependencies.wait = async () => { f.controller.abort(); };
+			await run(f.config, f.dependencies);
+			expect(f.pending).toBe(publication === 'published' ? null : f.spent);
+			expect(f.dependencies.ingestion.prepare).not.toHaveBeenCalled();
+			expect(f.selected).toEqual([]);
+			expect(f.calls).not.toContain('admit-current');
+			expect(arms).toHaveBeenCalledTimes(publication === 'published' ? 1 : 0);
+		}
+	);
+
 	describe.each(currentOnlyPolicies())('non-current work under %s', (_name, policy) => {
 		it.each([plan('historical', 3), plan('priority', 900)])(
 			'preserves and refuses a non-current pending plan', async pending => {
 				const f = fixture(1);
 				f.pending = pending;
-				f.config = { ...f.config, ...policy };
+				usePolicy(f, policy);
 				f.dependencies.wait = async () => { f.controller.abort(); };
 				await run(f.config, f.dependencies);
 				expect(f.selected).toEqual([]);
@@ -218,7 +337,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 
 		it('idles without a historical fallback when there is no current work', async () => {
 			const f = fixture(1);
-			f.config = { ...f.config, ...policy };
+			usePolicy(f, policy);
 			f.dependencies.priorityRangeReader.readNextRange = async options => {
 				expect(options.minimumPriorityLedger).toBe(1000);
 				return null;
@@ -264,6 +383,30 @@ function currentOnlyPolicies(): [string, Partial<ContinuousFullHistoryLedgerClos
 	];
 }
 
+function usePolicy(f: ReturnType<typeof fixture>, policy: Partial<ContinuousFullHistoryLedgerCloseMetaLoopConfig>): void {
+	f.config = { ...f.config, ...policy };
+	if (policy.currentOnlyCapacity !== undefined) f.dependencies.pairedCurrentAdmission = {
+		assertHeld: async () => {},
+		assertCapacity: async () => {},
+		pendingPublication: async pending => f.selected.some(item =>
+			item.startSequence === pending.startLedger && item.endSequence === pending.endLedger)
+			? 'published' : 'not-captured'
+	};
+}
+
+function scopedPolicy(f: ReturnType<typeof fixture>, arm: (() => Promise<(() => void) | void>) | null) {
+	usePolicy(f, { cycleLedgerCount: 128, typedShardLedgerCount: 128,
+		currentOnlyCapacity: { ...currentOnlyCapacity(), scopedReserve: true } });
+	const readArm = jest.fn(async () => arm === null ? null : async () => (await arm()) ?? (() => {}));
+	f.dependencies.scopedCurrentAttempt = {
+		policy: { permitId: '123e4567-e89b-42d3-a456-426614174000', bulkDevice: 4n,
+			startLedger: 1000, endLedger: 1063 },
+		readArm
+	};
+	f.dependencies.frontier = { readLatestRange: async () => range(1000, 1063) };
+	return readArm;
+}
+
 type Dependencies = { -readonly [K in keyof ContinuousFullHistoryLedgerCloseMetaLoopDependencies]:
 	ContinuousFullHistoryLedgerCloseMetaLoopDependencies[K] };
 
@@ -275,7 +418,7 @@ function fixture(stopAfter: number) {
 	let priorityReads = 0;
 	let durableNextLedger = 3;
 	const f = {
-		controller, selected, events, calls, pending: null as PendingPlan | null,
+		controller, selected, events, calls, pending: null as PendingPlan | null, spent: null as PendingPlan | null,
 		config: {
 			admissionRetryMilliseconds: 10, cycleCooldownMilliseconds: 0,
 			cycleLedgerCount: 64, errorBackoffMilliseconds: 30, idlePollMilliseconds: 20,
@@ -297,7 +440,11 @@ function fixture(stopAfter: number) {
 		frontier: { readLatestRange: async () => { calls.push('frontier'); return range(10000, 10000); } },
 		ingestion: {
 			prepare: jest.fn(async () => context(durableNextLedger)),
-			ingestRange: async (_context, selectedRange) => {
+			ingestRange: async (_context, selectedRange, _signal, assertBeforeConversion) => {
+				if (assertBeforeConversion !== undefined) {
+					await assertBeforeConversion();
+					calls.push('conversion-fence');
+				}
 				calls.push('ingest');
 				selected.push(selectedRange);
 				if (selected.length >= stopAfter) controller.abort();
@@ -308,8 +455,32 @@ function fixture(stopAfter: number) {
 		now: () => 1000,
 		pendingPlans: {
 			read: async () => f.pending,
+			installScopedAttempt: async (_permit, pending, assertHeld) => {
+				await assertHeld();
+				if (f.spent !== null) throw new Error('permit already spent');
+				f.calls.push('scope-consume');
+				f.spent = pending;
+				await assertHeld();
+				if (f.pending !== null) throw new Error('unexpected competing plan in fixture');
+				calls.push('pending-write');
+				f.pending = pending;
+				return pending;
+			},
+			matchesConsumedScopedAttempt: (_permit, pending) => f.spent === pending && f.pending === pending,
 			write: async pending => { calls.push('pending-write'); f.pending = pending; },
-			clear: async () => { f.pending = null; }
+			installVerified: async (pending, assertHeld) => {
+				await assertHeld();
+				if (f.pending !== null) throw new Error('unexpected competing plan in fixture');
+				calls.push('pending-write');
+				f.pending = pending;
+			},
+			confirmRecorded: async (_pending, assertHeld) => { calls.push('pending-confirm'); await assertHeld(); },
+			clear: async () => { f.pending = null; },
+			clearVerified: async (expected, assertHeld) => {
+				await assertHeld();
+				if (expected !== f.pending) throw new Error('unexpected replacement in fixture');
+				f.pending = null;
+			}
 		},
 		priorityRangeReader: {
 			readNextRange: async () => {

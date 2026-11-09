@@ -102,20 +102,45 @@ pnpm scan-network
 
 Ordinary current-priority scheduling still offers historical work. To opt in to
 current-only capture, keep admission and current priority enabled, use one
-processing slot and no bounded replay, and explicitly set both
+typed shard per cycle, one processing slot and no bounded replay, and set
 `FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER` and
-`FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES`. Set neither
-for ordinary scheduling; do not combine them with an expiring capacity allowance.
+`FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES` together with
+`FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION`. Leave all three
+unset for ordinary scheduling; do not combine them with an expiring allowance.
+
+The paired policy is a JSON object with `bootId`, the exact
+`warehouseReportedPath`, a service-private read-only `warehouseMetadataPath`,
+its `warehouseMetadataInode` as a decimal string, and the measured
+`minimumUnreservedBytes` as a decimal string. Set it only for a supervised
+activation. The source uses the explicitly configured local
+`HUBBLE_CLICKHOUSE_URL` and `HUBBLE_CLICKHOUSE_DATABASE` with the existing
+warehouse credential. A boot change restores ordinary source policy.
 
 The separate absolute floor must be positive and below the ordinary absolute
 floor. The larger configured proportional floor (with a minimum of five
 percent), full cycle output reservation, and store-size limit still apply.
-No eligible current range means idle, not historical fallback. Reconcile any
-incompatible saved plan before switching modes; the service refuses and
-preserves it. An eligible saved current plan is replayed exactly and does not
-prove that capture is current. Verify advancing source and warehouse
+No eligible current range means idle, not historical fallback. Capacity is
+checked before saving the plan and again before conversion. The existing plan
+is retained until the warehouse confirms the same batch, range, source digest
+and all twenty dataset declarations. An uncommitted eligible plan can resume;
+incompatible plans are refused and preserved. Verify advancing source and warehouse
 publication after activation. This is a source admission check, not a disk
 quota or a bound on concurrent warehouse writes.
+
+A separate, default-off scoped current attempt can be prepared with
+`FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT` (version 1, a unique
+permit ID, exact bulk device and exact current ledger range). It requires the
+paired configuration, one shard of up to 128 ledgers and an operator-owned,
+expiring arm bound to the running entrypoint, invocation and owned history hold. It retains the
+full source, warehouse, drain and startup allowances. Do not set it as a
+persistent boot configuration. The attempt is consumed durably before capture;
+restart or disarm can settle exact published work but cannot retry conversion.
+Preserve an ambiguous plan and its spent receipt for operator-reviewed recovery
+with the same geometry. Before arming, separately verify the entire release,
+protected warehouse and publisher generations, the publisher's effective hold
+and that already-admitted history has drained. A hold file alone does not prove
+that drain or cap independent writes. Keep the hold through a clean drain and
+verified ordinary source restoration; the source does not create or remove it.
 
 ### Run tests
 

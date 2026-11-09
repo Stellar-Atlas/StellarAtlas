@@ -10,6 +10,7 @@ const (
 	manifestVersionV6 = "stellar-atlas.full-history-etl.manifest.v6"
 	manifestVersionV7 = "stellar-atlas.full-history-etl.manifest.v7"
 	manifestVersionV8 = "stellar-atlas.full-history-etl.manifest.v8"
+	manifestVersionV9 = "stellar-atlas.full-history-etl.manifest.v9"
 )
 
 var unsupportedV7 = []string{
@@ -53,7 +54,7 @@ var unsupportedV8 = []string{
 }
 
 func isSupportedManifestVersion(version string) bool {
-	return version == manifestVersionV6 || version == manifestVersionV7 || version == manifestVersionV8
+	return version == manifestVersionV6 || version == manifestVersionV7 || version == manifestVersionV8 || version == manifestVersionV9
 }
 
 func unsupportedDatasetsForVersion(version string) ([]string, error) {
@@ -64,7 +65,7 @@ func unsupportedDatasetsForVersion(version string) ([]string, error) {
 		return append(result, unsupportedV7[12:]...), nil
 	case manifestVersionV7:
 		return append([]string{}, unsupportedV7...), nil
-	case manifestVersionV8:
+	case manifestVersionV8, manifestVersionV9:
 		return append([]string{}, unsupportedV8...), nil
 	default:
 		return nil, fmt.Errorf("unsupported manifest version %q", version)
@@ -74,6 +75,13 @@ func unsupportedDatasetsForVersion(version string) ([]string, error) {
 func outputSpecificationsForVersion(version string) ([]output.Specification, error) {
 	specifications := output.Specifications()
 	switch version {
+	case manifestVersionV9:
+		for i := range specifications {
+			if specifications[i].Dataset == "ledger-entry-changes" {
+				specifications[i].SchemaVersion = output.CompactLedgerEntryChangeSchemaVersion
+			}
+		}
+		return specifications, nil
 	case manifestVersionV8:
 		return specifications, nil
 	case manifestVersionV6, manifestVersionV7:

@@ -90,9 +90,13 @@ type ProcessingReceipt struct {
 }
 
 func newManifest(config Config, evidence ShardEvidence, descriptors []output.Descriptor) Manifest {
+	version := manifestVersion
+	if config.CompactLedgerEntryChanges {
+		version = manifestVersionV9
+	}
 	networkID := network.ID(config.NetworkPassphrase)
 	return Manifest{
-		ManifestVersion: manifestVersion,
+		ManifestVersion: version,
 		CreatedAt:       time.Now().UTC().Format(time.RFC3339Nano),
 		Network: ManifestNetwork{
 			Name:            config.NetworkName,

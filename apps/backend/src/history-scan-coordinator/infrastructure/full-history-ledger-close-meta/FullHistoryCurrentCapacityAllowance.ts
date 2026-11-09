@@ -22,7 +22,12 @@ export interface FullHistoryCurrentCapacityAllowance {
 export interface FullHistoryCurrentOnlyCapacity {
 	readonly minimumLedger: number;
 	readonly minimumFreeBytes: bigint;
+	readonly scopedReserve?: true;
 }
+
+export const SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES = 11n * 1024n ** 4n / 4n;
+export const SCOPED_CURRENT_RESERVE_BASIS_POINTS = 472;
+export const SCOPED_CURRENT_START_ALLOWANCE_BYTES = 328n * 1024n ** 3n;
 
 export function parseFullHistoryCurrentOnlyCapacity(
 	environment: NodeJS.ProcessEnv,

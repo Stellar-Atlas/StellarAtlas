@@ -143,7 +143,6 @@ api.delete(
 	'/user/:userId',
 	[param('userId').isUUID(4).withMessage('must be uuid v4')],
 	async function (req: express.Request, res: express.Response) {
-		console.log(req.body);
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
 			return res.status(400).json({ errors: errors.array() });
@@ -206,27 +205,17 @@ api.post(
 			);
 
 			if (result instanceof HttpError) {
-				console.error(
-					'Error: %s %s',
-					result.message,
-					result.response?.statusText
-				);
-				Sentry.captureException(result, {
-					extra: {
-						data: result.response?.data,
-						status: result.response?.statusText
-					}
+				Sentry.captureMessage('Mail provider request failed', {
+					extra: { code: result.code, status: result.response?.status }
 				});
-				return res.status(500).json({ msg: result.message });
+				return res.status(500).json({ msg: 'Something went wrong' });
 			}
 
 			if (result.status === 200)
 				return res.status(200).json({ msg: 'Message sent' });
 			else {
-				Sentry.captureMessage(result.statusText, {
-					extra: {
-						data: result.data
-					}
+				Sentry.captureMessage('Mail provider returned an unexpected status', {
+					extra: { status: result.status }
 				});
 				return res.status(500).json({ msg: 'Something went wrong' });
 			}

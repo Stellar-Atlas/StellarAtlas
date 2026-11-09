@@ -69,7 +69,7 @@ func Run(ctx context.Context, config Config) (ProcessingReceipt, error) {
 		}
 	}()
 
-	outputs, err := output.OpenCollection(stage, config.MaxOutputBytes, config.StartLedger, config.EndLedger)
+	outputs, err := output.OpenCollection(stage, config.MaxOutputBytes, config.StartLedger, config.EndLedger, config.CompactLedgerEntryChanges)
 	if err != nil {
 		return ProcessingReceipt{}, err
 	}

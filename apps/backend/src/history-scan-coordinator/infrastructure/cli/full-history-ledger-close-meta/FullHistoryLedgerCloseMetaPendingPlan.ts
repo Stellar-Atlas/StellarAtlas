@@ -1,4 +1,4 @@
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, linkSync, lstatSync, unlinkSync, type BigIntStats } from 'node:fs';
 import {
 	open,
 	rename,
@@ -25,7 +25,18 @@ export interface PendingPlan {
 export interface PendingPlanStore {
 	read(): Promise<PendingPlan | null>;
 	write(plan: PendingPlan): Promise<void>;
+	installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
+	confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
 	clear(): Promise<void>;
+	clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
+	installScopedAttempt(permitId: string, plan: PendingPlan, assertHeld: () => Promise<void>): Promise<PendingPlan>;
+	matchesConsumedScopedAttempt(permitId: string, plan: PendingPlan): boolean;
+}
+
+export class PendingPlanChangedError extends Error {
+	constructor(message = 'Verified pending plan changed or could not be identified; refusing to clear it') {
+		super(message);
+	}
 }
 
 const MAX_FILE_BYTES = 131_072;
@@ -46,6 +57,8 @@ const PLAN_KEYS = [
 ] as const;
 
 export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanStore {
+	readonly #observed = new WeakMap<PendingPlan, BigIntStats>();
+
 	constructor(private readonly file: string) {}
 
 	async read(): Promise<PendingPlan | null> {
@@ -57,8 +70,8 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		let handle: FileHandle | undefined;
 		try {
 			handle = await open(this.file, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
-			const opened = await handle.stat();
-			if (!opened.isFile() || opened.size > MAX_FILE_BYTES) {
+			const opened = await handle.stat({ bigint: true });
+			if (!opened.isFile() || opened.size > BigInt(MAX_FILE_BYTES)) {
 				throw new Error('Pending plan must be a bounded regular file');
 			}
 			const buffer = Buffer.alloc(MAX_FILE_BYTES + 1);
@@ -77,7 +90,9 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			} catch {
 				throw new Error('Pending plan file contains invalid JSON');
 			}
-			return validatePendingPlan(parsed);
+			const plan = validatePendingPlan(parsed);
+			this.#observed.set(plan, opened);
+			return plan;
 		} catch (error) {
 			if (isCode(error, 'ENOENT')) return null;
 			if (isCode(error, 'ELOOP')) {
@@ -123,6 +138,110 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		}
 	}
 
+	async installVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+		await this.#installVerified(plan, assertHeld);
+	}
+
+	async installScopedAttempt(permitId: string, plan: PendingPlan, assertHeld: () => Promise<void>): Promise<PendingPlan> {
+		if (!isCanonicalUuid(permitId)) throw new Error('Scoped attempt permit ID must be a canonical UUID');
+		const installed = await this.#installVerified(plan, assertHeld, `${this.file}.${permitId}.spent`);
+		if (!this.matchesConsumedScopedAttempt(permitId, installed)) {
+			throw new PendingPlanChangedError('Scoped pending plan lost its spent-inode binding; preserved');
+		}
+		return installed;
+	}
+
+	async #installVerified(plan: PendingPlan, assertHeld: () => Promise<void>, spent?: string): Promise<PendingPlan> {
+		const validated = validatePendingPlan(plan);
+		const directory = dirname(this.file);
+		const temporary = join(directory, `.${basename(this.file)}.${process.pid}.${randomUUID()}.tmp`);
+		let handle: FileHandle | undefined;
+		let installed = false;
+		let staged: BigIntStats | undefined;
+		try {
+			handle = await open(temporary, 'wx', 0o600);
+			try {
+				await handle.writeFile(`${JSON.stringify(validated)}\n`, 'utf8');
+				await handle.sync();
+				if (spent !== undefined) staged = await handle.stat({ bigint: true });
+			} finally {
+				await handle.close();
+			}
+			await assertHeld();
+			if (spent !== undefined) {
+				try {
+					// The spent name and the authoritative plan must reference this same inode.
+					linkSync(temporary, spent);
+					await syncDirectory(directory);
+				} catch {
+					throw new PendingPlanChangedError('Scoped current attempt is spent or could not be made durable');
+				}
+				await assertHeld();
+			}
+			// The complete inode becomes visible atomically. No await or replacing rename here.
+			try {
+				linkSync(temporary, this.file);
+				installed = true;
+			} catch (error) {
+				if (isCode(error, 'EEXIST')) {
+					throw new PendingPlanChangedError('Pending plan appeared before installation; refusing to replace it');
+				}
+				throw error;
+			}
+		} finally {
+			if (handle !== undefined) await unlink(temporary).catch((error: unknown) => {
+				if (isCode(error, 'ENOENT')) return;
+				if (installed) throw new PendingPlanChangedError('Pending plan installation could not be made durable');
+				throw error;
+			});
+		}
+		try {
+			await syncDirectory(directory);
+		} catch {
+			// The name may already be durable. Preserve it for the next owner to inspect.
+			throw new PendingPlanChangedError('Pending plan installation could not be made durable');
+		}
+		if (staged !== undefined) {
+			const named = lstatSync(this.file, { bigint: true });
+			// Linking and removing the temporary name change ctime, not contents.
+			if (!named.isFile() || staged.dev !== named.dev || staged.ino !== named.ino ||
+				staged.size !== named.size || staged.mtimeNs !== named.mtimeNs) {
+				throw new PendingPlanChangedError('Scoped pending plan changed during installation; preserved');
+			}
+			this.#observed.set(validated, named);
+		}
+		return validated;
+	}
+
+	async confirmRecorded(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+		const observed = this.#observed.get(plan);
+		const changed = () => new PendingPlanChangedError('Recorded pending plan changed or could not be identified; refusing to resume');
+		if (observed === undefined) throw changed();
+		const current = await this.read().catch(() => { throw changed(); });
+		const currentFile = current === null ? undefined : this.#observed.get(current);
+		if (current === null || currentFile === undefined || !samePlan(plan, current) ||
+			!sameFileVersion(observed, currentFile)) throw changed();
+
+		const assertNamed = (): void => {
+			let named: BigIntStats;
+			try {
+				named = lstatSync(this.file, { bigint: true });
+			} catch {
+				throw changed();
+			}
+			if (!sameFileVersion(observed, named)) throw changed();
+		};
+		assertNamed();
+		try {
+			await syncDirectory(dirname(this.file));
+		} catch {
+			throw new PendingPlanChangedError('Recorded pending plan durability could not be confirmed');
+		}
+		await assertHeld();
+		// Recheck the original name synchronously after the fsync and lease awaits.
+		assertNamed();
+	}
+
 	async clear(): Promise<void> {
 		try {
 			await unlink(this.file);
@@ -132,6 +251,53 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		}
 		await syncDirectory(dirname(this.file));
 	}
+
+	async clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+		const observed = this.#observed.get(plan);
+		const current = await this.read().catch(() => { throw new PendingPlanChangedError(); });
+		const currentFile = current === null ? undefined : this.#observed.get(current);
+		if (observed === undefined || current === null || currentFile === undefined ||
+			!samePlan(plan, current) || !sameFileVersion(observed, currentFile)) {
+			throw new PendingPlanChangedError();
+		}
+		await assertHeld();
+		// No await between the last pathname identity check and the unlink.
+		let named: BigIntStats;
+		try {
+			named = lstatSync(this.file, { bigint: true });
+		} catch {
+			throw new PendingPlanChangedError();
+		}
+		if (!sameFileVersion(observed, named)) throw new PendingPlanChangedError();
+		try {
+			unlinkSync(this.file);
+			await syncDirectory(dirname(this.file));
+		} catch {
+			throw new PendingPlanChangedError('Verified pending plan clear could not be made durable');
+		}
+	}
+
+	matchesConsumedScopedAttempt(permitId: string, plan: PendingPlan): boolean {
+		const observed = this.#observed.get(plan);
+		if (!isCanonicalUuid(permitId) || observed === undefined) return false;
+		try {
+			const spent = lstatSync(`${this.file}.${permitId}.spent`, { bigint: true });
+			const named = lstatSync(this.file, { bigint: true });
+			return spent.nlink >= 2n && sameFileVersion(observed, spent) && sameFileVersion(observed, named);
+		} catch {
+			return false;
+		}
+	}
+}
+
+function isCanonicalUuid(value: string): boolean {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+}
+
+function sameFileVersion(expected: BigIntStats, observed: BigIntStats): boolean {
+	return observed.isFile() && expected.dev === observed.dev && expected.ino === observed.ino &&
+		expected.size === observed.size && expected.mtimeNs === observed.mtimeNs &&
+		expected.ctimeNs === observed.ctimeNs;
 }
 
 function validatePendingPlan(value: unknown): PendingPlan {

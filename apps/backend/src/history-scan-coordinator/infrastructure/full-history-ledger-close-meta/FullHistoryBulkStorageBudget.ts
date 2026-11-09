@@ -2,6 +2,8 @@ import { statfs } from 'node:fs/promises';
 import {
 	isCurrentCapacityRange,
 	isFullHistoryCurrentCapacityAllowanceActive,
+	SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES,
+	SCOPED_CURRENT_RESERVE_BASIS_POINTS,
 	type FullHistoryCurrentCapacityAllowance,
 	type FullHistoryCurrentOnlyCapacity
 } from './FullHistoryCurrentCapacityAllowance.js';
@@ -96,7 +98,8 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 				!Number.isSafeInteger(currentOnly.minimumLedger) ||
 				currentOnly.minimumLedger < 1 || currentOnly.minimumLedger > 0xffff_ffff ||
 				typeof currentOnly.minimumFreeBytes !== 'bigint' ||
-				currentOnly.minimumFreeBytes <= 0n || currentOnly.minimumFreeBytes >= this.#minimumFreeBytes)) {
+				currentOnly.minimumFreeBytes <= 0n || currentOnly.minimumFreeBytes >= this.#minimumFreeBytes ||
+				(currentOnly.scopedReserve === true && currentOnly.minimumFreeBytes !== SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES))) {
 			throw new RangeError('Invalid current-only capacity policy');
 		}
 	}
@@ -124,7 +127,13 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 				: this.#minimumFreeBytes;
 		const allowance = this.#currentCapacityAllowance;
 		if (currentOnly !== undefined) {
-			reserve = currentOnlyReserve(capacity, this.#minimumFreeBasisPoints, currentOnly.minimumFreeBytes);
+			if (currentOnly.scopedReserve === true) {
+				const scopedRatio = (capacity.totalBytes * BigInt(SCOPED_CURRENT_RESERVE_BASIS_POINTS) + 9_999n) / 10_000n;
+				reserve = scopedRatio > SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES
+					? scopedRatio : SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES;
+			} else {
+				reserve = currentOnlyReserve(capacity, this.#minimumFreeBasisPoints, currentOnly.minimumFreeBytes);
+			}
 		} else if (allowance !== undefined &&
 			isFullHistoryCurrentCapacityAllowanceActive(allowance, this.#now()) &&
 			isCurrentCapacityRange(allocation, allowance.minimumLedger)) {

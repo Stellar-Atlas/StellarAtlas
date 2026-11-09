@@ -1,6 +1,8 @@
 import type { DataSource } from 'typeorm';
+import { createPairedCurrentAdmission, fencePairedCurrentAdmission, isPairedCurrentBoot } from './FullHistoryPairedCurrentAdmission.js';
 import { join } from 'node:path';
 import { FileFullHistoryLedgerCloseMetaPendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
+import { readScopedCurrentArm } from './FullHistoryScopedCurrentAttempt.js';
 import {
 	composeFullHistoryLedgerCloseMetaService,
 	FULL_HISTORY_LEDGER_CLOSE_META_MAXIMUM_OUTPUT_BYTES_PER_SHARD,
@@ -85,6 +87,16 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 	let config: FullHistoryLedgerCloseMetaServiceConfig;
 	try {
 		config = parseFullHistoryLedgerCloseMetaServiceConfig(environment);
+		if (config.pairedCurrentAdmission !== undefined && !(await isPairedCurrentBoot(config.pairedCurrentAdmission))) {
+			if (config.scopedCurrentAttempt !== undefined)
+				throw new Error('Scoped current attempt belongs to another boot; preserve any pending plan for owner review');
+			// A boot-bound qualification cannot carry reduced admission into another boot.
+			const ordinary = { ...environment };
+			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION;
+			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER;
+			delete ordinary.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES;
+			config = parseFullHistoryLedgerCloseMetaServiceConfig(ordinary);
+		}
 	} catch (error) {
 		writeEvent(dependencies.stderr, {
 			event: 'runtime',
@@ -134,6 +146,28 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 			exitCode = 75;
 		} else if (leadership?.acquired === true) {
 			await leadership.assertHeld();
+			const lease = leadership;
+			const scoped = config.scopedCurrentAttempt;
+			const scopedBootId = config.pairedCurrentAdmission?.bootId;
+			const paired = config.pairedCurrentAdmission !== undefined && config.currentOnlyCapacity !== undefined
+				? fencePairedCurrentAdmission(createPairedCurrentAdmission(config.pairedCurrentAdmission, {
+					bulkRoot: config.bulkRoot,
+					typedOutputRoot: config.typedOutputRoot,
+					minimumFreeBasisPoints: config.minimumFreeBasisPoints,
+					currentMinimumFreeBytes: config.currentOnlyCapacity.minimumFreeBytes,
+					sourceOutputBytes: cycleOutputReservation(config),
+					...(scoped === undefined ? {} : { scopedBulkDevice: scoped.bulkDevice })
+				}, environment, activeComposition.dataSource), async () => {
+					try {
+						await lease.assertHeld();
+					} catch (cause) {
+						const error = new Error('Full-history LedgerCloseMeta leadership was lost', { cause });
+						leadershipFailure = error;
+						abortController.abort(error);
+						throw error;
+					}
+				})
+				: undefined;
 			await dependencies.resetOwnedRuntime(config);
 			await dependencies.reconcileRuntime(config, dependencies.now());
 			leadershipMonitor = monitorLeadership(
@@ -186,6 +220,14 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 						activeComposition.storageBudget.assertCanAllocate(
 							cycleOutputReservation(config), plan
 						),
+					...(paired === undefined ? {} : { pairedCurrentAdmission: paired }),
+					...(scoped === undefined || scopedBootId === undefined ? {} : {
+						scopedCurrentAttempt: {
+							policy: scoped,
+							readArm: () => readScopedCurrentArm(scoped, scopedBootId,
+								environment.INVOCATION_ID, process.argv[1], dependencies.now)
+						}
+					}),
 					formatError: safeMessage,
 					frontier: activeComposition.frontier,
 					ingestion: activeComposition.ingestion,

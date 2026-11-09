@@ -75,14 +75,16 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 
 	processAndCommit(
 		request: FullHistoryLedgerCloseMetaProcessingRequest,
-		signal: AbortSignal
+		signal: AbortSignal,
+		assertBeforeConversion?: () => Promise<void>
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt> {
-		return this.#pool.run(signal, () => this.#process(request, signal));
+		return this.#pool.run(signal, () => this.#process(request, signal, assertBeforeConversion));
 	}
 
 	async #process(
 		request: FullHistoryLedgerCloseMetaProcessingRequest,
-		signal: AbortSignal
+		signal: AbortSignal,
+		assertBeforeConversion?: () => Promise<void>
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt> {
 		const range = requestRange(request, this.#minimumLedgers);
 		signal.throwIfAborted();
@@ -92,6 +94,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		);
 		const outputPath = this.#outputPath(request, range);
 		const outputExistedBeforeRun = await directoryExists(outputPath);
+		let launchAttempted = false;
 		try {
 			await claimFullHistoryLedgerCloseMetaTransientDirectory(
 				temporaryDirectory
@@ -100,9 +103,13 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 				temporaryDirectory,
 				request
 			);
+			const args = this.#arguments(request, inputPaths, outputPath, range);
+			// Fetching input, waiting for the pool and staging it can outlast the held session.
+			if (assertBeforeConversion !== undefined) await assertBeforeConversion();
+			launchAttempted = true;
 			const stdout = await runBoundedGoFullHistoryProcess(
 				this.#executablePath,
-				this.#arguments(request, inputPaths, outputPath, range),
+				args,
 				this.#processTimeoutMilliseconds,
 				signal
 			);
@@ -118,10 +125,9 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 			});
 		} finally {
 			try {
-				await this.#publicationRecorder?.recordPublication(
-					outputPath,
-					outputExistedBeforeRun
-				);
+				if (assertBeforeConversion === undefined || launchAttempted) {
+					await this.#publicationRecorder?.recordPublication(outputPath, outputExistedBeforeRun);
+				}
 			} finally {
 				await rm(temporaryDirectory, { force: true, recursive: true });
 			}

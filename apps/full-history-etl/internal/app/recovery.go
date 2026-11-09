@@ -76,6 +76,9 @@ func validateRecoveredManifest(
 	if !isSupportedManifestVersion(manifest.ManifestVersion) {
 		return fmt.Errorf("unsupported manifest version %q", manifest.ManifestVersion)
 	}
+	if (manifest.ManifestVersion == manifestVersionV9) != config.CompactLedgerEntryChanges {
+		return fmt.Errorf("existing output has a different ledger-entry-changes projection mode")
+	}
 	createdAt, err := time.Parse(time.RFC3339Nano, manifest.CreatedAt)
 	if err != nil || createdAt.UTC().Format(time.RFC3339Nano) != manifest.CreatedAt {
 		return fmt.Errorf("invalid manifest creation time %q", manifest.CreatedAt)

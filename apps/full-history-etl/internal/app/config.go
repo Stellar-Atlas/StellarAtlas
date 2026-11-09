@@ -32,20 +32,21 @@ type Source struct {
 }
 
 type Config struct {
-	Sources                []Source
-	TypedOutputRoot        string
-	OutputPath             string
-	PublicationStagingRoot string
-	NetworkName            string
-	NetworkPassphrase      string
-	StartLedger            uint32
-	EndLedger              uint32
-	MaxCompressedBytes     int64
-	MaxUncompressedBytes   int64
-	MaxDecodedMemoryBytes  int64
-	MaxOutputBytes         int64
-	MaxLedgers             uint64
-	MaxRows                uint64
+	Sources                   []Source
+	TypedOutputRoot           string
+	OutputPath                string
+	PublicationStagingRoot    string
+	NetworkName               string
+	NetworkPassphrase         string
+	StartLedger               uint32
+	EndLedger                 uint32
+	MaxCompressedBytes        int64
+	MaxUncompressedBytes      int64
+	MaxDecodedMemoryBytes     int64
+	MaxOutputBytes            int64
+	MaxLedgers                uint64
+	MaxRows                   uint64
+	CompactLedgerEntryChanges bool
 }
 
 type repeatedStrings []string
@@ -80,6 +81,7 @@ func ParseConfig(args []string, stderr io.Writer) (Config, error) {
 	flags.Int64Var(&config.MaxOutputBytes, "max-output-bytes", defaultMaxOutputBytes, "aggregate Parquet byte limit")
 	flags.Uint64Var(&config.MaxLedgers, "max-ledgers", defaultMaxLedgers, "ledger count limit")
 	flags.Uint64Var(&config.MaxRows, "max-rows", defaultMaxRows, "aggregate output row limit")
+	flags.BoolVar(&config.CompactLedgerEntryChanges, "compact-ledger-entry-changes", false, "write the opt-in ledger-entry-changes v4 projection with bodies in the paired lossless replay")
 	if err := flags.Parse(args); err != nil {
 		return Config{}, err
 	}

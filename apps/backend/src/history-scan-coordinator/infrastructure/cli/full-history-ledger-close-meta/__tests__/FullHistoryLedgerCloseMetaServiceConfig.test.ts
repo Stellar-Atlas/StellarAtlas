@@ -53,17 +53,27 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 			...environment(),
 			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '1000',
 			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '4000',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION: JSON.stringify({
+				bootId: 'abcdabcd-abcd-abcd-abcd-abcdabcdabcd',
+				warehouseReportedPath: '/bulk/warehouse',
+				warehouseMetadataPath: '/run/warehouse-metadata',
+				warehouseMetadataInode: '1',
+				minimumUnreservedBytes: '10000000000'
+			}),
 			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '5000',
 			FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'true'
 		};
 		const config = parseFullHistoryLedgerCloseMetaServiceConfig(values);
 		expect(config.currentOnlyCapacity).toEqual({ minimumLedger: 1000, minimumFreeBytes: 4000n });
 		expect(config.minimumFreeBytes).toBe(5000n);
+		expect(config.pairedCurrentAdmission?.minimumUnreservedBytes).toBe(10_000_000_000n);
 		for (const overrides of [
 			{ FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'false' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_ENABLED: 'false' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER: '1026' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '2048' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '2' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '0' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '4000\n' },
@@ -89,6 +99,39 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		expect(config.cycleLedgerCount).toBe(12_288);
 		expect(config.fetchConcurrency).toBe(256);
 		expect(config.processingConcurrency).toBe(12);
+	});
+
+	it('allows the scoped reserve only with the exact ordinary policy, 128 geometry and full paired allowance', () => {
+		const values = {
+			...environment(),
+			FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'true',
+			FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '128',
+			FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '128',
+			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '4398046511104',
+			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '500',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '65366208',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '3023656976384',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION: JSON.stringify({
+				bootId: 'abcdabcd-abcd-abcd-abcd-abcdabcdabcd', warehouseReportedPath: '/bulk/warehouse',
+				warehouseMetadataPath: '/run/warehouse-metadata', warehouseMetadataInode: '1',
+				minimumUnreservedBytes: '3375844294656'
+			}),
+			FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT: JSON.stringify({
+				version: 1, permitId: '123e4567-e89b-42d3-a456-426614174000', bulkDevice: '64517',
+				startLedger: 65366208, endLedger: 65366335
+			})
+		};
+		expect(parseFullHistoryLedgerCloseMetaServiceConfig(values).currentOnlyCapacity?.scopedReserve).toBe(true);
+		expect(parseFullHistoryLedgerCloseMetaServiceConfig({
+			...values, FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT: undefined
+		}).currentOnlyCapacity?.scopedReserve).toBeUndefined();
+		for (const override of [
+			{ FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT: '{}' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '472' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '64', FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '64' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION:
+				values.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION.replace('3375844294656', '3375844294655') }
+		]) expect(() => parseFullHistoryLedgerCloseMetaServiceConfig({ ...values, ...override })).toThrow(/scoped current/i);
 	});
 
 	it('accepts an inclusive bounded range made of complete typed shards', () => {

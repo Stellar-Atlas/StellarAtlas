@@ -118,6 +118,14 @@ export function parseEntityPage(value: unknown): AnalyticsEntityPage {
 		semantics: entityText(data, 'semantics')
 	};
 }
+export class ExplorerHttpError extends Error {
+	constructor(readonly status: number, readonly details: EntityRecord) {
+		super('HTTP ' + status + ': ' +
+			(entityText(details, 'error') || entityText(details, 'message') || 'The query could not be completed.'));
+		this.name = 'ExplorerHttpError';
+	}
+}
+
 export async function requestExplorerJson(
 	path: string,
 	signal: AbortSignal
@@ -128,17 +136,7 @@ export async function requestExplorerJson(
 		signal
 	});
 	const body: unknown = await response.json();
-	if (!response.ok) {
-		const details = recordValue(body);
-		throw new Error(
-			'HTTP ' +
-				response.status +
-				': ' +
-				(entityText(details, 'error') ||
-					entityText(details, 'message') ||
-					'The query could not be completed.')
-		);
-	}
+	if (!response.ok) throw new ExplorerHttpError(response.status, recordValue(body));
 	return body;
 }
 
