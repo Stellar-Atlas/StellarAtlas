@@ -181,7 +181,8 @@ export function createPairedCurrentAdmission(
 	async function select(
 		query: string, parameters: Readonly<Record<string, string>>, caller: AbortSignal
 	): Promise<readonly unknown[]> {
-		const url = new URL(endpoint);
+		// The configured endpoint is validated above. Use the fixed loopback target for every request.
+		const url = new URL('http://127.0.0.1:8123/');
 		url.search = new URLSearchParams({
 			readonly: '1', max_execution_time: '2', max_threads: '1', max_result_rows: '2',
 			result_overflow_mode: 'throw', max_rows_to_read: '131072',
