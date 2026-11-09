@@ -58,8 +58,14 @@ function outcome(status: number): Outcome {
 	return 'other';
 }
 
+interface AtlasApiTraffic {
+	observe: RequestHandler;
+	handshake(path: SocketPath): (state: Handshake) => void;
+	flush(): void;
+}
+
 /** No customer identity, URL parameters, database, event queue, or network sender. */
-export function createAtlasApiTraffic(document: unknown, output: Output = process.stdout) {
+export function createAtlasApiTraffic(document: unknown, output: Output = process.stdout): AtlasApiTraffic {
 	const root = routeTree(document);
 	const counts = new Map<string, Partial<Record<Outcome, number>>>();
 	const websocket = new Map<SocketPath, Record<Handshake, number>>();
