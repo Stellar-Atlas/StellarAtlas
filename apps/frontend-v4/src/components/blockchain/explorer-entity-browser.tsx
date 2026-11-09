@@ -21,6 +21,7 @@ import {
 import { ExplorerContractActivity } from './explorer-contract-activity';
 import { contractIdentityFilters, preserveContractActivityContext } from './contract-state-route';
 import { ExplorerContractProvenance } from './explorer-contract-provenance';
+import { verifiedContractsPath } from '../../api/verified-contract-catalogue';
 import { ExplorerBalanceObservations } from './explorer-balance-observations';
 import {
 	ExplorerEntityRequest,
@@ -170,6 +171,9 @@ function EntityBrowser({
 				</div>
 				{identifier && (
 					<Link href={buildEntityHref(collection)}>← Browse {collection}</Link>
+				)}
+				{!identifier && collection === 'contracts' && (
+					<p><a href={verifiedContractsPath}>Browse verified contracts →</a></p>
 				)}
 				{identifier && collection === 'contracts' && (
 					<ExplorerContractProvenance

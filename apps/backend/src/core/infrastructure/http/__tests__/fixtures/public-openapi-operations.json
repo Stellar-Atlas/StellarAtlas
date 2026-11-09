@@ -69,6 +69,7 @@
   "get /v1/assets/{asset}/transfers listAnalyticsAssetTransfersResource",
   "get /v1/assets/{asset}/trustlines listAssetTrustlinesSnapshot",
   "get /v1/contracts listParsedContractsResource",
+  "get /v1/contracts/catalogue listContractCatalogue",
   "get /v1/contracts/{contractId} getParsedContractResource",
   "get /v1/contracts/{contractId}/events listAnalyticsContractEventsResource",
   "get /v1/contracts/{contractId}/provenance getContractBuildProvenance",

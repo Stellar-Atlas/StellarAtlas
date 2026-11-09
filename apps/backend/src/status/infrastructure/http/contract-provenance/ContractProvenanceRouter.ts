@@ -2,7 +2,8 @@ import express, { type Router } from 'express';
 import { StrKey } from '@stellar/stellar-sdk';
 import {
 	ContractProvenanceService,
-	ProvenanceBusy
+	ProvenanceBusy,
+	type ContractProvenance
 } from './ContractProvenanceService.js';
 import { scopedProvenanceRpc } from './ScopedProvenanceRpc.js';
 import {
@@ -16,6 +17,7 @@ export function contractProvenanceRouter(config: {
 	readonly approvedNativeRpcUrl?: string;
 	readonly approvedProvenanceRpcUrl?: string;
 	readonly networkPassphrase: string;
+	readonly observe?: (value: ContractProvenance) => Promise<void>;
 }): Router {
 	const scoped =
 		config.provenanceRpcUrl === undefined
@@ -32,7 +34,8 @@ export function contractProvenanceRouter(config: {
 			? undefined
 			: nativeRpcEndpoint(config.rpcUrl, config.approvedNativeRpcUrl),
 		config.networkPassphrase,
-		scoped
+		scoped,
+		config.observe
 	);
 	const router = express.Router();
 	router.get('/contracts/:contractId/provenance', async (request, response) => {

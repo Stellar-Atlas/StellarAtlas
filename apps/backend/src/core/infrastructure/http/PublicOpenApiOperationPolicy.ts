@@ -4,6 +4,7 @@ import type { OpenApiOperationContext } from './OpenApiDocumentProjection.js';
 // Bind identity to method/path so reusing an allowed name cannot publish a new route.
 const publicOperations = new Map<string, string>([
 	['getMarketCandles', 'get /v1/markets/{base}/{quote}/candles'],
+	['listContractCatalogue', 'get /v1/contracts/catalogue'],
 	['getContractBuildProvenance', 'get /v1/contracts/{contractId}/provenance'],
 	['listParsedDatasets', 'get /v1/datasets'],
 	['getParsedDataset', 'get /v1/datasets/{dataset}'],

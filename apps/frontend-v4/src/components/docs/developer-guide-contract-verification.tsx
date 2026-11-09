@@ -60,7 +60,9 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 			content: (
 				<>
 					<p>
-						Open the contract in the Atlas explorer and choose <strong>Check build</strong>.
+						<a href="/explorer/verified-contracts">Browse verified contracts</a> to
+						find recorded build attestations by contract address or repository.
+						Open a contract and choose <strong>Check build</strong> for a new check.
 						To confirm a specific release, open <strong>Verify my build</strong> and
 						enter the full commit and Wasm SHA-256. For automated checks, use the
 						contract C-address with the{' '}

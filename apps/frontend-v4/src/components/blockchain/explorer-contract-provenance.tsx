@@ -7,6 +7,7 @@ import {
 	requestExplorerJson,
 	type EntityRecord
 } from '../../api/explorer-analytics';
+import { verifiedContractsPath } from '../../api/verified-contract-catalogue';
 import { LocalDateTime } from '../local-date-time';
 import styles from './explorer-contract-provenance.module.css';
 
@@ -141,7 +142,7 @@ export function ExplorerContractProvenance({
 	}
 
 	return (
-		<section className={styles.panel} aria-label="Contract build provenance">
+		<section id="build-provenance" className={styles.panel} aria-label="Contract build provenance">
 			<div className={styles.heading}>
 				<h2>Build provenance</h2>
 				{inputRejected ? null : attempt === 0 ? (
@@ -163,6 +164,7 @@ export function ExplorerContractProvenance({
 					</span>
 				)}
 			</div>
+			<p><a href={verifiedContractsPath}>Browse verified contracts</a></p>
 			<details className={styles.builder} key={contractId}>
 				<summary>Verify my build</summary>
 				<p>

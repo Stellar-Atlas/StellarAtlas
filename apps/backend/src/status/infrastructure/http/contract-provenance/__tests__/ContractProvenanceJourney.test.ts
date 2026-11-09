@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { StrKey } from '@stellar/stellar-sdk';
 import type { Request, Response } from 'express';
+import { projectCatalogueItem } from '../ContractCatalogue.js';
+import type { ContractProvenance } from '../ContractProvenanceService.js';
 
 // Synthetic trust/RPC/transport inputs exercise existing binding code, not real
 // Sigstore cryptography, a network observation or an independent source rebuild.
@@ -107,11 +109,15 @@ function bundle(subjectHash = hash) {
 		}
 	};
 }
-async function invoke(id = contractId) {
+async function invoke(
+	id = contractId,
+	observe?: (value: ContractProvenance) => Promise<void>
+) {
 	const router = contractProvenanceRouter({
 		rpcUrl: 'https://rpc.invalid',
 		approvedNativeRpcUrl: 'https://rpc.invalid',
-		networkPassphrase: 'synthetic network'
+		networkPassphrase: 'synthetic network',
+		observe
 	});
 	const layer = router.stack.find(
 		(value) => value.route?.path === '/contracts/:contractId/provenance'
@@ -162,6 +168,76 @@ beforeEach(() => {
 		.mockResolvedValue({ attestations: [{ bundle: bundle() }] });
 });
 describe('synthetic registered provenance journey', () => {
+	it('preserves native verification without projecting configured network text as evidence', async () => {
+		const observe = jest.fn(async (_value: ContractProvenance) => undefined);
+		const result = await invoke(contractId, observe);
+		expect(result.status).toBe(200);
+		expect(result.body).toMatchObject({
+			networkPassphrase: 'synthetic network',
+			build: { status: 'verified' }
+		});
+		expect(projectCatalogueItem(result.body as ContractProvenance)).toBeNull();
+		expect(observe).not.toHaveBeenCalled();
+	});
+	it('projects scoped evidence without holding verifier slots or queuing saturated writes', async () => {
+		const writes: { resolve: () => void; reject: (error: Error) => void }[] = [];
+		const observe = jest.fn((_value: ContractProvenance) =>
+			new Promise<void>((resolve, reject) => writes.push({ resolve, reject }))
+		);
+		const scoped = {
+			read: jest.fn(async (_id: string) => ({
+				ledger: 150,
+				modifiedLedger: 100,
+				executable: 'wasm' as const,
+				wasmSha256: hash,
+				wasm,
+				freshUntil: Date.now() + 30_000
+			}))
+		};
+		const service = new ContractProvenanceService(
+			undefined,
+			'synthetic network',
+			scoped,
+			observe
+		);
+		const address = (byte: number) =>
+			StrKey.encodeContract(new Uint8Array(32).fill(byte));
+		const warning = jest
+			.spyOn(console, 'warn')
+			.mockImplementation(() => undefined);
+		try {
+			const first = await service.get(contractId);
+			expect(projectCatalogueItem(first)).toEqual({
+				contractId,
+				observedLedger: 150,
+				instanceModifiedLedger: 100,
+				checkedAt: expect.any(String),
+				wasmSha256: hash,
+				ledgerEvidence: 'configured_rpc_observation',
+				build: { status: 'verified', record: first.build.record },
+				independentReproduction: 'not_assessed', securityAudit: 'not_assessed'
+			});
+			for (const byte of [8, 9]) {
+				await expect(service.get(address(byte))).resolves.toMatchObject({
+					build: { status: 'verified' }
+				});
+			}
+			await expect(service.get(contractId)).resolves.toBe(first);
+			expect(scoped.read).toHaveBeenCalledTimes(3);
+			expect(observe).toHaveBeenCalledTimes(2);
+			writes[0]!.reject(new Error('Synthetic database failure'));
+			await new Promise<void>((resolve) => setImmediate(resolve));
+			expect(warning).toHaveBeenCalledTimes(1);
+			expect(observe).toHaveBeenCalledTimes(2);
+			await service.get(address(10));
+			expect(observe.mock.calls.map(([value]) => value.contractId)).toEqual(
+				[contractId, address(8), address(10)]
+			);
+		} finally {
+			for (const write of writes) write.resolve();
+			warning.mockRestore();
+		}
+	});
 	it('returns the exact observed hash/commit from actual metadata and attestation binding', async () => {
 		const result = await invoke();
 		expect(result.status).toBe(200);

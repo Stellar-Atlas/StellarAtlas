@@ -1,0 +1,80 @@
+.filters {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(5rem, 8rem) auto;
+	align-items: end;
+	gap: .75rem;
+	max-width: 48rem;
+}
+.filters label { display: grid; gap: .35rem; min-width: 0; font-size: .875rem; }
+.filters :is(input, select, button), .pagination a {
+	min-width: 0;
+	min-height: 2.75rem;
+	font: inherit;
+	padding: .5rem .7rem;
+	border: 1px solid var(--border);
+	border-radius: .4rem;
+	color: var(--ink);
+	background: var(--button-secondary);
+}
+.filters input { background: var(--panel); }
+.filters button { cursor: pointer; }
+.filters button:hover, .pagination a:hover { border-color: var(--blue); }
+.filters :focus-visible, .row a:focus-visible, .pagination a:focus-visible, .guide:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+.resultsHead, .rowHead {
+	display: flex;
+	align-items: start;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: .55rem 1rem;
+	min-width: 0;
+}
+.rowHead > div { min-width: 0; }
+.rows { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--border); }
+.row {
+	padding-block: 1rem;
+	border-bottom: 1px solid var(--border);
+	display: grid;
+	gap: .65rem;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.address { margin-top: .25rem; }
+.address code, .identities code { padding: 0; background: none; font-size: .82rem; }
+.attested, .network {
+	width: fit-content;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: .2rem .6rem;
+	font-size: .8rem;
+}
+.attested { color: var(--blue); }
+.identities {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: .6rem 1rem;
+	margin: 0;
+}
+.identities dt, .evidence { font-size: .8rem; color: var(--muted); }
+.identities dd { margin: .15rem 0 0; font-size: .875rem; }
+.evidence {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .35rem 1.25rem;
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.evidence strong { font-weight: 500; color: var(--ink); }
+.pagination { display: flex; flex-wrap: wrap; gap: .5rem; }
+.pagination a { display: inline-flex; align-items: center; text-decoration: none; }
+.guide { display: inline-block; padding-block: .5rem; }
+@media (max-width: 600px) {
+	.filters { grid-template-columns: minmax(0, 1fr) auto; }
+	.filters label:first-child { grid-column: 1 / -1; }
+	.identities { grid-template-columns: minmax(0, 1fr); }
+}
