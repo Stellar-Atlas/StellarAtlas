@@ -60,6 +60,27 @@ workers never consult this control, and admitted imports finish normally.
 This is a coordination control, not instantaneous cancellation or a guarantee
 that shared I/O contention will disappear.
 
+## Optional current-first bulk headroom
+
+`HUBBLE_ETL_HISTORY_BULK_CAPACITY_POLICY` enables an additional history-only
+admission check in continuous reserved-current mode. Leave it unset or empty
+to retain the ordinary checks. When set, supply one JSON object with these
+exact fields: `bulkRoot`, `sourceMinimumFreeBytes`,
+`sourceMinimumFreeBasisPoints`, `sourceCycleOutputBytes`,
+`currentWarehouseMarginBytes`, and `unreservedGrowthPerHistorySlotBytes`.
+Use the source's configured bulk root, floors, and full cycle output allowance.
+The two growth margins require explicit operator sizing; request/chunk limits
+do not bound whole-batch disk growth.
+
+Enable only when the Linux publisher talks directly to local ClickHouse on a
+literal loopback endpoint and both services see the same underlying bulk
+filesystem. Each new historical import checks paired filesystem and ClickHouse
+capacity immediately before ingestion. The gate deducts current ClickHouse
+reservations once and leaves room for every configured historical slot. It is
+an admission check, not an allocation or quota; other writers can still consume
+space. Current work and admitted imports keep their existing checks and
+lifecycle. History retries automatically after capacity recovers.
+
 ## Optional one-time retained batch priority
 
 Set `HUBBLE_ETL_PRIORITY_BATCH_ID` in the existing host file

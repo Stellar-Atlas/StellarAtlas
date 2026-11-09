@@ -168,9 +168,9 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.events).toContainEqual(expect.objectContaining({ event: 'cycle-error', message: 'Error: disk full' }));
 	});
 
-	it('uses the finite current window without historical offers and passes the exact plan to capacity admission', async () => {
+	it.each(currentOnlyPolicies())('uses %s without historical offers and passes the exact plan to capacity admission', async (_name, policy) => {
 		const f = fixture(7);
-		f.config = { ...f.config, currentCapacityAllowance: allowance() };
+		f.config = { ...f.config, ...policy };
 		const plans: PendingPlan[] = [];
 		f.dependencies.ensureStorageCapacity = async pending => { plans.push(pending); };
 		await run(f.config, f.dependencies);
@@ -180,29 +180,54 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 			f.selected.map(r => ['priority', r.startSequence, r.endSequence]));
 	});
 
-	it.each([plan('historical', 3), plan('priority', 900)])(
-		'preserves and refuses a non-current pending plan during the window', async pending => {
-			const f = fixture(1);
-			f.pending = pending;
-			f.config = { ...f.config, currentCapacityAllowance: allowance() };
-			f.dependencies.wait = async () => { f.controller.abort(); };
-			await run(f.config, f.dependencies);
-			expect(f.selected).toEqual([]);
-			expect(f.pending).toBe(pending);
-			expect(f.calls).not.toContain('pending-write');
-		});
-
-	it('idles without a historical fallback while the current window has no work', async () => {
+	it('replays the exact eligible durable plan before discovery, without a time-based fallback', async () => {
 		const f = fixture(1);
-		f.config = { ...f.config, currentCapacityAllowance: allowance() };
-		f.dependencies.priorityRangeReader.readNextRange = async options => {
-			expect(options.minimumPriorityLedger).toBe(1000);
-			return null;
-		};
+		f.pending = plan('priority', 1000);
+		f.config = { ...f.config, currentOnlyCapacity: currentOnlyCapacity() };
+		f.dependencies.now = () => 3000;
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1000, 1063)]);
+		expect(f.calls).not.toContain('frontier');
+		expect(f.pending).toBeNull();
+	});
+
+	it('rejects a newly offered range below the durable boundary before storage or pending writes', async () => {
+		const f = fixture(1);
+		f.config = { ...f.config, currentOnlyCapacity: currentOnlyCapacity() };
+		f.dependencies.priorityRangeReader.readNextRange = async () => range(999, 1062);
 		f.dependencies.wait = async () => { f.controller.abort(); };
 		await run(f.config, f.dependencies);
-		expect(f.calls).not.toContain('historical');
+		expect(f.calls).not.toContain('capacity');
 		expect(f.selected).toEqual([]);
+		expect(f.pending).toBeNull();
+	});
+
+	describe.each(currentOnlyPolicies())('non-current work under %s', (_name, policy) => {
+		it.each([plan('historical', 3), plan('priority', 900)])(
+			'preserves and refuses a non-current pending plan', async pending => {
+				const f = fixture(1);
+				f.pending = pending;
+				f.config = { ...f.config, ...policy };
+				f.dependencies.wait = async () => { f.controller.abort(); };
+				await run(f.config, f.dependencies);
+				expect(f.selected).toEqual([]);
+				expect(f.pending).toBe(pending);
+				expect(f.calls).not.toContain('pending-write');
+				expect(f.calls).not.toContain('capacity');
+			});
+
+		it('idles without a historical fallback when there is no current work', async () => {
+			const f = fixture(1);
+			f.config = { ...f.config, ...policy };
+			f.dependencies.priorityRangeReader.readNextRange = async options => {
+				expect(options.minimumPriorityLedger).toBe(1000);
+				return null;
+			};
+			f.dependencies.wait = async () => { f.controller.abort(); };
+			await run(f.config, f.dependencies);
+			expect(f.calls).not.toContain('historical');
+			expect(f.selected).toEqual([]);
+		});
 	});
 
 	it('restores ordinary historical fairness at the exact expiry boundary', async () => {
@@ -226,6 +251,17 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 function allowance() {
 	return { minimumLedger: 1000, maximumReserveBorrowBytes: 512n * 1024n ** 3n,
 		expiresAtMilliseconds: 2000 };
+}
+
+function currentOnlyCapacity() {
+	return { minimumLedger: 1000, minimumFreeBytes: 4000n };
+}
+
+function currentOnlyPolicies(): [string, Partial<ContinuousFullHistoryLedgerCloseMetaLoopConfig>][] {
+	return [
+		['finite allowance', { currentCapacityAllowance: allowance() }],
+		['durable current-only mode', { currentOnlyCapacity: currentOnlyCapacity() }]
+	];
 }
 
 type Dependencies = { -readonly [K in keyof ContinuousFullHistoryLedgerCloseMetaLoopDependencies]:

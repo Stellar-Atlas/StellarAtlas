@@ -35,6 +35,7 @@ type config struct {
 	currentGuard         *backfill.PressureGuard
 	baselineHistoryGuard *backfill.PressureGuard
 	historyAdmissionHold *backfill.HistoryAdmissionHold
+	historyStoragePolicy *clickhouse.HistoricalStoragePolicy
 	reserveCurrent       bool
 	typedOperations      bool
 	readinessGuard       *backfill.WarehouseReadinessGuard
@@ -210,11 +211,16 @@ func loadConfig() (config, error) {
 			},
 		}
 	}
+	historyStoragePolicy, err := loadHistoryStoragePolicy(reserveCurrent)
+	if err != nil {
+		return result, err
+	}
 	result = config{
 		pressureGuard:        guard,
 		currentGuard:         currentGuard,
 		baselineHistoryGuard: baselineHistoryGuard,
 		historyAdmissionHold: loadHistoryAdmissionHold(),
+		historyStoragePolicy: historyStoragePolicy,
 		reserveCurrent:       reserveCurrent,
 		typedOperations:      typedOperations,
 		readinessGuard: &backfill.WarehouseReadinessGuard{
@@ -315,6 +321,7 @@ func backfillConfig(cfg config) backfill.Config {
 		PressureGuard:                cfg.pressureGuard,
 		BaselineHistoryPressureGuard: cfg.baselineHistoryGuard,
 		HistoryAdmissionHold:         cfg.historyAdmissionHold,
+		HistoryStoragePolicy:         cfg.historyStoragePolicy,
 		ReadinessGuard:               cfg.readinessGuard,
 		Publisher:                    cfg.publisher,
 		OnProgress: func(summary backfill.Summary) {

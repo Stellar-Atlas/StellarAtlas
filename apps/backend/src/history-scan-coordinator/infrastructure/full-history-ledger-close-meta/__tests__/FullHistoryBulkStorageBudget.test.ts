@@ -116,6 +116,29 @@ describe('FullHistoryBulkStorageBudget', () => {
 		).rejects.toEqual(new FullHistoryBulkStorageBudgetExceededError('store-size-limit'));
 	});
 
+	it('charges the full output, proportional reserve and store cap only to eligible durable current work', async () => {
+		const outputBytes = 8n * 1024n ** 3n;
+		const currentOnlyCapacity = { minimumLedger: 1000, minimumFreeBytes: 3n * tebibyte };
+		const priority = { kind: 'priority' as const, startLedger: 1000, endLedger: 1063 };
+		const floor = (60n * tebibyte * 550n + 9999n) / 10000n;
+		const config = {
+			currentOnlyCapacity, minimumFreeBasisPoints: 550, minimumFreeBytes: 4n * tebibyte
+		};
+		// The 5.5% reserve is greater than the separate absolute floor on this fixture.
+		const budget = createBudget({
+			...config, capacityReader: createCapacityReader(floor + outputBytes, 60n * tebibyte)
+		});
+		await expect(budget.assertCanAllocate(outputBytes, priority)).resolves.toBeUndefined();
+		await expect(budget.assertCanAllocate(outputBytes + 1n, priority)).rejects.toThrow('free-space-reserve');
+		for (const allocation of [
+			{ ...priority, kind: 'historical' as const }, { ...priority, startLedger: 999 }, undefined
+		]) {
+			await expect(budget.assertCanAllocate(outputBytes, allocation)).rejects.toThrow('non-current storage');
+		}
+		await expect(createBudget({ ...config, maximumStoredBytes: 5n * tebibyte })
+			.assertCanAllocate(outputBytes, priority)).rejects.toThrow('store-size-limit');
+	});
+
 	it('rejects relative roots and invalid reserve ratios', () => {
 		expect(() => createBudget({ rootPath: 'relative' })).toThrow(/absolute/);
 		expect(() => createBudget({ minimumFreeBasisPoints: 10_001 })).toThrow(

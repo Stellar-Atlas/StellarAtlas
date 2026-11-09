@@ -48,6 +48,36 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		expect(config.currentCapacityAllowance?.maximumReserveBorrowBytes).toBe(512n * 1024n ** 3n);
 	});
 
+	it('opts in to durable current-only capacity without changing the ordinary floor', () => {
+		const values = {
+			...environment(),
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '1000',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '4000',
+			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '5000',
+			FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'true'
+		};
+		const config = parseFullHistoryLedgerCloseMetaServiceConfig(values);
+		expect(config.currentOnlyCapacity).toEqual({ minimumLedger: 1000, minimumFreeBytes: 4000n });
+		expect(config.minimumFreeBytes).toBe(5000n);
+		for (const overrides of [
+			{ FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'false' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_ENABLED: 'false' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER: '1026' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '2' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '0' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '4000\n' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '5000' },
+			{
+				FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_MIN_LEDGER: '1000',
+				FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_RESERVE_BORROW_BYTES: '1000',
+				FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_EXPIRES_AT: '2026-01-01T00:00:00.000Z'
+			}
+		]) {
+			expect(() => parseFullHistoryLedgerCloseMetaServiceConfig({ ...values, ...overrides })).toThrow();
+		}
+	});
+
 	it('accepts multiple admitted shards with bounded parallel processing', () => {
 		const config = parseFullHistoryLedgerCloseMetaServiceConfig({
 			...environment(),

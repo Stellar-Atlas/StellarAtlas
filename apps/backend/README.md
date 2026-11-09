@@ -98,6 +98,25 @@ pnpm scan-network
 
 ```
 
+### Restrict ledger-close-meta capture to current work
+
+Ordinary current-priority scheduling still offers historical work. To opt in to
+current-only capture, keep admission and current priority enabled, use one
+processing slot and no bounded replay, and explicitly set both
+`FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER` and
+`FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES`. Set neither
+for ordinary scheduling; do not combine them with an expiring capacity allowance.
+
+The separate absolute floor must be positive and below the ordinary absolute
+floor. The larger configured proportional floor (with a minimum of five
+percent), full cycle output reservation, and store-size limit still apply.
+No eligible current range means idle, not historical fallback. Reconcile any
+incompatible saved plan before switching modes; the service refuses and
+preserves it. An eligible saved current plan is replayed exactly and does not
+prove that capture is current. Verify advancing source and warehouse
+publication after activation. This is a source admission check, not a disk
+quota or a bound on concurrent warehouse writes.
+
 ### Run tests
 
 The test folder contains both unit and integration tests. A test database is

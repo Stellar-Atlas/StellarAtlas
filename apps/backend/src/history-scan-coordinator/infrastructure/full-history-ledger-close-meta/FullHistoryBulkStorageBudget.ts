@@ -1,7 +1,9 @@
 import { statfs } from 'node:fs/promises';
 import {
+	isCurrentCapacityRange,
 	isFullHistoryCurrentCapacityAllowanceActive,
-	type FullHistoryCurrentCapacityAllowance
+	type FullHistoryCurrentCapacityAllowance,
+	type FullHistoryCurrentOnlyCapacity
 } from './FullHistoryCurrentCapacityAllowance.js';
 
 export interface FullHistoryBulkStorageCapacity {
@@ -19,6 +21,7 @@ export interface FullHistoryBulkStorageUsageReader {
 
 export interface FullHistoryBulkStorageBudgetOptions {
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
+	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
 	readonly capacityReader?: FullHistoryBulkStorageCapacityReader;
 	readonly maximumStoredBytes: bigint;
 	readonly minimumFreeBasisPoints: number;
@@ -53,6 +56,7 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 	readonly #rootPath: string;
 	readonly #usageReader: FullHistoryBulkStorageUsageReader;
 	readonly #currentCapacityAllowance: FullHistoryCurrentCapacityAllowance | undefined;
+	readonly #currentOnlyCapacity: FullHistoryCurrentOnlyCapacity | undefined;
 	readonly #now: () => number;
 
 	constructor(options: FullHistoryBulkStorageBudgetOptions) {
@@ -75,6 +79,7 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 		this.#rootPath = options.rootPath;
 		this.#usageReader = options.usageReader;
 		this.#currentCapacityAllowance = options.currentCapacityAllowance;
+		this.#currentOnlyCapacity = options.currentOnlyCapacity;
 		this.#now = options.now ?? Date.now;
 		const allowance = this.#currentCapacityAllowance;
 		if (allowance !== undefined &&
@@ -85,10 +90,23 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 				!Number.isSafeInteger(allowance.expiresAtMilliseconds) || allowance.expiresAtMilliseconds <= 0)) {
 			throw new RangeError('Invalid current capacity allowance');
 		}
+		const currentOnly = this.#currentOnlyCapacity;
+		if (currentOnly !== undefined &&
+			(allowance !== undefined ||
+				!Number.isSafeInteger(currentOnly.minimumLedger) ||
+				currentOnly.minimumLedger < 1 || currentOnly.minimumLedger > 0xffff_ffff ||
+				typeof currentOnly.minimumFreeBytes !== 'bigint' ||
+				currentOnly.minimumFreeBytes <= 0n || currentOnly.minimumFreeBytes >= this.#minimumFreeBytes)) {
+			throw new RangeError('Invalid current-only capacity policy');
+		}
 	}
 
 	async assertCanAllocate(byteCount: bigint, allocation?: FullHistoryBulkStorageAllocation): Promise<void> {
 		assertPositive(byteCount, 'byteCount');
+		const currentOnly = this.#currentOnlyCapacity;
+		if (currentOnly !== undefined && !isCurrentCapacityRange(allocation, currentOnly.minimumLedger)) {
+			throw new RangeError('Current-only capacity refuses non-current storage allocation');
+		}
 		const [capacity, storedBytes] = await Promise.all([
 			this.#capacityReader.readCapacity(this.#rootPath),
 			this.#usageReader.readStoredBytes()
@@ -105,24 +123,28 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 				? proportionalReserve
 				: this.#minimumFreeBytes;
 		const allowance = this.#currentCapacityAllowance;
-		if (allowance !== undefined &&
+		if (currentOnly !== undefined) {
+			reserve = currentOnlyReserve(capacity, this.#minimumFreeBasisPoints, currentOnly.minimumFreeBytes);
+		} else if (allowance !== undefined &&
 			isFullHistoryCurrentCapacityAllowanceActive(allowance, this.#now()) &&
-			allocation?.kind === 'priority' &&
-			Number.isSafeInteger(allocation.startLedger) &&
-			Number.isSafeInteger(allocation.endLedger) &&
-			allocation.startLedger >= allowance.minimumLedger &&
-			allocation.endLedger >= allocation.startLedger && allocation.endLedger <= 0xffff_ffff) {
+			isCurrentCapacityRange(allocation, allowance.minimumLedger)) {
 			// A single shared reserve-floor drawdown, never a per-job credit or a write quota.
 			const borrowedFloor = this.#minimumFreeBytes > allowance.maximumReserveBorrowBytes
 				? this.#minimumFreeBytes - allowance.maximumReserveBorrowBytes : 0n;
-			const hardRatio = this.#minimumFreeBasisPoints > 500n ? this.#minimumFreeBasisPoints : 500n;
-			const hardFloor = (capacity.totalBytes * hardRatio + 9_999n) / 10_000n;
-			reserve = borrowedFloor > hardFloor ? borrowedFloor : hardFloor;
+			reserve = currentOnlyReserve(capacity, this.#minimumFreeBasisPoints, borrowedFloor);
 		}
 		if (capacity.availableBytes < byteCount + reserve) {
 			throw new FullHistoryBulkStorageBudgetExceededError('free-space-reserve');
 		}
 	}
+}
+
+function currentOnlyReserve(
+	capacity: FullHistoryBulkStorageCapacity, configuredRatio: bigint, absoluteFloor: bigint
+): bigint {
+	const hardRatio = configuredRatio > 500n ? configuredRatio : 500n;
+	const hardFloor = (capacity.totalBytes * hardRatio + 9_999n) / 10_000n;
+	return absoluteFloor > hardFloor ? absoluteFloor : hardFloor;
 }
 
 const fileSystemCapacityReader: FullHistoryBulkStorageCapacityReader = {

@@ -163,6 +163,9 @@ export function composeFullHistoryLedgerCloseMetaService(
 			...(config.currentCapacityAllowance === undefined ? {} : {
 				currentCapacityAllowance: config.currentCapacityAllowance
 			}),
+			...(config.currentOnlyCapacity === undefined ? {} : {
+				currentOnlyCapacity: config.currentOnlyCapacity
+			}),
 			maximumStoredBytes: config.maximumStoredBytes,
 			minimumFreeBasisPoints: config.minimumFreeBasisPoints,
 			minimumFreeBytes: config.minimumFreeBytes,
