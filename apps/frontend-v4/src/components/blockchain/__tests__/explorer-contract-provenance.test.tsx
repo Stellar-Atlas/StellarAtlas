@@ -84,6 +84,7 @@ jest.unstable_mockModule('../../local-date-time', () => ({
 	LocalDateTime: ({ dateTime }: { dateTime: string }) =>
 		ReactActual.createElement('time', null, dateTime)
 }));
+jest.unstable_mockModule('../explorer-contract-provenance.module.css', () => ({ default: {} }));
 const { ExplorerContractProvenance, parseLedgerEvidence } =
 	await import('../explorer-contract-provenance');
 const hash = 'a'.repeat(64),

@@ -3,6 +3,10 @@ import request from 'supertest';
 import { createHash } from 'node:crypto';
 import { Address, StrKey, xdr } from '@stellar/stellar-sdk';
 import type { fetchRpcJson } from '../BoundedProvenanceJson.js';
+import { contractCatalogueRouter } from '../ContractCatalogueRouter.js';
+import {
+	catalogueCursor, type ContractCatalogueItem, type ContractCatalogueQuery
+} from '../ContractCatalogue.js';
 
 const { jest: mocks } = import.meta as ImportMeta & { jest: typeof jest };
 const fetchRpc = mocks.fn<
@@ -16,6 +20,57 @@ mocks.unstable_mockModule('../BoundedProvenanceJson.js', () => ({
 }));
 const { contractProvenanceRouter } =
 	await import('../ContractProvenanceRouter.js');
+
+it('binds catalogue continuation to the normalized filter and configured network', async () => {
+	const contractId = StrKey.encodeContract(new Uint8Array(32).fill(7));
+	const item: ContractCatalogueItem = {
+		contractId, observedLedger: 150, instanceModifiedLedger: 100,
+		checkedAt: '2026-11-09T12:00:00.000Z', wasmSha256: 'a'.repeat(64),
+		ledgerEvidence: 'configured_rpc_observation',
+		build: {
+			status: 'verified',
+			record: {
+				repository: 'Example/Contract', commit: 'b'.repeat(40),
+				sourceUrl: 'https://github.com/Example/Contract/tree/' + 'b'.repeat(40),
+				workflowUrl: 'https://github.com/Example/Contract/blob/' + 'b'.repeat(40) + '/.github/workflows/release.yml',
+				runUrl: null,
+				attestationUrl: 'https://api.github.com/repos/Example/Contract/attestations/sha256:' + 'a'.repeat(64)
+			}
+		},
+		independentReproduction: 'not_assessed', securityAudit: 'not_assessed'
+	};
+	const list = jest.fn(async (query: ContractCatalogueQuery) => ({
+		version: 1 as const, networkPassphrase: 'network one',
+		items: query.after ? [] : [item],
+		nextCursor: query.after ? null : catalogueCursor(query, item)
+	}));
+	const route = '/v1/contracts/catalogue';
+	const app = express().use('/v1', contractCatalogueRouter('network one', { list }));
+	const first = await request(app).get(route).query({ q: 'Example/Con', limit: 1 })
+		.expect('Cache-Control', 'no-store').expect(200);
+	expect(first.body.items).toEqual([item]);
+	const cursor = first.body.nextCursor;
+	await request(app).get(route).query({ q: 'example/con', cursor }).expect(200);
+	expect(list.mock.calls[1]?.[0].after).toEqual({ contractId, repositoryKey: 'example/contract' });
+	await request(app).get(route).query({ q: 'different', cursor }).expect(400);
+	await request(app).get(route + '?q=one&q=two').expect(400);
+	await request(app).get(route).query({ limit: 51 }).expect(400);
+	await request(express().use('/v1', contractCatalogueRouter('network two', { list })))
+		.get(route).query({ q: 'example/con', cursor }).expect(400);
+	expect(list).toHaveBeenCalledTimes(2);
+	expect(fetchRpc).not.toHaveBeenCalled();
+});
+
+it('reports catalogue unavailability separately from an available empty page', async () => {
+	const route = '/v1/contracts/catalogue';
+	const disabled = express().use('/v1', contractCatalogueRouter('test'));
+	await request(disabled).get(route).expect('Cache-Control', 'no-store').expect(503);
+	const enabled = express().use('/v1', contractCatalogueRouter('test', {
+		list: async () => ({ version: 1, networkPassphrase: 'test', items: [], nextCursor: null })
+	}));
+	await request(enabled).get(route).expect(200)
+		.expect({ version: 1, networkPassphrase: 'test', items: [], nextCursor: null });
+});
 
 describe('contract provenance RPC path', () => {
 	afterEach(() => fetchRpc.mockReset());

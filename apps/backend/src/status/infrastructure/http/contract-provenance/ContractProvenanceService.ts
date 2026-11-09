@@ -48,7 +48,10 @@ export interface ContractProvenance {
 
 export class ProvenanceBusy extends Error {}
 
+const maxCatalogueWrites = 2;
+
 export class ContractProvenanceService {
+	private catalogueWrites = 0;
 	private readonly cache = new Map<
 		string,
 		{ expires: number; value: ContractProvenance }
@@ -61,7 +64,8 @@ export class ContractProvenanceService {
 	constructor(
 		private readonly rpc: RpcEndpoint | undefined,
 		private readonly networkPassphrase: string,
-		private readonly scopedRpc?: ScopedProvenanceRpc
+		private readonly scopedRpc?: ScopedProvenanceRpc,
+		private readonly observe?: (value: ContractProvenance) => Promise<void>
 	) {}
 
 	async get(contractId: string): Promise<ContractProvenance> {
@@ -84,11 +88,33 @@ export class ContractProvenanceService {
 						'Scoped provenance RPC evidence expired'
 					);
 				this.remember(this.cache, contractId, value, expires);
+				this.recordCatalogueObservation(value);
 				return value;
 			})
 			.finally(() => this.pending.delete(contractId));
 		this.pending.set(contractId, job);
 		return job;
+	}
+
+	private recordCatalogueObservation(value: ContractProvenance): void {
+		const observe = this.observe;
+		if (
+			!observe ||
+			value.ledgerEvidence !== 'configured_rpc_observation' ||
+			value.build.status !== 'verified' ||
+			this.catalogueWrites >= maxCatalogueWrites
+		)
+			return;
+		// Bound writes independently of verification, including pool acquisition.
+		this.catalogueWrites++;
+		void Promise.resolve()
+			.then(() => observe(value))
+			.catch(() => {
+				console.warn('Contract catalogue observation could not be stored');
+			})
+			.finally(() => {
+				this.catalogueWrites--;
+			});
 	}
 
 	private async load(

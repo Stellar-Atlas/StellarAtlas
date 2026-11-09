@@ -14,6 +14,8 @@ import { createPublicGoodsReadinessReader } from './PublicGoodsReadinessReader.j
 import { sorobanDomainRouter } from './soroban-domains/SorobanDomainRouter.js';
 import type { DirectoryReader } from '../directory/DirectoryReader.js';
 import { directoryRoutePrefix, directoryRouter } from './DirectoryRouter.js';
+import { contractCatalogueRouter } from './contract-provenance/ContractCatalogueRouter.js';
+import { ContractCatalogueStore } from './contract-provenance/ContractCatalogueStore.js';
 
 interface PublicDataRouteConfig {
 	readonly warehouse: PublicGoodsRouterConfig['warehouse'];
@@ -25,6 +27,10 @@ interface PublicDataRouteConfig {
 }
 
 export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfig): void {
+	const contractCatalogue = process.env.STELLAR_ATLAS_CONTRACT_CATALOGUE_ENABLED === '1'
+		? new ContractCatalogueStore(config.manager, config.networkPassphrase)
+		: undefined;
+	app.use('/v1', contractCatalogueRouter(config.networkPassphrase, contractCatalogue));
 	if (config.directory)
 		app.use(directoryRoutePrefix, directoryRouter(config.directory));
 	app.use('/v1/analytics', hubbleWarehouseRouter({ warehouse: config.warehouse }));
@@ -46,7 +52,8 @@ export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfi
 		networkPassphrase: config.networkPassphrase,
 		cacheRoot,
 		source,
-		catalogue
+		catalogue,
+		observeContractVerification: contractCatalogue?.observe.bind(contractCatalogue)
 	}));
 	app.use('/v1/public-goods', publicGoodsRouter({
 		warehouse: config.warehouse,

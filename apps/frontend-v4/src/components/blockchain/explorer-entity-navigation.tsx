@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
+import { verifiedContractsPath } from '../../api/verified-contract-catalogue';
 import {
 	analyticsCollections,
 	buildEntityHref
@@ -69,6 +70,13 @@ export function ExplorerEntityNavigation({
 				aria-current={active === 'contract-events' ? 'page' : undefined}
 			>
 				Contract events
+			</Link>
+			<Link
+				href={verifiedContractsPath}
+				prefetch={false}
+				aria-current={active === 'verified-contracts' ? 'page' : undefined}
+			>
+				Verified contracts
 			</Link>
 		</nav>
 	);
