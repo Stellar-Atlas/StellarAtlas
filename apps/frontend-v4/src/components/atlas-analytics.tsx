@@ -51,7 +51,8 @@ const explorerRecords = new Set([
 ]);
 const explorerLists = new Set([
 	'assets', 'contracts', 'issuers', 'liquidity-pools', 'operations',
-	'transactions', 'offers', 'trades', 'transfers', 'contract-events'
+	'transactions', 'offers', 'trades', 'transfers', 'contract-events',
+	'markets', 'verified-contracts', 'soroban-domains'
 ]);
 
 export function atlasRouteEvent(pathname: string): AtlasEvent | null {
@@ -62,6 +63,7 @@ export function atlasRouteEvent(pathname: string): AtlasEvent | null {
 	if (section !== 'explorer') return null;
 	if (family === undefined || (record === undefined && explorerLists.has(family)))
 		return 'explorerList';
+	if (family === 'issuers' && record === 'by-domain' && extra === undefined) return 'explorerList';
 	if (extra === undefined && record && explorerRecords.has(family)) return 'explorerRecord';
 	return null;
 }

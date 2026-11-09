@@ -28,7 +28,7 @@ Configure exactly these case-sensitive custom event goals for the product signal
 | Explorer record view | `/explorer` | Navigation into a recognized explorer detail route, not proof a record exists |
 | Explorer search submitted | `/explorer` | Search accepted by the form validator, not proof of a match |
 | Successful event query | `/explorer/contract-events` | Finished HTTP 200 typed REST contract-event query |
-| Public REST use | `/docs/api` | Finished HTTP 200 GET on the transactions, operations or ledgers detail, account balances or asset holders routes under `/v1/analytics` |
+| Public REST use | `/docs/api` | Finished HTTP 200 GET on transaction or operation detail with `view=typed`, ledger detail, account balances or asset holders under `/v1/analytics` |
 | Public GraphQL use | `/docs/graphql` | Finished HTTP 200 POST with a successful, directly selected warehouse data field |
 | Public WebSocket connection | `/docs/live-updates` | Accepted connection on `/v1/stream/data` after its ready frame is queued |
 

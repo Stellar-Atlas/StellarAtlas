@@ -16,7 +16,7 @@ import type { DirectoryReader } from '../directory/DirectoryReader.js';
 import { directoryRoutePrefix, directoryRouter } from './DirectoryRouter.js';
 import { contractCatalogueRouter } from './contract-provenance/ContractCatalogueRouter.js';
 import { ContractCatalogueStore } from './contract-provenance/ContractCatalogueStore.js';
-import { observeAtlasRest } from './AtlasEventAnalytics.js';
+import { observeAtlasRest, observeAtlasTypedRest } from './AtlasEventAnalytics.js';
 
 interface PublicDataRouteConfig {
 	readonly warehouse: PublicGoodsRouterConfig['warehouse'];
@@ -36,7 +36,9 @@ export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfi
 		app.use(directoryRoutePrefix, directoryRouter(config.directory));
 	app.get([
 		'/v1/analytics/transactions/:transactionHash',
-		'/v1/analytics/operations/:operationId',
+		'/v1/analytics/operations/:operationId'
+	], observeAtlasTypedRest);
+	app.get([
 		'/v1/analytics/ledgers/:sequence',
 		'/v1/analytics/accounts/:account/balances',
 		'/v1/analytics/assets/:asset/holders'

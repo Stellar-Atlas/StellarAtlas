@@ -42,6 +42,11 @@ export const observeAtlasRest: RequestHandler = (request, response, next) => {
 	next();
 };
 
+export const observeAtlasTypedRest: RequestHandler = (request, response, next) => {
+	if (request.query.view === 'typed') observeAtlasRest(request, response, next);
+	else next();
+};
+
 export function recordAtlasApiEvent(event: AtlasEvent, headers: IncomingHttpHeaders): void {
 	const configured = process.env.ATLAS_ANALYTICS_ORIGIN;
 	if (!configured || inFlight >= 2 || analyticsOptedOut(headers)) return;

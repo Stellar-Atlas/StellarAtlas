@@ -2,7 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { setImmediate as turn } from 'node:timers/promises';
 import { registerHubbleContractEventRoutes } from '../HubbleContractEventRoutes.js';
-import { observeAtlasRest, recordAtlasApiEvent } from '../AtlasEventAnalytics.js';
+import { observeAtlasRest, observeAtlasTypedRest, recordAtlasApiEvent } from '../AtlasEventAnalytics.js';
 import type { HubbleContractEventPage } from '../HubbleContractEventContracts.js';
 
 it('records only bounded, fixed telemetry after a successful typed event response', async () => {
@@ -102,17 +102,22 @@ it('records only eligible finished REST responses and limits warehouse socket re
 		const app = express();
 		app.get('/records/:id', observeAtlasRest, (req, res) =>
 			res.status(req.params.id === 'missing' ? 404 : 200).json({}));
+		app.get('/transactions/:id', observeAtlasTypedRest, (_req, res) => res.json({}));
 		await request(app).get('/records/missing').expect(404);
 		await request(app).head('/records/private').expect(200);
 		await request(app).get('/records/private').set('Origin', 'https://stellaratlas.io').expect(200);
 		await request(app).get('/records/private').set('Sec-GPC', '1').expect(200);
 		await request(app).get('/records/private?private=search').expect(200);
+		await request(app).get('/transactions/private').expect(200);
+		await request(app).get('/transactions/private?view=legacy').expect(200);
+		await request(app).get('/transactions/private?view=typed&view=typed').expect(200);
+		await request(app).get('/transactions/private?view=typed').expect(200);
 		await turn();
 		recordAtlasApiEvent('websocket', { 'sec-gpc': '1' });
 		recordAtlasApiEvent('websocket', {});
 		recordAtlasApiEvent('websocket', {});
 		await turn();
-		expect(names).toEqual(['Public REST use', 'Public WebSocket connection']);
+		expect(names).toEqual(['Public REST use', 'Public REST use', 'Public WebSocket connection']);
 	} finally {
 		globalThis.fetch = originalFetch;
 		if (original === undefined) delete process.env.ATLAS_ANALYTICS_ORIGIN;

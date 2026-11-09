@@ -50,6 +50,12 @@ it('reduces known explorer routes to fixed categories without retaining identifi
 	expect(atlasRouteEvent('/')).toBe('network');
 	expect(atlasRouteEvent('/nodes/private-key')).toBe('network');
 	expect(atlasRouteEvent('/explorer/contracts')).toBe('explorerList');
+	expect(atlasRouteEvent('/explorer/markets')).toBe('explorerList');
+	expect(atlasRouteEvent('/explorer/verified-contracts')).toBe('explorerList');
+	expect(atlasRouteEvent('/explorer/soroban-domains')).toBe('explorerList');
+	expect(atlasRouteEvent('/explorer/issuers/by-domain')).toBe('explorerList');
+	expect(atlasRouteEvent('/explorer/issuers/private-key')).toBe('explorerRecord');
+	expect(atlasRouteEvent('/explorer/issuers/by-domain/extra')).toBeNull();
 	expect(atlasRouteEvent('/explorer/contracts/private-address')).toBe('explorerRecord');
 	expect(atlasRouteEvent('/explorer/transactions/private-hash')).toBe('explorerRecord');
 	expect(atlasRouteEvent('/explorer/unknown/private-address')).toBeNull();
