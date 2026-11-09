@@ -1,9 +1,16 @@
-import { createHash, randomBytes } from 'node:crypto';
+import {
+	createCipheriv,
+	createDecipheriv,
+	createHash,
+	hkdfSync,
+	randomBytes
+} from 'node:crypto';
 import express, {
 	type CookieOptions,
 	type Request,
 	type Router
 } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import {
 	developerGithubOAuth,
 	type DeveloperGithubConfig
@@ -53,6 +60,7 @@ const cookieOptions: CookieOptions = {
 	path: '/'
 };
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
+const sealedCookiePattern = /^[A-Za-z0-9_-]{80}$/;
 const secret = () => randomBytes(32).toString('base64url');
 const hash = (value: string) =>
 	createHash('sha256').update(value).digest('hex');
@@ -67,6 +75,15 @@ export function developerAuthRouter(
 } {
 	const github = developerGithubOAuth(config, request);
 	const { origin } = config;
+	const cookieKey = Buffer.from(
+		hkdfSync(
+			'sha256',
+			config.clientSecret,
+			'',
+			'atlas-developer-cookies-v1',
+			32
+		)
+	);
 	const router = express.Router();
 	const inputs = new WeakMap<
 		Request,
@@ -77,6 +94,48 @@ export function developerAuthRouter(
 		}
 	>();
 	let activeExchanges = 0;
+	function sealCookie(name: string, value: string): string {
+		const nonce = randomBytes(12);
+		const cipher = createCipheriv('aes-256-gcm', cookieKey, nonce);
+		cipher.setAAD(Buffer.from(name));
+		const ciphertext = Buffer.concat([
+			cipher.update(Buffer.from(value, 'base64url')),
+			cipher.final()
+		]);
+		return Buffer.concat([nonce, cipher.getAuthTag(), ciphertext]).toString(
+			'base64url'
+		);
+	}
+
+	function readCookie(req: Request, name: string): string | null {
+		const header = req.get('Cookie');
+		if (!header || header.length > 8192) return null;
+		const prefix = name + '=';
+		const cookies = header
+			.split(';')
+			.map((part) => part.trim())
+			.filter((part) => part.startsWith(prefix));
+		const value = cookies[0]?.slice(prefix.length);
+		if (cookies.length !== 1 || !value || !sealedCookiePattern.test(value))
+			return null;
+		const bytes = Buffer.from(value, 'base64url');
+		try {
+			const decipher = createDecipheriv(
+				'aes-256-gcm',
+				cookieKey,
+				bytes.subarray(0, 12)
+			);
+			decipher.setAAD(Buffer.from(name));
+			decipher.setAuthTag(bytes.subarray(12, 28));
+			return Buffer.concat([
+				decipher.update(bytes.subarray(28)),
+				decipher.final()
+			]).toString('base64url');
+		} catch {
+			return null;
+		}
+	}
+
 	router.use((req, res, next) => {
 		inputs.set(req, {
 			query: req.query,
@@ -104,34 +163,58 @@ export function developerAuthRouter(
 		res.json({ available: true, provider: 'github' });
 	});
 
-	router.post('/oauth/github/start', async (req, res) => {
-		if (req.get('Origin') !== origin) {
-			res.status(403).json({ code: 'origin_mismatch' });
-			return;
-		}
-		const state = secret();
-		const browser = secret();
-		const verifier = secret();
-		try {
-			const accepted = await store.issueFlow({
-				stateHash: hash(state),
-				browserHash: hash(browser),
-				verifier,
-				expiresAt: Date.now() + flowLifetimeMs
-			});
-			if (!accepted) {
-				res.set('Retry-After', '60').status(429).json({ code: 'sign_in_busy' });
+	router.post(
+		'/oauth/github/start',
+		(req, res, next) => {
+			if (req.get('Origin') !== origin) {
+				res.status(403).json({ code: 'origin_mismatch' });
 				return;
 			}
-			res.cookie(flowCookie, browser, {
-				...cookieOptions,
-				maxAge: flowLifetimeMs
-			});
-			res.json({ authorizationUrl: github.authorizationUrl(state, verifier) });
-		} catch {
-			res.status(503).json({ code: 'sign_in_unavailable' });
+			next();
+		},
+		rateLimit({
+			windowMs: 60_000,
+			limit: 60,
+			// Bound calls to shared admission without trusting forwarded client IPs.
+			keyGenerator: () => 'developer-oauth-start',
+			legacyHeaders: false,
+			handler: (_req, res) => {
+				res.set('Retry-After', '60').status(429).json({ code: 'sign_in_busy' });
+			}
+		}),
+		async (_req, res) => {
+			const state = secret();
+			const browser = secret();
+			const verifier = secret();
+			try {
+				const accepted = await store.issueFlow({
+					stateHash: hash(state),
+					browserHash: hash(browser),
+					verifier,
+					expiresAt: Date.now() + flowLifetimeMs
+				});
+				if (!accepted) {
+					res
+						.set('Retry-After', '60')
+						.status(429)
+						.json({ code: 'sign_in_busy' });
+					return;
+				}
+				res.cookie(flowCookie, sealCookie(flowCookie, browser), {
+					httpOnly: true,
+					secure: true,
+					sameSite: 'lax',
+					path: '/',
+					maxAge: flowLifetimeMs
+				});
+				res.json({
+					authorizationUrl: github.authorizationUrl(state, verifier)
+				});
+			} catch {
+				res.status(503).json({ code: 'sign_in_unavailable' });
+			}
 		}
-	});
+	);
 
 	router.head('/oauth/github/callback', (_req, res) => {
 		res.set('Allow', 'GET').status(405).end();
@@ -175,8 +258,11 @@ export function developerAuthRouter(
 			const token = secret();
 			const expiresAt = Date.now() + sessionLifetimeMs;
 			await store.createSession(hash(token), { providerUserId, expiresAt });
-			res.cookie(sessionCookie, token, {
-				...cookieOptions,
+			res.cookie(sessionCookie, sealCookie(sessionCookie, token), {
+				httpOnly: true,
+				secure: true,
+				sameSite: 'lax',
+				path: '/',
 				maxAge: sessionLifetimeMs
 			});
 			redirect('complete');
@@ -231,18 +317,4 @@ export function developerAuthRouter(
 		}
 	});
 	return { router, applicant };
-}
-
-function readCookie(req: Request, name: string): string | null {
-	const header = req.get('Cookie');
-	if (!header || header.length > 8192) return null;
-	const prefix = name + '=';
-	const cookies = header
-		.split(';')
-		.map((part) => part.trim())
-		.filter((part) => part.startsWith(prefix));
-	const value = cookies[0]?.slice(prefix.length);
-	return cookies.length === 1 && value && secretPattern.test(value)
-		? value
-		: null;
 }

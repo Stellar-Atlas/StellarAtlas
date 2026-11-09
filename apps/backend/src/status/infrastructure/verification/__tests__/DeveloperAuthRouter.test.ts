@@ -141,7 +141,9 @@ it('authenticates one browser-bound PKCE flow and issues a revocable Atlas sessi
 	);
 	expect(sessionCookie).not.toContain('test-provider-token');
 	const session = sessionCookie.split(';')[0]!;
-	const stored = sessions.get(hash(session.split('=')[1]!));
+	expect(sessions.size).toBe(1);
+	const [storedHash, stored] = [...sessions.entries()][0]!;
+	expect(storedHash).not.toBe(hash(session.split('=')[1]!));
 	expect(stored).toEqual({
 		providerUserId: '1234567',
 		expiresAt: expect.any(Number)
@@ -171,6 +173,12 @@ it('authenticates one browser-bound PKCE flow and issues a revocable Atlas sessi
 	expect(provider).toHaveBeenCalledTimes(2);
 
 	const api = supertest(app());
+	const tampered = session.replace(/.$/, (last) => (last === 'a' ? 'b' : 'a'));
+	await api.get(sessionPath).set('Cookie', tampered).expect(401);
+	await api
+		.get(sessionPath)
+		.set('Cookie', browser.replace('-oauth=', '-session='))
+		.expect(401);
 	await api
 		.get(sessionPath)
 		.set('Cookie', session)
@@ -226,6 +234,21 @@ it('rejects cross-origin starts, wrong browser binding and shared admission satu
 		.set('Origin', origin)
 		.expect('Retry-After', '60')
 		.expect(429);
+	expect(provider).not.toHaveBeenCalled();
+});
+
+it('bounds calls to shared admission on a single worker before contacting storage', async () => {
+	const { app, store, provider } = fixture();
+	const api = supertest(app());
+	for (let index = 0; index < 60; index++) {
+		await api.post(startPath).set('Origin', origin).expect(200);
+	}
+	await api
+		.post(startPath)
+		.set('Origin', origin)
+		.expect('Retry-After', '60')
+		.expect(429, { code: 'sign_in_busy' });
+	expect(store.issueFlow).toHaveBeenCalledTimes(60);
 	expect(provider).not.toHaveBeenCalled();
 });
 
@@ -311,15 +334,22 @@ it('rejects expired flows and sessions', async () => {
 		.expect('Location', rejected)
 		.expect(303);
 	expect(provider).not.toHaveBeenCalled();
-	const token = 'a'.repeat(43);
-	sessions.set(hash(token), {
-		providerUserId: '1234567',
-		expiresAt: Date.now() - 1
-	});
-	await api
-		.get(sessionPath)
-		.set('Cookie', '__Host-atlas-developer-session=' + token)
-		.expect(401);
+	provider
+		.mockResolvedValueOnce(token())
+		.mockResolvedValueOnce(Response.json({ type: 'User', id: 1234567 }));
+	const fresh = await begin();
+	const response = await api
+		.get(callbackPath)
+		.set('Cookie', fresh.browser)
+		.query({ state: fresh.state, code: 'fresh' })
+		.expect('Location', signedIn)
+		.expect(303);
+	const session = (response.headers['set-cookie'] as string[])
+		.find((value) => value.startsWith('__Host-atlas-developer-session='))!
+		.split(';')[0]!;
+	const [storedHash, stored] = [...sessions.entries()][0]!;
+	sessions.set(storedHash, { ...stored, expiresAt: Date.now() - 1 });
+	await api.get(sessionPath).set('Cookie', session).expect(401);
 });
 
 it.each([

@@ -193,6 +193,9 @@ importers:
       express-basic-auth:
         specifier: ^1.2.1
         version: 1.2.1
+      express-rate-limit:
+        specifier: 8.7.3
+        version: 8.7.3(express@4.22.2)
       express-validator:
         specifier: ^7.3.2
         version: 7.3.2
@@ -4981,6 +4984,12 @@ packages:
 
   express-basic-auth@1.2.1:
     resolution: {integrity: sha512-L6YQ1wQ/mNjVLAmK3AG1RK6VkokA1BIY6wmiH304Xtt/cLTps40EusZsU1Uop+v9lTDPxdtzbFmdXfFO3KEnwA==}
+
+  express-rate-limit@8.7.3:
+    resolution: {integrity: sha512-zPLqDI2f0gV2WmGnacLf9XSSqn4VldRyP5LCzOwx0BKH40mO6+2PCFkoSsRO2jePx87/Kf6NUF6P2QOTKXHbQA==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express: '>= 4.11'
 
   express-validator@7.3.2:
     resolution: {integrity: sha512-ctLw1Vl6dXVH62dIQMDdTAQkrh480mkFuG6/SGXOaVlwPNukhRAe7EgJIMJ2TSAni8iwHBRp530zAZE5ZPF2IA==}
@@ -12102,6 +12111,14 @@ snapshots:
   express-basic-auth@1.2.1:
     dependencies:
       basic-auth: 2.0.1
+
+  express-rate-limit@8.7.3(express@4.22.2):
+    dependencies:
+      debug: 4.4.3
+      express: 4.22.2
+      ip-address: 10.7.4
+    transitivePeerDependencies:
+      - supports-color
 
   express-validator@7.3.2:
     dependencies:
