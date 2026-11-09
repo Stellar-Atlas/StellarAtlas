@@ -72,7 +72,7 @@ type Collection struct {
 	TransactionResults    *Sink[model.TransactionResult]
 	TransactionMeta       *Sink[model.TransactionMeta]
 	ContractEvents        *Sink[model.ContractEvent]
-	LedgerEntryChanges    *Sink[model.LedgerEntryChange]
+	LedgerEntryChanges    ledgerEntryChangeSink
 	AccountStateChanges   *Sink[model.AccountStateChange]
 	TrustlineStateChanges *Sink[model.TrustlineStateChange]
 
@@ -109,7 +109,7 @@ type budgetWriter struct {
 	budget *byteBudget
 }
 
-func OpenCollection(directory string, maxBytes int64, startLedger, endLedger uint32) (*Collection, error) {
+func OpenCollection(directory string, maxBytes int64, startLedger, endLedger uint32, compactLedgerEntryChanges bool) (*Collection, error) {
 	if maxBytes <= 0 {
 		return nil, fmt.Errorf("output byte limit must be positive")
 	}
@@ -150,7 +150,7 @@ func OpenCollection(directory string, maxBytes int64, startLedger, endLedger uin
 		return nil, err
 	}
 	collection.sinks = append(collection.sinks, collection.ContractEvents)
-	if collection.LedgerEntryChanges, err = newSink[model.LedgerEntryChange](directory, budget, specifications[6]); err != nil {
+	if collection.LedgerEntryChanges, err = newLedgerEntryChangeSink(directory, budget, specifications[6], compactLedgerEntryChanges); err != nil {
 		return nil, err
 	}
 	collection.sinks = append(collection.sinks, collection.LedgerEntryChanges)

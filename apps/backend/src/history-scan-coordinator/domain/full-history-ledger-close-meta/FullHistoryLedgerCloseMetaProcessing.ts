@@ -38,6 +38,8 @@ const LEGACY_CONTRACT_EVENT_SCHEMA_VERSION =
 	'stellar-atlas.full-history.contract-events.v2';
 const LEGACY_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION =
 	'stellar-atlas.full-history.ledger-entry-changes.v2';
+export const COMPACT_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION =
+	'stellar-atlas.full-history.ledger-entry-changes.v4';
 
 export const FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS = {
 	'account-state-changes':
@@ -67,7 +69,8 @@ export const FULL_HISTORY_LEDGER_CLOSE_META_SUPPORTED_SCHEMA_VERSIONS = {
 	],
 	'ledger-entry-changes': [
 		LEGACY_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION,
-		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-entry-changes']
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-entry-changes'],
+		COMPACT_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION
 	],
 	ledgers: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.ledgers],
 	operations: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.operations],
@@ -230,9 +233,13 @@ function hasCoherentProjectionSchemas(
 			FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events'] &&
 		ledgerEntryChangeSchema ===
 			FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-entry-changes'];
+	const isCompactProjection =
+		contractEventSchema ===
+			FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events'] &&
+		ledgerEntryChangeSchema === COMPACT_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION;
 
 	return hasStateProjections
-		? isCompleteProjection
+		? isCompleteProjection || isCompactProjection
 		: isLegacyProjection || isCompleteProjection;
 }
 

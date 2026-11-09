@@ -21,9 +21,9 @@ describe('GoFullHistoryLedgerCloseMetaReceipt', () => {
 		protocol30.format.stellarSdk = 'github.com/stellar/go-stellar-sdk@v0.8.0';
 		protocol30.format.stellarXdrCommit =
 			'4f524bbac80c781c06e4fb5fc93a2d0d331d6705';
-		expect(parseGoFullHistoryLedgerCloseMetaManifest(protocol30).format).toEqual(
-			protocol30.format
-		);
+		expect(
+			parseGoFullHistoryLedgerCloseMetaManifest(protocol30).format
+		).toEqual(protocol30.format);
 	});
 	it.each([
 		[
@@ -145,6 +145,30 @@ describe('GoFullHistoryLedgerCloseMetaReceipt', () => {
 		expect(() => parseGoFullHistoryLedgerCloseMetaReceipt(receipt)).toThrow(
 			/incomplete/i
 		);
+	});
+
+	it('admits compact v4 only with a v9 manifest and both state projections', () => {
+		const manifest = manifestFixture();
+		const v4 = manifest.outputs.find(
+			(output) => output.dataset === 'ledger-entry-changes'
+		)!;
+		v4.schemaVersion = 'stellar-atlas.full-history.ledger-entry-changes.v4';
+		expect(() => parseGoFullHistoryLedgerCloseMetaManifest(manifest)).toThrow(
+			/not compatible/i
+		);
+		manifest.manifestVersion = 'stellar-atlas.full-history-etl.manifest.v9';
+		expect(
+			parseGoFullHistoryLedgerCloseMetaManifest(manifest).outputs
+		).toHaveLength(10);
+		v4.schemaVersion = 'stellar-atlas.full-history.ledger-entry-changes.v3';
+		expect(() => parseGoFullHistoryLedgerCloseMetaManifest(manifest)).toThrow(
+			/not compatible/i
+		);
+		v4.schemaVersion = 'stellar-atlas.full-history.ledger-entry-changes.v4';
+		manifest.outputs = manifest.outputs.filter(
+			(output) => output.dataset !== 'trustline-state-changes'
+		);
+		expect(() => parseGoFullHistoryLedgerCloseMetaManifest(manifest)).toThrow();
 	});
 
 	it('accepts immutable v6 and v7 manifests while requiring v8 state projections', () => {
