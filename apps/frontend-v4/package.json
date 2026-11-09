@@ -30,7 +30,8 @@
 		"react": "19.2.7",
 		"react-dom": "19.2.7",
 		"shared": "workspace:*",
-		"three": "0.185.1"
+		"three": "0.185.1",
+		"tldts": "7.4.19"
 	},
 	"devDependencies": {
 		"@jest/globals": "30.4.1",

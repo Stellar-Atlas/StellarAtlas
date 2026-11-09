@@ -20,6 +20,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
 			</header>
 			<NetworkStrip />
 			{children}
+			<footer className="shell atlas-footer"><Link href="/privacy">Privacy</Link></footer>
 		</>
 	);
 }
