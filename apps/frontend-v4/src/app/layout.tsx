@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import './shell.css';
 import './components.css';
@@ -16,6 +17,7 @@ import './status.css';
 import './operations-visibility.css';
 import './responsive.css';
 import { AppShell } from '../components/layout/app-shell';
+import { AtlasRouteAnalytics } from '../components/atlas-analytics';
 
 export const metadata: Metadata = {
 	title: 'StellarAtlas',
@@ -52,6 +54,7 @@ export default function RootLayout({
 				<script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
 			</head>
 			<body>
+				<Suspense fallback={null}><AtlasRouteAnalytics /></Suspense>
 				<AppShell>{children}</AppShell>
 			</body>
 		</html>

@@ -16,6 +16,7 @@ import type { DirectoryReader } from '../directory/DirectoryReader.js';
 import { directoryRoutePrefix, directoryRouter } from './DirectoryRouter.js';
 import { contractCatalogueRouter } from './contract-provenance/ContractCatalogueRouter.js';
 import { ContractCatalogueStore } from './contract-provenance/ContractCatalogueStore.js';
+import { observeAtlasRest, observeAtlasTypedRest } from './AtlasEventAnalytics.js';
 
 interface PublicDataRouteConfig {
 	readonly warehouse: PublicGoodsRouterConfig['warehouse'];
@@ -33,6 +34,15 @@ export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfi
 	app.use('/v1', contractCatalogueRouter(config.networkPassphrase, contractCatalogue));
 	if (config.directory)
 		app.use(directoryRoutePrefix, directoryRouter(config.directory));
+	app.get([
+		'/v1/analytics/transactions/:transactionHash',
+		'/v1/analytics/operations/:operationId'
+	], observeAtlasTypedRest);
+	app.get([
+		'/v1/analytics/ledgers/:sequence',
+		'/v1/analytics/accounts/:account/balances',
+		'/v1/analytics/assets/:asset/holders'
+	], observeAtlasRest);
 	app.use('/v1/analytics', hubbleWarehouseRouter({ warehouse: config.warehouse }));
 	app.use('/v1', sorobanDomainRouter({
 		rpcUrl: process.env.STELLAR_RPC_URL,

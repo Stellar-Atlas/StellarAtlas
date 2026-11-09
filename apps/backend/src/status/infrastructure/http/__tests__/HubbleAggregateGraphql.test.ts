@@ -1,4 +1,5 @@
 import express from 'express';
+import { setImmediate as turn } from 'node:timers/promises';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { hubbleWarehouseGraphqlHandler } from '../HubbleWarehouseGraphql.js';
@@ -42,6 +43,38 @@ function fixture() {
 }
 const query =
 	'query($input:HubbleQueryInput!) { hubbleQuery(input:$input) { dataset columns rows limit offset nextOffset aggregates { alias function field sourceType valueEncoding approximate } coverage { contiguousLastLedger } coverageStatus window { minLedger maxLedger } semantics } }';
+
+it('records successful programmatic GraphQL data responses, not discovery or opt-outs', async () => {
+	const original = process.env.ATLAS_ANALYTICS_ORIGIN;
+	const originalFetch = globalThis.fetch;
+	const sent: unknown[] = [];
+	try {
+		process.env.ATLAS_ANALYTICS_ORIGIN = 'https://analytics.example.test';
+		globalThis.fetch = async (_url, init) => {
+			sent.push(JSON.parse(String(init?.body)));
+			return new Response(null, { status: 202 });
+		};
+		const { app, warehouse } = fixture();
+		const payload = { query: '{ privateAlias: hubbleQuery(input: { dataset: "history_operations" }) { dataset } }' };
+		await request(app).post('/graphql').send({ query: '{ __typename }' }).expect(200);
+		await request(app).post('/graphql').send({ query: '{ notAField }' }).expect(200);
+		await request(app).post('/graphql').set('Sec-GPC', '1').send(payload).expect(200);
+		await request(app).post('/graphql').set('Sec-Fetch-Site', 'same-site').send(payload).expect(200);
+		await request(app).post('/graphql').send(payload).expect(200);
+		warehouse.query.mockRejectedValueOnce(new HubbleWarehouseInputError('invalid fixture'));
+		const failed = await request(app).post('/graphql').send(payload).expect(200);
+		expect(failed.body.errors).toHaveLength(1);
+		await turn();
+		expect(sent).toEqual([{
+			name: 'Public GraphQL use', domain: 'stellaratlas.io', url: 'https://stellaratlas.io/docs/graphql'
+		}]);
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (original === undefined) delete process.env.ATLAS_ANALYTICS_ORIGIN;
+		else process.env.ATLAS_ANALYTICS_ORIGIN = original;
+	}
+});
+
 describe('shared aggregate GraphQL forwarding', () => {
 	it('passes identical normalized query input to REST and GraphQL and preserves exact result strings', async () => {
 		const f = fixture();
