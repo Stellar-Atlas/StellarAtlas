@@ -14,7 +14,11 @@ const plan: PendingPlan = {
 const payload = Buffer.from(JSON.stringify(plan));
 let cursor = 0;
 const close = jest.fn(async () => {});
-const stat = jest.fn(async () => ({ isFile: () => true, size: payload.byteLength }));
+const fileVersion = { isFile: () => true, size: BigInt(payload.byteLength),
+	dev: 4n, ino: 7n, mtimeNs: 10n, ctimeNs: 11n };
+const stat = jest.fn(async () => fileVersion);
+const lstatSync = jest.fn(() => fileVersion);
+const unlinkSync = jest.fn();
 const read = jest.fn(async (
 	buffer: Buffer, offset = 0, length = buffer.byteLength - offset, position: number | null = null
 ) => {
@@ -25,7 +29,7 @@ const read = jest.fn(async (
 });
 const open = jest.fn(async (_file: string, _flags: number) => ({ stat, read, close }));
 
-jest.unstable_mockModule('node:fs', () => ({ constants: flags }));
+jest.unstable_mockModule('node:fs', () => ({ constants: flags, lstatSync, unlinkSync }));
 jest.unstable_mockModule('node:fs/promises', () => ({
 	open,
 	rename: jest.fn(async () => {}),
@@ -40,7 +44,8 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 		jest.clearAllMocks();
 		cursor = 0;
 		open.mockImplementation(async () => ({ stat, read, close }));
-		stat.mockImplementation(async () => ({ isFile: () => true, size: payload.byteLength }));
+		stat.mockImplementation(async () => fileVersion);
+		lstatSync.mockImplementation(() => fileVersion);
 	});
 
 	it('returns null when opening a missing plan', async () => {
@@ -69,7 +74,7 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 		{ label: 'nonregular', regular: false, size: payload.byteLength },
 		{ label: 'oversize', regular: true, size: maximumBytes + 1 }
 	])('rejects an opened $label descriptor and closes it', async ({ regular, size }) => {
-		stat.mockResolvedValueOnce({ isFile: () => regular, size });
+		stat.mockResolvedValueOnce({ ...fileVersion, isFile: () => regular, size: BigInt(size) });
 		await expect(new Store(file).read()).rejects.toThrow(/bounded regular file|bounded size limit/);
 		expect(read).not.toHaveBeenCalled();
 		expect(close).toHaveBeenCalledTimes(1);
@@ -81,5 +86,27 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 		expect(stat).not.toHaveBeenCalled();
 		expect(read).not.toHaveBeenCalled();
 		expect(close).not.toHaveBeenCalled();
+	});
+
+	it('does not unlink a verified plan if leadership is lost after the last descriptor read', async () => {
+		const store = new Store(file);
+		const expected = await store.read();
+		if (expected === null) throw new Error('fixture must have a plan');
+		await expect(store.clearVerified(expected, async () => {
+			expect(open).toHaveBeenCalledTimes(2);
+			throw new Error('leadership lost');
+		})).rejects.toThrow(/leadership lost/);
+		expect(lstatSync).not.toHaveBeenCalled();
+		expect(unlinkSync).not.toHaveBeenCalled();
+	});
+
+	it('does not unlink a same-content replacement that arrives during the final lease check', async () => {
+		const store = new Store(file);
+		const expected = await store.read();
+		if (expected === null) throw new Error('fixture must have a plan');
+		await expect(store.clearVerified(expected, async () => {
+			lstatSync.mockReturnValueOnce({ ...fileVersion, ino: 8n });
+		})).rejects.toThrow(/refusing to clear/);
+		expect(unlinkSync).not.toHaveBeenCalled();
 	});
 });

@@ -1,9 +1,11 @@
 import {
 	assertPairedCapacity,
+	fencePairedCurrentAdmission,
 	matchesFullPublication,
 	type PairedCurrentAdmissionPolicy,
 	type PairedFilesystem
 } from '../FullHistoryPairedCurrentAdmission.js';
+import type { PendingPlan } from '../FullHistoryLedgerCloseMetaPendingPlan.js';
 
 describe('paired current source admission', () => {
 	const policy: PairedCurrentAdmissionPolicy = {
@@ -18,6 +20,33 @@ describe('paired current source admission', () => {
 	const before: PairedFilesystem = { device: 4n, inode: 1n, total: 10_000n, available: 1_001n };
 	const warehouse = { ...before, inode: 12n, available: 1_000n };
 	const row = { path: '/bulk/warehouse/', total_space: '10000', free_space: '1000', unreserved_space: '800' };
+
+	it.each(['assertCapacity', 'pendingPublication'] as const)(
+		'fails %s when the lock session is lost during metadata I/O', async method => {
+			const pending: PendingPlan = {
+				version: 1, kind: 'priority', networkPassphraseHash: '22'.repeat(32),
+				sourceId: 'source', configDigest: '11'.repeat(32),
+				partitionVersion: 'source-aligned-remainder-v1', sourceBatchLedgerCount: 1,
+				typedShardLedgerCount: 64, startLedger: 3, endLedger: 66,
+				shards: [{ startLedger: 3, endLedger: 66 }]
+			};
+			const actions: string[] = [];
+			let held = true;
+			const read = async () => {
+				actions.push('metadata');
+				await Promise.resolve();
+				held = false;
+			};
+			const fenced = fencePairedCurrentAdmission({
+				assertCapacity: read,
+				pendingPublication: async () => { await read(); return 'published'; }
+			}, async () => {
+				actions.push('lease');
+				if (!held) throw new Error('leadership lost');
+			});
+			await expect(fenced[method](pending, new AbortController().signal)).rejects.toThrow(/leadership lost/);
+			expect(actions).toEqual(['lease', 'metadata', 'lease']);
+		});
 
 	it('counts existing warehouse reservations once and rejects stale or mismatched capacity', () => {
 		expect(() => assertPairedCapacity(policy, config, before, before, before, warehouse, row, 4000))

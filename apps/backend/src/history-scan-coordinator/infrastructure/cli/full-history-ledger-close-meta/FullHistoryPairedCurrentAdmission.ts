@@ -24,6 +24,34 @@ export interface PairedCurrentAdmission {
 	>;
 }
 
+export interface FencedPairedCurrentAdmission extends PairedCurrentAdmission {
+	assertHeld(signal: AbortSignal): Promise<void>;
+}
+
+export function fencePairedCurrentAdmission(
+	paired: PairedCurrentAdmission,
+	assertLeadership: () => Promise<void>
+): FencedPairedCurrentAdmission {
+	const assertHeld = async (signal: AbortSignal): Promise<void> => {
+		signal.throwIfAborted();
+		await assertLeadership();
+		signal.throwIfAborted();
+	};
+	const observe = async <T>(signal: AbortSignal, read: () => Promise<T>): Promise<T> => {
+		await assertHeld(signal);
+		const started = performance.now();
+		const result = await read();
+		await assertHeld(signal);
+		assertFreshAfterLease(started);
+		return result;
+	};
+	return {
+		assertHeld,
+		assertCapacity: (plan, signal) => observe(signal, () => paired.assertCapacity(plan, signal)),
+		pendingPublication: (plan, signal) => observe(signal, () => paired.pendingPublication(plan, signal))
+	};
+}
+
 export interface PairedFilesystem {
 	readonly device: bigint;
 	readonly inode: bigint;
@@ -186,16 +214,20 @@ export async function isPairedCurrentBoot(policy: PairedCurrentAdmissionPolicy):
 }
 
 export async function settlePairedPendingPublication(
-	paired: PairedCurrentAdmission,
+	paired: FencedPairedCurrentAdmission,
 	plan: PendingPlan,
 	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies
 ): Promise<boolean> {
+	const started = performance.now();
 	const status = await paired.pendingPublication(plan, dependencies.signal);
 	dependencies.signal.throwIfAborted();
 	if (status === 'not-captured') return false;
 	if (status === 'published') {
-		await dependencies.pendingPlans.clear();
+		await dependencies.pendingPlans.clearVerified(plan, async () => {
+			await paired.assertHeld(dependencies.signal);
+			assertFreshAfterLease(started);
+		});
 		return true;
 	}
 	const retryInMilliseconds = Math.max(30_000, config.admissionRetryMilliseconds);
@@ -206,6 +238,11 @@ export async function settlePairedPendingPublication(
 	});
 	await dependencies.wait(retryInMilliseconds, dependencies.signal);
 	return true;
+}
+
+function assertFreshAfterLease(started: number): void {
+	if (performance.now() - started > maximumEvidenceAgeMs)
+		throw new Error('Paired current metadata expired before the leadership fence completed');
 }
 
 export function assertPairedCapacity(

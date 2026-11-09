@@ -1,5 +1,5 @@
 import type { DataSource } from 'typeorm';
-import { createPairedCurrentAdmission, isPairedCurrentBoot } from './FullHistoryPairedCurrentAdmission.js';
+import { createPairedCurrentAdmission, fencePairedCurrentAdmission, isPairedCurrentBoot } from './FullHistoryPairedCurrentAdmission.js';
 import { join } from 'node:path';
 import { FileFullHistoryLedgerCloseMetaPendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import {
@@ -145,13 +145,22 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 			await leadership.assertHeld();
 			const lease = leadership;
 			const paired = config.pairedCurrentAdmission !== undefined && config.currentOnlyCapacity !== undefined
-				? createPairedCurrentAdmission(config.pairedCurrentAdmission, {
+				? fencePairedCurrentAdmission(createPairedCurrentAdmission(config.pairedCurrentAdmission, {
 					bulkRoot: config.bulkRoot,
 					typedOutputRoot: config.typedOutputRoot,
 					minimumFreeBasisPoints: config.minimumFreeBasisPoints,
 					currentMinimumFreeBytes: config.currentOnlyCapacity.minimumFreeBytes,
 					sourceOutputBytes: cycleOutputReservation(config)
-				}, environment, activeComposition.dataSource)
+				}, environment, activeComposition.dataSource), async () => {
+					try {
+						await lease.assertHeld();
+					} catch (cause) {
+						const error = new Error('Full-history LedgerCloseMeta leadership was lost', { cause });
+						leadershipFailure = error;
+						abortController.abort(error);
+						throw error;
+					}
+				})
 				: undefined;
 			await dependencies.resetOwnedRuntime(config);
 			await dependencies.reconcileRuntime(config, dependencies.now());
@@ -205,18 +214,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 						activeComposition.storageBudget.assertCanAllocate(
 							cycleOutputReservation(config), plan
 						),
-					...(paired === undefined ? {} : {
-						pairedCurrentAdmission: {
-							assertCapacity: async (plan, signal) => {
-								await lease.assertHeld();
-								await paired.assertCapacity(plan, signal);
-							},
-							pendingPublication: async (plan, signal) => {
-								await lease.assertHeld();
-								return paired.pendingPublication(plan, signal);
-							}
-						}
-					}),
+					...(paired === undefined ? {} : { pairedCurrentAdmission: paired }),
 					formatError: safeMessage,
 					frontier: activeComposition.frontier,
 					ingestion: activeComposition.ingestion,

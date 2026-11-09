@@ -207,6 +207,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
 		let checks = 0;
 		f.dependencies.pairedCurrentAdmission = {
+			assertHeld: async () => {},
 			pendingPublication: async () => 'not-captured',
 			assertCapacity: async () => {
 				if (++checks === boundary) throw new Error('stale paired sample');
@@ -225,6 +226,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		f.pending = plan('priority', 1000);
 		let waiting = true;
 		f.dependencies.pairedCurrentAdmission = {
+			assertHeld: async () => {},
 			assertCapacity: async () => {},
 			pendingPublication: async pending => {
 				expect(pending).toEqual(plan('priority', 1000));
@@ -309,6 +311,7 @@ function currentOnlyPolicies(): [string, Partial<ContinuousFullHistoryLedgerClos
 function usePolicy(f: ReturnType<typeof fixture>, policy: Partial<ContinuousFullHistoryLedgerCloseMetaLoopConfig>): void {
 	f.config = { ...f.config, ...policy };
 	if (policy.currentOnlyCapacity !== undefined) f.dependencies.pairedCurrentAdmission = {
+		assertHeld: async () => {},
 		assertCapacity: async () => {},
 		pendingPublication: async pending => f.selected.some(item =>
 			item.startSequence === pending.startLedger && item.endSequence === pending.endLedger)
@@ -361,7 +364,12 @@ function fixture(stopAfter: number) {
 		pendingPlans: {
 			read: async () => f.pending,
 			write: async pending => { calls.push('pending-write'); f.pending = pending; },
-			clear: async () => { f.pending = null; }
+			clear: async () => { f.pending = null; },
+			clearVerified: async (expected, assertHeld) => {
+				await assertHeld();
+				if (expected !== f.pending) throw new Error('unexpected replacement in fixture');
+				f.pending = null;
+			}
 		},
 		priorityRangeReader: {
 			readNextRange: async () => {

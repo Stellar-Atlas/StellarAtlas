@@ -1,4 +1,4 @@
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, lstatSync, unlinkSync, type BigIntStats } from 'node:fs';
 import {
 	open,
 	rename,
@@ -26,6 +26,13 @@ export interface PendingPlanStore {
 	read(): Promise<PendingPlan | null>;
 	write(plan: PendingPlan): Promise<void>;
 	clear(): Promise<void>;
+	clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void>;
+}
+
+export class PendingPlanChangedError extends Error {
+	constructor(message = 'Verified pending plan changed or could not be identified; refusing to clear it') {
+		super(message);
+	}
 }
 
 const MAX_FILE_BYTES = 131_072;
@@ -46,6 +53,8 @@ const PLAN_KEYS = [
 ] as const;
 
 export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanStore {
+	readonly #observed = new WeakMap<PendingPlan, BigIntStats>();
+
 	constructor(private readonly file: string) {}
 
 	async read(): Promise<PendingPlan | null> {
@@ -57,8 +66,8 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		let handle: FileHandle | undefined;
 		try {
 			handle = await open(this.file, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
-			const opened = await handle.stat();
-			if (!opened.isFile() || opened.size > MAX_FILE_BYTES) {
+			const opened = await handle.stat({ bigint: true });
+			if (!opened.isFile() || opened.size > BigInt(MAX_FILE_BYTES)) {
 				throw new Error('Pending plan must be a bounded regular file');
 			}
 			const buffer = Buffer.alloc(MAX_FILE_BYTES + 1);
@@ -77,7 +86,9 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 			} catch {
 				throw new Error('Pending plan file contains invalid JSON');
 			}
-			return validatePendingPlan(parsed);
+			const plan = validatePendingPlan(parsed);
+			this.#observed.set(plan, opened);
+			return plan;
 		} catch (error) {
 			if (isCode(error, 'ENOENT')) return null;
 			if (isCode(error, 'ELOOP')) {
@@ -132,6 +143,37 @@ export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanSto
 		}
 		await syncDirectory(dirname(this.file));
 	}
+
+	async clearVerified(plan: PendingPlan, assertHeld: () => Promise<void>): Promise<void> {
+		const observed = this.#observed.get(plan);
+		const current = await this.read().catch(() => { throw new PendingPlanChangedError(); });
+		const currentFile = current === null ? undefined : this.#observed.get(current);
+		if (observed === undefined || current === null || currentFile === undefined ||
+			!samePlan(plan, current) || !sameFileVersion(observed, currentFile)) {
+			throw new PendingPlanChangedError();
+		}
+		await assertHeld();
+		// No await between the last pathname identity check and the unlink.
+		let named: BigIntStats;
+		try {
+			named = lstatSync(this.file, { bigint: true });
+		} catch {
+			throw new PendingPlanChangedError();
+		}
+		if (!sameFileVersion(observed, named)) throw new PendingPlanChangedError();
+		try {
+			unlinkSync(this.file);
+			await syncDirectory(dirname(this.file));
+		} catch {
+			throw new PendingPlanChangedError('Verified pending plan clear could not be made durable');
+		}
+	}
+}
+
+function sameFileVersion(expected: BigIntStats, observed: BigIntStats): boolean {
+	return observed.isFile() && expected.dev === observed.dev && expected.ino === observed.ino &&
+		expected.size === observed.size && expected.mtimeNs === observed.mtimeNs &&
+		expected.ctimeNs === observed.ctimeNs;
 }
 
 function validatePendingPlan(value: unknown): PendingPlan {

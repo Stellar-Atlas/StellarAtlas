@@ -1,4 +1,4 @@
-import { settlePairedPendingPublication, type PairedCurrentAdmission } from './FullHistoryPairedCurrentAdmission.js';
+import { settlePairedPendingPublication, type FencedPairedCurrentAdmission } from './FullHistoryPairedCurrentAdmission.js';
 import {
 	fullHistoryLedgerCloseMetaRange,
 	type FullHistoryLedgerCloseMetaRange
@@ -17,7 +17,7 @@ import type {
 } from '../../../use-cases/ingest-full-history-ledger-close-meta/IngestFullHistoryLedgerCloseMeta.js';
 import type { TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader } from '../../database/full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader.js';
 import { createShardRanges } from '../../../use-cases/ingest-full-history-ledger-close-meta/FullHistoryLedgerCloseMetaShardRanges.js';
-import type { PendingPlan, PendingPlanStore } from './FullHistoryLedgerCloseMetaPendingPlan.js';
+import { PendingPlanChangedError, type PendingPlan, type PendingPlanStore } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import type {
 	FullHistoryLedgerCloseMetaAdmissionDecision,
 	FullHistoryLedgerCloseMetaAdmissionReason,
@@ -93,7 +93,7 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 	  };
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
-	readonly pairedCurrentAdmission?: PairedCurrentAdmission;
+	readonly pairedCurrentAdmission?: FencedPairedCurrentAdmission;
 	readonly admitCycle: (current?: boolean) => Promise<FullHistoryLedgerCloseMetaAdmissionDecision>;
 	readonly emit: (event: ContinuousFullHistoryLedgerCloseMetaEvent) => void;
 	readonly ensureStorageCapacity: (plan: PendingPlan) => Promise<void>;
@@ -289,6 +289,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				createPendingPlan(cycleContext, config, range, 'historical'));
 			priorityStreak = 0;
 		} catch (error) {
+			if (error instanceof PendingPlanChangedError) throw error;
 			if (dependencies.signal.aborted) break;
 			reloadDurableState = true;
 			dependencies.emit({
