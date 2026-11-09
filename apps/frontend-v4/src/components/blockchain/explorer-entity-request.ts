@@ -1,7 +1,9 @@
 import {
 	buildEntityApiPath,
 	buildEntityHref,
+	ExplorerHttpError,
 	parseEntityPage,
+	recordValue,
 	requestExplorerJson,
 	type AnalyticsCollection,
 	type AnalyticsEntityPage,
@@ -34,7 +36,29 @@ export type ExplorerPageOutcome =
 			readonly page: AnalyticsEntityPage;
 			readonly request: ExplorerPageRequest;
 	  }
-	| { readonly ok: false; readonly message: string };
+	| { readonly ok: false; readonly message: string; readonly windowMiss?: ContractActivityWindowMiss };
+
+export interface ContractActivityWindowMiss {
+	readonly coverage: 'complete' | 'partial_or_unknown';
+	readonly minLedger: number;
+	readonly maxLedger: number;
+}
+
+function contractActivityWindowMiss(failure: unknown): ContractActivityWindowMiss | undefined {
+	if (!(failure instanceof ExplorerHttpError)) return;
+	const { details, status } = failure;
+	if (details.source !== 'stellar_hubble' || details.entity !== 'contracts' || details.record !== null) return;
+	const coverage = details.coverageStatus;
+	if (!(
+		(status === 404 && details.code === 'hubble_record_not_found' && coverage === 'complete') ||
+		(status === 409 && details.code === 'hubble_range_not_fully_ingested' && coverage === 'partial_or_unknown')
+	)) return;
+	const { minLedger, maxLedger } = recordValue(details.window);
+	if (typeof minLedger !== 'number' || typeof maxLedger !== 'number' ||
+		!Number.isSafeInteger(minLedger) || !Number.isSafeInteger(maxLedger) ||
+		minLedger < 1 || maxLedger < minLedger || maxLedger > 0xffffffff) return;
+	return { coverage, minLedger, maxLedger };
+}
 
 /** Own only one bounded request; a failed request remains the exact retry target. */
 export class ExplorerEntityRequest {
@@ -77,8 +101,11 @@ export class ExplorerEntityRequest {
 			return { ok: true, page, request: { ...request, filters } };
 		} catch (failure) {
 			if (generation !== this.generation) return null;
+			const windowMiss = this.collection === 'contracts' && this.identifier && !abort.signal.aborted
+				? contractActivityWindowMiss(failure) : undefined;
 			return {
 				ok: false,
+				...(windowMiss ? { windowMiss } : {}),
 				message: abort.signal.aborted
 					? 'The query was cancelled. Retry or narrow the ledger range.'
 					: failure instanceof Error
