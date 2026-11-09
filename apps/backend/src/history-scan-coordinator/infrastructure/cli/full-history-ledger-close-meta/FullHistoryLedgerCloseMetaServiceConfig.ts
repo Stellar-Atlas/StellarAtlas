@@ -2,6 +2,8 @@ import { dirname, relative, resolve, sep } from 'node:path';
 import {
 	parseFullHistoryCurrentCapacityAllowance,
 	parseFullHistoryCurrentOnlyCapacity,
+	SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES,
+	SCOPED_CURRENT_START_ALLOWANCE_BYTES,
 	type FullHistoryCurrentCapacityAllowance,
 	type FullHistoryCurrentOnlyCapacity
 } from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
@@ -9,6 +11,7 @@ import {
 	parsePairedCurrentAdmissionPolicy,
 	type PairedCurrentAdmissionPolicy
 } from './FullHistoryPairedCurrentAdmission.js';
+import { parseScopedCurrentAttemptPolicy, type ScopedCurrentAttemptPolicy } from './FullHistoryScopedCurrentAttempt.js';
 
 const maximumIngressBytesPerSecond = 187_500_000;
 const maximumFetchConcurrency = 1_024;
@@ -22,6 +25,7 @@ export interface FullHistoryLedgerCloseMetaServiceConfig {
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
 	readonly pairedCurrentAdmission?: PairedCurrentAdmissionPolicy;
+	readonly scopedCurrentAttempt?: ScopedCurrentAttemptPolicy;
 	readonly admissionCycleCooldownMilliseconds: number;
 	readonly admissionEnabled: boolean;
 	readonly admissionMaximumDatabaseConnectionBasisPoints: number;
@@ -190,6 +194,22 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	const pairedCurrentAdmission = parsePairedCurrentAdmissionPolicy(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION
 	);
+	const scopedCurrentAttempt = parseScopedCurrentAttemptPolicy(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_SCOPED_CURRENT_ATTEMPT
+	);
+	const minimumFreeBasisPoints = integer(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS,
+		1_000, 0, 10_000, 'minimum free basis points'
+	);
+	if (scopedCurrentAttempt !== undefined &&
+		(currentOnlyCapacity === undefined || pairedCurrentAdmission === undefined ||
+			currentOnlyCapacity.minimumFreeBytes !== SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES ||
+			pairedCurrentAdmission.minimumUnreservedBytes < SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES + SCOPED_CURRENT_START_ALLOWANCE_BYTES ||
+			scopedCurrentAttempt.startLedger < currentOnlyCapacity.minimumLedger ||
+			minimumFreeBytes !== 4n * 1024n ** 4n || minimumFreeBasisPoints !== 500 ||
+			typedShardLedgerCount !== 128 || cycleLedgerCount !== 128 || processingConcurrency !== 1)) {
+		throw new Error('Scoped current attempt requires the exact ordinary floor, paired allowance and one 128-ledger shard');
+	}
 	if ((currentOnlyCapacity === undefined) !== (pairedCurrentAdmission === undefined)) {
 		throw new Error('current-only capacity and paired admission must be configured together');
 	}
@@ -233,8 +253,10 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	}
 	return Object.freeze({
 		...(currentCapacityAllowance === undefined ? {} : { currentCapacityAllowance }),
-		...(currentOnlyCapacity === undefined ? {} : { currentOnlyCapacity }),
+		...(currentOnlyCapacity === undefined ? {} : { currentOnlyCapacity: scopedCurrentAttempt === undefined
+			? currentOnlyCapacity : Object.freeze({ ...currentOnlyCapacity, scopedReserve: true as const }) }),
 		...(pairedCurrentAdmission === undefined ? {} : { pairedCurrentAdmission }),
+		...(scopedCurrentAttempt === undefined ? {} : { scopedCurrentAttempt }),
 		admissionCycleCooldownMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_CYCLE_COOLDOWN_MS,
 			30_000,
@@ -319,13 +341,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		),
 		lastAvailableLedger,
 		minimumFreeBytes,
-		minimumFreeBasisPoints: integer(
-			environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS,
-			1_000,
-			0,
-			10_000,
-			'minimum free basis points'
-		),
+		minimumFreeBasisPoints,
 		maximumStoredBytes: positiveBigInt(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_MAXIMUM_STORED_BYTES,
 			40n * 1_024n ** 4n,
