@@ -21,6 +21,7 @@ import { isWithinScpStatementTransportCeiling } from './ScpStatementTransportPol
 import type { ScpStatementLiveCursor } from '../../domain/scp/ScpStatementLiveStore.js';
 
 interface NetworkLiveWebSocketConfig {
+	readonly recordTraffic?: (outcome: 'attempted' | 'accepted' | 'rejected') => void;
 	getLatestObservedLedger: GetLatestObservedLedger;
 	getNetwork: GetNetwork;
 	getScpStatements: GetScpStatements;
@@ -463,14 +464,17 @@ export function attachNetworkLiveWebSocket(
 		'upgrade',
 		(request: IncomingMessage, socket: Socket, head: Buffer) => {
 			if (!isWebSocketPath(request, path)) return;
+			config.recordTraffic?.('attempted');
 			if (
 				!parseNetworkLiveResumeCursor(request.url).valid ||
 				!parseNetworkLiveChannels(request.url).valid
 			) {
+				config.recordTraffic?.('rejected');
 				rejectInvalidUpgrade(socket);
 				return;
 			}
 			webSocketServer.handleUpgrade(request, socket, head, (client) => {
+				config.recordTraffic?.('accepted');
 				webSocketServer.emit('connection', client, request);
 			});
 		}

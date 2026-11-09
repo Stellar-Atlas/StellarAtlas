@@ -116,6 +116,8 @@ import {
 	prepareExplorerAccountProtocolPositionHandler
 } from './ExplorerRoutes.js';
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
+import { createPublicOpenApiDocument } from './PublicOpenApiDocument.js';
+import { createAtlasApiTraffic } from './AtlasApiTraffic.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
 import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
@@ -135,6 +137,9 @@ let shutdownStarted = false;
 const api = express();
 const backgroundTasks = apiBackgroundTasksEnabled(process.env);
 const listenHost = apiListenHost(process.env);
+const apiTraffic = process.env.ATLAS_API_TRAFFIC_LOG === '1'
+	? createAtlasApiTraffic(createPublicOpenApiDocument(openApiDocument)) : undefined;
+if (apiTraffic) api.use(apiTraffic.observe);
 api.use(corsMiddleware);
 mountParsedHistoryRequestBodyParser(api);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
@@ -448,8 +453,14 @@ const listen = async () => {
 	};
 	server = api.listen({ port: config.apiPort, ...(listenHost ? { host: listenHost } : {}) }, onListening);
 	trackServerSockets(server);
-	attachWarehouseLiveWebSocket(server);
+	attachWarehouseLiveWebSocket(server, apiTraffic?.handshake('/v1/stream/data'));
+	if (apiTraffic) {
+		const trafficTimer = setInterval(apiTraffic.flush, 60_000);
+		trafficTimer.unref();
+		server.once('close', () => { clearInterval(trafficTimer); apiTraffic.flush(); });
+	}
 	attachNetworkLiveWebSocket(server, {
+		recordTraffic: apiTraffic?.handshake('/v1/live/ws'),
 		getLatestObservedLedger: kernel.container.get(GetLatestObservedLedger),
 		getNetwork: kernel.container.get(GetNetwork),
 		getScpStatements: kernel.container.get(GetScpStatements),
@@ -457,6 +468,7 @@ const listen = async () => {
 		logger: kernel.container.get<Logger>('Logger')
 	});
 	attachStatusLiveWebSocket(server, {
+		recordTraffic: apiTraffic?.handshake('/v1/status/ws'),
 		getApiStatus: kernel.container.get(GetApiStatus),
 		getDataQualityStatus: kernel.container.get(GetDataQualityStatus),
 		getFrontendStatus: kernel.container.get(GetFrontendStatus),

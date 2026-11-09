@@ -1,5 +1,7 @@
 # StellarAtlas adoption analytics
 
+For the cookieless pageview rollout and separate API traffic counters, follow the [traffic collector contract](./TRAFFIC.md). The fixed-event rules below describe the previous producer during the transition; its API goals are historical after cutover.
+
 The Atlas-only Compose project uses [Plausible Community Edition 3.2.1](https://github.com/plausible/analytics/releases/tag/v3.2.1). Its Postgres and ClickHouse instances live on a dedicated internal network with dedicated volumes. Keep the raw Plausible collector on host loopback and administer it through approved private access.
 
 Supply the following through an operator-owned environment file outside Git:

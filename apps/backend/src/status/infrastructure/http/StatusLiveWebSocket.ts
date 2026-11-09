@@ -22,6 +22,7 @@ import type { ScanLogStatusDTO } from '../../use-cases/get-scan-log-status/GetSc
 import type { WorkerStatusDTO } from '../../use-cases/get-worker-status/GetWorkerStatus.js';
 
 export interface StatusLiveWebSocketConfig {
+	readonly recordTraffic?: (outcome: 'attempted' | 'accepted') => void;
 	readonly getApiStatus: GetApiStatus;
 	readonly getDataQualityStatus: GetDataQualityStatus;
 	readonly getFrontendStatus: GetFrontendStatus;
@@ -215,7 +216,9 @@ export function attachStatusLiveWebSocket(
 
 	server.on('upgrade', (request: IncomingMessage, socket: Socket, head) => {
 		if (!isWebSocketPath(request, path)) return;
+		config.recordTraffic?.('attempted');
 		webSocketServer.handleUpgrade(request, socket, head, (client) => {
+			config.recordTraffic?.('accepted');
 			webSocketServer.emit('connection', client, request);
 		});
 	});

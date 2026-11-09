@@ -346,3 +346,13 @@ small,
 	min-block-size: 38px;
 	padding: 0 12px;
 }
+.atlas-footer {
+	padding-block: 0.75rem;
+	font-size: 0.875rem;
+}
+
+.atlas-analytics-preference {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}

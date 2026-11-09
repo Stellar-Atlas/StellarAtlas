@@ -4,7 +4,6 @@ import type { Duplex } from 'stream';
 import { parse as parseDotenv } from 'dotenv';
 import { connect, type NatsConnection, type Subscription } from 'nats';
 import { WebSocket, WebSocketServer } from 'ws';
-import { allowsProgrammaticAnalytics, recordAtlasApiEvent } from './AtlasEventAnalytics.js';
 
 const subject = 'stellaratlas.warehouse.published';
 const path = '/v1/stream/data';
@@ -177,7 +176,10 @@ function rejectUpgrade(
 	);
 }
 
-export function attachWarehouseLiveWebSocket(server: Server): void {
+export function attachWarehouseLiveWebSocket(
+	server: Server,
+	recordTraffic?: (outcome: 'attempted' | 'accepted' | 'rejected') => void
+): void {
 	const clients = new Set<LiveClient>();
 	const pendingSockets = new Set<Duplex>();
 	const webSocketServer = new WebSocketServer({
@@ -215,7 +217,7 @@ export function attachWarehouseLiveWebSocket(server: Server): void {
 		for (const client of clients) send(client, payload);
 	};
 
-	webSocketServer.on('connection', (socket, request: IncomingMessage) => {
+	webSocketServer.on('connection', (socket) => {
 		const client = socket as LiveClient;
 		client.isAlive = true;
 		clients.add(client);
@@ -228,9 +230,7 @@ export function attachWarehouseLiveWebSocket(server: Server): void {
 		client.on('error', () => {
 			clients.delete(client);
 		});
-		if (send(client, JSON.stringify({ version: 1, event: 'ready' })) &&
-			allowsProgrammaticAnalytics(request.headers))
-			recordAtlasApiEvent('websocket', request.headers);
+		send(client, JSON.stringify({ version: 1, event: 'ready' }));
 		if (heartbeat === undefined) {
 			heartbeat = setInterval(() => {
 				for (const item of clients) {
@@ -249,11 +249,14 @@ export function attachWarehouseLiveWebSocket(server: Server): void {
 
 	server.on('upgrade', (request, socket, head) => {
 		if (!matchesPath(request)) return;
+		recordTraffic?.('attempted');
 		if (!isAllowedOrigin(request.headers.origin)) {
+			recordTraffic?.('rejected');
 			rejectUpgrade(socket, 403, 'origin not allowed');
 			return;
 		}
 		if (clients.size + pendingSockets.size >= maximumClients) {
+			recordTraffic?.('rejected');
 			rejectUpgrade(socket, 429, 'connection limit reached');
 			return;
 		}
@@ -261,6 +264,7 @@ export function attachWarehouseLiveWebSocket(server: Server): void {
 		socket.once('close', () => pendingSockets.delete(socket));
 		webSocketServer.handleUpgrade(request, socket, head, (client) => {
 			pendingSockets.delete(socket);
+			recordTraffic?.('accepted');
 			webSocketServer.emit('connection', client, request);
 		});
 	});
