@@ -169,15 +169,35 @@ beforeEach(() => {
 });
 describe('synthetic registered provenance journey', () => {
 	it('preserves native verification without projecting configured network text as evidence', async () => {
-		const observe = jest.fn(async (_value: ContractProvenance) => undefined);
-		const result = await invoke(contractId, observe);
+		const result = await invoke(contractId);
 		expect(result.status).toBe(200);
 		expect(result.body).toMatchObject({
 			networkPassphrase: 'synthetic network',
 			build: { status: 'verified' }
 		});
 		expect(projectCatalogueItem(result.body as ContractProvenance)).toBeNull();
-		expect(observe).not.toHaveBeenCalled();
+		expect(fetchRpcJson).not.toHaveBeenCalled();
+	});
+	it('projects an attested native observation with its network, digest, ledger and time', async () => {
+		fetchRpcJson.mockResolvedValueOnce({
+			jsonrpc: '2.0',
+			id: 1,
+			result: { passphrase: 'synthetic network', protocolVersion: 29 }
+		});
+		const observe = jest.fn(async (_value: ContractProvenance) => undefined);
+		const result = await invoke(contractId, observe);
+		expect(result.status).toBe(200);
+		expect(readContractCode).toHaveBeenCalledWith(undefined, contractId, expect.any(Function));
+		expect(observe).toHaveBeenCalledWith(result.body);
+		expect(projectCatalogueItem(result.body as ContractProvenance)).toMatchObject({
+			contractId,
+			observedLedger: 150,
+			checkedAt: expect.any(String),
+			wasmSha256: hash,
+			ledgerEvidence: 'configured_rpc_observation',
+			build: { status: 'verified', record: { commit } }
+		});
+		expect(result.body).toMatchObject({ networkPassphrase: 'synthetic network' });
 	});
 	it('projects scoped evidence without holding verifier slots or queuing saturated writes', async () => {
 		const writes: { resolve: () => void; reject: (error: Error) => void }[] = [];

@@ -14,12 +14,12 @@ export interface ContractCodeObservation {
 
 export class ContractRpcUnavailable extends Error {}
 
-type ReadScopedEntries = (key: string) => Promise<Record<string, unknown>>;
+type ReadBoundEntries = (key: string) => Promise<Record<string, unknown>>;
 
 export async function readContractCode(
 	rpc: RpcEndpoint | undefined,
 	contractId: string,
-	readScopedEntries?: ReadScopedEntries
+	readBoundEntries?: ReadBoundEntries
 ): Promise<ContractCodeObservation> {
 	const instanceKey = xdr.LedgerKey.contractData(
 		new xdr.LedgerKeyContractData({
@@ -28,7 +28,7 @@ export async function readContractCode(
 			durability: xdr.ContractDataDurability.persistent
 		})
 	);
-	const instance = await readEntry(rpc, instanceKey, readScopedEntries);
+	const instance = await readEntry(rpc, instanceKey, readBoundEntries);
 	if (!instance.entry)
 		return {
 			ledger: instance.ledger,
@@ -45,7 +45,7 @@ export async function readContractCode(
 		data.contract.toXDR('base64') !==
 			instanceKey.contractData.contract.toXDR('base64') ||
 		data.key.toXDR('base64') !== instanceKey.contractData.key.toXDR('base64') ||
-		(readScopedEntries &&
+		(readBoundEntries &&
 			data.durability !== xdr.ContractDataDurability.persistent)
 	)
 		throw new Error('RPC contract instance identity mismatch');
@@ -66,7 +66,7 @@ export async function readContractCode(
 	const code = await readEntry(
 		rpc,
 		xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash })),
-		readScopedEntries
+		readBoundEntries
 	);
 	if (!code.entry)
 		throw new ContractRpcUnavailable('Contract Wasm is not available from RPC');
@@ -77,7 +77,7 @@ export async function readContractCode(
 	if (wasm.hash.toString() !== hash.toString())
 		throw new Error('RPC Wasm identity mismatch');
 	if (
-		readScopedEntries &&
+		readBoundEntries &&
 		(code.modifiedLedger > instance.ledger ||
 			createHash('sha256').update(wasm.code).digest('hex') !== hash.toString())
 	)
@@ -94,11 +94,11 @@ export async function readContractCode(
 async function readEntry(
 	rpc: RpcEndpoint | undefined,
 	key: xdr.LedgerKey,
-	readScopedEntries?: ReadScopedEntries
+	readBoundEntries?: ReadBoundEntries
 ): Promise<{ ledger: number; modifiedLedger: number; entry: string | null }> {
 	const encodedKey = key.toXDR('base64');
-	if (readScopedEntries) {
-		const result = await readScopedEntries(encodedKey);
+	if (readBoundEntries) {
+		const result = await readBoundEntries(encodedKey);
 		return parseEntry(result, encodedKey, true);
 	}
 	if (!rpc) throw new ContractRpcUnavailable('Contract RPC is not configured');

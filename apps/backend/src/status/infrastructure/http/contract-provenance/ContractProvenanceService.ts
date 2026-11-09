@@ -13,6 +13,7 @@ import {
 } from './ContractBuildAttestation.js';
 import { readContractCode, ContractRpcUnavailable } from './ContractRpcCode.js';
 import { readContractWasmMetadata } from './ContractWasmMetadata.js';
+import { readNativeHistoricalProvenance } from './NativeHistoricalProvenanceRpc.js';
 import type { ScopedProvenanceRpc } from './ScopedProvenanceRpc.js';
 import type { RpcEndpoint } from './ProvenanceEndpointPolicy.js';
 
@@ -62,7 +63,7 @@ export class ContractProvenanceService {
 		{ expires: number; value: ContractProvenance['build'] }
 	>();
 	constructor(
-		private readonly rpc: RpcEndpoint | undefined,
+		private readonly rpc: RpcEndpoint<'native'> | undefined,
 		private readonly networkPassphrase: string,
 		private readonly scopedRpc?: ScopedProvenanceRpc,
 		private readonly observe?: (value: ContractProvenance) => Promise<void>
@@ -121,8 +122,17 @@ export class ContractProvenanceService {
 		contractId: string
 	): Promise<{ value: ContractProvenance; freshUntil?: number }> {
 		const scoped = await this.scopedRpc?.read(contractId);
+		const nativeHistorical =
+			!scoped && this.observe && this.rpc
+				? await readNativeHistoricalProvenance(
+						this.rpc,
+						this.networkPassphrase,
+						contractId
+					)
+				: undefined;
 		const observation =
-			scoped ?? (await readContractCode(this.rpc, contractId));
+			scoped ?? nativeHistorical ?? (await readContractCode(this.rpc, contractId));
+		const nativeCheckedAt = nativeHistorical ? new Date().toISOString() : undefined;
 		let metadata: ContractProvenance['metadata'] = {
 			sourceRepository: null,
 			homeDomain: null
@@ -167,11 +177,11 @@ export class ContractProvenanceService {
 				contractId,
 				networkPassphrase: this.networkPassphrase,
 				observedLedger: observation.ledger,
-				...(scoped
+				...(scoped || nativeHistorical
 					? ({ ledgerEvidence: 'configured_rpc_observation' } as const)
 					: {}),
 				instanceModifiedLedger: observation.modifiedLedger || null,
-				checkedAt: new Date().toISOString(),
+				checkedAt: nativeCheckedAt ?? new Date().toISOString(),
 				executable: observation.executable,
 				wasmSha256: observation.wasmSha256,
 				metadata,
