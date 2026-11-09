@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const minimumBulkReserveBytes = uint64(500) << 30
+
 // CheckBulkReserve includes ClickHouse's active merge reservations. The NVMe
 // read-model disks retain their configured ClickHouse free-space reservations.
 func (c *Client) CheckBulkReserve(ctx context.Context) error {
@@ -19,9 +21,8 @@ func (c *Client) CheckBulkReserve(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("bulk free-space probe is unavailable or malformed")
 	}
-	const minimum = uint64(500) << 30
-	if available < minimum {
-		return fmt.Errorf("bulk free-space reserve: %d unreserved bytes, require %d", available, minimum)
+	if available < minimumBulkReserveBytes {
+		return fmt.Errorf("bulk free-space reserve: %d unreserved bytes, require %d", available, minimumBulkReserveBytes)
 	}
 	return nil
 }

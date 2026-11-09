@@ -18,17 +18,18 @@ import (
 const currentWindowLedgers uint32 = 4096
 
 type currentWorkerIO struct {
-	recent        func(context.Context) ([]catalog.Batch, error)
-	agedOut       func(context.Context) (uint32, []catalog.Batch, error)
-	history       func(context.Context) ([]catalog.Batch, error)
-	states        func(context.Context, []string) (clickhouse.BatchAdmissionSnapshot, error)
-	allStates     func(context.Context) (clickhouse.BatchAdmissionSnapshot, error)
-	admit         func(context.Context, bool) error
-	baselineAdmit func(context.Context) error
-	ingest        func(context.Context, catalog.Batch) (ingestion.Receipt, error)
-	capacity      func(context.Context) error
-	wait          func(context.Context) error
-	notice        func(bool, string, error)
+	recent          func(context.Context) ([]catalog.Batch, error)
+	agedOut         func(context.Context) (uint32, []catalog.Batch, error)
+	history         func(context.Context) ([]catalog.Batch, error)
+	states          func(context.Context, []string) (clickhouse.BatchAdmissionSnapshot, error)
+	allStates       func(context.Context) (clickhouse.BatchAdmissionSnapshot, error)
+	admit           func(context.Context, bool) error
+	baselineAdmit   func(context.Context) error
+	ingest          func(context.Context, catalog.Batch) (ingestion.Receipt, error)
+	capacity        func(context.Context) error
+	historyCapacity func(context.Context) error
+	wait            func(context.Context) error
+	notice          func(bool, string, error)
 }
 
 // RunCurrentWorkers reserves exactly one configured slot for current data. The
@@ -88,6 +89,12 @@ func RunCurrentWorkers(ctx context.Context, config Config, currentGuard *Pressur
 				guard.Log(event, reason)
 			}
 		},
+	}
+	if config.HistoryStoragePolicy != nil {
+		policy := *config.HistoryStoragePolicy
+		io.historyCapacity = func(ctx context.Context) error {
+			return config.Client.CheckHistoricalBulkReserve(ctx, policy, config.WorkerCount-1)
+		}
 	}
 	if config.BaselineHistoryPressureGuard != nil {
 		baselineConfig := config
@@ -183,8 +190,14 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 				if config.ReadinessGuard != nil {
 					err = config.ReadinessGuard.Wait(selectionCtx)
 				}
-				if err == nil && io.capacity != nil {
-					err = io.capacity(selectionCtx)
+				historyCapacityDeferred := false
+				if err == nil {
+					if !current && io.historyCapacity != nil {
+						err = io.historyCapacity(selectionCtx)
+						historyCapacityDeferred = err != nil
+					} else if io.capacity != nil {
+						err = io.capacity(selectionCtx)
+					}
 				}
 				if err == nil {
 					err = selectionCtx.Err()
@@ -195,7 +208,7 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 					if admissionCtx.Err() != nil {
 						return
 					}
-					if config.ReadinessGuard != nil {
+					if config.ReadinessGuard != nil && !historyCapacityDeferred {
 						config.ReadinessGuard.Invalidate(err)
 					}
 					if io.notice != nil {

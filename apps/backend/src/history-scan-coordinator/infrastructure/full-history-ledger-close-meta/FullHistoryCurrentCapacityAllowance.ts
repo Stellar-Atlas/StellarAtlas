@@ -8,11 +8,55 @@ const reserveBorrowBytesEnvironmentKey =
 	'FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_RESERVE_BORROW_BYTES';
 const expiresAtEnvironmentKey =
 	'FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_EXPIRES_AT';
+const currentOnlyMinimumLedgerKey =
+	'FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER';
+const currentOnlyMinimumFreeBytesKey =
+	'FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES';
 
 export interface FullHistoryCurrentCapacityAllowance {
 	readonly minimumLedger: number;
 	readonly maximumReserveBorrowBytes: bigint;
 	readonly expiresAtMilliseconds: number;
+}
+
+export interface FullHistoryCurrentOnlyCapacity {
+	readonly minimumLedger: number;
+	readonly minimumFreeBytes: bigint;
+}
+
+export function parseFullHistoryCurrentOnlyCapacity(
+	environment: NodeJS.ProcessEnv,
+	ordinaryMinimumFreeBytes: bigint,
+	firstAvailableLedger: number
+): FullHistoryCurrentOnlyCapacity | undefined {
+	const ledger = environment[currentOnlyMinimumLedgerKey];
+	const freeBytes = environment[currentOnlyMinimumFreeBytesKey];
+	if (ledger === undefined && freeBytes === undefined) return undefined;
+	if (ledger === undefined || freeBytes === undefined) {
+		throw new TypeError('Current-only capacity must be fully configured');
+	}
+	const minimumLedger = parsePositiveDecimalNumber(ledger, maximumLedger, currentOnlyMinimumLedgerKey);
+	if (ledger.trim() !== ledger || minimumLedger < firstAvailableLedger) {
+		throw new RangeError('Current-only minimum ledger must be canonical and inside the source range');
+	}
+	if (freeBytes.trim() !== freeBytes || !/^[1-9][0-9]{0,19}$/u.test(freeBytes)) {
+		throw new TypeError(`${currentOnlyMinimumFreeBytesKey} must be a positive decimal integer`);
+	}
+	const minimumFreeBytes = BigInt(freeBytes);
+	if (minimumFreeBytes >= ordinaryMinimumFreeBytes) {
+		throw new RangeError('Current-only free-space floor must be below the ordinary absolute floor');
+	}
+	return Object.freeze({ minimumLedger, minimumFreeBytes });
+}
+
+export function isCurrentCapacityRange(
+	range: { readonly kind: 'priority' | 'historical'; readonly startLedger: number; readonly endLedger: number } | undefined,
+	minimumLedger: number
+): boolean {
+	return range?.kind === 'priority' &&
+		Number.isSafeInteger(range.startLedger) && Number.isSafeInteger(range.endLedger) &&
+		range.startLedger >= minimumLedger &&
+		range.endLedger >= range.startLedger && range.endLedger <= maximumLedger;
 }
 
 export function parseFullHistoryCurrentCapacityAllowance(

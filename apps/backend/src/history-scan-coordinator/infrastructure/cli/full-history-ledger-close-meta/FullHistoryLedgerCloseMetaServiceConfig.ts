@@ -1,7 +1,9 @@
 import { dirname, relative, resolve, sep } from 'node:path';
 import {
 	parseFullHistoryCurrentCapacityAllowance,
-	type FullHistoryCurrentCapacityAllowance
+	parseFullHistoryCurrentOnlyCapacity,
+	type FullHistoryCurrentCapacityAllowance,
+	type FullHistoryCurrentOnlyCapacity
 } from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
 
 const maximumIngressBytesPerSecond = 187_500_000;
@@ -14,6 +16,7 @@ const sharedMemoryRoot = '/dev/shm';
 
 export interface FullHistoryLedgerCloseMetaServiceConfig {
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
+	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
 	readonly admissionCycleCooldownMilliseconds: number;
 	readonly admissionEnabled: boolean;
 	readonly admissionMaximumDatabaseConnectionBasisPoints: number;
@@ -171,6 +174,20 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	if (currentCapacityAllowance !== undefined && !prioritizeCurrent) {
 		throw new Error('current capacity allowance requires prioritize current');
 	}
+	const minimumFreeBytes = positiveBigInt(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES,
+		5n * 1_024n ** 4n,
+		'minimum free bytes'
+	);
+	const currentOnlyCapacity = parseFullHistoryCurrentOnlyCapacity(
+		environment, minimumFreeBytes, firstAvailableLedger
+	);
+	if (currentOnlyCapacity !== undefined) {
+		if (!prioritizeCurrent) throw new Error('current-only capacity requires prioritize current');
+		if (currentCapacityAllowance !== undefined) {
+			throw new Error('current-only capacity cannot be combined with an expiring allowance');
+		}
+	}
 	if (
 		lastAvailableLedger !== null &&
 		(lastAvailableLedger - firstAvailableLedger + 1) % typedShardLedgerCount !==
@@ -202,6 +219,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	}
 	return Object.freeze({
 		...(currentCapacityAllowance === undefined ? {} : { currentCapacityAllowance }),
+		...(currentOnlyCapacity === undefined ? {} : { currentOnlyCapacity }),
 		admissionCycleCooldownMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_CYCLE_COOLDOWN_MS,
 			30_000,
@@ -285,11 +303,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			'ingress burst bytes'
 		),
 		lastAvailableLedger,
-		minimumFreeBytes: positiveBigInt(
-			environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES,
-			5n * 1_024n ** 4n,
-			'minimum free bytes'
-		),
+		minimumFreeBytes,
 		minimumFreeBasisPoints: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS,
 			1_000,

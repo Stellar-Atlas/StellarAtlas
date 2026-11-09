@@ -157,6 +157,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					...(config.currentCapacityAllowance === undefined ? {} : {
 						currentCapacityAllowance: config.currentCapacityAllowance
 					}),
+					...(config.currentOnlyCapacity === undefined ? {} : {
+						currentOnlyCapacity: config.currentOnlyCapacity
+					}),
 					admissionRetryMilliseconds: config.admissionRetryMilliseconds,
 					cycleCooldownMilliseconds: config.admissionEnabled
 						? config.admissionCycleCooldownMilliseconds

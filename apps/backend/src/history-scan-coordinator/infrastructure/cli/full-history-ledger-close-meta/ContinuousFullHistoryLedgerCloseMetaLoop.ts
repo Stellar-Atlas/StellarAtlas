@@ -3,8 +3,10 @@ import {
 	type FullHistoryLedgerCloseMetaRange
 } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import {
+	isCurrentCapacityRange,
 	isFullHistoryCurrentCapacityAllowanceActive,
-	type FullHistoryCurrentCapacityAllowance
+	type FullHistoryCurrentCapacityAllowance,
+	type FullHistoryCurrentOnlyCapacity
 } from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
 import type { FullHistoryLedgerCloseMetaFrontierPort } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaPorts.js';
 import type {
@@ -23,6 +25,7 @@ import type {
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
+	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
 	readonly admissionRetryMilliseconds: number;
 	readonly cycleCooldownMilliseconds: number;
 	readonly cycleLedgerCount: number;
@@ -123,6 +126,10 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	if (config.currentCapacityAllowance !== undefined && !config.prioritizeCurrent) {
 		throw new Error('current capacity allowance requires prioritize current');
 	}
+	if (config.currentOnlyCapacity !== undefined &&
+		(!config.prioritizeCurrent || config.currentCapacityAllowance !== undefined)) {
+		throw new Error('current-only capacity requires prioritize current without an expiring allowance');
+	}
 	let context: FullHistoryLedgerCloseMetaIngestionContext | null = null;
 	let nextLedger: number | null = null;
 	let readyEmitted = false;
@@ -131,8 +138,8 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 
 	while (!dependencies.signal.aborted) {
 		try {
-			const currentCapacityOnly = isFullHistoryCurrentCapacityAllowanceActive(
-				config.currentCapacityAllowance, dependencies.now());
+			const minimumPriorityLedger = currentCapacityMinimumLedger(config, dependencies.now());
+			const currentCapacityOnly = minimumPriorityLedger !== undefined;
 			if (reloadDurableState) {
 				if (!(await admitCycle(config, dependencies, config.prioritizeCurrent))) continue;
 				context = await dependencies.ingestion.prepare(dependencies.signal);
@@ -192,7 +199,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			);
 			dependencies.signal.throwIfAborted();
 			const rangeOptions = {
-				...(currentCapacityOnly ? { minimumPriorityLedger: config.currentCapacityAllowance!.minimumLedger } : {}),
+				...(minimumPriorityLedger === undefined ? {} : { minimumPriorityLedger }),
 				durableNextLedger,
 				firstAvailableLedger: cycleContext.registeredSource.firstAvailableLedger,
 				latestAvailableLedger: sourceFrontier.endSequence,
@@ -336,11 +343,19 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 
 function assertCurrentCapacityPlan(config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies, plan: PendingPlan): void {
-	const allowance = config.currentCapacityAllowance;
-	if (allowance !== undefined && isFullHistoryCurrentCapacityAllowanceActive(allowance, dependencies.now()) &&
-		(plan.kind !== 'priority' || plan.startLedger < allowance.minimumLedger)) {
+	const minimumLedger = currentCapacityMinimumLedger(config, dependencies.now());
+	if (minimumLedger !== undefined && !isCurrentCapacityRange(plan, minimumLedger)) {
 		throw new Error('Current capacity window refuses non-current pending work; plan preserved');
 	}
+}
+
+function currentCapacityMinimumLedger(config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
+	nowMilliseconds: number): number | undefined {
+	if (config.currentOnlyCapacity !== undefined) return config.currentOnlyCapacity.minimumLedger;
+	const allowance = config.currentCapacityAllowance;
+	return allowance !== undefined &&
+		isFullHistoryCurrentCapacityAllowanceActive(allowance, nowMilliseconds)
+		? allowance.minimumLedger : undefined;
 }
 
 async function admitCycle(

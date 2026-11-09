@@ -33,6 +33,7 @@ type Config struct {
 	PressureGuard                *PressureGuard
 	BaselineHistoryPressureGuard *PressureGuard
 	HistoryAdmissionHold         *HistoryAdmissionHold
+	HistoryStoragePolicy         *clickhouse.HistoricalStoragePolicy
 	ReadinessGuard               *WarehouseReadinessGuard
 	Publisher                    *publication.WarehousePublisher
 	OnProgress                   func(Summary)
