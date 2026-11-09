@@ -11,10 +11,10 @@ export type HttpResponse<T = unknown> = {
 	headers: unknown;
 };
 
-export class HttpError<T = unknown> extends Error {
+export class HttpError extends Error {
 	code?: string;
-	response?: HttpResponse<T>;
-	constructor(message?: string, code?: string, response?: HttpResponse<T>) {
+	response?: { status: number };
+	constructor(message?: string, code?: string, response?: { status: number }) {
 		super(message);
 		this.code = code;
 		this.response = response;
@@ -53,7 +53,7 @@ export class MailgunService {
 
 			const axiosResponse = await axios.post(
 				this.baseUrl + '/messages',
-				`from=${this.from}&to=${to}&subject=${subject}&html=${encodeURIComponent(message)}`,
+				new URLSearchParams({ from: this.from, to, subject, html: message }).toString(),
 				config
 			);
 			clearTimeout(timeout);
@@ -63,8 +63,7 @@ export class MailgunService {
 			if (axios.isAxiosError(error)) {
 				return this.mapAxiosErrorToHttpError(error);
 			}
-			if (error instanceof Error) return new HttpError(error.message, '500');
-			return new HttpError('Error sending msg', '500');
+			return new HttpError('Mail provider request failed', 'PROVIDER_TRANSPORT');
 		}
 	}
 
@@ -79,11 +78,18 @@ export class MailgunService {
 		};
 	}
 	protected mapAxiosErrorToHttpError(axiosError: AxiosError): HttpError {
-		console.log(axiosError.request);
-		return new HttpError(
-			axiosError.message + ': ' + axiosError.response?.statusText,
-			axiosError.code,
-			axiosError.response
-		);
+		if (axiosError.response) {
+			return new HttpError('Mail provider rejected the request', 'PROVIDER_HTTP', {
+				status: axiosError.response.status
+			});
+		}
+		if (
+			axiosError.code === AxiosError.ECONNABORTED ||
+			axiosError.code === AxiosError.ETIMEDOUT ||
+			axiosError.code === AxiosError.ERR_CANCELED
+		) {
+			return new HttpError('Mail provider request timed out', 'PROVIDER_TIMEOUT');
+		}
+		return new HttpError('Mail provider request failed', 'PROVIDER_TRANSPORT');
 	}
 }

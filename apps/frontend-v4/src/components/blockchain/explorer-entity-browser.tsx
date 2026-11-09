@@ -13,7 +13,7 @@ import {
 import { entityDescriptions, titleCase } from './explorer-entity-config';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
 import { ExplorerEntityFilters } from './explorer-entity-filters';
-import { ExplorerEntityContext } from './explorer-entity-context';
+import { ExplorerContractWindowNotice, ExplorerEntityContext } from './explorer-entity-context';
 import {
 	ExplorerEntityDetails,
 	ExplorerEntityTable
@@ -28,7 +28,8 @@ import {
 	explorerPageHref,
 	explorerSelectionKey,
 	readExplorerPageSelection,
-	previousExplorerOffset
+	previousExplorerOffset,
+	type ExplorerPageOutcome
 } from './explorer-entity-request';
 import styles from './explorer-entity.module.css';
 
@@ -68,7 +69,7 @@ function EntityBrowser({
 	const [page, setPage] = useState<AnalyticsEntityPage | null>(null);
 	const [submitted, setSubmitted] = useState<ExplorerFilters>(initialFilters);
 	const [busy, setBusy] = useState(false),
-		[error, setError] = useState<string | null>(null),
+		[error, setError] = useState<Extract<ExplorerPageOutcome, { ok: false }> | null>(null),
 		[elapsed, setElapsed] = useState<number | null>(null);
 	const [history, setHistory] = useState<number[]>([]);
 	const currentOffset = useRef(0);
@@ -131,7 +132,7 @@ function EntityBrowser({
 					if (historyMode === 'push') window.history.pushState(null, '', href);
 					else window.history.replaceState(null, '', href);
 				}
-			} else setError(outcome.message);
+			} else setError(outcome);
 		},
 		[collection, identifier, requests, returnTo]
 	);
@@ -194,9 +195,10 @@ function EntityBrowser({
 					optional.
 				</p></>}
 				{busy && <p role="status">Loading {collection}…</p>}
-				{error && (
+				{error?.windowMiss && <ExplorerContractWindowNotice window={error.windowMiss} />}
+				{error && !error.windowMiss && (
 					<div className={styles.error} role="alert">
-						{error}{' '}
+						{error.message}{' '}
 						<button
 							type="button"
 							disabled={busy}
@@ -214,7 +216,8 @@ function EntityBrowser({
 					<ExplorerInvestigationScope origin={returnTo ?? explorerPageHref(collection, identifier, submitted, page.offset)}>
 						{error && (
 							<p role="status">
-								Showing the last successful result; the requested update failed.
+								{error.windowMiss ? 'Showing previously loaded activity, not a result for this lookup.'
+									: 'Showing the last successful result; the requested update failed.'}
 							</p>
 						)}
 						{!operationDetail && <ExplorerEntityContext collection={collection} identifier={identifier} page={page} submitted={submitted} elapsed={elapsed} />}
