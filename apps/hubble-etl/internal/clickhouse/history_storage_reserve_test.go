@@ -1,7 +1,9 @@
 package clickhouse
 
 import (
+	"errors"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -62,11 +64,16 @@ func TestHistoryStorageUsesSameDeviceAndSubtractsReservationsOnce(t *testing.T) 
 	if err != nil || available != 810 {
 		t.Fatalf("available=%d, want=810, error=%v", available, err)
 	}
-	if _, err := historicalUnreservedBytes(before, after, clickhousePath, 950, 951); err == nil {
-		t.Fatal("invalid reservation was not rejected")
+	if got, err := historicalUnreservedBytes(before, after, clickhousePath, 950, 951); got != 0 ||
+		!CurrentWriteCapacityDeferred(err) || !strings.Contains(err.Error(), "unreserved space exceeds free space") {
+		t.Fatalf("conflicting accounting did not fail closed with a retryable diagnostic: %d, %v", got, err)
 	}
 	clickhousePath.device++
-	if _, err := historicalUnreservedBytes(before, after, clickhousePath, 950, 850); err == nil {
-		t.Fatal("a different filesystem was not rejected")
+	if got, err := historicalUnreservedBytes(before, after, clickhousePath, 950, 850); got != 0 ||
+		!CurrentWriteCapacityDeferred(err) || !strings.Contains(err.Error(), "devices disagree") {
+		t.Fatalf("wrong device did not fail closed with its own diagnostic: %d, %v", got, err)
+	}
+	if CurrentWriteCapacityDeferred(errors.New("wrong pinned warehouse metadata path")) || CurrentWriteCapacityDeferred(nil) {
+		t.Fatal("non-capacity outcomes were classified as retryable")
 	}
 }
