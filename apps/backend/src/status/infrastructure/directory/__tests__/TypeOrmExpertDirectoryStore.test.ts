@@ -56,6 +56,7 @@ function transactionFixture(
 			ReturnType<EntityManager['findOneBy']>,
 			Parameters<EntityManager['findOneBy']>
 		>(),
+		insert: jest.fn().mockResolvedValue({ identifiers: [], generatedMaps: [], raw: [] }),
 		upsert: jest.fn<
 			ReturnType<EntityManager['upsert']>,
 			Parameters<EntityManager['upsert']>
@@ -80,6 +81,27 @@ function transactionFixture(
 }
 
 describe('TypeOrmExpertDirectoryStore transaction contract', () => {
+	it('publishes a full initial snapshot atomically and replays without writes', async () => {
+		const { store, manager, transaction } = transactionFixture();
+		const checkpoint = { ...nextCheckpoint, previousCommit: null };
+		const entry = { ...active, commit: checkpoint.commit, observedAt: checkpoint.observedAt };
+		manager.findOneBy.mockResolvedValue(null);
+		await expect(store.initializeSnapshot(checkpoint, [entry])).resolves.toEqual({
+			status: 'initialized', checkpoint
+		});
+		expect(transaction).toHaveBeenCalledWith('SERIALIZABLE', expect.any(Function));
+		expect(manager.insert.mock.calls.map(([schema]) => schema)).toEqual([
+			ExpertDirectoryEntrySchema, ExpertDirectoryCheckpointSchema
+		]);
+		manager.insert.mockClear();
+		manager.findOneBy.mockResolvedValue({ source, ...checkpoint });
+		await expect(store.initializeSnapshot(checkpoint, [entry])).resolves.toMatchObject({
+			status: 'replayed', checkpoint
+		});
+		expect(manager.insert).not.toHaveBeenCalled();
+		await expect(store.initializeSnapshot({ ...checkpoint, commit: 'f'.repeat(40) }, []))
+			.rejects.toThrow('already initialized');
+	});
 	it('builds the PostgreSQL checkpoint update without setting the source key', async () => {
 		class OfflineDataSource extends DataSource {
 			loadMetadata() {

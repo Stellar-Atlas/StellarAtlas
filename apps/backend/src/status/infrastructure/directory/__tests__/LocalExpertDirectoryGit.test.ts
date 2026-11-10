@@ -12,6 +12,7 @@ import {
 import { MAX_EXPERT_RECORD_BYTES } from '../ExpertDirectoryRecord.js';
 import {
 	importLocalExpertDirectoryDelta,
+	importLocalExpertDirectorySnapshot,
 	type DirectoryGitRevision
 } from '../LocalExpertDirectoryGit.js';
 
@@ -88,6 +89,29 @@ beforeEach(async () => {
 		{ env, windowsHide: true }
 	);
 	base = revision([]);
+});
+
+it('validates the complete pinned initial snapshot before one atomic store admission', async () => {
+	const to = revision([row(accountA, blob(accountA)), row(accountB, blob(accountB))]);
+	const initializeSnapshot = jest.fn(async (checkpoint: ExpertDirectoryCheckpoint,
+		entries: readonly ExpertDirectoryEntry[]) => {
+		expect(entries.map((entry) => entry.address)).toEqual([accountA, accountB].sort());
+		expect(entries.every((entry) => entry.state === 'active' &&
+			entry.commit === to.commit && entry.source === 'stellar-expert/public-directory')).toBe(true);
+		return { status: 'initialized' as const, checkpoint };
+	});
+	const result = await importLocalExpertDirectorySnapshot({
+		approvedGitDir: root, to, observedAt
+	}, { initializeSnapshot });
+	expect(result.status).toBe('initialized');
+	expect(result.provenance.paths).toBe(2);
+	expect(result.checkpoint).toMatchObject({ commit: to.commit, previousCommit: null });
+	expect(result.checkpoint.deltaSha256).toMatch(/^[a-f0-9]{64}$/);
+	expect(initializeSnapshot).toHaveBeenCalledTimes(1);
+	await expect(importLocalExpertDirectorySnapshot({
+		approvedGitDir: root, to: { ...to, tree: base.tree }, observedAt
+	}, { initializeSnapshot })).rejects.toThrow('binding');
+	expect(initializeSnapshot).toHaveBeenCalledTimes(1);
 });
 
 afterEach(async () => {

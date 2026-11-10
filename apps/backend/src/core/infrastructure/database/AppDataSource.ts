@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
+import { ExpertDirectoryCheckpointSchema, ExpertDirectoryEntrySchema } from '../../../status/infrastructure/directory/TypeOrmExpertDirectoryStore.js';
 import { DataSource } from 'typeorm';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { resolveDatabasePoolPolicy } from './DatabasePoolPolicy.js';
@@ -57,7 +58,8 @@ const AppDataSource = new DataSource({
 	installExtensions: backgroundTasks,
 	connectTimeoutMS: databasePool.connectionTimeoutMs,
 	url: process.env.ACTIVE_DATABASE_URL,
-	entities: ['lib/**/entities/*.js', 'lib/**/domain/**/!(*.test)*.js'],
+	entities: ['lib/**/entities/*.js', 'lib/**/domain/**/!(*.test)*.js',
+		ExpertDirectoryCheckpointSchema, ExpertDirectoryEntrySchema],
 	migrations: [...managedMigrations],
 	migrationsRun: runMigrations,
 	migrationsTransactionMode: 'each',
