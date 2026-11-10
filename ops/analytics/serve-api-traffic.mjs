@@ -1,7 +1,6 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const home = `<!doctype html>
@@ -21,6 +20,8 @@ a{color:LinkText;text-underline-offset:.2em}
 </main></body></html>\n`;
 
 const maxPageBytes = 128 * 1024;
+const socketPath = '/run/atlas-analytics-api-traffic/report.sock';
+const reportPath = '/srv/stellaratlas/analytics-data/api-traffic/index.html';
 const headers = {
 	'Cache-Control': 'private, no-store',
 	'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
@@ -85,19 +86,13 @@ export function createDashboardServer(reportPath) {
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-	const [socketPath, reportPath] = process.argv.slice(2);
-	if (process.argv.length !== 4 || !isAbsolute(socketPath) || !isAbsolute(reportPath)) {
-		console.error('Usage: node serve-api-traffic.mjs <absolute-socket-path> <absolute-report.html>');
-		process.exitCode = 2;
-	} else {
-		process.umask(0o177);
-		const server = createDashboardServer(reportPath);
-		server.once('error', () => {
-			console.error('API traffic origin could not bind its socket.');
-			process.exitCode = 1;
-		});
-		server.listen(socketPath);
-		process.once('SIGTERM', () => server.close());
-		process.once('SIGINT', () => server.close());
-	}
+	process.umask(0o177);
+	const server = createDashboardServer(reportPath);
+	server.once('error', () => {
+		console.error('API traffic origin could not bind its socket.');
+		process.exitCode = 1;
+	});
+	server.listen(socketPath);
+	process.once('SIGTERM', () => server.close());
+	process.once('SIGINT', () => server.close());
 }

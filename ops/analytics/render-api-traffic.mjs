@@ -1,7 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { chmodSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { closeSync, constants, fstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const presets = [
@@ -12,6 +11,9 @@ const outcomes = ['2xx', '3xx', '4xx', '5xx', '429', 'aborted', 'other'];
 const methods = ['get', 'post', 'put', 'patch', 'delete', 'head'];
 const journalLimit = 1600;
 const journalPrefix = '{"type":"atlas_public_api_traffic_v1"';
+const apiUnit = 'stellaratlas-api-contract-catalogue.service';
+const openApiPath = '/opt/stellaratlas/atlas-analytics/api-traffic/public-openapi.json';
+const reportPath = '/srv/stellaratlas/analytics-data/api-traffic/index.html';
 const reader = fileURLToPath(new URL('./read-api-traffic.mjs', import.meta.url));
 const number = new Intl.NumberFormat('en-US');
 const timestamp = value => new Date(value).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
@@ -150,15 +152,25 @@ ${presets.map((preset, index) => renderWindow(preset, reports[index], journalCap
 </main></body></html>\n`;
 }
 
-function publishDashboard(output, unit, openapi) {
-	if (statSync(openapi).size > 4 * 1024 * 1024) throw new Error('Public OpenAPI snapshot exceeds size limit');
-	const routes = publicRoutes(JSON.parse(readFileSync(openapi, 'utf8')));
+function loadPublicRoutes() {
+	const file = openSync(openApiPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+	try {
+		const info = fstatSync(file);
+		if (!info.isFile() || info.size > 32 * 1024) throw new Error('Invalid public OpenAPI snapshot');
+		return publicRoutes(JSON.parse(readFileSync(file, 'utf8')));
+	} finally {
+		closeSync(file);
+	}
+}
+
+function publishDashboard() {
+	const routes = loadPublicRoutes();
 	const end = new Date();
 	const starts = presets.map(({ hours }) => new Date(end.getTime() - hours * 3600_000).toISOString());
 	const to = end.toISOString();
 	const journalTime = iso => iso.replace('T', ' ').replace('Z', ' UTC');
 	const journal = spawnSync('/usr/bin/journalctl', [
-		'--unit', unit, '--since', journalTime(starts.at(-1)), '--until', journalTime(to),
+		'--unit', apiUnit, '--since', journalTime(starts.at(-1)), '--until', journalTime(to),
 		'--output=cat', '--no-pager', '--quiet', '--grep', '^\\{"type":"atlas_public_api_traffic_v1"',
 		'--lines', String(journalLimit)
 	], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 8_000, killSignal: 'SIGKILL' });
@@ -181,27 +193,20 @@ function publishDashboard(output, unit, openapi) {
 		}
 		return report;
 	});
-	const temporary = output + '.' + randomUUID() + '.tmp';
+	const temporary = reportPath + '.' + randomUUID() + '.tmp';
 	try {
 		writeFileSync(temporary, renderDashboard(reports, to, journalCapped), { flag: 'wx', mode: 0o640 });
-		chmodSync(temporary, 0o640);
-		renameSync(temporary, output);
+		renameSync(temporary, reportPath);
 	} finally {
 		rmSync(temporary, { force: true });
 	}
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-	const [output, unit, openapi] = process.argv.slice(2);
-	if (process.argv.length !== 5 || !isAbsolute(output) || !/^[\w.-]{1,100}\.service$/.test(unit) || !isAbsolute(openapi)) {
-		console.error('Usage: node render-api-traffic.mjs <absolute-output.html> <api-unit.service> <absolute-public-openapi.json>');
-		process.exitCode = 2;
-	} else {
-		try {
-			publishDashboard(output, unit, openapi);
-		} catch {
-			console.error('API traffic snapshot refresh failed.');
-			process.exitCode = 1;
-		}
+	try {
+		publishDashboard();
+	} catch {
+		console.error('API traffic snapshot refresh failed.');
+		process.exitCode = 1;
 	}
 }
