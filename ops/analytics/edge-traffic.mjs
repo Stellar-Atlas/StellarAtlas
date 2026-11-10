@@ -147,9 +147,9 @@ function publish(value) {
 async function main() {
 	const checkedAtUtc = new Date().toISOString();
 	try {
-		const directory = process.env.CREDENTIALS_DIRECTORY;
-		if (!directory?.startsWith('/run/credentials/')) throw new Error('Credential binding unavailable');
-		const token = readBounded(directory + '/cloudflare-analytics-token', 2048).trim();
+		const directory = '/run/credentials/atlas-edge-traffic-refresh.service';
+		if (process.env.CREDENTIALS_DIRECTORY !== directory) throw new Error('Credential binding unavailable');
+		const token = readBounded('/run/credentials/atlas-edge-traffic-refresh.service/cloudflare-analytics-token', 2048).trim();
 		const lastGood = await collectEdgeTraffic(process.env.CF_ZONE_ID, token);
 		publish({ state: 'ready', checkedAtUtc, lastGood });
 	} catch {
