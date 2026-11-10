@@ -2,13 +2,14 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { closeSync, constants, fstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readEdgeState, sanitizeEdgeSnapshot } from './edge-traffic.mjs';
 
 const presets = [
 	{ id: 'hour', label: 'Last hour', hours: 1 },
 	{ id: 'day', label: 'Last 24 hours', hours: 24 }
 ];
 const outcomes = ['2xx', '3xx', '4xx', '5xx', '429', 'aborted', 'other'];
-const methods = ['get', 'post', 'put', 'patch', 'delete', 'head'];
+const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
 const journalLimit = 1600;
 const journalPrefix = '{"type":"atlas_public_api_traffic_v1"';
 const apiUnit = 'stellaratlas-api-contract-catalogue.service';
@@ -34,6 +35,7 @@ export function publicRoutes(document) {
 		}
 	}
 	if (routes.size === 0 || routes.size > 256) throw new Error('Unexpected public API route count');
+	for (const label of ['UNMATCHED_ROUTE', 'UNSUPPORTED_METHOD', 'INVALID_PATH']) routes.add(label);
 	return routes;
 }
 
@@ -43,13 +45,14 @@ export function filterJournal(journal, routes) {
 		if (!line.startsWith(journalPrefix)) continue;
 		try {
 			if (Buffer.byteLength(line) > 128 * 1024) throw new Error('Aggregate summary exceeds size limit');
-			const { type, from, to, deferredFlushes, http, websocket } = JSON.parse(line);
+			const { type, from, to, deferredFlushes, httpScope, http, websocket } = JSON.parse(line);
 			if (type !== 'atlas_public_api_traffic_v1') throw new Error('Invalid aggregate summary');
 			const entries = Object.entries(http ?? {});
 			const known = entries.filter(([route]) => routes.has(route));
 			summaries.push({
 				start: Date.parse(from), end: Date.parse(to), rejected: entries.length - known.length,
-				line: JSON.stringify({ type, from, to, deferredFlushes, http: Object.fromEntries(known), websocket })
+				line: JSON.stringify({ type, from, to, deferredFlushes,
+					...(httpScope === 'all_express_requests' ? { httpScope } : {}), http: Object.fromEntries(known), websocket })
 			});
 		} catch {
 			summaries.push({ line: journalPrefix });
@@ -103,18 +106,41 @@ function renderWindow(preset, report, journalCapped) {
 	<p>${observedRange}</p>
 	<dl class="coverage">
 		<div><dt>Included aggregate windows</dt><dd>${number.format(coverage.windows)}</dd></div>
+		<div><dt>All-request observer windows</dt><dd>${number.format(coverage.allRequestWindows)}</dd></div>
+		<div><dt>Older route-only windows</dt><dd>${number.format(coverage.legacyRouteOnlyWindows)}</dd></div>
 		<div><dt>Time covered by included windows</dt><dd>${number.format(Math.round(observed / 1000))} s</dd></div>
 		<div><dt>Unobserved time</dt><dd>${number.format(Math.round(unobserved / 1000))} s</dd></div>
 		<div><dt>Boundary windows excluded</dt><dd>${number.format(coverage.boundaryWindowsExcluded)}</dd></div>
 		<div><dt>Invalid summaries</dt><dd>${number.format(coverage.invalid)}</dd></div>
-		<div><dt>Undocumented route entries excluded</dt><dd>${number.format(coverage.rejectedRouteEntries)}</dd></div>
+		<div><dt>Unrecognized aggregate labels excluded</dt><dd>${number.format(coverage.rejectedRouteEntries)}</dd></div>
 		<div><dt>Deferred flushes</dt><dd>${number.format(coverage.deferredFlushes)}</dd></div>
 	</dl>
 	<p>Deferred flushes count delays. The source does not measure lost requests. Unobserved time can be idle or missing, and a process exit can lose an unflushed window.</p>
 </section>`;
 }
 
-export function renderDashboard(reports, generatedAt, journalCapped) {
+export function renderEdgeTraffic(state, generatedAt) {
+	const heading = '<section aria-labelledby="edge-heading"><h2 id="edge-heading">Edge requests</h2>';
+	let saved;
+	try { saved = state?.lastGood ? sanitizeEdgeSnapshot(state.lastGood) : null; }
+	catch { saved = null; }
+	if (!saved) return heading + `<p>${state?.state === 'not_collecting' || !state
+		? 'Not yet collecting.' : 'Collection unavailable.'} No edge request total is available; this is not zero traffic.</p></section>`;
+	const stale = state.state !== 'ready' || Date.parse(generatedAt) - Date.parse(saved.generatedAtUtc) > 20 * 60_000 ||
+		Date.parse(saved.generatedAtUtc) > Date.parse(generatedAt);
+	const groups = saved.edge.groups.map(group => `<tr><th scope="row">${html(group.host)}</th><td>${html(group.cacheStatus)}</td>
+		<td>${number.format(group.edgeStatus)}</td><td>${number.format(group.providerCount)}</td>
+		<td>${number.format(group.reportedAverageSampleInterval)}</td></tr>`).join('');
+	return heading + `${stale ? '<p class="notice">Refresh unavailable or stale. Showing the last measured window.</p>' : ''}
+	${state.state === 'error' && Number.isFinite(Date.parse(state.checkedAtUtc)) ? `<p>Latest attempt ${timestamp(state.checkedAtUtc)} did not produce a fresh result.</p>` : ''}
+	<p>${number.format(saved.edge.providerCount)} provider-reported client requests across the zone, from ${timestamp(saved.window.from)} to ${timestamp(saved.window.to)} (UTC; end exclusive).</p>
+	<p>Collected ${timestamp(saved.generatedAtUtc)}. Adaptive sampling: average interval ${number.format(saved.edge.sampling.reportedAverageSampleInterval)}. Counts are reported as supplied, not multiplied by the interval. Provider reporting can be delayed; this is not an exhaustive event ledger.</p>
+	<div class="scroll" role="region" aria-label="Edge request groups" tabindex="0"><table>
+	<thead><tr><th>Host</th><th>Cache</th><th>HTTP status</th><th>Requests</th><th>Sample interval</th></tr></thead><tbody>${groups}</tbody></table></div>
+	<p>Top ${saved.edge.breakdownReturned} groups, limited to 10; their sum is not the separate total query. Edge counts overlap origin requests and browser activity; do not add them together. Worker invocations, subrequests and security events are separate. Exact failover-branch counts and WebSocket message counts are not measured.</p></section>`;
+}
+
+export function renderDashboard(reports, generatedAt, journalCapped, edgeState) {
 	return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>API traffic | StellarAtlas Analytics</title>
@@ -146,8 +172,10 @@ tbody th{overflow-wrap:anywhere}
 </style></head><body><main>
 <nav aria-label="Analytics views"><a href="/">Analytics home</a><a href="/stellaratlas.io">Website analytics</a><a href="#hour">Last hour</a><a href="#day">Last 24 hours</a></nav>
 <h1>API traffic</h1>
-<p>Private service totals for documented routes on one StellarAtlas API origin. Counts cover requests and handshakes. Edge-only traffic and visitor activity are outside this report.</p>
+<p>Private HTTP totals for one StellarAtlas API origin process, including fixed buckets for unmatched routes, unsupported methods and invalid paths after the observer update. Older windows omit those requests. Requests rejected before reaching this process are not counted here. WebSocket handshakes are separate from HTTP requests and message traffic.</p>
+<p>HTTP 2xx is not proof of application success. Browser pageviews honor privacy preferences and are not request totals. Edge requests overlap origin traffic; never add those counts together.</p>
 <p>Snapshot generated <time datetime="${html(generatedAt)}">${timestamp(generatedAt)}</time>. Reload for the latest available snapshot.</p>
+${renderEdgeTraffic(edgeState, generatedAt)}
 ${presets.map((preset, index) => renderWindow(preset, reports[index], journalCapped)).join('\n')}
 </main></body></html>\n`;
 }
@@ -195,7 +223,7 @@ function publishDashboard() {
 	});
 	const temporary = reportPath + '.' + randomUUID() + '.tmp';
 	try {
-		writeFileSync(temporary, renderDashboard(reports, to, journalCapped), { flag: 'wx', mode: 0o640 });
+		writeFileSync(temporary, renderDashboard(reports, to, journalCapped, readEdgeState()), { flag: 'wx', mode: 0o640 });
 		renameSync(temporary, reportPath);
 	} finally {
 		rmSync(temporary, { force: true });

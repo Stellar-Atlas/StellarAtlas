@@ -118,20 +118,23 @@ const referralHostname = new RegExp(contract.referrerPolicy.hostnamePattern);
 const opaqueReferralLabel = new RegExp(contract.referrerPolicy.opaqueLabelPattern);
 
 export function atlasPageLabel(pathname: string): string | undefined {
-	if (!pathname.startsWith('/') || pathname.includes('?') || pathname.includes('#')) return;
+	if (pathname.length > 2048 || !pathname.startsWith('/') || /[?#\\\s]/.test(pathname)) return;
 	const path = pathname === '/' ? pathname : pathname.replace(/\/$/, '');
 	if (publicPageLabels.has(path)) return path;
 	const [, section, first, second, extra] = path.split('/', 5);
-	if (!first) return;
-	if (section === 'archive-scans') return '/archive-scans/_detail';
-	if ((section === 'nodes' || section === 'organizations') && second === undefined)
+	if (!section || section.startsWith('_') || section.startsWith('.') ||
+		['api', 'v1', 'graphql', 'rpc', 'horizon', 'cdn-cgi', 'frontend-identity'].includes(section) ||
+		/\/[^/]*\.[^/]*$/.test(path)) return;
+	if (section === 'archive-scans' && first) return '/archive-scans/_detail';
+	if ((section === 'nodes' || section === 'organizations') && first && second === undefined)
 		return '/' + section + '/_detail';
 	if (section === 'docs') {
 		if (first === 'api' && second && extra === undefined) return '/docs/api/_operation';
-		if (second === undefined) return '/docs/_guide';
+		if (first && second === undefined) return '/docs/_guide';
 	}
-	if (section === 'explorer' && second && extra === undefined && explorerRecords.has(first))
+	if (section === 'explorer' && first && second && extra === undefined && explorerRecords.has(first))
 		return '/explorer/' + first + '/_detail';
+	return '/_other';
 }
 
 export function atlasSafeReferrer(value: string): string | undefined {
