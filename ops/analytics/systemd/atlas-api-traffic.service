@@ -1,0 +1,28 @@
+[Unit]
+Description=Serve the protected Atlas API traffic report
+RequiresMountsFor=/srv/stellaratlas/analytics-data
+ConditionPathIsMountPoint=/srv/stellaratlas/analytics-data
+
+[Service]
+User=atlas-analytics
+Group=atlas-analytics
+RuntimeDirectory=atlas-analytics-api-traffic
+RuntimeDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/local/lib/stellaratlas/node-v26.12.1/bin/node /opt/stellaratlas/atlas-analytics/api-traffic/serve-api-traffic.mjs /run/atlas-analytics-api-traffic/report.sock /srv/stellaratlas/analytics-data/api-traffic/index.html
+Restart=on-failure
+RestartSec=5s
+MemoryMax=96M
+TasksMax=16
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX
+InaccessiblePaths=-/run/atlas-analytics -/run/log/journal -/var/log/journal
+InaccessiblePaths=-/srv/stellaratlas/analytics-data/postgres -/srv/stellaratlas/analytics-data/events -/srv/stellaratlas/analytics-data/plausible
+
+[Install]
+WantedBy=multi-user.target

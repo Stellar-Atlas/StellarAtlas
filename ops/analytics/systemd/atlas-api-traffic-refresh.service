@@ -1,0 +1,25 @@
+[Unit]
+Description=Refresh the private Atlas API traffic snapshot
+RequiresMountsFor=/srv/stellaratlas/analytics-data
+ConditionPathIsMountPoint=/srv/stellaratlas/analytics-data
+
+[Service]
+Type=oneshot
+User=atlas-analytics
+Group=atlas-analytics
+SupplementaryGroups=systemd-journal
+UMask=0027
+ExecStart=/usr/local/lib/stellaratlas/node-v26.12.1/bin/node /opt/stellaratlas/atlas-analytics/api-traffic/render-api-traffic.mjs /srv/stellaratlas/analytics-data/api-traffic/index.html stellaratlas-api-contract-catalogue.service /opt/stellaratlas/atlas-analytics/api-traffic/public-openapi.json
+TimeoutStartSec=60s
+MemoryMax=256M
+CPUQuota=25%
+TasksMax=32
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/srv/stellaratlas/analytics-data/api-traffic
+InaccessiblePaths=-/run/atlas-analytics -/srv/stellaratlas/analytics-data/postgres -/srv/stellaratlas/analytics-data/events -/srv/stellaratlas/analytics-data/plausible

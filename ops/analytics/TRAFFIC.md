@@ -25,4 +25,25 @@ journalctl --unit "$api_unit" --since "$from" --until "$to" --no-pager \
   node ops/analytics/read-api-traffic.mjs "$from" "$to"
 ```
 
-This prints the requested range, the top 20 fixed route templates, HTTP outcome totals, and WebSocket handshakes. It reads at most 10,000 matching summaries and 32 MiB over a range of up to 31 days. Narrow the range if `inputLimited` is true or the journal command hits its record cap. Process windows crossing the range boundary are excluded, not prorated; unobserved time may be idle or missing and does not establish zero traffic or downtime. Run the report for each serving origin before drawing conclusions. This is a private operator report, not a graphical API analytics dashboard or an edge traffic census.
+This prints the requested range, the top 20 fixed route templates, HTTP outcome totals, and WebSocket handshakes. It reads at most 10,000 matching summaries and 32 MiB over a range of up to 31 days. Narrow the range if `inputLimited` is true or the journal command hits its record cap. The reader includes only complete process windows. Unobserved time may be idle or missing. Run the report for each serving origin before drawing conclusions.
+
+### Protected API traffic dashboard
+
+The analytics host entry links to the Plausible site dashboard and to
+`/api-traffic`. Both entry and report paths require the existing administrator
+access policy. The separate public browser event receiver keeps its existing
+route and policy.
+
+The refresh timer runs the existing reader against the serving API unit for
+the past hour and day. Supply the method and path projection of the serving
+generation's public OpenAPI document as `public-openapi.json` when installing
+the scripts. Refresh that projection and the unit selection when changing API
+generations. The refresh service atomically replaces one HTML snapshot on the
+analytics data mount. The web service reads that snapshot over a private Unix
+socket and has no journal access. A failed refresh leaves the last complete
+snapshot and its original generation time.
+
+Use the report to understand documented origin requests and HTTP outcomes,
+including automation. GraphQL HTTP outcomes describe transport responses.
+WebSocket attempts and outcomes appear separately. Edge traffic, visitor
+counts, and GraphQL operation success require different measurements.
