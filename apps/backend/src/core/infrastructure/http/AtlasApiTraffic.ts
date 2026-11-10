@@ -1,4 +1,5 @@
 import type { RequestHandler } from 'express';
+import type { AtlasApiEventSender } from './AtlasApiEventSender.js';
 
 interface Route {
 	readonly literal: Map<string, Route>;
@@ -62,27 +63,34 @@ interface AtlasApiTraffic {
 	observe: RequestHandler;
 	handshake(path: SocketPath): (state: Handshake) => void;
 	flush(): void;
+	close(): Promise<void>;
 }
 
-/** No customer identity, URL parameters, database, event queue, or network sender. */
-export function createAtlasApiTraffic(document: unknown, output: Output = process.stdout): AtlasApiTraffic {
+/** No customer identities or raw URLs; optional delivery receives fixed labels only. */
+export function createAtlasApiTraffic(
+	document: unknown, output: Output = process.stdout, events?: AtlasApiEventSender
+): AtlasApiTraffic {
 	const root = routeTree(document);
 	const counts = new Map<string, Partial<Record<Outcome, number>>>();
 	const websocket = new Map<SocketPath, Record<Handshake, number>>();
 	let deferredFlushes = 0;
+	let previousDelivery: string | undefined;
 	let from = new Date().toISOString();
 
 	const observe: RequestHandler = (request, response, next) => {
 		// Fixed fallback labels bound cardinality even for arbitrary methods/URLs.
 		// Attach before reading the path or invoking any downstream middleware.
 		let route = 'INVALID_PATH';
+		let method = 'OTHER';
 		response.once('close', () => {
 			const bucket = counts.get(route) ?? {};
 			const key = response.writableFinished ? outcome(response.statusCode) : 'aborted';
 			bucket[key] = (bucket[key] ?? 0) + 1;
 			counts.set(route, bucket);
+			events?.record(route, key, method);
 		});
 		try {
+			if (methods.includes(request.method.toLowerCase())) method = request.method.toUpperCase();
 			const path = request.path;
 			if (path.length <= 2048 && path.startsWith('/')) {
 				const parts = segments(path);
@@ -99,7 +107,9 @@ export function createAtlasApiTraffic(document: unknown, output: Output = proces
 	};
 	const flush = (): void => {
 		const to = new Date().toISOString();
-		if (counts.size === 0 && websocket.size === 0 && deferredFlushes === 0) { from = to; return; }
+		const delivery = events?.snapshot();
+		const deliveryState = delivery && JSON.stringify(delivery);
+		if (counts.size === 0 && websocket.size === 0 && deferredFlushes === 0 && deliveryState === previousDelivery) { from = to; return; }
 		if (output.destroyed || output.writableNeedDrain) {
 			deferredFlushes++;
 			return; // Keep a single bounded aggregate; don't enqueue another log.
@@ -107,6 +117,7 @@ export function createAtlasApiTraffic(document: unknown, output: Output = proces
 		const line = JSON.stringify({
 			type: 'atlas_public_api_traffic_v1', from, to, deferredFlushes,
 			httpScope: 'all_express_requests',
+			...(delivery ? { plausibleDelivery: { semantics: 'process_cumulative', ...delivery } } : {}),
 			http: Object.fromEntries(counts), websocket: Object.fromEntries(websocket)
 		});
 		try { output.write(line + '\n'); }
@@ -114,7 +125,8 @@ export function createAtlasApiTraffic(document: unknown, output: Output = proces
 		counts.clear();
 		websocket.clear();
 		deferredFlushes = 0;
+		previousDelivery = deliveryState;
 		from = to;
 	};
-	return { observe, handshake, flush };
+	return { observe, handshake, flush, close: async () => { await events?.close(); flush(); } };
 }
