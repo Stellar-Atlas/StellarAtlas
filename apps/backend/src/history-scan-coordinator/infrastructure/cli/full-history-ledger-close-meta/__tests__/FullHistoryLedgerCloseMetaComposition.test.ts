@@ -10,20 +10,22 @@ import {
 } from '../FullHistoryLedgerCloseMetaComposition.js';
 
 describe('FullHistoryLedgerCloseMetaComposition', () => {
-	it('retains every migration except the three independent feature migrations', () => {
+	it('retains every migration except the independent feature migrations', () => {
 		const dataSource = createFullHistoryLedgerCloseMetaDataSource({
 			admissionEnabled: false,
 			admissionMaximumDatabaseProbeMilliseconds: 1_000
 		});
 		const unrelatedNames = new Set([
 			'HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000',
+			'AccountDirectory1794090000000',
 			'AtlasAccountVerification1794091000000',
+			'AtlasDeveloperAuthentication1794232800000',
 			'AtlasVerificationAuthentication1794092000000'
 		]);
 		expect(dataSource.options.migrations).toEqual(
 			managedMigrations.filter((migration) => !unrelatedNames.has(migration.name))
 		);
-		expect(dataSource.options.migrations).toHaveLength(managedMigrations.length - 3);
+		expect(dataSource.options.migrations).toHaveLength(managedMigrations.length - unrelatedNames.size);
 		expect(dataSource.options.migrationsRun).toBe(false);
 		expect(dataSource.options.synchronize).toBe(false);
 	});
