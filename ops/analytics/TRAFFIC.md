@@ -2,6 +2,8 @@
 
 The frontend sends a real Plausible `pageview` for a public pathname navigation, including between two entity details in the same family. It suppresses re-renders of the same pathname. Query-only filters and fragments are not page transitions. The Privacy page honors and updates only Plausible's `plausible_ignore=true` browser storage flag, without a cookie or visitor ID. Global Privacy Control overrides the local preference.
 
+Unknown public page paths map to the single `/_other` label. API, static and system paths are excluded from browser events. Deploy `traffic-contract.json` to the existing trusted browser ingress before switching the frontend, so the receiver accepts that same fixed label. No raw unknown path is transmitted. Consent controls, ad blockers, send failures and collector rejection mean browser analytics are not a complete HTTP request count.
+
 - Public ingress: `POST /api/event` only, HTTPS, simple CORS text/plain with credentials and HTTP Referer omitted. Accept exact Atlas website Origins only for new browser pageviews. Forward `Sec-GPC`; an opt-out must never reach Plausible. No wildcard, cookie forwarding or client-supplied identity header.
 - Pageview body: exactly `name: "pageview", domain: "stellaratlas.io", url: "https://stellaratlas.io" + path`, and optional `referrer`. Validate the exact path and the shared referrer policy in [traffic-contract.json](./traffic-contract.json); reconstruct the outbound body. A referrer is the original HTTP(S) scheme plus the ICANN registrable domain, never a subdomain, path, query, fragment, credential, non-default port, IP literal, internal suffix or opaque identifier-like registrable name. Use pinned `tldts@7.4.19` with `allowPrivateDomains: false` and require `isIcann === true` and `isIp !== true`; no DNS lookup. At ingress require the incoming referrer exactly equals the value reconstructed by the same policy, so `https://acct-92741123.customers.vendor.com` is rejected and `https://vendor.com` is accepted. Keep the six fixed browser custom actions in the existing ingress allowlist; they use the same trusted visitor headers. Keep API traffic out of this visitor site.
 - Private CE 3.2.1 visitor input: the browser ingress accepts identity only on the protected Unix socket served by the authenticated Cloudflare tunnel, after deployment verifies the tunnel's provider route, connector access and client-IP overwrite behavior. Read exactly one validated `CF-Connecting-IP` there; reject duplicates, malformed addresses or lists. Rebuild the private collector request with the original bounded User-Agent and just one `X-Forwarded-For` from that verified address. Do not reuse inbound forwarding headers or send cookies, credentials or a raw referrer. Fail closed if the trusted hop is unavailable. Don't log or persist those headers outside Plausible's transient visitor calculation. The old fixed 120/min ingress cap was for sampled goal counters, not full site traffic. Replace it with bounded concurrency and overload handling sized and verified for actual traffic; report rejected, opted-out, overload and failed forwards separately. Never label accepted HTTP status alone a stored event.
@@ -11,7 +13,7 @@ The same public HTTPS endpoint may retain the previous four server event shapes 
 
 ## API operational traffic
 
-Set `ATLAS_API_TRAFFIC_LOG=1` in the API runtime. Each API process aggregates completed or disconnected requests whose method and path match the reviewed public OpenAPI paths, including REST, GraphQL, and documented RPC. Each minute it emits at most one `atlas_public_api_traffic_v1` JSON line to the existing private service log. The fields are `from`, `to` (UTC), `deferredFlushes`, `http` (fixed method and OpenAPI path template → counts by 2xx, 3xx, 4xx, 5xx, 429, other or aborted), and `websocket` (attempted, accepted and app-policy-rejected upgrades by fixed path: `/v1/stream/data`, `/v1/live/ws`, `/v1/status/ws`). Malformed protocol handshakes rejected by the WebSocket library appear only as attempts. The 4xx bucket excludes 429. Heartbeats and messages are not counted. GraphQL errors returned with HTTP 200 are not HTTP failures. Unmatched/private routes and undocumented upstream paths are outside the origin counters; add edge measurements separately for cache hits or failures that never reach the origin.
+Set `ATLAS_API_TRAFFIC_LOG=1` in the API runtime. Each API process aggregates all completed or disconnected HTTP requests that enter its Express observer, mounted before CORS, body parsing and routing. Reviewed OpenAPI routes use fixed method/path templates; other requests use only `UNMATCHED_ROUTE`, `UNSUPPORTED_METHOD` or `INVALID_PATH` (over 2,048 path characters, over 16 segments or unreadable/invalid path). Arbitrary request paths and methods never become labels. Each minute it emits at most one `atlas_public_api_traffic_v1` JSON line to the existing private service log. The fields are `from`, `to` (UTC), `deferredFlushes`, `http` (fixed labels → counts by 2xx, 3xx, 4xx, 5xx, 429, other or aborted), and `websocket` (attempted, accepted and app-policy-rejected upgrades by fixed path: `/v1/stream/data`, `/v1/live/ws`, `/v1/status/ws`). Each response is counted once on close, not again on finish. Malformed protocol handshakes rejected by the WebSocket library appear only as attempts. The 4xx bucket excludes 429. Heartbeats and messages are not counted. GraphQL errors returned with HTTP 200 count as HTTP 2xx, not successful operations; this observer does not inspect response bodies. Historical windows before this observer update omitted unmatched requests and cannot be retrospectively corrected from these aggregates. Socket/protocol errors rejected before Express and edge-only responses require separate evidence.
 
 No API request is sent to Plausible. API request/error totals count service use, including automation and browsers with analytics disabled; they contain no identities, raw paths, parameters, query text, payloads or headers. Sum process windows, not distinct visitors. Backpressure defers a single bounded aggregate; `deferredFlushes` reports delayed intervals, not lost requests. A forced exit can lose the last unflushed window; this is operational evidence, not a billing-grade ledger. Remove the old `ATLAS_ANALYTICS_ORIGIN` API runtime value after the change. No new database, API endpoint, or remote log sender is needed.
 
@@ -43,7 +45,59 @@ analytics data mount. The web service reads that snapshot over a private Unix
 socket and has no journal access. A failed refresh leaves the last complete
 snapshot and its original generation time.
 
-Use the report to understand documented origin requests and HTTP outcomes,
+Use the report to understand origin-process requests and HTTP outcomes,
 including automation. GraphQL HTTP outcomes describe transport responses.
 WebSocket attempts and outcomes appear separately. Edge traffic, visitor
 counts, and GraphQL operation success require different measurements.
+
+### Optional edge measurement
+
+`edge-traffic.mjs` is a separate outbound-only fetch step. It queries the zone's
+`httpRequestsAdaptiveGroups` for `requestSource: "eyeball"`: one total and at most
+10 host/status/cache groups, plus a separate unfiltered request-source category
+aggregate capped at 16 groups, for a rolling 24-hour closed UTC window ending on a
+five-minute boundary at least ten minutes behind the clock. One POST per refresh,
+ten-second deadline and 64 KiB response cap; no request URLs, IPs, referrers,
+security-event rows or Worker invocation dataset is requested. Counts are
+provider-reported, never multiplied by `sampleInterval`. The top groups are not
+the separate total. Client `eyeball` requests, `inBrowserChallenge` traffic and
+internal/subrequest categories remain separate; no combined client/unique total
+is inferred. Missing source categories are unknown, not zero, and reaching the
+16-group cap is flagged. Provider source names are mapped to the fixed documented
+[ClientRequestSource categories](https://developers.cloudflare.com/logs/reference/clientrequestsource/),
+with unknown categories collapsed to `other-source`. Adaptive sampling and
+provider delay remain visible.
+
+The optional five-minute unit requires a **separate narrow zone-analytics-read
+credential**, supplied by systemd `LoadCredential` as `cloudflare-analytics-token`,
+and `CF_ZONE_ID` in its protected environment file. Do not reuse workstation OAuth
+or expose this credential to the browser collector, report renderer or server.
+Provision its dedicated `atlas-edge-analytics` user with write access only to
+`api-traffic/edge`, and renderer read access to the 0640 result. The existing
+0700 `api-traffic` parent needs only an explicit traversal ACL for this UID;
+do not make the parent or credentials group-readable or recursively chmod any
+tree. Use a dedicated edge-owned child with the renderer's read group and a
+root-only original provider credential; systemd copies it to this unit's private
+credential directory. Credential
+creation, filesystem ownership and timer activation are operator/release steps;
+source installation alone does not establish live collection. Existing renderer
+and serving units retain `PrivateNetwork=yes` and their AF_UNIX restriction.
+
+The atomic `edge/traffic.json` envelope contains `state: ready|error`,
+`checkedAtUtc`, and nullable `lastGood`. The sanitized last-good contract contains
+`schemaVersion: 1`, `source: cloudflare_graphql_analytics`, `generatedAtUtc`,
+`window` (from/to, inclusive/exclusive semantics, seconds, reporting lag), `edge`
+(provider count, sampling, up to ten fixed-host/status/cache groups and sixteen
+fixed request-source groups with a cap flag), and
+`coverage` (delay/missing flags, unknown failover and WebSocket message counts).
+Unknown zone hosts collapse to `other-zone-host`. Every refresh replaces this
+one bounded file; it never accumulates equal windows or keeps old generations.
+Failures retain the last measured snapshot marked stale; empty provider results
+are unknown, not zero. Without the optional file the report says **Not yet
+collecting**. The report marks collection older than twenty minutes stale.
+
+Edge requests include requests that may also reach an origin, while browser
+pageviews represent a different consent-sensitive measurement. Never add edge,
+origin, visitor, Worker or security-event totals together. An edge cache status
+does not identify the exact failover branch. The report is private, not an
+adoption claim or exhaustive billing ledger.
