@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the private Atlas API traffic snapshot every five minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
