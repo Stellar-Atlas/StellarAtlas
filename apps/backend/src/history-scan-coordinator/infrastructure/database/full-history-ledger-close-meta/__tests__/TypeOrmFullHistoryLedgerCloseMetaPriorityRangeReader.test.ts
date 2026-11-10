@@ -42,6 +42,21 @@ describe('TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader', () => {
 			.rejects.toThrow(/minimumPriorityLedger/);
 	});
 
+	it('checks the publisher end floor after preserving a complete historical remainder', async () => {
+		const f = fixture([[3, 5902], [6033, 10000]]);
+		const current = { ...options(), durableNextLedger: 5903, latestAvailableLedger: 10000,
+			maximumLedgerCount: 128, sourceBatchLedgerCount: 2, typedShardLedgerCount: 128 };
+		await expect(f.reader.readNextRange({ ...current, minimumPriorityEndLedger: 5905 }))
+			.resolves.toEqual(range(5967, 6032));
+		expect(f.query.mock.calls[0]?.[1]?.[1]).toBe(3);
+		await expect(f.reader.readNextRange({ ...current, minimumPriorityEndLedger: 6032 }))
+			.resolves.toEqual(range(5967, 6032));
+		await expect(f.reader.readNextRange({ ...current, minimumPriorityEndLedger: 6033 }))
+			.resolves.toBeNull();
+		const remainder = fixture([[3, 5902], [5967, 6032], [6033, 10000]]);
+		await expect(remainder.reader.readNextHistoricalRange(current)).resolves.toEqual(range(5903, 5966));
+	});
+
 	it.each([1089, 1090])('requires 64 ledgers in a current tail at head %i', async latestAvailableLedger => {
 		const f = fixture([[3, 1026]]);
 		await expect(f.reader.readNextRange({

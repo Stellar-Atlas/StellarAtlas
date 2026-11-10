@@ -1,4 +1,5 @@
-import { settlePairedPendingPublication, type FencedPairedCurrentAdmission } from './FullHistoryPairedCurrentAdmission.js';
+import { publisherCurrentWindowStart, settlePairedPendingPublication,
+	type FencedPairedCurrentAdmission } from './FullHistoryPairedCurrentAdmission.js';
 import { performance } from 'node:perf_hooks';
 import type { ScopedCurrentArm, ScopedCurrentAttemptPolicy } from './FullHistoryScopedCurrentAttempt.js';
 import {
@@ -87,6 +88,13 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 			readonly sourceObjectCount: number;
 			readonly startLedger: number;
 			readonly typedShardCount: number;
+	  }
+	| {
+			readonly at: string;
+			readonly event: 'priority-publication-deferred';
+			readonly startLedger: number;
+			readonly endLedger: number;
+			readonly reason: 'outside-publisher-current-window';
 	  }
 	| {
 			readonly at: string;
@@ -252,9 +260,15 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				sourceFrontier.endSequence - scoped.policy.endLedger > 128)) {
 				throw new Error('Scoped current attempt does not match a fresh near-head frontier');
 			}
+			// Match the publisher's end-ledger gate without clipping the left
+			// side of a gap before the range planner protects its remainder.
+			const minimumPriorityEndLedger = paired !== undefined && scoped === undefined
+				? publisherCurrentWindowStart(sourceFrontier.endSequence)
+				: undefined;
 			const rangeOptions = {
 				...(scoped !== undefined ? { minimumPriorityLedger: scoped.policy.startLedger }
 					: minimumPriorityLedger === undefined ? {} : { minimumPriorityLedger }),
+				...(minimumPriorityEndLedger === undefined ? {} : { minimumPriorityEndLedger }),
 				durableNextLedger,
 				firstAvailableLedger: cycleContext.registeredSource.firstAvailableLedger,
 				latestAvailableLedger: scoped?.policy.endLedger ?? sourceFrontier.endSequence,
