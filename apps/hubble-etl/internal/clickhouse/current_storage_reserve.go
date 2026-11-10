@@ -15,6 +15,13 @@ const (
 
 var ErrCurrentBulkHeadroom = errors.New("current warehouse bulk headroom")
 
+// CurrentWriteCapacityDeferred identifies a failed pre-write observation for
+// which the current worker can take a fresh sample without submitting or
+// replaying any insert. Neither error admits writes or lowers the reserve.
+func CurrentWriteCapacityDeferred(err error) bool {
+	return errors.Is(err, ErrCurrentBulkHeadroom) || errors.Is(err, errPairedBulkCapacityConflict)
+}
+
 // ValidateCurrentPublicationPolicy requires the same device binding used by the
 // historical writer. Its higher historical threshold remains unchanged.
 func ValidateCurrentPublicationPolicy(policy HistoricalStoragePolicy) error {

@@ -77,20 +77,8 @@ func RunCurrentWorkers(ctx context.Context, config Config, currentGuard *Pressur
 			request.WriterLimits.MaximumPendingInsertBytes = 0
 			request.CurrentWriteBudgetBytes = config.CurrentWriteBudgetBytes
 			request.CheckCurrentWriteCapacity = func(writeCtx context.Context) error {
-				// Only new writes wait; an admitted HTTP request retains existing
-				// cancellation/settlement semantics. Never replay the batch here.
-				for {
-					err := currentCapacity(writeCtx)
-					if !errors.Is(err, clickhouse.ErrCurrentBulkHeadroom) {
-						return err
-					}
-					if currentGuard.Log != nil {
-						currentGuard.Log("current-write-capacity-deferred", err.Error())
-					}
-					if err := waitReadiness(writeCtx, 15*time.Second); err != nil {
-						return err
-					}
-				}
+				return waitCurrentWriteCapacity(writeCtx, config.Drain, currentCapacity,
+					15*time.Second, currentGuard.Log)
 			}
 		}
 		return ingestion.File(ctx, config.Client, request)
@@ -154,6 +142,51 @@ func RunCurrentWorkers(ctx context.Context, config Config, currentGuard *Pressur
 		}
 	}
 	return runCurrentWorkers(ctx, config, io)
+}
+
+// Recheck only the unsubmitted insert's capacity fence. HTTP settlement and
+// errors after submission still take the existing path and are never replayed.
+func waitCurrentWriteCapacity(ctx context.Context, drain <-chan struct{}, probe func(context.Context) error, interval time.Duration, log func(string, string)) error {
+	var lastDeferral error
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := probe(ctx)
+		if !clickhouse.CurrentWriteCapacityDeferred(err) {
+			if err != nil {
+				return err
+			}
+			if lastDeferral != nil {
+				select {
+				case <-drain:
+					return fmt.Errorf("current write was not submitted before publisher drain: %w", lastDeferral)
+				default:
+				}
+			}
+			return ctx.Err()
+		}
+		lastDeferral = err
+		if log != nil {
+			log("current-write-capacity-deferred", err.Error())
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-drain:
+			timer.Stop()
+			return fmt.Errorf("current write was not submitted before publisher drain: %w", err)
+		case <-timer.C:
+		}
+		// Prefer a drain that arrived with the timer over taking another sample.
+		select {
+		case <-drain:
+			return fmt.Errorf("current write was not submitted before publisher drain: %w", err)
+		default:
+		}
+	}
 }
 
 func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (Summary, error) {
@@ -251,7 +284,7 @@ func runCurrentWorkers(ctx context.Context, config Config, io currentWorkerIO) (
 						capacityDeferred = err != nil
 					} else if current && io.currentCapacity != nil {
 						err = io.currentCapacity(selectionCtx)
-						capacityDeferred = errors.Is(err, clickhouse.ErrCurrentBulkHeadroom)
+						capacityDeferred = clickhouse.CurrentWriteCapacityDeferred(err)
 					} else if io.capacity != nil {
 						err = io.capacity(selectionCtx)
 					}

@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -90,11 +91,20 @@ type bulkFilesystemCapacity struct {
 	available uint64
 }
 
+// An incoherent snapshot must never admit a write. It is different from an
+// invalid configuration or an error after an insert has been submitted.
+var errPairedBulkCapacityConflict = errors.New("inconsistent paired bulk capacity sample")
+
 func historicalUnreservedBytes(before, after, clickhousePath bulkFilesystemCapacity, free, unreserved uint64) (uint64, error) {
-	if before.device != after.device || before.device != clickhousePath.device || before.total == 0 ||
-		before.total != after.total || before.total != clickhousePath.total || unreserved > free ||
-		free > before.total || before.available > before.total || after.available > after.total || clickhousePath.available > clickhousePath.total {
-		return 0, fmt.Errorf("historical admission requires consistent capacity on the source bulk device")
+	switch {
+	case before.device != after.device || before.device != clickhousePath.device:
+		return 0, fmt.Errorf("%w: source and warehouse devices disagree", errPairedBulkCapacityConflict)
+	case before.total == 0 || before.total != after.total || before.total != clickhousePath.total:
+		return 0, fmt.Errorf("%w: filesystem totals disagree", errPairedBulkCapacityConflict)
+	case free > before.total || before.available > before.total || after.available > after.total || clickhousePath.available > clickhousePath.total:
+		return 0, fmt.Errorf("%w: free space exceeds filesystem total", errPairedBulkCapacityConflict)
+	case unreserved > free:
+		return 0, fmt.Errorf("%w: ClickHouse unreserved space exceeds free space", errPairedBulkCapacityConflict)
 	}
 	// The ClickHouse reservation is subtracted exactly once. Never credit
 	// aggregate reservations against a particular historical slot: they may be
