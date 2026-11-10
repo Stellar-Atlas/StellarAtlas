@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { StrKey } from '@stellar/stellar-sdk';
 import {
 	MAX_EXPERT_DELTA_PATHS,
+	MAX_EXPERT_SNAPSHOT_PATHS,
 	type ExpertDirectoryCheckpoint,
 	type ExpertDirectoryEntry,
 	type ExpertDirectoryStore
@@ -111,6 +112,15 @@ it('validates the complete pinned initial snapshot before one atomic store admis
 	await expect(importLocalExpertDirectorySnapshot({
 		approvedGitDir: root, to: { ...to, tree: base.tree }, observedAt
 	}, { initializeSnapshot })).rejects.toThrow('binding');
+	const sharedBlob = blob(accountA);
+	const oversized = revision(Array.from({ length: MAX_EXPERT_SNAPSHOT_PATHS + 1 }, (_, index) => {
+		const key = Buffer.alloc(32);
+		key.writeUInt32BE(index);
+		return row(StrKey.encodeEd25519PublicKey(key), sharedBlob);
+	}));
+	await expect(importLocalExpertDirectorySnapshot({
+		approvedGitDir: root, to: oversized, observedAt
+	}, { initializeSnapshot })).rejects.toThrow('record limit');
 	expect(initializeSnapshot).toHaveBeenCalledTimes(1);
 });
 

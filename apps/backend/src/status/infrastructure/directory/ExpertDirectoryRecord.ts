@@ -118,12 +118,16 @@ export function parseExpertDirectoryRecord(
 	if (
 		typeof version !== 'number' ||
 		!Number.isSafeInteger(version) ||
-		version < 1
+		version < 0
 	)
 		throw new Error('Invalid directory record version');
+	const fields =
+		version === 0 && typeof decoded.domain === 'string'
+			? { ...decoded, domain: parseDnsHostname(decoded.domain) }
+			: decoded;
 	return {
 		...identity,
-		...normalizeDirectoryPublicFields(decoded),
+		...normalizeDirectoryPublicFields(fields),
 		source: EXPERT_DIRECTORY_SOURCE,
 		publisher: 'StellarExpert',
 		license: 'MIT',
@@ -136,12 +140,19 @@ export function parseExpertDirectoryRecord(
 }
 
 function normalizeDomain(value: unknown): string {
+	const host = parseDnsHostname(value);
+	if (host === null) throw new Error('Invalid directory DNS hostname');
+	return host;
+}
+
+/** Legacy upstream records may contain annotations in this optional field. */
+function parseDnsHostname(value: unknown): string | null {
 	if (
 		typeof value !== 'string' ||
 		value.length > 254 ||
 		!/^[A-Za-z0-9.-]+$(?!\s)/.test(value)
 	)
-		throw new Error('Invalid directory DNS hostname');
+		return null;
 	const host = value.toLowerCase().replace(/\.$/, '');
 	try {
 		if (
@@ -153,7 +164,7 @@ function normalizeDomain(value: unknown): string {
 	} catch {
 		// URL parser aliases do not establish a DNS hostname.
 	}
-	throw new Error('Invalid directory DNS hostname');
+	return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
