@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { createAtlasApiTraffic } from '../AtlasApiTraffic.js';
+import { createAtlasApiEventSender } from '../AtlasApiEventSender.js';
 
 it('counts all observed HTTP outcomes in bounded labels, including early failures and aborted requests', async () => {
 	const lines: string[] = [];
@@ -63,4 +64,80 @@ it('counts all observed HTTP outcomes in bounded labels, including early failure
 	expect(lines[0]).not.toMatch(/private|not-a-public-route/);
 	traffic.flush();
 	expect(lines).toHaveLength(1);
+});
+
+it('delivers API custom events asynchronously without forwarding identities or inflating pageviews', async () => {
+	let release!: () => void;
+	const held = new Promise<void>(resolve => { release = resolve; });
+	const payloads: unknown[] = [];
+	const send = jest.fn<typeof fetch>().mockImplementation(async (url, options) => {
+		expect(url).toBe('http://127.0.0.1:18080/api/event');
+		expect(options?.headers).toEqual({ 'Content-Type': 'application/json', 'User-Agent': 'StellarAtlasAPIEvents/1.0' });
+		payloads.push(JSON.parse(String(options?.body)));
+		await held;
+		return new Response(null, { status: 202 });
+	});
+	const events = createAtlasApiEventSender({ ATLAS_API_PLAUSIBLE_ORIGIN: 'http://127.0.0.1:18080' }, send)!;
+	const lines: string[] = [];
+	const traffic = createAtlasApiTraffic({ paths: { '/v1/accounts/{account}': { get: {} } } }, {
+		destroyed: false, writableNeedDrain: false, write: value => { lines.push(String(value)); return true; }
+	}, events);
+	const api = express();
+	api.use(traffic.observe);
+	api.get('/v1/accounts/:account', (_req, res) => { res.status(200).end(); });
+	try {
+		await request(api).get('/v1/accounts/private-wallet?key=private').set('User-Agent', 'private-agent')
+			.set('X-Forwarded-For', '192.0.2.99').expect(200);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		expect(events.snapshot()).toMatchObject({ accepted: 0, active: 1 });
+		expect(payloads).toEqual([{ name: 'API request', domain: 'api.stellaratlas.io',
+			url: 'https://api.stellaratlas.io/requests', interactive: false,
+			props: { route: '/v1/accounts/{account}', method: 'GET', outcome: '2xx', scope: 'origin_http' } }]);
+		expect(JSON.stringify(payloads)).not.toMatch(/private|192\.0\.2\.99|pageview/);
+		await request(api).get('/private-unknown-route').expect(404);
+	} finally {
+		release();
+		await traffic.close();
+	}
+	const summary = JSON.parse(lines.at(-1)!);
+	expect(summary.plausibleDelivery).toMatchObject({ semantics: 'process_cumulative', enqueued: 2,
+		accepted: 2, failed: 0, pending: 0, active: 0 });
+	expect(payloads.at(-1)).toMatchObject({ props: { route: 'UNMATCHED_ROUTE', method: 'GET', outcome: '4xx' } });
+});
+
+it('bounds the API event queue and retries only a connection refusal, not ambiguous or dropped events', async () => {
+	const options = { ATLAS_API_PLAUSIBLE_ORIGIN: 'http://127.0.0.1:18080' };
+	expect(createAtlasApiEventSender({})).toBeUndefined();
+	expect(() => createAtlasApiEventSender({ ATLAS_API_PLAUSIBLE_ORIGIN: 'https://analytics.example' })).toThrow();
+	const ready = jest.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 202 }));
+	const bounded = createAtlasApiEventSender(options, ready)!;
+	for (let index = 0; index < 1026; index++) bounded.record('UNMATCHED_ROUTE', '4xx');
+	expect(ready).not.toHaveBeenCalled();
+	expect(bounded.snapshot()).toMatchObject({ enqueued: 1024, pending: 1024, overloaded: 2 });
+	await bounded.close();
+	expect(bounded.snapshot()).toMatchObject({ accepted: 1024, active: 0, pending: 0 });
+
+	const refused = new TypeError('not logged', { cause: { code: 'ECONNREFUSED' } });
+	const retry = jest.fn<typeof fetch>().mockRejectedValueOnce(refused).mockResolvedValue(new Response(null, { status: 202 }));
+	const retried = createAtlasApiEventSender(options, retry)!;
+	retried.record('POST /graphql', '2xx');
+	await retried.close();
+	expect(retry).toHaveBeenCalledTimes(2);
+	expect(retried.snapshot()).toMatchObject({ accepted: 1, retried: 1, failed: 0 });
+
+	for (const [response, expected] of [
+		[new Response(null, { status: 202, headers: { 'x-plausible-dropped': '1' } }), { collectorDropped: 1 }],
+		[new Response(null, { status: 429 }), { rejected: 1 }],
+		[new Error('ambiguous timeout; must not retry'), { ambiguous: 1 }]
+	] as const) {
+		const send = jest.fn<typeof fetch>().mockImplementation(async () => {
+			if (response instanceof Error) throw response;
+			return response;
+		});
+		const failed = createAtlasApiEventSender(options, send)!;
+		failed.record('INVALID_PATH', 'aborted');
+		await failed.close();
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(failed.snapshot()).toMatchObject({ failed: 1, accepted: 0, ...expected });
+	}
 });
