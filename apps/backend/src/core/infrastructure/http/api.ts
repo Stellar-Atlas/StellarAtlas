@@ -1,4 +1,5 @@
 import express from 'express';
+import { createAccountDirectory } from '../../../status/infrastructure/directory/DirectoryActivation.js';
 import { createAtlasVerification } from '../../../status/infrastructure/verification/VerificationActivation.js';
 import { createAtlasDeveloperAuth } from '../../../status/infrastructure/verification/DeveloperAuthActivation.js';
 import { developerAuthPath } from '../../../status/infrastructure/verification/DeveloperGithubOAuth.js';
@@ -222,6 +223,7 @@ const listen = async () => {
 	);
 
 	mountPublicDataRoutes(api, {
+		directory: createAccountDirectory(process.env, kernel.container.get(DataSource)),
 		backgroundTasksEnabled: backgroundTasks,
 		warehouse: hubbleWarehouse,
 		manager: kernel.container.get(DataSource).manager,

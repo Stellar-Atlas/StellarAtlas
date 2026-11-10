@@ -11,6 +11,7 @@ import { isPublicOpenApiOperation } from './OpenApiOperationClassification.js';
 import { withLocalPublicOpenApiSchemas } from './LocalPublicOpenApiSchemas.js';
 import { withPublicGoodsOpenApiPaths } from './PublicGoodsOpenApiDocument.js';
 import { withAssetResourceOpenApiPaths } from './AssetResourceOpenApi.js';
+import { withAccountDirectoryOpenApiPaths } from './AccountDirectoryOpenApi.js';
 
 const publicServer = {
 	description: 'API for the Stellar public network',
@@ -102,9 +103,9 @@ export function createPublicOpenApiDocument(document: unknown): OpenApiRecord {
 	// Excluded operator/legacy routes must not introduce schema dependencies.
 	const publicDocument = projectOpenApiDocument(
 		withAssetResourceOpenApiPaths(
-			withPublicGoodsOpenApiPaths(
+			withAccountDirectoryOpenApiPaths(withPublicGoodsOpenApiPaths(
 				withHubbleOpenApiPaths(withDataAccessOpenApiPaths(document))
-			)
+			))
 		),
 		options
 	);

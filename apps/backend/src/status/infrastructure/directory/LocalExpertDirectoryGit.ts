@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import {
 	applyExpertDirectoryDelta,
 	MAX_EXPERT_DELTA_BYTES,
 	MAX_EXPERT_DELTA_PATHS,
+	MAX_EXPERT_SNAPSHOT_BYTES,
+	MAX_EXPERT_SNAPSHOT_PATHS,
 	type ExpertDirectoryChange,
 	type ExpertDirectoryStore
 } from './ExpertDirectoryImport.js';
@@ -9,12 +12,14 @@ import {
 	EXPERT_DIRECTORY_SOURCE,
 	isGitOid,
 	MAX_EXPERT_RECORD_BYTES,
-	parseExpertDirectoryPath
+	parseExpertDirectoryPath,
+	parseExpertDirectoryRecord
 } from './ExpertDirectoryRecord.js';
 import {
 	openDirectoryGit,
 	type ReadDirectoryGit
 } from './OfflineDirectoryGit.js';
+import type { TypeOrmExpertDirectoryStore } from './TypeOrmExpertDirectoryStore.js';
 
 const ZERO_OID = '0'.repeat(40);
 const DIFF_OUTPUT_BYTES = MAX_EXPERT_DELTA_PATHS * 172;
@@ -22,6 +27,70 @@ const DIFF_OUTPUT_BYTES = MAX_EXPERT_DELTA_PATHS * 172;
 export interface DirectoryGitRevision {
 	readonly commit: string;
 	readonly tree: string;
+}
+
+/** Bootstrap only after the complete pinned tree has passed all bounds and record checks. */
+export async function importLocalExpertDirectorySnapshot(
+	input: {
+		readonly approvedGitDir: string;
+		readonly to: DirectoryGitRevision;
+		readonly observedAt: string;
+		readonly signal?: AbortSignal;
+	},
+	store: Pick<TypeOrmExpertDirectoryStore, 'initializeSnapshot'>
+) {
+	const { approvedGitDir, observedAt, signal } = input;
+	const to = { ...input.to };
+	if (![to.commit, to.tree].every(isGitOid) ||
+		!Number.isFinite(Date.parse(observedAt)))
+		throw new Error('Initial directory requires exact revision and observation time');
+	const git = await openDirectoryGit(approvedGitDir, signal);
+	if (lines((await git(['rev-parse', '--show-object-format'])).stdout, 1)[0] !== 'sha1')
+		throw new Error('Directory Git object format must be SHA-1');
+	const revision = await readObjectInfo(git, [...new Set([to.commit, to.tree])]);
+	if (revision.get(to.commit)?.type !== 'commit' || revision.get(to.tree)?.type !== 'tree' ||
+		lines((await git(['rev-parse', '--revs-only', '--end-of-options',
+			to.commit + '^{tree}'])).stdout, 1)[0] !== to.tree)
+		throw new Error('Initial directory commit/tree binding is invalid');
+	const listing = await git(['ls-tree', '-r', '-z', '--full-tree', to.tree, '--', 'accounts'],
+		{ maxBuffer: MAX_EXPERT_SNAPSHOT_PATHS * 128 + 1 });
+	const rows = listing.stdout.length
+		? new TextDecoder('utf-8', { fatal: true }).decode(listing.stdout).split('\0')
+		: [''];
+	if (rows.pop() !== '' || rows.length > MAX_EXPERT_SNAPSHOT_PATHS)
+		throw new Error('Initial directory tree exceeds its record limit');
+	const paths = rows.map((row) => {
+		const match = /^(100644|100755) blob ([a-f0-9]{40})\t(.+)$/.exec(row);
+		if (!match) throw new Error('Initial directory tree contains a nonordinary record');
+		parseExpertDirectoryPath(match[3]!);
+		return { oid: match[2]!, path: match[3]! };
+	});
+	const objects = await readObjectInfo(git, [...new Set(paths.map(({ oid }) => oid))]);
+	const sizes = new Map<string, number>();
+	let payloadBytes = 0;
+	for (const { oid } of paths) {
+		const info = objects.get(oid)!;
+		if (info.type !== 'blob' || info.size < 1 || info.size > MAX_EXPERT_RECORD_BYTES)
+			throw new Error('Invalid initial directory blob');
+		payloadBytes += info.size;
+		if (payloadBytes > MAX_EXPERT_SNAPSHOT_BYTES)
+			throw new Error('Initial directory exceeds its byte limit');
+		sizes.set(oid, info.size);
+	}
+	const payloads = await readPayloads(git, sizes, payloadBytes);
+	const timestamp = new Date(observedAt).toISOString();
+	const entries = paths.map(({ oid, path }) => ({
+		...parseExpertDirectoryRecord(path, oid, payloads.get(oid)!),
+		commit: to.commit, observedAt: timestamp, state: 'active' as const
+	}));
+	const digest = createHash('sha256').update(JSON.stringify(entries.map((entry) =>
+		[entry.sourcePath, entry.sourceBlobOid, entry.contentSha256]))).digest('hex');
+	signal?.throwIfAborted();
+	const result = await store.initializeSnapshot({
+		commit: to.commit, observedAt: timestamp, previousCommit: null, deltaSha256: digest
+	}, entries);
+	return { ...result, provenance: { source: EXPERT_DIRECTORY_SOURCE, to,
+		paths: paths.length, payloadBytes } };
 }
 
 interface PathDelta {
@@ -218,7 +287,8 @@ async function readObjectInfo(git: ReadDirectoryGit, ids: readonly string[]) {
 	const output = await git(
 		['cat-file', '--batch-check=%(objectname) %(objecttype) %(objectsize)'],
 		{
-			input: ids.join('\n') + '\n'
+			input: ids.join('\n') + '\n',
+			maxBuffer: Math.max(24 * 1024, ids.length * 96)
 		}
 	);
 	const rows = lines(output.stdout, ids.length);

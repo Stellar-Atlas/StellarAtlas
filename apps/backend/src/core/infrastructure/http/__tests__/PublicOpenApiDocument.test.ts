@@ -10,6 +10,8 @@ describe('public OpenAPI document', () => {
 
 	it('keeps public data routes and removes operator or cross-check routes', () => {
 		expect(paths['/v1/explorer/operations']).toBeDefined();
+		expect(paths['/v1/account-directory']?.get).toBeDefined();
+		expect(paths['/v1/account-directory/{address}']?.get).toBeDefined();
 		expect(paths['/v1/asset-metadata']?.get).toBeDefined();
 		expect(paths['/v1/assets/{asset}/similar']?.get).toBeDefined();
 		expect(paths['/v1/assets/{asset}/rankings']?.get).toBeDefined();

@@ -11,6 +11,8 @@ import {
 
 export const MAX_EXPERT_DELTA_PATHS = 128;
 export const MAX_EXPERT_DELTA_BYTES = 512 * 1024;
+export const MAX_EXPERT_SNAPSHOT_PATHS = 16_384;
+export const MAX_EXPERT_SNAPSHOT_BYTES = 32 * 1024 * 1024;
 
 export type ExpertDirectoryChange =
 	| {

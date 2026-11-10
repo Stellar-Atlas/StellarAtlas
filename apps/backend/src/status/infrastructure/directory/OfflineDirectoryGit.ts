@@ -48,6 +48,9 @@ export async function openDirectoryGit(
 	Object.assign(env, {
 		GIT_CONFIG_NOSYSTEM: '1',
 		GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+		// Older Git accepts the empty protocol allowlist even when it does not
+		// recognize the newer lazy-fetch control.
+		GIT_NO_LAZY_FETCH: '1',
 		GIT_ALLOW_PROTOCOL: '',
 		GIT_TERMINAL_PROMPT: '0',
 		LC_ALL: 'C'
@@ -63,7 +66,6 @@ export async function openDirectoryGit(
 				[
 					'--no-pager',
 					'--no-replace-objects',
-					'--no-lazy-fetch',
 					'--no-optional-locks',
 					'--literal-pathspecs',
 					'--bare',

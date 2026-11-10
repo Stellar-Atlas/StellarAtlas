@@ -6,6 +6,8 @@ import type {
 	ExpertDirectoryTransaction
 } from './ExpertDirectoryImport.js';
 import { EXPERT_DIRECTORY_SOURCE } from './ExpertDirectoryRecord.js';
+import { isGitOid } from './ExpertDirectoryRecord.js';
+import { MAX_EXPERT_SNAPSHOT_BYTES, MAX_EXPERT_SNAPSHOT_PATHS } from './ExpertDirectoryImport.js';
 
 export const ExpertDirectoryEntrySchema = new EntitySchema<{
 	source: typeof EXPERT_DIRECTORY_SOURCE;
@@ -37,6 +39,39 @@ export const ExpertDirectoryCheckpointSchema = new EntitySchema<
 
 export class TypeOrmExpertDirectoryStore implements ExpertDirectoryStore {
 	constructor(private readonly dataSource: DataSource) {}
+
+	/** Publish the complete initial snapshot and its checkpoint in one transaction. */
+	initializeSnapshot(
+		checkpoint: ExpertDirectoryCheckpoint,
+		entries: readonly ExpertDirectoryEntry[]
+	) {
+		if (!isGitOid(checkpoint.commit) || checkpoint.previousCommit !== null ||
+			!checkpoint.deltaSha256 || !/^[0-9a-f]{64}$/.test(checkpoint.deltaSha256) ||
+			!Number.isFinite(Date.parse(checkpoint.observedAt)) ||
+			entries.length > MAX_EXPERT_SNAPSHOT_PATHS ||
+			Buffer.byteLength(JSON.stringify(entries)) > MAX_EXPERT_SNAPSHOT_BYTES ||
+			entries.some((entry) => entry.source !== EXPERT_DIRECTORY_SOURCE ||
+				entry.state !== 'active' || entry.commit !== checkpoint.commit ||
+				entry.observedAt !== checkpoint.observedAt))
+			throw new Error('Invalid initial directory snapshot');
+		return this.dataSource.transaction('SERIALIZABLE', async (manager) => {
+			const source = EXPERT_DIRECTORY_SOURCE;
+			const current = await manager.findOneBy(ExpertDirectoryCheckpointSchema, { source });
+			if (current) {
+				if (current.commit === checkpoint.commit && current.previousCommit === null &&
+					current.deltaSha256 === checkpoint.deltaSha256)
+					return { status: 'replayed' as const, checkpoint: current };
+				throw new Error('Directory is already initialized');
+			}
+			if (await manager.findOneBy(ExpertDirectoryEntrySchema, { source }))
+				throw new Error('Directory has entries without a checkpoint');
+			if (entries.length)
+				await manager.insert(ExpertDirectoryEntrySchema,
+					entries.map((entry) => ({ source, address: entry.address, evidence: entry })));
+			await manager.insert(ExpertDirectoryCheckpointSchema, { source, ...checkpoint });
+			return { status: 'initialized' as const, checkpoint };
+		});
+	}
 
 	transaction<T>(
 		work: (transaction: ExpertDirectoryTransaction) => Promise<T>
