@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StrKey } from '@stellar/stellar-sdk';
 import {
 	MAX_EXPERT_DELTA_PATHS,
+	MAX_EXPERT_SNAPSHOT_BATCH_PATHS,
 	type ExpertDirectoryCheckpoint,
 	type ExpertDirectoryEntry,
 	type ExpertDirectoryStore
@@ -91,27 +92,50 @@ beforeEach(async () => {
 	base = revision([]);
 });
 
-it('validates the complete pinned initial snapshot before one atomic store admission', async () => {
-	const to = revision([row(accountA, blob(accountA)), row(accountB, blob(accountB))]);
-	const initializeSnapshot = jest.fn(async (checkpoint: ExpertDirectoryCheckpoint,
-		entries: readonly ExpertDirectoryEntry[]) => {
-		expect(entries.map((entry) => entry.address)).toEqual([accountA, accountB].sort());
-		expect(entries.every((entry) => entry.state === 'active' &&
-			entry.commit === to.commit && entry.source === 'stellar-expert/public-directory')).toBe(true);
+it('stages multiple validated batches before one atomic store admission', async () => {
+	const addresses = Array.from({ length: MAX_EXPERT_SNAPSHOT_BATCH_PATHS + 1 }, (_, index) => {
+		const key = Buffer.alloc(32);
+		key.writeUInt32BE(index);
+		return StrKey.encodeEd25519PublicKey(key);
+	}).sort();
+	const files: string[] = [];
+	for (const address of addresses) {
+		const file = join(root, filename(address));
+		await writeFile(file, JSON.stringify({ address, name: 'Fixture', tags: [], version: 0 }));
+		files.push(file);
+	}
+	const oids = git(['hash-object', '-w', '--stdin-paths'], files.join('\n') + '\n').split(/\r?\n/);
+	const treeRows = addresses.map((address, index) => row(address, oids[index]!));
+	const to = revision(treeRows, base);
+	const publishSnapshot = jest.fn(async (checkpoint: ExpertDirectoryCheckpoint,
+		batches: AsyncIterable<readonly ExpertDirectoryEntry[]>) => {
+		const batchSizes: number[] = [];
+		const seen: string[] = [];
+		for await (const entries of batches) {
+			batchSizes.push(entries.length);
+			seen.push(...entries.map((entry) => entry.address));
+			expect(entries.every((entry) => entry.state === 'active' && entry.version === 0 &&
+				entry.commit === to.commit && entry.source === 'stellar-expert/public-directory')).toBe(true);
+		}
+		expect(batchSizes).toEqual([MAX_EXPERT_SNAPSHOT_BATCH_PATHS, 1]);
+		expect(seen).toEqual(addresses);
 		return { status: 'initialized' as const, checkpoint };
 	});
 	const result = await importLocalExpertDirectorySnapshot({
 		approvedGitDir: root, to, observedAt
-	}, { initializeSnapshot });
+	}, { publishSnapshot });
 	expect(result.status).toBe('initialized');
-	expect(result.provenance.paths).toBe(2);
+	expect(result.provenance.paths).toBe(addresses.length);
 	expect(result.checkpoint).toMatchObject({ commit: to.commit, previousCommit: null });
 	expect(result.checkpoint.deltaSha256).toMatch(/^[a-f0-9]{64}$/);
-	expect(initializeSnapshot).toHaveBeenCalledTimes(1);
 	await expect(importLocalExpertDirectorySnapshot({
 		approvedGitDir: root, to: { ...to, tree: base.tree }, observedAt
-	}, { initializeSnapshot })).rejects.toThrow('binding');
-	expect(initializeSnapshot).toHaveBeenCalledTimes(1);
+	}, { publishSnapshot })).rejects.toThrow('binding');
+	const invalidLate = revision([...treeRows, row(accountB, blob(accountA))], to);
+	await expect(importLocalExpertDirectorySnapshot({
+		approvedGitDir: root, from: to, to: invalidLate, observedAt
+	}, { publishSnapshot })).rejects.toThrow('record does not match its path');
+	expect(publishSnapshot).toHaveBeenCalledTimes(1);
 });
 
 afterEach(async () => {

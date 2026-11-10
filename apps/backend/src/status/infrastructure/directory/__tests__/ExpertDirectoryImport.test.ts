@@ -169,6 +169,7 @@ test('only retains bounded public fields and separates G and C identities', () =
 		name: ' Example 合約 ',
 		domain: 'EXAMPLE.org.',
 		tags: ['unreviewed', 'unreviewed'],
+		version: 0,
 		note: 'private',
 		moderator: 'private',
 		apiOnly: 'private'
@@ -182,10 +183,22 @@ test('only retains bounded public fields and separates G and C identities', () =
 		addressKind: 'contract',
 		name: 'Example 合約',
 		domain: 'example.org',
-		tags: ['unreviewed']
+		tags: ['unreviewed'],
+		version: 0
 	});
 	for (const field of ['note', 'moderator', 'apiOnly'])
 		expect(parsed).not.toHaveProperty(field);
+	const legacy = upsert(contract, {
+		version: 0,
+		domain: 'example.org legacy annotation'
+	});
+	expect(
+		parseExpertDirectoryRecord(legacy.path, legacy.blobOid, legacy.bytes)
+	).toMatchObject({
+		domain: null,
+		version: 0,
+		sourceBlobOid: legacy.blobOid
+	});
 });
 
 test.each([
@@ -207,7 +220,10 @@ test.each([
 	{ name: 'Left\u202Eright' },
 	{ domain: 'https://example.org' },
 	{ domain: '127.0.0.0x1' },
-	{ version: 0 },
+	{ version: 0, domain: 1 },
+	{ version: -1 },
+	{ version: 0.5 },
+	{ version: '0' },
 	{ tags: Array.from({ length: 25 }, () => 'tag') },
 	{ tags: ['<script>'] }
 ])(

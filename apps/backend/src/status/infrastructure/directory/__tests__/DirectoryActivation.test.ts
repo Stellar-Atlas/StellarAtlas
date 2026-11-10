@@ -83,7 +83,7 @@ it('wires a lazy reader and serves separately attributed Atlas evidence through 
 	).toThrow('Duplicate');
 });
 
-it('requires complete exact import pins and preserves the explicit snapshot/delta distinction', () => {
+it('requires complete exact import pins and an explicit base for refreshes and deltas', () => {
 	const manifest = {
 		mode: 'snapshot',
 		approvedGitDir: '/approved/git',
@@ -97,6 +97,11 @@ it('requires complete exact import pins and preserves the explicit snapshot/delt
 	expect(() =>
 		parseDirectoryImportManifest({ ...manifest, mode: 'delta' })
 	).toThrow();
+	expect(() =>
+		parseDirectoryImportManifest({ ...manifest, mode: 'refresh' })
+	).toThrow();
+	const refresh = { ...manifest, mode: 'refresh', from: { ...pin, commit: 'b'.repeat(40) } };
+	expect(parseDirectoryImportManifest(refresh)).toEqual(refresh);
 	expect(() =>
 		parseDirectoryImportManifest({ ...manifest, to: { ...pin, tree: 'main' } })
 	).toThrow();

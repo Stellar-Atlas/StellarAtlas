@@ -1,7 +1,9 @@
 import {
 	assertPairedCapacity,
+	classifyCapturedPublication,
 	fencePairedCurrentAdmission,
 	matchesFullPublication,
+	publisherCurrentWindowStart,
 	type PairedCurrentAdmissionPolicy,
 	type PairedFilesystem
 } from '../FullHistoryPairedCurrentAdmission.js';
@@ -10,6 +12,8 @@ import fsModule, { promises as fs } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readScopedCurrentArm, type ScopedCurrentAttemptPolicy } from '../FullHistoryScopedCurrentAttempt.js';
+import { readCurrentSourcePublication } from '../FullHistoryPairedSourceManifest.js';
+import type { DataSource } from 'typeorm';
 
 describe('paired current source admission', () => {
 	const policy: PairedCurrentAdmissionPolicy = {
@@ -113,6 +117,50 @@ describe('paired current source admission', () => {
 		expect(matchesFullPublication({ ...manifest, status: 'started' }, source)).toBe(false);
 		expect(matchesFullPublication({ ...manifest, datasets: { ...datasets, ttl: undefined } }, source)).toBe(false);
 		expect(matchesFullPublication({ ...manifest, datasets: { ...datasets, history_ledgers: '63' } }, source)).toBe(false);
+		expect(classifyCapturedPublication([manifest], { ...source, publisherTip: 10_000 })).toBe('published');
+		expect(classifyCapturedPublication([{ ...manifest, datasets: {} }],
+			{ ...source, publisherTip: 10_000 })).toBe('waiting');
+	});
+
+	it('defers only exact captured batches outside the publisher window without resolving warehouse writes', () => {
+		const source = { id: '00', digest: 'aa'.repeat(32), start: 100, end: 163 };
+		const justCurrent = { ...source, publisherTip: 4258 };
+		const agedOut = { ...source, publisherTip: 4259 };
+		const unfinished = { id: source.id, digest: source.digest, status: 'started',
+			start_ledger: '100', end_ledger: '163', ledger_count: '64' };
+		expect(publisherCurrentWindowStart(63)).toBe(1);
+		expect(publisherCurrentWindowStart(4258)).toBe(163);
+		expect(publisherCurrentWindowStart(4259)).toBe(164);
+		expect(classifyCapturedPublication([], { ...source, publisherTip: null })).toBe('waiting');
+		expect(classifyCapturedPublication([], justCurrent)).toBe('waiting');
+		expect(classifyCapturedPublication([unfinished], justCurrent)).toBe('waiting');
+		expect(classifyCapturedPublication([], agedOut)).toBe('deferred-aged-out');
+		expect(classifyCapturedPublication([unfinished], agedOut)).toBe('deferred-aged-out');
+		expect(classifyCapturedPublication([{ ...unfinished, status: 'failed' }], agedOut)).toBe('deferred-aged-out');
+		expect(classifyCapturedPublication([{ ...unfinished, digest: 'bb'.repeat(32) }], agedOut)).toBe('waiting');
+		expect(classifyCapturedPublication([{ ...unfinished, end_ledger: 164 }], agedOut)).toBe('waiting');
+		expect(classifyCapturedPublication([{ ...unfinished, status: 'unexpected' }], agedOut)).toBe('waiting');
+		expect(classifyCapturedPublication([unfinished, unfinished], agedOut)).toBe('waiting');
+	});
+
+	it('takes the bounded publisher tip with the same exact source observation', async () => {
+		const plan = { networkPassphraseHash: '11'.repeat(32), sourceId: 'source',
+			configDigest: '22'.repeat(32), startLedger: 100, endLedger: 163 } as PendingPlan;
+		const row = { id: 'abcdabcd-abcd-abcd-abcd-abcdabcdabcd', source_id: 'source',
+			config_digest: plan.configDigest, ledger_count: 64, digest: 'aa'.repeat(32),
+			publisher_tip: '4259' };
+		const query = jest.fn<Promise<unknown[]>, [string, unknown[]?]>().mockResolvedValueOnce([])
+			.mockResolvedValueOnce([row]).mockResolvedValueOnce([])
+			.mockResolvedValueOnce([{ ...row, publisher_tip: '4294967296' }]);
+		const source = { transaction: async (fn: (manager: { query: typeof query }) => Promise<unknown>) =>
+			fn({ query }) } as unknown as DataSource;
+		await expect(readCurrentSourcePublication(source, plan, true)).resolves.toEqual({
+			id: row.id, digest: row.digest, start: 100, end: 163, publisherTip: 4259
+		});
+		expect(query.mock.calls[0]?.[0]).toContain('SET TRANSACTION READ ONLY');
+		expect(query.mock.calls[1]?.[0]).toMatch(/ORDER BY start_ledger DESC, id DESC\s+LIMIT 128/);
+		expect(query.mock.calls[1]?.[1]).toEqual([Buffer.from(plan.networkPassphraseHash, 'hex'), 100, 163, true]);
+		await expect(readCurrentSourcePublication(source, plan, true)).rejects.toThrow(/manifest unavailable/);
 	});
 });
 
