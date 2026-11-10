@@ -119,6 +119,7 @@ import {
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { createPublicOpenApiDocument } from './PublicOpenApiDocument.js';
 import { createAtlasApiTraffic } from './AtlasApiTraffic.js';
+import { createAtlasApiEventSender } from './AtlasApiEventSender.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
 import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
@@ -138,8 +139,9 @@ let shutdownStarted = false;
 const api = express();
 const backgroundTasks = apiBackgroundTasksEnabled(process.env);
 const listenHost = apiListenHost(process.env);
-const apiTraffic = process.env.ATLAS_API_TRAFFIC_LOG === '1'
-	? createAtlasApiTraffic(createPublicOpenApiDocument(openApiDocument)) : undefined;
+const apiEvents = createAtlasApiEventSender(process.env);
+const apiTraffic = process.env.ATLAS_API_TRAFFIC_LOG === '1' || apiEvents
+	? createAtlasApiTraffic(createPublicOpenApiDocument(openApiDocument), process.stdout, apiEvents) : undefined;
 if (apiTraffic) api.use(apiTraffic.observe);
 api.use(corsMiddleware);
 mountParsedHistoryRequestBodyParser(api);
@@ -533,6 +535,7 @@ async function stop(
 		server.closeIdleConnections();
 	});
 	const [, federationDrained] = await Promise.all([httpClosed, drainFederation()]);
+	await apiTraffic?.close();
 
 	clearTimeout(forceCloseTimeout);
 	console.log('HTTP server closed');
