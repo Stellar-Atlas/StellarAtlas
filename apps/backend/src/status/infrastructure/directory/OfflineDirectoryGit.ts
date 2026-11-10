@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 
@@ -16,8 +16,11 @@ export type ReadDirectoryGit = (
 /** The caller supplies a trusted, approved standalone local Git directory. */
 export async function openDirectoryGit(
 	approvedGitDir: string,
-	signal?: AbortSignal
-): Promise<ReadDirectoryGit> {
+	signal?: AbortSignal,
+	mode: 'delta' | 'snapshot' = 'delta'
+): Promise<ReadDirectoryGit & {
+	listTree(tree: string): AsyncIterable<Buffer>;
+}> {
 	const deadline = performance.now() + GIT_READ_DEADLINE_MS;
 	signal?.throwIfAborted();
 	if (!isLocalAbsolutePath(approvedGitDir))
@@ -55,25 +58,27 @@ export async function openDirectoryGit(
 		GIT_TERMINAL_PROMPT: '0',
 		LC_ALL: 'C'
 	});
-	return async (args, options = {}) => {
+	const gitArgs = [
+		'--no-pager',
+		'--no-replace-objects',
+		'--no-optional-locks',
+		'--literal-pathspecs',
+		'--bare',
+		'--git-dir=' + gitDir,
+		'-c',
+		'core.warnAmbiguousRefs=true'
+	];
+	const read: ReadDirectoryGit = async (args, options = {}) => {
 		signal?.throwIfAborted();
-		const timeout = Math.floor(deadline - performance.now());
+		const timeout = mode === 'snapshot'
+			? GIT_READ_DEADLINE_MS
+			: Math.floor(deadline - performance.now());
 		if (timeout < 1) throw new Error('Directory Git read deadline expired');
 		const { input, maxBuffer = 24 * 1024, allowExitOne } = options;
 		return new Promise((resolve, reject) => {
 			const child = execFile(
 				'git',
-				[
-					'--no-pager',
-					'--no-replace-objects',
-					'--no-optional-locks',
-					'--literal-pathspecs',
-					'--bare',
-					'--git-dir=' + gitDir,
-					'-c',
-					'core.warnAmbiguousRefs=true',
-					...args
-				],
+				[...gitArgs, ...args],
 				{
 					encoding: 'buffer',
 					windowsHide: true,
@@ -104,6 +109,81 @@ export async function openDirectoryGit(
 			child.stdin?.end(input);
 		});
 	};
+	return Object.assign(read, {
+		async *listTree(tree: string) {
+			signal?.throwIfAborted();
+			const child = spawn('git', [
+				...gitArgs, 'ls-tree', '-r', '-z', '--full-tree', tree, '--', 'accounts'
+			], { env, signal, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+			let failed = false;
+			child.stderr.on('data', () => { failed = true; });
+			child.on('error', () => { failed = true; });
+			const closed = new Promise<boolean>((resolve) => {
+				child.once('close', (code) => resolve(code === 0 && !failed));
+			});
+			const iterator = child.stdout[Symbol.asyncIterator]();
+			async function* chunks() {
+				while (true) {
+					const chunk = await withGitReadDeadline(iterator.next());
+					if (chunk.done) return;
+					yield chunk.value as Buffer;
+				}
+			}
+			try {
+				yield* readDirectoryFrames(chunks(), 0, 128);
+				signal?.throwIfAborted();
+				if (!(await withGitReadDeadline(closed)))
+					throw new Error('Directory Git ls-tree read failed or was incomplete');
+			} finally {
+				child.kill();
+				child.stdout.destroy();
+				await closed;
+			}
+		}
+	});
+}
+
+async function withGitReadDeadline<T>(pending: Promise<T>): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			pending,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error('Directory Git read deadline expired')),
+					GIT_READ_DEADLINE_MS);
+			})
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** Retain only the unfinished frame across stream chunks. */
+export async function* readDirectoryFrames(
+	chunks: AsyncIterable<Buffer>,
+	delimiter: number,
+	maxFrameBytes: number
+): AsyncGenerator<Buffer> {
+	let parts: Buffer[] = [];
+	let size = 0;
+	for await (const chunk of chunks) {
+		let offset = 0;
+		while (offset < chunk.length) {
+			const end = chunk.indexOf(delimiter, offset);
+			const part = chunk.subarray(offset, end < 0 ? undefined : end);
+			size += part.length;
+			if (size > maxFrameBytes)
+				throw new Error('Directory stream frame exceeds its byte limit');
+			if (part.length) parts.push(part);
+			if (end < 0) break;
+			yield parts.length === 1 ? parts[0]! : Buffer.concat(parts, size);
+			parts = [];
+			size = 0;
+			offset = end + 1;
+		}
+	}
+	if (size)
+		throw new Error('Directory stream ended with an incomplete frame');
 }
 
 function isLocalAbsolutePath(path: string): boolean {

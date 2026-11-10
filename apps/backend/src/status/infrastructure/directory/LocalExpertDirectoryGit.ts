@@ -1,11 +1,16 @@
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { mkdtemp, open, rm, rmdir, statfs } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
 	applyExpertDirectoryDelta,
 	MAX_EXPERT_DELTA_BYTES,
 	MAX_EXPERT_DELTA_PATHS,
-	MAX_EXPERT_SNAPSHOT_BYTES,
-	MAX_EXPERT_SNAPSHOT_PATHS,
+	MAX_EXPERT_SNAPSHOT_BATCH_BYTES,
+	MAX_EXPERT_SNAPSHOT_BATCH_PATHS,
 	type ExpertDirectoryChange,
+	type ExpertDirectoryEntry,
 	type ExpertDirectoryStore
 } from './ExpertDirectoryImport.js';
 import {
@@ -17,81 +22,181 @@ import {
 } from './ExpertDirectoryRecord.js';
 import {
 	openDirectoryGit,
+	readDirectoryFrames,
 	type ReadDirectoryGit
 } from './OfflineDirectoryGit.js';
 import type { TypeOrmExpertDirectoryStore } from './TypeOrmExpertDirectoryStore.js';
 
 const ZERO_OID = '0'.repeat(40);
 const DIFF_OUTPUT_BYTES = MAX_EXPERT_DELTA_PATHS * 172;
+const STAGING_FREE_RESERVE_BYTES = 64n * 1024n * 1024n;
 
 export interface DirectoryGitRevision {
 	readonly commit: string;
 	readonly tree: string;
 }
 
-/** Bootstrap only after the complete pinned tree has passed all bounds and record checks. */
+/** Validate the complete pinned tree before taking any database locks. */
 export async function importLocalExpertDirectorySnapshot(
 	input: {
 		readonly approvedGitDir: string;
+		readonly from?: DirectoryGitRevision;
 		readonly to: DirectoryGitRevision;
 		readonly observedAt: string;
 		readonly signal?: AbortSignal;
 	},
-	store: Pick<TypeOrmExpertDirectoryStore, 'initializeSnapshot'>
+	store: Pick<TypeOrmExpertDirectoryStore, 'publishSnapshot'>
 ) {
 	const { approvedGitDir, observedAt, signal } = input;
 	const to = { ...input.to };
-	if (![to.commit, to.tree].every(isGitOid) ||
-		!Number.isFinite(Date.parse(observedAt)))
-		throw new Error('Initial directory requires exact revision and observation time');
-	const git = await openDirectoryGit(approvedGitDir, signal);
-	if (lines((await git(['rev-parse', '--show-object-format'])).stdout, 1)[0] !== 'sha1')
-		throw new Error('Directory Git object format must be SHA-1');
-	const revision = await readObjectInfo(git, [...new Set([to.commit, to.tree])]);
-	if (revision.get(to.commit)?.type !== 'commit' || revision.get(to.tree)?.type !== 'tree' ||
-		lines((await git(['rev-parse', '--revs-only', '--end-of-options',
-			to.commit + '^{tree}'])).stdout, 1)[0] !== to.tree)
-		throw new Error('Initial directory commit/tree binding is invalid');
-	const listing = await git(['ls-tree', '-r', '-z', '--full-tree', to.tree, '--', 'accounts'],
-		{ maxBuffer: MAX_EXPERT_SNAPSHOT_PATHS * 128 + 1 });
-	const rows = listing.stdout.length
-		? new TextDecoder('utf-8', { fatal: true }).decode(listing.stdout).split('\0')
-		: [''];
-	if (rows.pop() !== '' || rows.length > MAX_EXPERT_SNAPSHOT_PATHS)
-		throw new Error('Initial directory tree exceeds its record limit');
-	const paths = rows.map((row) => {
+	const from = input.from && { ...input.from };
+	const timestamp = Date.parse(observedAt);
+	if (!Number.isFinite(timestamp) || observedAt.length > 64)
+		throw new Error('Directory snapshot requires an exact observation time');
+	const git = await openDirectoryGit(approvedGitDir, signal, 'snapshot');
+	await verifyDirectoryRevisions(git, from, to);
+
+	const temp = await mkdtemp(join(tmpdir(), 'expert-directory-snapshot-'));
+	const stage = join(temp, 'entries.jsonl');
+	try {
+		const output = await open(stage, 'wx', 0o600);
+		const digest = createHash('sha256').update('[');
+		const stagedDigest = createHash('sha256');
+		let count = 0;
+		let payloadBytes = 0;
+		const observation = { commit: to.commit, observedAt: new Date(timestamp).toISOString() };
+		try {
+			for await (const batch of snapshotPaths(git.listTree(to.tree))) {
+				signal?.throwIfAborted();
+				const { entries, bytes } = await readSnapshotBatch(git, batch, observation);
+				payloadBytes += bytes;
+				for (const entry of entries) {
+					if (count > 0) digest.update(',');
+					digest.update(JSON.stringify([entry.sourcePath, entry.sourceBlobOid, entry.contentSha256]));
+					count++;
+				}
+				const line = JSON.stringify(entries) + '\n';
+				const lineBytes = Buffer.byteLength(line);
+				if (lineBytes > MAX_EXPERT_SNAPSHOT_BATCH_BYTES)
+					throw new Error('Directory snapshot batch exceeds its normalized byte limit');
+				const { bavail, bsize } = await statfs(temp, { bigint: true });
+				if (bavail * bsize < STAGING_FREE_RESERVE_BYTES + BigInt(lineBytes))
+					throw new Error('Directory snapshot staging has insufficient free space');
+				await output.writeFile(line);
+				stagedDigest.update(line);
+			}
+		} finally {
+			await output.close();
+		}
+		signal?.throwIfAborted();
+		const result = await store.publishSnapshot(
+			{ ...observation, previousCommit: from?.commit ?? null, deltaSha256: digest.update(']').digest('hex') },
+			readStagedSnapshot(stage, stagedDigest.digest('hex'), signal),
+			signal
+		);
+		return { ...result, provenance: { source: EXPERT_DIRECTORY_SOURCE, ...(from && { from }), to,
+			paths: count, payloadBytes } };
+	} finally {
+		await rm(stage, { force: true }).then(() => rmdir(temp)).catch(() => {
+			console.warn('Directory staging cleanup failed');
+		});
+	}
+}
+
+type SnapshotPath = { readonly oid: string; readonly path: string };
+
+async function* snapshotPaths(frames: AsyncIterable<Buffer>) {
+	const decoder = new TextDecoder('utf-8', { fatal: true });
+	let previous = '';
+	let paths: SnapshotPath[] = [];
+	for await (const frame of frames) {
+		const row = decoder.decode(frame);
 		const match = /^(100644|100755) blob ([a-f0-9]{40})\t(.+)$/.exec(row);
-		if (!match) throw new Error('Initial directory tree contains a nonordinary record');
-		parseExpertDirectoryPath(match[3]!);
-		return { oid: match[2]!, path: match[3]! };
-	});
+		if (!match || match[0] !== row)
+			throw new Error('Directory snapshot tree contains a nonordinary record');
+		const oid = match[2]!;
+		const path = match[3]!;
+		parseExpertDirectoryPath(path);
+		if (path <= previous)
+			throw new Error('Directory snapshot paths are duplicated or out of order');
+		previous = path;
+		paths.push({ oid, path });
+		if (paths.length === MAX_EXPERT_SNAPSHOT_BATCH_PATHS) {
+			yield paths;
+			paths = [];
+		}
+	}
+	if (paths.length) yield paths;
+}
+
+async function readSnapshotBatch(
+	git: ReadDirectoryGit,
+	paths: readonly SnapshotPath[],
+	observation: { readonly commit: string; readonly observedAt: string }
+) {
 	const objects = await readObjectInfo(git, [...new Set(paths.map(({ oid }) => oid))]);
 	const sizes = new Map<string, number>();
-	let payloadBytes = 0;
+	let bytes = 0;
 	for (const { oid } of paths) {
 		const info = objects.get(oid)!;
 		if (info.type !== 'blob' || info.size < 1 || info.size > MAX_EXPERT_RECORD_BYTES)
-			throw new Error('Invalid initial directory blob');
-		payloadBytes += info.size;
-		if (payloadBytes > MAX_EXPERT_SNAPSHOT_BYTES)
-			throw new Error('Initial directory exceeds its byte limit');
+			throw new Error('Invalid directory snapshot blob');
+		bytes += info.size;
+		if (bytes > MAX_EXPERT_SNAPSHOT_BATCH_BYTES)
+			throw new Error('Directory snapshot batch exceeds its raw byte limit');
 		sizes.set(oid, info.size);
 	}
-	const payloads = await readPayloads(git, sizes, payloadBytes);
-	const timestamp = new Date(observedAt).toISOString();
+	const payloads = await readPayloads(git, sizes, bytes);
 	const entries = paths.map(({ oid, path }) => ({
 		...parseExpertDirectoryRecord(path, oid, payloads.get(oid)!),
-		commit: to.commit, observedAt: timestamp, state: 'active' as const
+		...observation,
+		state: 'active' as const
 	}));
-	const digest = createHash('sha256').update(JSON.stringify(entries.map((entry) =>
-		[entry.sourcePath, entry.sourceBlobOid, entry.contentSha256]))).digest('hex');
-	signal?.throwIfAborted();
-	const result = await store.initializeSnapshot({
-		commit: to.commit, observedAt: timestamp, previousCommit: null, deltaSha256: digest
-	}, entries);
-	return { ...result, provenance: { source: EXPERT_DIRECTORY_SOURCE, to,
-		paths: paths.length, payloadBytes } };
+	return { entries, bytes };
 }
+
+async function* readStagedSnapshot(
+	path: string,
+	expectedDigest: string,
+	signal?: AbortSignal
+): AsyncGenerator<readonly ExpertDirectoryEntry[]> {
+	const digest = createHash('sha256');
+	const input = createReadStream(path, { signal });
+	for await (const line of readDirectoryFrames(input, 10, MAX_EXPERT_SNAPSHOT_BATCH_BYTES - 1)) {
+		digest.update(line).update('\n');
+		yield JSON.parse(line.toString('utf8')) as readonly ExpertDirectoryEntry[];
+	}
+	if (digest.digest('hex') !== expectedDigest)
+		throw new Error('Directory staging changed before publication');
+}
+
+async function verifyDirectoryRevisions(
+	git: ReadDirectoryGit,
+	from: DirectoryGitRevision | undefined,
+	to: DirectoryGitRevision
+): Promise<void> {
+	const pins = from ? [from, to] : [to];
+	if (pins.some(({ commit, tree }) => !isGitOid(commit) || !isGitOid(tree)) ||
+		from?.commit === to.commit)
+		throw new Error('Directory Git revisions require exact commit and tree IDs');
+	const format = await git(['rev-parse', '--show-object-format']);
+	if (lines(format.stdout, 1)[0] !== 'sha1')
+		throw new Error('Directory Git object format must be SHA-1');
+	const objects = await readObjectInfo(git, [...new Set(pins.flatMap(({ commit, tree }) => [commit, tree]))]);
+	for (const { commit, tree } of pins) {
+		if (objects.get(commit)?.type !== 'commit' || objects.get(tree)?.type !== 'tree')
+			throw new Error('Directory Git revision has the wrong object type');
+	}
+	const resolved = await git(['rev-parse', '--revs-only', '--end-of-options',
+		...pins.map(({ commit }) => commit + '^{tree}')]);
+	const trees = lines(resolved.stdout, pins.length);
+	if (pins.some(({ tree }, index) => tree !== trees[index]))
+		throw new Error('Directory Git commit/tree binding does not match its approved tree');
+	if (from && (await git(['merge-base', '--is-ancestor', from.commit, to.commit],
+		{ allowExitOne: true })).exitCode !== 0)
+		throw new Error('Directory Git target is not a descendant of the approved base');
+}
+
 
 interface PathDelta {
 	readonly path: string;
@@ -113,47 +218,8 @@ export async function importLocalExpertDirectoryDelta(
 	const { approvedGitDir, observedAt, signal } = input;
 	const from = { ...input.from };
 	const to = { ...input.to };
-	if (
-		![from.commit, from.tree, to.commit, to.tree].every(isGitOid) ||
-		from.commit === to.commit
-	)
-		throw new Error(
-			'Directory Git revisions require exact commit and tree IDs'
-		);
-
 	const git = await openDirectoryGit(approvedGitDir, signal);
-	const format = await git(['rev-parse', '--show-object-format']);
-	if (lines(format.stdout, 1)[0] !== 'sha1')
-		throw new Error('Directory Git object format must be SHA-1');
-	const revisions = await readObjectInfo(git, [
-		...new Set([from.commit, to.commit, from.tree, to.tree])
-	]);
-	for (const revision of [from, to]) {
-		if (
-			revisions.get(revision.commit)?.type !== 'commit' ||
-			revisions.get(revision.tree)?.type !== 'tree'
-		)
-			throw new Error('Directory Git revision has the wrong object type');
-	}
-	const resolved = await git([
-		'rev-parse',
-		'--revs-only',
-		'--end-of-options',
-		from.commit + '^{tree}',
-		to.commit + '^{tree}'
-	]);
-	const trees = lines(resolved.stdout, 2);
-	if (trees[0] !== from.tree || trees[1] !== to.tree)
-		throw new Error('Directory Git commit does not match its approved tree');
-
-	const ancestry = await git(
-		['merge-base', '--is-ancestor', from.commit, to.commit],
-		{ allowExitOne: true }
-	);
-	if (ancestry.exitCode !== 0)
-		throw new Error(
-			'Directory Git target is not a descendant of the approved base'
-		);
+	await verifyDirectoryRevisions(git, from, to);
 	const diff = await git(
 		[
 			'diff-tree',

@@ -356,6 +356,54 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.calls).toContain('conversion-fence');
 	});
 
+	it('defers a captured aged-out range and selects newer work without replaying or offering history', async () => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		const recorded = plan('priority', 1000);
+		f.pending = recorded;
+		f.dependencies.pairedCurrentAdmission = {
+			assertHeld: async () => { f.calls.push('lease'); },
+			assertCapacity: async () => {},
+			pendingPublication: async (pending) => {
+				expect(pending).toBe(recorded);
+				return 'deferred-aged-out';
+			}
+		};
+		f.dependencies.priorityRangeReader.readNextRange = async options => {
+			expect(options.minimumPriorityLedger).toBe(1000);
+			expect(options.minimumPriorityEndLedger).toBe(5905);
+			expect(f.pending).toBeNull();
+			expect(f.calls).toContain('lease');
+			return range(9937, 10000);
+		};
+		const confirm = jest.spyOn(f.dependencies.pendingPlans, 'confirmRecorded');
+		await run(f.config, f.dependencies);
+		expect(f.events).toContainEqual(expect.objectContaining({ event: 'priority-publication-deferred',
+			startLedger: 1000, endLedger: 1063, reason: 'outside-publisher-current-window' }));
+		expect(f.selected).toEqual([range(9937, 10000)]);
+		expect(f.pending).toEqual(plan('priority', 9937));
+		expect(f.calls).not.toContain('historical');
+		expect(confirm.mock.calls.map(([pending]) => pending.startLedger)).toEqual([9937]);
+	});
+
+	it('keeps the aged-out plan when the settlement lease fails', async () => {
+		const f = fixture(1);
+		usePolicy(f, { currentOnlyCapacity: currentOnlyCapacity() });
+		const recorded = plan('priority', 1000);
+		f.pending = recorded;
+		f.dependencies.pairedCurrentAdmission = {
+			assertHeld: async () => { throw new Error('lost settlement lease'); },
+			assertCapacity: async () => {},
+			pendingPublication: async () => 'deferred-aged-out'
+		};
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.pending).toBe(recorded);
+		expect(f.selected).toEqual([]);
+		expect(f.calls).not.toContain('frontier');
+		expect(f.events).not.toContainEqual(expect.objectContaining({ event: 'priority-publication-deferred' }));
+	});
+
 	it('consumes one scoped attempt before recording it and cannot readmit after exact publication', async () => {
 		const f = fixture(2);
 		const arms = scopedPolicy(f, async () => {});
@@ -398,7 +446,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		expect(f.events).toContainEqual(expect.objectContaining({ message: expect.stringContaining('lost its spent-inode binding') }));
 	});
 
-	it.each(['published', 'not-captured'] as const)(
+	it.each(['published', 'not-captured', 'deferred-aged-out'] as const)(
 		'a disarmed restart settles only exact published work (%s), without pressure or provider preparation',
 		async publication => {
 			const f = fixture(1);
@@ -438,6 +486,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 			usePolicy(f, policy);
 			f.dependencies.priorityRangeReader.readNextRange = async options => {
 				expect(options.minimumPriorityLedger).toBe(1000);
+				expect(options.minimumPriorityEndLedger).toBe(policy.currentOnlyCapacity === undefined ? undefined : 5905);
 				return null;
 			};
 			f.dependencies.wait = async () => { f.controller.abort(); };

@@ -19,6 +19,7 @@ interface LedgerRangeBounds {
 
 export interface FullHistoryLedgerCloseMetaPriorityRangeOptions {
 	readonly minimumPriorityLedger?: number;
+	readonly minimumPriorityEndLedger?: number;
 	readonly durableNextLedger: number;
 	readonly firstAvailableLedger: number;
 	readonly latestAvailableLedger: number;
@@ -94,7 +95,8 @@ export class TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader {
 			options.minimumPriorityLedger ?? options.firstAvailableLedger,
 			maximumLedger - Math.max(options.maximumLedgerCount * 2, 17_280) + 1
 		);
-		if (searchMinimum > maximumLedger) return null;
+		const minimumEnd = options.minimumPriorityEndLedger ?? 1;
+		if (searchMinimum > maximumLedger || minimumEnd > maximumLedger) return null;
 		const storedRows = await this.dataSource.query<StoredRangeRow[]>(
 			`select "start_ledger"::text as "startLedger",
 				"end_ledger"::text as "endLedger"
@@ -104,7 +106,7 @@ export class TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader {
 			 order by "end_ledger" desc, "start_ledger" desc`,
 			[networkHash, searchMinimum, maximumLedger]
 		);
-		return selectLatestPriorityRange(
+		const candidate = selectLatestPriorityRange(
 			{ endSequence: maximumLedger, startSequence: searchMinimum },
 			storedRows.map((row) => ({
 				endSequence: databaseInteger(row.endLedger, 'stored range end'),
@@ -112,6 +114,9 @@ export class TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader {
 			})),
 			options
 		);
+		// Selection returns the latest safe end. Older candidates cannot meet a
+		// floor this one misses. Keep the real gap visible during selection.
+		return candidate !== null && candidate.endSequence >= minimumEnd ? candidate : null;
 	}
 }
 
@@ -216,10 +221,14 @@ function validatePlanningOptions(
 		'networkPassphraseHash' | 'latestAvailableLedger'
 	>
 ): void {
-	if (options.minimumPriorityLedger !== undefined &&
-		(!Number.isSafeInteger(options.minimumPriorityLedger) || options.minimumPriorityLedger < 1 ||
-			options.minimumPriorityLedger > 0xffff_ffff)) {
-		throw new RangeError('minimumPriorityLedger must be a positive uint32');
+	for (const [field, minimum] of [
+		['minimumPriorityLedger', options.minimumPriorityLedger],
+		['minimumPriorityEndLedger', options.minimumPriorityEndLedger]
+	] as const) {
+		if (minimum !== undefined &&
+			(!Number.isSafeInteger(minimum) || minimum < 1 || minimum > 0xffff_ffff)) {
+			throw new RangeError(`${field} must be a positive uint32`);
+		}
 	}
 	const values = [
 		['durableNextLedger', options.durableNextLedger],

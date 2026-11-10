@@ -22,11 +22,11 @@ export interface PairedCurrentAdmissionPolicy {
 	readonly minimumUnreservedBytes: bigint;
 }
 
+type PendingPublicationStatus = 'not-captured' | 'waiting' | 'published' | 'deferred-aged-out';
+
 export interface PairedCurrentAdmission {
 	assertCapacity(plan: PendingPlan, signal: AbortSignal): Promise<void | (() => void)>;
-	pendingPublication(plan: PendingPlan, signal: AbortSignal): Promise<
-		'not-captured' | 'waiting' | 'published'
-	>;
+	pendingPublication(plan: PendingPlan, signal: AbortSignal): Promise<PendingPublicationStatus>;
 }
 
 export interface FencedPairedCurrentAdmission extends PairedCurrentAdmission {
@@ -77,6 +77,12 @@ interface AdmissionConfig {
 }
 
 const maximumEvidenceAgeMs = 4_000;
+// Keep this boundary in sync with currentWindowLedgers in hubble-etl.
+const publisherCurrentWindowLedgers = 4_096;
+
+export function publisherCurrentWindowStart(tip: number): number {
+	return Math.max(1, tip - publisherCurrentWindowLedgers + 1);
+}
 // The publisher's per-insert fence retains these same two cushions.
 const guardedCurrentPublisherAndStartupAllowanceBytes = 96n * 1024n ** 3n;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -179,7 +185,7 @@ export function createPairedCurrentAdmission(
 			caller.throwIfAborted();
 			const started = performance.now();
 			if (!(await isPairedCurrentBoot(policy))) throw new Error('Paired current admission boot binding changed');
-			const source = await readCurrentSourcePublication(dataSource, plan);
+			const source = await readCurrentSourcePublication(dataSource, plan, config.scopedBulkDevice === undefined);
 			caller.throwIfAborted();
 			if (performance.now() - started > maximumEvidenceAgeMs)
 				throw new Error('Current source publication evidence expired');
@@ -194,8 +200,7 @@ export function createPairedCurrentAdmission(
 			caller.throwIfAborted();
 			if (performance.now() - started > maximumEvidenceAgeMs)
 				throw new Error('Current publication evidence expired');
-			return rows.length !== 1 || !matchesFullPublication(rows[0], source)
-				? 'waiting' : 'published';
+			return classifyCapturedPublication(rows, source);
 		}
 	};
 
@@ -252,11 +257,19 @@ export async function settlePairedPendingPublication(
 	const status = await paired.pendingPublication(plan, dependencies.signal);
 	dependencies.signal.throwIfAborted();
 	if (status === 'not-captured') return false;
-	if (status === 'published') {
+	const deferred = status === 'deferred-aged-out' && assertOwnsPlan === undefined;
+	if (status === 'published' || deferred) {
+		// The source batch and its digest are already durable in the catalog. On
+		// age-out release only this collector's wait marker, not the source or any
+		// warehouse state. Incomplete warehouse batches still require exact repair.
 		await dependencies.pendingPlans.clearVerified(plan, async () => {
 			await paired.assertHeld(dependencies.signal);
 			assertFreshAfterLease(started);
 			assertOwnsPlan?.();
+		});
+		if (deferred) dependencies.emit({
+			at: new Date(dependencies.now()).toISOString(), event: 'priority-publication-deferred',
+			startLedger: plan.startLedger, endLedger: plan.endLedger, reason: 'outside-publisher-current-window'
 		});
 		return true;
 	}
@@ -313,17 +326,38 @@ export function assertPairedCapacity(
 		throw new Error('Paired current free-space reserve refused allocation');
 }
 
-export function matchesFullPublication(
-	value: unknown, source: { id: string; digest: string; start: number; end: number }
-): boolean {
+type CapturedIdentity = { id: string; digest: string; start: number; end: number };
+
+export function classifyCapturedPublication(
+	rows: readonly unknown[], source: CapturedIdentity & { publisherTip: number | null }
+): Exclude<PendingPublicationStatus, 'not-captured'> {
+	if (rows.length === 1 && matchesFullPublication(rows[0], source)) return 'published';
+	if (source.publisherTip === null || source.end >= publisherCurrentWindowStart(source.publisherTip))
+		return 'waiting';
+	if (rows.length === 0) return 'deferred-aged-out';
+	if (rows.length !== 1) return 'waiting';
+	try {
+		const row = record(rows[0]);
+		return (row.status === 'started' || row.status === 'failed') && matchesSourceIdentity(row, source)
+			? 'deferred-aged-out' : 'waiting';
+	} catch {
+		return 'waiting';
+	}
+}
+
+function matchesSourceIdentity(row: Record<string, unknown>, source: CapturedIdentity): boolean {
+	return row.id === source.id && row.digest === source.digest &&
+		uint(row.start_ledger) === BigInt(source.start) &&
+		uint(row.end_ledger) === BigInt(source.end) &&
+		uint(row.ledger_count) === BigInt(source.end - source.start + 1);
+}
+
+export function matchesFullPublication(value: unknown, source: CapturedIdentity): boolean {
 	try {
 		const row = record(value);
 		const counts = record(row.datasets);
-		return row.id === source.id && row.digest === source.digest && row.status === 'complete' &&
+		return row.status === 'complete' && matchesSourceIdentity(row, source) &&
 			row.projection_contract === 'hubble-full20-v1' &&
-			uint(row.start_ledger) === BigInt(source.start) &&
-			uint(row.end_ledger) === BigInt(source.end) &&
-			uint(row.ledger_count) === BigInt(source.end - source.start + 1) &&
 			Object.keys(counts).length === datasets.length &&
 			uint(counts.history_ledgers) === BigInt(source.end - source.start + 1) &&
 			datasets.every((name) => Object.hasOwn(counts, name) && uint(counts[name]) >= 0n);

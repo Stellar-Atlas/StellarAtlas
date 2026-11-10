@@ -30,6 +30,7 @@ export default async function VerifiedContractsPage({ searchParams }: {
 				aside={<VerificationGuideLink />} />
 			<div className={styles.workspace}>
 				<ExplorerEntityNavigation active="verified-contracts" />
+				<p><a href="/developer/verification">Open developer verification</a></p>
 				<VerifiedContractFilters query={query} />
 				{query && (
 					<Suspense key={verifiedContractsHref(query)} fallback={
