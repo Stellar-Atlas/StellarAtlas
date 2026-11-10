@@ -10,7 +10,7 @@ import {
 	type ExpertDirectoryDelta,
 	type ExpertDirectoryStore
 } from '../ExpertDirectoryImport.js';
-import { EXPERT_DIRECTORY_SOURCE as source } from '../ExpertDirectoryRecord.js';
+import { EXPERT_DIRECTORY_SOURCE as source, parseExpertDirectoryRecord } from '../ExpertDirectoryRecord.js';
 import { TypeOrmDirectoryReader } from '../TypeOrmDirectoryReader.js';
 import {
 	ExpertDirectoryCheckpointSchema,
@@ -202,32 +202,8 @@ fixture('native PostgreSQL account directory', () => {
 		});
 	}, 15_000);
 
-	it('commits one simultaneous successor and rolls back the losing staged rows', async () => {
+	it('serializes simultaneous writers before allowing one successor', async () => {
 		const other = await openFixture();
-		let release!: (staged: boolean) => void;
-		const bothStaged = new Promise<boolean>((resolve) => {
-			release = resolve;
-		});
-		const timer = setTimeout(() => release(false), 5000);
-		let arrivals = 0;
-		const racing = (
-			dataSource: DataSource,
-			key: string
-		): ExpertDirectoryStore => ({
-			transaction: (work) =>
-				new TypeOrmExpertDirectoryStore(dataSource).transaction((tx) =>
-					work({
-						...tx,
-						async advanceCheckpoint(...args) {
-							expect((await tx.readEntry(source, key))?.state).toBe('active');
-							if (++arrivals === 2) release(true);
-							if (!(await bothStaged))
-								throw new Error('Both transactions did not stage writes');
-							await tx.advanceCheckpoint(...args);
-						}
-					})
-				)
-		});
 		const left = address(3);
 		const right = address(4);
 		try {
@@ -235,15 +211,14 @@ fixture('native PostgreSQL account directory', () => {
 				applyExpertDirectoryDelta(
 					delta(initial, first, upsert(left, 'Left')),
 					history,
-					racing(dataSource, left)
+					store()
 				),
 				applyExpertDirectoryDelta(
 					delta(initial, second, upsert(right, 'Right')),
 					history,
-					racing(other, right)
+					new TypeOrmExpertDirectoryStore(other)
 				)
 			]);
-			expect(arrivals).toBe(2);
 			expect(
 				results.filter((result) => result.status === 'fulfilled')
 			).toHaveLength(1);
@@ -252,7 +227,7 @@ fixture('native PostgreSQL account directory', () => {
 			expect(loser).toMatchObject({
 				status: 'rejected',
 				reason: expect.objectContaining({
-					message: 'Directory checkpoint changed during import'
+					message: 'Directory checkpoint does not match the delta base'
 				})
 			});
 			await store().transaction(async (tx) => {
@@ -265,9 +240,47 @@ fixture('native PostgreSQL account directory', () => {
 				expect(await tx.readEntry(source, leftWon ? right : left)).toBeNull();
 			});
 		} finally {
-			clearTimeout(timer);
 			await other.destroy();
 		}
+	}, 15_000);
+
+	it('keeps the previous view during refresh and rolls back a failed staged batch', async () => {
+		const removed = address(1);
+		const added = address(2);
+		const original = upsert(removed, 'Original');
+		await applyExpertDirectoryDelta(delta(initial, first, original), history, store());
+		const checkpoint = { commit: second, previousCommit: first, observedAt, deltaSha256: 'e'.repeat(64) };
+		const replacement = upsert(added, 'Replacement');
+		const entry = {
+			...parseExpertDirectoryRecord(replacement.path, replacement.blobOid, replacement.bytes),
+			commit: second, observedAt, state: 'active' as const
+		};
+		const reader = new TypeOrmDirectoryReader(dataSource);
+		async function* stage(fail: boolean) {
+			yield [entry];
+			expect(await reader.lookup(removed)).toMatchObject({
+				checkpoint: { commit: first },
+				entries: [{ state: 'active', name: 'Original' }]
+			});
+			expect(await reader.lookup(added)).toMatchObject({
+				checkpoint: { commit: first }, entries: []
+			});
+			if (fail) throw new Error('Interrupted snapshot stage');
+		}
+		await expect(store().publishSnapshot(checkpoint, stage(true))).rejects.toThrow('Interrupted snapshot stage');
+		expect(await reader.lookup(added)).toMatchObject({ checkpoint: { commit: first }, entries: [] });
+		await expect(store().publishSnapshot(checkpoint, stage(false))).resolves.toEqual({
+			status: 'refreshed', checkpoint
+		});
+		expect(await reader.lookup(removed)).toMatchObject({
+			checkpoint, entries: [{ state: 'deleted', previousBlobOid: original.blobOid }]
+		});
+		expect(await reader.lookup(added)).toMatchObject({
+			checkpoint, entries: [{ state: 'active', name: 'Replacement' }]
+		});
+		await expect(store().publishSnapshot(checkpoint, stage(false))).resolves.toMatchObject({
+			status: 'replayed', checkpoint
+		});
 	}, 15_000);
 
 	it('replays the exact checkpoint after reconnecting and performs no replay writes', async () => {

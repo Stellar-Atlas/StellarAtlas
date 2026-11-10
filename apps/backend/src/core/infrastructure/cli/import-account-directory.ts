@@ -8,7 +8,7 @@ import {
 } from '../../../status/infrastructure/directory/LocalExpertDirectoryGit.js';
 
 type Manifest = {
-	mode: 'snapshot' | 'delta';
+	mode: 'snapshot' | 'refresh' | 'delta';
 	approvedGitDir: string;
 	to: DirectoryGitRevision;
 	from?: DirectoryGitRevision;
@@ -24,7 +24,7 @@ export function parseDirectoryImportManifest(value: unknown): Manifest {
 			(key) =>
 				!['mode', 'approvedGitDir', 'from', 'to', 'observedAt'].includes(key)
 		) ||
-		(row.mode !== 'snapshot' && row.mode !== 'delta') ||
+		(row.mode !== 'snapshot' && row.mode !== 'refresh' && row.mode !== 'delta') ||
 		typeof row.approvedGitDir !== 'string' ||
 		typeof row.observedAt !== 'string' ||
 		row.observedAt.length > 64 ||
@@ -49,7 +49,7 @@ export function parseDirectoryImportManifest(value: unknown): Manifest {
 		mode: row.mode,
 		approvedGitDir: row.approvedGitDir,
 		to: revision(row.to),
-		...(row.mode === 'delta' ? { from: revision(row.from) } : {}),
+		...(row.mode !== 'snapshot' ? { from: revision(row.from) } : {}),
 		observedAt: row.observedAt
 	};
 }
@@ -86,14 +86,24 @@ async function main(): Promise<void> {
 	const initialize = async () => {
 		if (!AppDataSource.isInitialized) await AppDataSource.initialize();
 	};
+	const interruption = new AbortController();
+	const interrupt = () => interruption.abort(new Error('Directory import interrupted'));
+	process.once('SIGINT', interrupt);
+	process.once('SIGTERM', interrupt);
 	try {
-		const input = { ...manifest, signal: AbortSignal.timeout(120_000) };
+		const input = {
+			...manifest,
+			signal: AbortSignal.any([
+				interruption.signal,
+				AbortSignal.timeout(manifest.mode === 'delta' ? 120_000 : 60 * 60_000)
+			])
+		};
 		const result =
-			manifest.mode === 'snapshot'
+			manifest.mode !== 'delta'
 				? await importLocalExpertDirectorySnapshot(input, {
-						initializeSnapshot: async (...args) => {
+						publishSnapshot: async (...args) => {
 							await initialize();
-							return store.initializeSnapshot(...args);
+							return store.publishSnapshot(...args);
 						}
 					})
 				: await importLocalExpertDirectoryDelta(
@@ -107,6 +117,8 @@ async function main(): Promise<void> {
 					);
 		console.log(JSON.stringify(result));
 	} finally {
+		process.off('SIGINT', interrupt);
+		process.off('SIGTERM', interrupt);
 		if (AppDataSource.isInitialized) await AppDataSource.destroy();
 	}
 }
