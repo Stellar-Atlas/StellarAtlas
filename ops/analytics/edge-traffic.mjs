@@ -8,6 +8,10 @@ const hosts = new Set(['stellaratlas.io', 'www.stellaratlas.io', 'api.stellaratl
 	'status.stellaratlas.io', 'analytics.stellaratlas.io']);
 const caches = new Set(['hit', 'miss', 'expired', 'stale', 'bypass', 'revalidated',
 	'updating', 'dynamic', 'none', 'unknown']);
+// https://developers.cloudflare.com/logs/reference/clientrequestsource/
+const sources = new Set(['unknown', 'eyeball', 'purge', 'alwaysOnline', 'healthcheck',
+	'edgeWorkerFetch', 'edgeWorkerCacheAPI', 'edgeWorkerKV', 'imageResizing',
+	'orangeToOrange', 'sslDetector', 'earlyHintsCache', 'inBrowserChallenge']);
 const integer = value => Number.isSafeInteger(value) && value >= 0;
 const interval = value => typeof value === 'number' && Number.isFinite(value) && value >= 1;
 const iso = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value)
@@ -23,7 +27,8 @@ export function edgeWindow(now = Date.now()) {
 export function edgeQuery(zone, window) {
 	if (!/^[a-f0-9]{32}$/.test(zone) || !validWindow(window)) throw new Error('Invalid edge query configuration');
 	const filter = `datetime_geq:${JSON.stringify(window.from)},datetime_lt:${JSON.stringify(window.to)},requestSource:"eyeball"`;
-	return `{viewer{zones(filter:{zoneTag:${JSON.stringify(zone)}}){total:httpRequestsAdaptiveGroups(limit:1 filter:{${filter}}){count avg{sampleInterval}}breakdown:httpRequestsAdaptiveGroups(limit:10 orderBy:[count_DESC] filter:{${filter}}){count avg{sampleInterval} dimensions{clientRequestHTTPHost edgeResponseStatus cacheStatus}}}}}`;
+	const time = `datetime_geq:${JSON.stringify(window.from)},datetime_lt:${JSON.stringify(window.to)}`;
+	return `{viewer{zones(filter:{zoneTag:${JSON.stringify(zone)}}){total:httpRequestsAdaptiveGroups(limit:1 filter:{${filter}}){count avg{sampleInterval}}breakdown:httpRequestsAdaptiveGroups(limit:10 orderBy:[count_DESC] filter:{${filter}}){count avg{sampleInterval} dimensions{clientRequestHTTPHost edgeResponseStatus cacheStatus}}sources:httpRequestsAdaptiveGroups(limit:16 orderBy:[count_DESC] filter:{${time}}){count avg{sampleInterval} dimensions{requestSource}}}}}`;
 }
 
 function validWindow(value) {
@@ -40,13 +45,22 @@ function safeGroup(group) {
 		providerCount: group.providerCount, reportedAverageSampleInterval: group.reportedAverageSampleInterval };
 }
 
+function safeSource(group) {
+	if (!integer(group?.providerCount) || !interval(group.reportedAverageSampleInterval))
+		throw new Error('Invalid edge source group');
+	return { source: sources.has(group.source) ? group.source : 'other-source',
+		providerCount: group.providerCount, reportedAverageSampleInterval: group.reportedAverageSampleInterval };
+}
+
 export function sanitizeEdgeSnapshot(value) {
 	const edge = value?.edge;
 	if (value?.schemaVersion !== 1 || value.source !== 'cloudflare_graphql_analytics' ||
 		!iso(value.generatedAtUtc) || !validWindow(value.window) ||
 		edge?.scope !== 'stellaratlas.io zone' || edge.requestSource !== 'eyeball' ||
 		!integer(edge.providerCount) || !interval(edge.sampling?.reportedAverageSampleInterval) ||
-		!Array.isArray(edge.groups) || edge.groups.length > 10) throw new Error('Invalid edge snapshot');
+		!Array.isArray(edge.groups) || edge.groups.length > 10 ||
+		(edge.sourceGroups != null && (!Array.isArray(edge.sourceGroups) || edge.sourceGroups.length > 16)))
+		throw new Error('Invalid edge snapshot');
 	return { schemaVersion: 1, source: 'cloudflare_graphql_analytics', generatedAtUtc: value.generatedAtUtc,
 		window: { from: value.window.from, to: value.window.to, semantics: 'inclusive start, exclusive end',
 			seconds: 86400, requestedWithAtLeastSecondsLag: 600 },
@@ -55,7 +69,9 @@ export function sanitizeEdgeSnapshot(value) {
 			sampling: { dataset: 'adaptive', reportedAverageSampleInterval: edge.sampling.reportedAverageSampleInterval,
 				confidence: null, exhaustiveEventLedgerClaim: false },
 			breakdownLimit: 10, breakdownReturned: edge.groups.length, breakdownIsNotTheTotalQuery: true,
-			groups: edge.groups.map(safeGroup) },
+			groups: edge.groups.map(safeGroup),
+			sourceGroups: edge.sourceGroups?.map(safeSource) ?? null,
+			sourceGroupLimit: 16, sourceGroupsMayBeTruncated: edge.sourceGroups?.length === 16 },
 		coverage: { providerIngestionCanBeDelayed: true, missingMeansUnknownNotZero: true,
 			browserPageviewsOrOriginTotalsAreNotAdditive: true, websocketMessageCount: null, fallbackBranchCount: null } };
 }
@@ -83,7 +99,8 @@ export async function collectEdgeTraffic(zone, token, send = fetch, now = Date.n
 	const zones = result?.data?.viewer?.zones;
 	if (result.errors?.length || !Array.isArray(zones) || zones.length !== 1 ||
 		!Array.isArray(zones[0].total) || zones[0].total.length > 1 ||
-		!Array.isArray(zones[0].breakdown) || zones[0].breakdown.length > 10)
+		!Array.isArray(zones[0].breakdown) || zones[0].breakdown.length > 10 ||
+		!Array.isArray(zones[0].sources) || zones[0].sources.length > 16)
 		throw new Error('Edge response unavailable');
 	const total = zones[0].total[0];
 	// An empty provider series is not evidence of zero requests.
@@ -94,6 +111,8 @@ export async function collectEdgeTraffic(zone, token, send = fetch, now = Date.n
 			sampling: { reportedAverageSampleInterval: total.avg?.sampleInterval },
 			groups: zones[0].breakdown.map(group => ({ host: group.dimensions?.clientRequestHTTPHost,
 				edgeStatus: group.dimensions?.edgeResponseStatus, cacheStatus: group.dimensions?.cacheStatus,
+				providerCount: group.count, reportedAverageSampleInterval: group.avg?.sampleInterval })),
+			sourceGroups: zones[0].sources.map(group => ({ source: group.dimensions?.requestSource,
 				providerCount: group.count, reportedAverageSampleInterval: group.avg?.sampleInterval })) } });
 }
 

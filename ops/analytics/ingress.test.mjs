@@ -36,11 +36,15 @@ test('traffic edge adapter preserves provider counts and never treats missing da
 	assert.equal(window.to, '2026-11-10T22:10:00.000Z');
 	assert.equal(window.from, '2026-11-09T22:10:00.000Z');
 	assert.match(edgeQuery('a'.repeat(32), window), /requestSource:"eyeball"/);
+	assert.match(edgeQuery('a'.repeat(32), window), /sources:httpRequestsAdaptiveGroups\(limit:16/);
 	assert.doesNotMatch(edgeQuery('a'.repeat(32), window), /clientIP|RequestPath|workersInvocations/);
 	const payload = { data: { viewer: { zones: [{
 		total: [{ count: 27, avg: { sampleInterval: 2 } }],
 		breakdown: [{ count: 21, avg: { sampleInterval: 2 },
-			dimensions: { clientRequestHTTPHost: 'private-token.stellaratlas.io', edgeResponseStatus: 200, cacheStatus: 'dynamic' } }]
+			dimensions: { clientRequestHTTPHost: 'private-token.stellaratlas.io', edgeResponseStatus: 200, cacheStatus: 'dynamic' } }],
+		sources: [{ count: 27, avg: { sampleInterval: 2 }, dimensions: { requestSource: 'eyeball' } },
+			{ count: 5, avg: { sampleInterval: 1 }, dimensions: { requestSource: 'inBrowserChallenge' } },
+			{ count: 43, avg: { sampleInterval: 1 }, dimensions: { requestSource: 'edgeWorkerFetch' } }]
 	}] } } };
 	const send = async (url, options) => {
 		assert.equal(url, 'https://api.cloudflare.com/client/v4/graphql');
@@ -54,6 +58,9 @@ test('traffic edge adapter preserves provider counts and never treats missing da
 	const html = renderEdgeTraffic({ state: 'ready', lastGood: snapshot }, new Date(now).toISOString());
 	assert.match(html, /27 provider-reported/);
 	assert.match(html, /not multiplied/);
+	assert.match(html, /inBrowserChallenge/);
+	assert.match(html, /edgeWorkerFetch/);
+	assert.equal(snapshot.edge.providerCount, 27); // Never 27 + 5 + 43.
 	assert.match(renderEdgeTraffic({ state: 'error', lastGood: snapshot }, new Date(now).toISOString()), /last measured window/);
 	assert.match(renderEdgeTraffic(undefined, new Date(now).toISOString()), /Not yet collecting/);
 	assert.match(renderEdgeTraffic({ state: 'unavailable' }, new Date(now).toISOString()), /not zero traffic/);

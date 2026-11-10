@@ -54,19 +54,31 @@ counts, and GraphQL operation success require different measurements.
 
 `edge-traffic.mjs` is a separate outbound-only fetch step. It queries the zone's
 `httpRequestsAdaptiveGroups` for `requestSource: "eyeball"`: one total and at most
-10 host/status/cache groups for a rolling 24-hour closed UTC window, ending on a
+10 host/status/cache groups, plus a separate unfiltered request-source category
+aggregate capped at 16 groups, for a rolling 24-hour closed UTC window ending on a
 five-minute boundary at least ten minutes behind the clock. One POST per refresh,
 ten-second deadline and 64 KiB response cap; no request URLs, IPs, referrers,
-security-event rows, Worker invocations or subrequests are requested. Counts are
+security-event rows or Worker invocation dataset is requested. Counts are
 provider-reported, never multiplied by `sampleInterval`. The top groups are not
-the separate total. Adaptive sampling and provider delay remain visible.
+the separate total. Client `eyeball` requests, `inBrowserChallenge` traffic and
+internal/subrequest categories remain separate; no combined client/unique total
+is inferred. Missing source categories are unknown, not zero, and reaching the
+16-group cap is flagged. Provider source names are mapped to the fixed documented
+[ClientRequestSource categories](https://developers.cloudflare.com/logs/reference/clientrequestsource/),
+with unknown categories collapsed to `other-source`. Adaptive sampling and
+provider delay remain visible.
 
 The optional five-minute unit requires a **separate narrow zone-analytics-read
 credential**, supplied by systemd `LoadCredential` as `cloudflare-analytics-token`,
 and `CF_ZONE_ID` in its protected environment file. Do not reuse workstation OAuth
 or expose this credential to the browser collector, report renderer or server.
 Provision its dedicated `atlas-edge-analytics` user with write access only to
-`api-traffic/edge`, and renderer read access to the 0640 result. Credential
+`api-traffic/edge`, and renderer read access to the 0640 result. The existing
+0700 `api-traffic` parent needs only an explicit traversal ACL for this UID;
+do not make the parent or credentials group-readable or recursively chmod any
+tree. Use a dedicated edge-owned child with the renderer's read group and a
+root-only original provider credential; systemd copies it to this unit's private
+credential directory. Credential
 creation, filesystem ownership and timer activation are operator/release steps;
 source installation alone does not establish live collection. Existing renderer
 and serving units retain `PrivateNetwork=yes` and their AF_UNIX restriction.
@@ -75,7 +87,8 @@ The atomic `edge/traffic.json` envelope contains `state: ready|error`,
 `checkedAtUtc`, and nullable `lastGood`. The sanitized last-good contract contains
 `schemaVersion: 1`, `source: cloudflare_graphql_analytics`, `generatedAtUtc`,
 `window` (from/to, inclusive/exclusive semantics, seconds, reporting lag), `edge`
-(provider count, sampling, up to ten fixed-host/status/cache groups), and
+(provider count, sampling, up to ten fixed-host/status/cache groups and sixteen
+fixed request-source groups with a cap flag), and
 `coverage` (delay/missing flags, unknown failover and WebSocket message counts).
 Unknown zone hosts collapse to `other-zone-host`. Every refresh replaces this
 one bounded file; it never accumulates equal windows or keeps old generations.

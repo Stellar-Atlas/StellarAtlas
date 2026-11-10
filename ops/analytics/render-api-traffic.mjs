@@ -131,13 +131,20 @@ export function renderEdgeTraffic(state, generatedAt) {
 	const groups = saved.edge.groups.map(group => `<tr><th scope="row">${html(group.host)}</th><td>${html(group.cacheStatus)}</td>
 		<td>${number.format(group.edgeStatus)}</td><td>${number.format(group.providerCount)}</td>
 		<td>${number.format(group.reportedAverageSampleInterval)}</td></tr>`).join('');
+	const sourceRows = saved.edge.sourceGroups?.map(group => row(group.source,
+		[group.providerCount, group.reportedAverageSampleInterval])).join('');
 	return heading + `${stale ? '<p class="notice">Refresh unavailable or stale. Showing the last measured window.</p>' : ''}
 	${state.state === 'error' && Number.isFinite(Date.parse(state.checkedAtUtc)) ? `<p>Latest attempt ${timestamp(state.checkedAtUtc)} did not produce a fresh result.</p>` : ''}
 	<p>${number.format(saved.edge.providerCount)} provider-reported client requests across the zone, from ${timestamp(saved.window.from)} to ${timestamp(saved.window.to)} (UTC; end exclusive).</p>
 	<p>Collected ${timestamp(saved.generatedAtUtc)}. Adaptive sampling: average interval ${number.format(saved.edge.sampling.reportedAverageSampleInterval)}. Counts are reported as supplied, not multiplied by the interval. Provider reporting can be delayed; this is not an exhaustive event ledger.</p>
 	<div class="scroll" role="region" aria-label="Edge request groups" tabindex="0"><table>
 	<thead><tr><th>Host</th><th>Cache</th><th>HTTP status</th><th>Requests</th><th>Sample interval</th></tr></thead><tbody>${groups}</tbody></table></div>
-	<p>Top ${saved.edge.breakdownReturned} groups, limited to 10; their sum is not the separate total query. Edge counts overlap origin requests and browser activity; do not add them together. Worker invocations, subrequests and security events are separate. Exact failover-branch counts and WebSocket message counts are not measured.</p></section>`;
+	<p>Top ${saved.edge.breakdownReturned} groups, limited to 10; their sum is not the separate total query. Edge counts overlap origin requests and browser activity; do not add them together.</p>
+	<h3>Request source categories</h3>
+	${sourceRows ? `<div class="scroll" role="region" aria-label="Edge request sources" tabindex="0"><table><thead><tr><th>Provider category</th><th>Requests</th><th>Sample interval</th></tr></thead><tbody>${sourceRows}</tbody></table></div>`
+		: '<p>Source categories were not returned or have not yet been collected; missing categories are unknown, not zero.</p>'}
+	${saved.edge.sourceGroupsMayBeTruncated ? '<p class="notice">The source-category query reached its 16-group limit.</p>' : ''}
+	<p>Eyeball requests are client requests. inBrowserChallenge is separate challenge traffic. Other categories include internal and subrequest activity; do not add them to the client total or interpret them as unique visitors. These are request-source groups, not security-event records or Worker invocation counts. Exact failover-branch counts and WebSocket message counts are not measured.</p></section>`;
 }
 
 export function renderDashboard(reports, generatedAt, journalCapped, edgeState) {
