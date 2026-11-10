@@ -11,7 +11,7 @@ if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > 
 const outcomes = ['2xx', '3xx', '4xx', '5xx', '429', 'aborted', 'other'];
 const socketPaths = ['/v1/stream/data', '/v1/live/ws', '/v1/status/ws'];
 const handshake = ['attempted', 'accepted', 'rejected'];
-const routePattern = /^(?:GET|POST|PUT|PATCH|DELETE|HEAD) \/[\w{}./-]{0,180}$/;
+const routePattern = /^(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) \/[\w{}./-]{0,180}|UNMATCHED_ROUTE|UNSUPPORTED_METHOD|INVALID_PATH)$/;
 const number = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
 const zeroes = names => Object.fromEntries(names.map(name => [name, 0]));
 const routes = new Map();
@@ -25,6 +25,7 @@ let deferred = 0;
 let limited = false;
 let bytes = 0;
 let pending = '';
+let allRequestWindows = 0;
 
 function addLine(line) {
 	if (!line.startsWith('{"type":"atlas_public_api_traffic_v1"')) return;
@@ -37,9 +38,10 @@ function addLine(line) {
 	if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) { invalid++; return; }
 	if (start < from || end > to) { boundary++; return; }
 	windows.push([start, end]);
+	if (item.httpScope === 'all_express_requests') allRequestWindows++;
 	deferred += number(item.deferredFlushes);
 	for (const [route, counts] of Object.entries(item.http ?? {})) {
-		if (!routePattern.test(route) || (!routes.has(route) && routes.size >= 256)) {
+		if (!routePattern.test(route) || (!routes.has(route) && routes.size >= 259)) {
 			limited = true;
 			continue;
 		}
@@ -86,8 +88,9 @@ console.log(JSON.stringify({
 	requestedRange: { from: iso(from), to: iso(to) },
 	coverage: {
 		windows: windows.length, examined, invalid, boundaryWindowsExcluded: boundary,
+		allRequestWindows, legacyRouteOnlyWindows: windows.length - allRequestWindows,
 		unobservedMilliseconds: to - from - covered, inputLimited: limited, deferredFlushes: deferred,
-		note: 'Origin journal only. Unobserved time may be idle or missing; edge and undocumented traffic are not measured.'
+		note: 'Origin process journal only, including fixed unknown-request buckets after observer rollout. Older windows omitted unknown requests. Unobserved time may be idle or missing. Edge-only traffic is separate; HTTP 2xx does not establish GraphQL application success.'
 	},
 	outcomes: totals, topRoutes, websocket
 }, null, 2));

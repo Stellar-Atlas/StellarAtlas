@@ -1,6 +1,7 @@
 {
   "paths": [
     "/",
+    "/_other",
     "/api",
     "/archives",
     "/archive-scans/_detail",

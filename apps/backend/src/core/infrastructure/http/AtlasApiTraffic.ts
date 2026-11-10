@@ -7,7 +7,7 @@ interface Route {
 }
 const node = (): Route => ({ literal: new Map(), methods: new Map() });
 const segments = (path: string): string[] => path.replace(/\/$/, '').slice(1).split('/');
-const methods = ['get', 'post', 'put', 'patch', 'delete', 'head'];
+const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
 
 function object(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -73,17 +73,23 @@ export function createAtlasApiTraffic(document: unknown, output: Output = proces
 	let from = new Date().toISOString();
 
 	const observe: RequestHandler = (request, response, next) => {
-		const path = request.path;
-		if (path.length <= 2048 && path.startsWith('/')) {
-			const parts = segments(path);
-			const route = parts.length <= 16 ? match(root, parts, request.method) : undefined;
-			if (route !== undefined) response.once('close', () => {
-				const bucket = counts.get(route) ?? {};
-				const key = response.writableFinished ? outcome(response.statusCode) : 'aborted';
-				bucket[key] = (bucket[key] ?? 0) + 1;
-				counts.set(route, bucket);
-			});
-		}
+		// Fixed fallback labels bound cardinality even for arbitrary methods/URLs.
+		// Attach before reading the path or invoking any downstream middleware.
+		let route = 'INVALID_PATH';
+		response.once('close', () => {
+			const bucket = counts.get(route) ?? {};
+			const key = response.writableFinished ? outcome(response.statusCode) : 'aborted';
+			bucket[key] = (bucket[key] ?? 0) + 1;
+			counts.set(route, bucket);
+		});
+		try {
+			const path = request.path;
+			if (path.length <= 2048 && path.startsWith('/')) {
+				const parts = segments(path);
+				if (parts.length <= 16) route = methods.includes(request.method.toLowerCase())
+					? match(root, parts, request.method) ?? 'UNMATCHED_ROUTE' : 'UNSUPPORTED_METHOD';
+			}
+		} catch { /* Observation must not turn an invalid URL into an application error. */ }
 		next();
 	};
 	const handshake = (path: SocketPath) => (state: Handshake): void => {
@@ -100,6 +106,7 @@ export function createAtlasApiTraffic(document: unknown, output: Output = proces
 		}
 		const line = JSON.stringify({
 			type: 'atlas_public_api_traffic_v1', from, to, deferredFlushes,
+			httpScope: 'all_express_requests',
 			http: Object.fromEntries(counts), websocket: Object.fromEntries(websocket)
 		});
 		try { output.write(line + '\n'); }

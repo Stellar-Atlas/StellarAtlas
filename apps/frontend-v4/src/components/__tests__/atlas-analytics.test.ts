@@ -26,10 +26,11 @@ it('sends fixed browser actions without paths, referrers, credentials or retries
 		recordAtlasPageview('/explorer/contracts/private-contract-1', 'https://www.google.com/search?q=private');
 		recordAtlasPageview('/explorer/contracts/private-contract-2', 'https://private.example.com/secret');
 		recordAtlasPageview('/explorer/contracts/private-contract-3?token=private', '');
+		recordAtlasPageview('/developer/verification/private-account', '');
 		setAtlasAnalyticsOptOut(true);
 		recordAtlasView('docs');
 		await new Promise<void>(resolve => setImmediate(resolve));
-		expect(send).toHaveBeenCalledTimes(4);
+		expect(send).toHaveBeenCalledTimes(5);
 		const payloads = send.mock.calls.map(([endpoint, options]) => {
 			expect(String(endpoint)).toBe('https://analytics.example.test/api/event');
 			expect(options).toMatchObject({
@@ -44,7 +45,8 @@ it('sends fixed browser actions without paths, referrers, credentials or retries
 			{ domain: 'stellaratlas.io', name: 'Documentation use', url: 'https://stellaratlas.io/docs' },
 			{ domain: 'stellaratlas.io', name: 'Archive inspection', url: 'https://stellaratlas.io/archives' },
 			{ domain: 'stellaratlas.io', name: 'pageview', url: 'https://stellaratlas.io/explorer/contracts/_detail', referrer: 'https://google.com' },
-			{ domain: 'stellaratlas.io', name: 'pageview', url: 'https://stellaratlas.io/explorer/contracts/_detail' }
+			{ domain: 'stellaratlas.io', name: 'pageview', url: 'https://stellaratlas.io/explorer/contracts/_detail' },
+			{ domain: 'stellaratlas.io', name: 'pageview', url: 'https://stellaratlas.io/_other' }
 		]);
 	} finally {
 		setAtlasAnalyticsOptOut(false);
@@ -77,6 +79,11 @@ it('reduces known explorer routes to fixed categories without retaining identifi
 	expect(atlasPageLabel('/privacy')).toBe('/privacy');
 	expect(atlasPageLabel('/verification/review')).toBe('/verification/review');
 	expect(atlasPageLabel('/api/explorer/private')).toBeUndefined();
+	expect(atlasPageLabel('/new-page')).toBe('/_other');
+	expect(atlasPageLabel('/explorer/unknown/private')).toBe('/_other');
+	for (const path of ['/v1/unknown', '/graphql', '/rpc', '/_next/static/file',
+		'/cdn-cgi/rum', '/.env', '/favicon.ico', '/sitemap.xml', '/unknown?secret=value',
+		'/unknown#private', '/' + 'x'.repeat(2048)]) expect(atlasPageLabel(path)).toBeUndefined();
 	expect(atlasSafeReferrer('https://discuss.stellar.community/private?q=wallet')).toBe('https://stellar.community');
 	expect(atlasSafeReferrer('https://acct-92741123.customers.vendor.com/private')).toBe('https://vendor.com');
 	expect(atlasSafeReferrer('https://acct-92741123.hosted.vendor.co.uk/private')).toBe('https://vendor.co.uk');

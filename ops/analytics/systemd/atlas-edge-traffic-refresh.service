@@ -1,0 +1,27 @@
+[Unit]
+Description=Refresh sanitized edge traffic aggregates
+RequiresMountsFor=/srv/stellaratlas/analytics-data
+ConditionPathIsMountPoint=/srv/stellaratlas/analytics-data
+ConditionPathExists=/etc/stellaratlas/analytics/edge.env
+
+[Service]
+Type=oneshot
+User=atlas-edge-analytics
+Group=atlas-analytics
+EnvironmentFile=/etc/stellaratlas/analytics/edge.env
+LoadCredential=cloudflare-analytics-token:/etc/stellaratlas/analytics/edge-token
+UMask=0027
+ExecStart=/usr/local/lib/stellaratlas/node-v26.12.1/bin/node /opt/stellaratlas/atlas-analytics/api-traffic/edge-traffic.mjs
+TimeoutStartSec=20s
+MemoryMax=128M
+CPUQuota=10%
+TasksMax=16
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+PrivateNetwork=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/srv/stellaratlas/analytics-data/api-traffic/edge
+InaccessiblePaths=-/etc/stellaratlas -/run/atlas-analytics -/srv/stellaratlas/analytics-data/postgres -/srv/stellaratlas/analytics-data/events -/srv/stellaratlas/analytics-data/plausible
