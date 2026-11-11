@@ -25,8 +25,10 @@ test('UTC labels include seconds and polling remains once per visible minute', a
   const stampSource = status.match(/^const stamp = (.*);$/m)?.[1];
   const labelSource = status.match(/^const timeLabel = (.*);$/m)?.[1];
   assert.ok(stampSource && labelSource);
-  const stamp = Function('return (' + stampSource + ')')();
-  const label = Function('return (' + labelSource + ')')();
+  const stamp = value => value ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'medium', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(value)) + ' UTC' : 'Not available';
+  const label = value => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(value));
+  assert.equal(stampSource, stamp.toString());
+  assert.equal(labelSource, label.toString());
   const value = Date.parse('2026-11-01T04:05:06.789Z');
   assert.match(stamp(value), /04:05:06.*UTC/);
   assert.match(label(value), /04:05:06/);
