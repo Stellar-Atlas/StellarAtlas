@@ -27,6 +27,8 @@ export class HttpError<T = unknown> extends CustomError {
 }
 
 export interface HttpOptions {
+	/** Untrusted public archive: pinned public DNS, safe redirects, bounded state bodies. */
+	publicArchive?: boolean;
 	auth?: {
 		username: string;
 		password: string;

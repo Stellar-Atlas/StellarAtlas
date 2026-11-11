@@ -52,6 +52,12 @@ test('fetchStellarHistory', async () => {
 	expect(result.isOk()).toBeTruthy();
 	if (result.isErr()) return;
 	expect(result.value).toEqual(23586760);
+	expect(httpService.get).toHaveBeenCalledWith(
+		expect.objectContaining({
+			value: 'https://stellar.sui.li/history/.well-known/stellar-history.json'
+		}),
+		{ publicArchive: true }
+	);
 	expect(historyArchiveStateRepository.saveAvailable).toHaveBeenCalledWith(
 		'https://stellar.sui.li/history',
 		expect.objectContaining({

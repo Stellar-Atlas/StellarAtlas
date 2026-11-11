@@ -20,6 +20,20 @@ it('should map to scan error', function () {
 	expect(mappedError).toBeInstanceOf(ScanError);
 });
 
+it('keeps public-address policy refusals out of archive verification evidence', () => {
+	const error = new QueueError(
+		{
+			url: createDummyHistoryBaseUrl(),
+			meta: {},
+			method: RequestMethod.GET
+		},
+		new HttpError('Destination refused', 'PUBLIC_ARCHIVE_POLICY')
+	);
+	expect(mapHttpQueueErrorToScanError(error).type).toBe(
+		ScanErrorType.TYPE_CONNECTION
+	);
+});
+
 it('File not found should map to verification error', function () {
 	const error = new FileNotFoundError({
 		url: createDummyHistoryBaseUrl(),

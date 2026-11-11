@@ -11,6 +11,7 @@ import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import type { HistoryArchiveStateStatus } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
+import { AxiosHttpService, Url, type HttpService } from 'http-helper';
 
 export interface BackfillArchiveMetadataRequest {
 	readonly limit?: number;
@@ -42,7 +43,11 @@ export class BackfillArchiveMetadata {
 		private readonly scanRepository: ScanRepository,
 		@inject(TYPES.HistoryArchiveStateRepository)
 		private readonly stateRepository: HistoryArchiveStateRepository,
-		@inject('Logger') private readonly logger: Logger
+		@inject('Logger') private readonly logger: Logger,
+		@inject('HttpService')
+		private readonly httpService: HttpService = new AxiosHttpService(
+			'StellarAtlas archive state backfill'
+		)
 	) {}
 
 	async execute(
@@ -104,22 +109,26 @@ export class BackfillArchiveMetadata {
 	): Promise<Result<ArchiveMetadataDTO, Error>> {
 		const stellarHistoryUrl = buildStellarHistoryUrl(archiveUrl);
 		try {
-			const response = await fetch(stellarHistoryUrl, {
+			const url = Url.create(stellarHistoryUrl);
+			if (url.isErr()) return err(url.error);
+			const response = await this.httpService.get(url.value, {
+				publicArchive: true,
 				headers: { accept: 'application/json' },
-				signal: AbortSignal.timeout(fetchTimeoutMs)
+				requestTimeoutMs: fetchTimeoutMs,
+				socketTimeoutMs: fetchTimeoutMs
 			});
-			if (!response.ok) {
+			if (response.isErr()) {
 				return err(
 					new ArchiveStateFetchError(
-						`History archive state fetch returned HTTP ${response.status.toString()}`,
+						response.error.message,
 						'unreachable',
-						'http_error',
-						response.status
+						response.error.code ?? 'http_error',
+						response.error.response?.status ?? null
 					)
 				);
 			}
 
-			const stellarHistory = await response.json();
+			const stellarHistory = response.value.data;
 			const archiveMetadata = {
 				stellarHistoryUrl,
 				stellarHistory,
@@ -148,7 +157,10 @@ export class BackfillArchiveMetadata {
 		}
 	}
 
-	private async saveFetchFailure(archiveUrl: string, error: Error): Promise<void> {
+	private async saveFetchFailure(
+		archiveUrl: string,
+		error: Error
+	): Promise<void> {
 		const fetchError =
 			error instanceof ArchiveStateFetchError
 				? error

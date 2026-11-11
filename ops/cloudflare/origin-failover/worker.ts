@@ -88,6 +88,13 @@ function publicReadCors(headers: Headers): Headers {
 
 async function mirror(request: Request, env: GatewayEnv): Promise<Response> {
 	try {
+		// Affinity is consumed by the gateway before dispatch. Public snapshots
+		// require no visitor cookies, including live OAuth and session credentials.
+		if (request.headers.has('cookie')) {
+			const headers = new Headers(request.headers);
+			headers.delete('cookie');
+			request = new Request(request, { headers });
+		}
 		const response = markSnapshot(await env.MIRROR.fetch(request));
 		if (!savedPublicReadPath(new URL(request.url).pathname)) return response;
 		return new Response(response.body, { status: response.status, statusText: response.statusText,

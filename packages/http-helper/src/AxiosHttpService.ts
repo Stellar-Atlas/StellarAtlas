@@ -3,6 +3,12 @@ import { Agent as HttpsAgent } from 'node:https';
 import { err, ok, Result } from 'neverthrow';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { isObject, isString } from 'shared';
+import {
+	isPublicArchivePolicyError,
+	publicArchivePolicyErrorCode,
+	publicArchiveRequestConfig,
+	requirePublicArchiveUrl
+} from './PublicArchivePolicy.js';
 
 const sharedHttpAgent = new HttpAgent({
 	keepAlive: true,
@@ -33,7 +39,11 @@ export class AxiosHttpService implements HttpService {
 		url: Url,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, (config) => axios.delete<unknown>(url.value, config), httpOptions);
+		return await this.performRequest(
+			url,
+			(config) => axios.delete<unknown>(url.value, config),
+			httpOptions
+		);
 	}
 
 	async post(
@@ -41,21 +51,33 @@ export class AxiosHttpService implements HttpService {
 		data: Record<string, unknown>,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, (config) => axios.post<unknown>(url.value, data, config), httpOptions);
+		return await this.performRequest(
+			url,
+			(config) => axios.post<unknown>(url.value, data, config),
+			httpOptions
+		);
 	}
 
 	async head(
 		url: Url,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, (config) => axios.head<unknown>(url.value, config), httpOptions);
+		return await this.performRequest(
+			url,
+			(config) => axios.head<unknown>(url.value, config),
+			httpOptions
+		);
 	}
 
 	async get(
 		url: Url,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
-		return await this.performRequest(url, (config) => axios.get<unknown>(url.value, config), httpOptions);
+		return await this.performRequest(
+			url,
+			(config) => axios.get<unknown>(url.value, config),
+			httpOptions
+		);
 	}
 
 	protected mapHttpOptionsToAxiosRequestConfig(
@@ -86,13 +108,18 @@ export class AxiosHttpService implements HttpService {
 			proxy: httpOptions.proxy,
 			httpsAgent: httpOptions.httpsAgent ?? sharedHttpsAgent,
 			httpAgent: httpOptions.httpAgent ?? sharedHttpAgent,
-			signal: httpOptions.abortSignal
+			signal: httpOptions.abortSignal,
+			...(httpOptions.publicArchive
+				? publicArchiveRequestConfig(httpOptions)
+				: {})
 		};
 	}
 
 	private async performRequest(
 		url: Url,
-		operation: (config: AxiosRequestConfig<unknown>) => Promise<AxiosResponse<unknown>>,
+		operation: (
+			config: AxiosRequestConfig<unknown>
+		) => Promise<AxiosResponse<unknown>>,
 		httpOptions?: HttpOptions
 	): Promise<Result<HttpResponse, HttpError>> {
 		let connectionTimeout: NodeJS.Timeout | undefined;
@@ -112,6 +139,7 @@ export class AxiosHttpService implements HttpService {
 		}
 
 		try {
+			if (httpOptions?.publicArchive) requirePublicArchiveUrl(url.value);
 			const source = axios.CancelToken.source();
 			if (connectionTimeoutMs > 0) {
 				connectionTimeout = setTimeout(() => {
@@ -161,6 +189,11 @@ export class AxiosHttpService implements HttpService {
 	}
 
 	protected mapErrorToHttpError(error: unknown, url: Url): HttpError {
+		if (isPublicArchivePolicyError(error))
+			return new HttpError(
+				'Archive destination refused by public-address policy',
+				publicArchivePolicyErrorCode
+			);
 		if (axios.isAxiosError(error)) {
 			return new HttpError(error.message, error.code, error.response);
 		}

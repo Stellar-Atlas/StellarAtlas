@@ -26,9 +26,9 @@
 		"graphiql": "5.4.0",
 		"graphql": "16.11.0",
 		"history-scanner-dto": "workspace:*",
-		"next": "16.4.2",
-		"react": "19.2.7",
-		"react-dom": "19.2.7",
+		"next": "16.4.6",
+		"react": "19.2.9",
+		"react-dom": "19.2.9",
 		"shared": "workspace:*",
 		"three": "0.185.1",
 		"tldts": "7.4.19"

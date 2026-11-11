@@ -40,6 +40,7 @@ export class ArchiveObjectHistoryStateVerifier {
 		this.reportProgress(job.remoteId, 'fetching_history_archive_state', null);
 		const response = await this.httpService
 			.get(urlResult.value, {
+				publicArchive: true,
 				responseType: 'json',
 				requestTimeoutMs: 30_000,
 				socketTimeoutMs: 30_000

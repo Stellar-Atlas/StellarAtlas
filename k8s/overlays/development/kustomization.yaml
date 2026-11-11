@@ -97,14 +97,21 @@ patches:
 
 configMapGenerator:
   - name: stellaratlas-config
+    namespace: stellaratlas
     behavior: merge
     literals:
       - NODE_ENV=development
       - LOG_LEVEL=debug
       - FRONTEND_BASE_URL=http://dev.stellaratlas.local
 
+# Required operator-owned inputs; no credentials are supplied by the base.
+# Kustomize adds the overlay prefix and content hash and rewrites Secret refs.
 secretGenerator:
   - name: stellaratlas-secrets
-    behavior: merge
-    literals:
-      - DATABASE_URL=postgresql://dev_user:dev_password@postgres-service:5432/stellaratlas_dev
+    namespace: stellaratlas
+    envs:
+      - .secrets/application.env
+  - name: postgres-secret
+    namespace: stellaratlas
+    envs:
+      - .secrets/postgres.env

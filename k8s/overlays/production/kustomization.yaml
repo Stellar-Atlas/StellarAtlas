@@ -110,6 +110,7 @@ patches:
 
 configMapGenerator:
   - name: stellaratlas-config
+    namespace: stellaratlas
     behavior: merge
     literals:
       - NODE_ENV=production
@@ -118,13 +119,14 @@ configMapGenerator:
       - RATE_LIMIT_ENABLED=true
       - METRICS_ENABLED=true
 
-# Production secrets should be managed externally
-# This is just a placeholder structure
+# Required operator-owned inputs; no credentials are supplied by the base.
+# Kustomize adds the overlay prefix and content hash and rewrites Secret refs.
 secretGenerator:
   - name: stellaratlas-secrets
-    behavior: merge
-    files:
-      - DATABASE_URL=database-url.txt
-      - SMTP_USERNAME=smtp-username.txt
-      - SMTP_PASSWORD=smtp-password.txt
-      - JWT_SECRET=jwt-secret.txt
+    namespace: stellaratlas
+    envs:
+      - .secrets/application.env
+  - name: postgres-secret
+    namespace: stellaratlas
+    envs:
+      - .secrets/postgres.env

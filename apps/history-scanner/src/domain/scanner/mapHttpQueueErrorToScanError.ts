@@ -13,6 +13,12 @@ export function mapHttpQueueErrorToScanError(error: QueueError): ScanError {
 	if (error.cause instanceof ScanError) {
 		return error.cause;
 	}
+	if (isHttpError(error.cause) && error.cause.code === 'PUBLIC_ARCHIVE_POLICY')
+		return new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			error.request.url.value,
+			'Archive destination refused by public-address policy'
+		);
 	if (isHttpError(error.cause) && isArchiveEvidenceStatus(error.cause)) {
 		const status = error.cause.response?.status;
 		const statusText = error.cause.response?.statusText;

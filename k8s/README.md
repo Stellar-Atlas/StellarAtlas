@@ -1,6 +1,10 @@
-# StellarAtlas Kubernetes Deployment
+# Legacy StellarAtlas Kubernetes Recipe
 
-This directory contains Kubernetes manifests for deploying StellarAtlas using a GitOps approach with Kustomize.
+These manifests describe a legacy Vue-era deployment recipe, not the current
+live architecture or a supported from-scratch production deployment. See the
+[current deployment guide](../deployment.md) and [architecture](../README.md).
+Review and adapt this recipe before use. The base supplies no Secrets and is
+not a standalone deployment; use an overlay with explicit operator inputs.
 
 ## 📁 Directory Structure
 
@@ -9,7 +13,6 @@ k8s/
 ├── base/                          # Base Kubernetes manifests
 │   ├── namespace.yaml            # Namespace and resource quotas
 │   ├── configmap.yaml            # Application configuration
-│   ├── secrets.yaml              # Secret templates (replace in production)
 │   ├── postgres.yaml             # PostgreSQL StatefulSet
 │   ├── backend.yaml              # Backend API deployment
 │   ├── frontend.yaml             # Frontend web deployment
@@ -62,6 +65,10 @@ REGISTRY=your-registry.com/stellaratlas TAG=v1.0.0 PUSH=true ./scripts/build-ima
 
 ### 2. Deploy to Development
 
+Prepare both required private input files for this overlay first; see
+[Operator-supplied Secrets](#operator-supplied-secrets). Without them, Kustomize
+must fail rather than render credentials from a template.
+
 ```bash
 # Deploy development environment
 kubectl apply -k k8s/overlays/development
@@ -72,15 +79,10 @@ ENVIRONMENT=development ./scripts/deploy.sh
 
 ### 3. Deploy to Production
 
-```bash
-# Update production secrets first (see Security section)
-kubectl create secret generic stellaratlas-secrets \
-  --from-literal=DATABASE_URL="postgresql://user:pass@postgres-service:5432/stellaratlas" \
-  --from-literal=SMTP_USERNAME="your-smtp-user" \
-  --from-literal=SMTP_PASSWORD="your-smtp-pass" \
-  --from-literal=JWT_SECRET="your-jwt-secret" \
-  -n stellaratlas
+Prepare separate production inputs as described below. Do not reuse development
+credentials or manually create an unprefixed Secret alongside this generator.
 
+```bash
 # Deploy production environment
 kubectl apply -k k8s/overlays/production
 
@@ -105,6 +107,10 @@ Key configuration is managed through ConfigMaps and Secrets:
 - `DATABASE_URL`: PostgreSQL connection string
 - `SMTP_USERNAME`, `SMTP_PASSWORD`: SMTP credentials
 - `JWT_SECRET`: JWT signing secret
+- `SESSION_SECRET`: session signing secret
+
+#### PostgreSQL Secret (`postgres-secret`)
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`: database credentials
 
 ### Customization
 
@@ -129,23 +135,51 @@ Adjust in overlays for different environments.
 
 ## 🔒 Security
 
-### Production Secrets
+### Operator-supplied Secrets
 
-**⚠️ IMPORTANT**: The base secrets.yaml contains placeholder values. For production:
+Both overlays require two operator-owned files under their own ignored
+`.secrets/` directory. There are no tracked values or merge defaults. For each
+environment, create that directory with private permissions and populate the
+files from your approved secret store, outside logs and shell history:
 
-1. **Never commit real secrets to git**
-2. Use external secret management:
-   - [External Secrets Operator](https://external-secrets.io/)
-   - [Sealed Secrets](https://sealed-secrets.netlify.app/)
-   - Cloud provider secret managers (AWS Secrets Manager, Azure Key Vault, etc.)
+| Overlay input | Required keys, one `KEY=value` per line |
+| --- | --- |
+| `overlays/development/.secrets/application.env` | `DATABASE_URL`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `JWT_SECRET`, `SESSION_SECRET` |
+| `overlays/development/.secrets/postgres.env` | `POSTGRES_USER`, `POSTGRES_PASSWORD` |
+| `overlays/production/.secrets/application.env` | `DATABASE_URL`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `JWT_SECRET`, `SESSION_SECRET` |
+| `overlays/production/.secrets/postgres.env` | `POSTGRES_USER`, `POSTGRES_PASSWORD` |
 
-3. Or create secrets manually:
-```bash
-kubectl create secret generic stellaratlas-secrets \
-  --from-literal=DATABASE_URL="$(cat database-url.txt)" \
-  --from-literal=SMTP_PASSWORD="$(cat smtp-password.txt)" \
-  -n stellaratlas
-```
+Use nonempty, independently chosen values and restrict file permissions to the
+operator account (for example, directory mode `0700` and file mode `0600` on
+Unix). Keep database credentials consistent with the intended database, its
+configured role/probes and the connection URL. Service DNS names in that URL
+must use the chosen overlay prefix, such as `dev-postgres-service` or
+`prod-postgres-service`, in the `stellaratlas` namespace. Never commit input
+files, rendered Secrets or decoded values. Base64 encoding is not encryption.
+
+Render only the intended overlay using `kubectl kustomize
+k8s/overlays/development` or `kubectl kustomize k8s/overlays/production` in a
+private environment. Rendering includes Secret data; do not send its output to
+shared terminals, CI logs or source control. An absent input file must fail
+rendering. Missing referenced keys must prevent container startup; do not set
+Secret references to optional to bypass this gate.
+
+Kustomize creates the following names in namespace `stellaratlas` and rewrites
+the workloads' Secret references to match. `<hash>` is content-derived; inspect
+the private rendered manifest for the exact name before use.
+
+| Overlay | Application Secret | Database Secret |
+| --- | --- | --- |
+| development | `dev-stellaratlas-secrets-<hash>` | `dev-postgres-secret-<hash>` |
+| production | `prod-stellaratlas-secrets-<hash>` | `prod-postgres-secret-<hash>` |
+
+Do not use the previous `behavior: merge` recipe: it could retain base defaults
+for fields that were not overridden. If adapting this legacy recipe to an
+external Secret manager, replace both generators and explicitly reconcile the
+rendered names, namespace and every required key. Do not mix externally managed
+Secrets with these generators. Changing a manifest does not rotate any existing
+credential; existing installations need their own reviewed migration and
+credential lifecycle plan.
 
 ### Security Features
 
