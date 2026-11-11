@@ -97,7 +97,7 @@ function query(
 	return { in: 'query', name, description, required: false, schema };
 }
 const parameters: readonly OpenApiRecord[] = [
-	query('evidence', 'payment verifies only this page against successful mainnet classic-payment envelopes in one bounded batch. Requires a classic account and limit <=20. Missing or conflicting evidence stays unknown.', { type: 'string', enum: ['payment'] }),
+	query('evidence', 'payment verifies only this page against successful mainnet classic-payment envelopes in one bounded batch. Requires a classic account and limit <=100. Missing or conflicting evidence stays unknown.', { type: 'string', enum: ['payment'] }),
 	query(
 		'account',
 		'Either sender, recipient, or muxed recipient. Directional filters are combined with AND.'
@@ -154,7 +154,7 @@ const parameters: readonly OpenApiRecord[] = [
 	query(
 		'limit',
 		'Requested rows; fetches one extra row to determine nextCursor. Excess limits are rejected.',
-		{ type: 'integer', minimum: 1, maximum: 200, default: 100, example: 10 }
+		{ type: 'integer', minimum: 1, maximum: 200, default: 100, example: 25 }
 	),
 	query(
 		'after',

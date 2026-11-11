@@ -16,7 +16,7 @@ export async function verifyTransferPayments(
 	executor: HubbleSemanticQueryExecutor,
 	transfers: readonly HubbleTransfer[]
 ): Promise<readonly HubbleTransfer[]> {
-	if (transfers.length > 20) throw new HubbleWarehouseUnavailableError('Payment evidence page exceeds 20 rows');
+	if (transfers.length > 100) throw new HubbleWarehouseUnavailableError('Payment evidence page exceeds 100 rows');
 	const candidates = transfers.filter(row => row.eventTopic === 'transfer' && row.amountScale === 7 &&
 		classic(row.from) && classic(row.to) && row.toMuxed === null && row.from !== row.to &&
 		/^[a-f0-9]{64}$/.test(row.transactionHash) && /^[1-9][0-9]{0,18}$/.test(row.transactionId) &&

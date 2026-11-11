@@ -33,6 +33,11 @@ export interface TransferActivityPage {
 	elapsedMilliseconds: number;
 }
 export type TransferFilters = Record<string, string>;
+export const transferPageSizes = [25, 50, 100] as const;
+export function transferPageSize(value: string | undefined): 25 | 50 | 100 | null {
+	if (value === undefined || value === '25') return 25;
+	return value === '50' ? 50 : value === '100' ? 100 : null;
+}
 
 export function buildTransferActivityPath(
 	filters: TransferFilters,
@@ -66,7 +71,9 @@ export function buildTransferActivityPath(
 			'/activity/transfers';
 		params.delete('asset');
 	}
-	params.set('limit', '10');
+	const limit = transferPageSize(filters.limit?.trim());
+	if (limit === null) throw new Error('Select 25, 50 or 100 transfers per page.');
+	params.set('limit', String(limit));
 	if (after) params.set('after', after);
 	return path + '?' + params.toString();
 }

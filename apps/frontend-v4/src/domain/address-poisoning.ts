@@ -11,7 +11,7 @@ export const poisoningRule = { prefix: 5, suffix: 4, dustMaximumRaw: 100_000n } 
 
 /** Only the explicitly loaded mainnet account page. No history fetch or balance inference. */
 export function detectAddressPoisoning(account: string, rows: readonly TransferActivity[]): readonly AddressPoisoningMatch[] {
-	if (!isClassicAccount(account) || rows.length > 20) return [];
+	if (!isClassicAccount(account) || rows.length > 100) return [];
 	const eligible = rows.filter(row => row.paymentEvidence === 'mainnet-successful-payment' && row.eventTopic === 'transfer' &&
 		row.amountScale === 7 && row.toMuxed === null && isClassicAccount(row.from ?? '') && isClassicAccount(row.to ?? '') &&
 		row.from !== row.to && /^[1-9][0-9]{0,18}$/.test(row.amountRaw) &&

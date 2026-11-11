@@ -17,6 +17,11 @@ it('recognizes the successful payment-then-dust sequence independent of display 
 	expect(match).toMatchObject({ intendedAddress: recipient, attackingAddress: attacker });
 	expect(addressDifference(attacker, recipient).map(part => part.text).join('')).toBe(attacker);
 	expect(addressDifference(attacker, recipient).filter(part => part.different).map(part => part.text).join('')).toBe('4DT5');
+	for (const size of [25, 50, 100]) {
+		const page = [...poisoningRows, ...Array.from({ length: size - 2 }, (_, index) => ({ ...poisoningRows[0]!, id: 'unverified-' + index, paymentEvidence: null }))];
+		expect(detectAddressPoisoning(payer, page)).toHaveLength(1);
+	}
+	expect(detectAddressPoisoning(payer, Array.from({ length: 101 }, () => poisoningRows[0]!))).toEqual([]);
 });
 it('does not turn dust alone, unrelated look-alikes, self-payments, unknown or wrong-network evidence into warnings', () => {
 	const [payment, dust] = poisoningRows as [TransferActivity, TransferActivity];

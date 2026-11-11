@@ -1,7 +1,7 @@
 import { buildEntityHref } from '../../api/explorer-analytics';
 import { sanitizeExplorerReturnTo } from '../../api/explorer-return-context';
 import { normalizeExplorerTimes } from '../../api/explorer-search-route';
-import type { TransferFilters } from '../../api/transfer-activity';
+import { transferPageSize, type TransferFilters } from '../../api/transfer-activity';
 import { normalizeTransactionHash } from '../../domain/transaction-hash';
 
 export const transferFields = [
@@ -20,7 +20,7 @@ export const transferFields = [
 	['contract_id', 'Token contract ID', 'text']
 ] as const;
 
-const runKey = 'transfer_query', pageKey = 'transfer_after', windowKey = 'transfer_window';
+const runKey = 'transfer_query', pageKey = 'transfer_after', windowKey = 'transfer_window', boundKey = 'transfer_bound';
 const ledger = (value: number): boolean =>
 	Number.isSafeInteger(value) && value > 0 && value <= 2_147_483_647;
 export const validTransferCursor = (value: string): boolean => /^[A-Za-z0-9_-]{1,2048}$/.test(value);
@@ -29,6 +29,8 @@ export type TransferSelection = {
 	filters: TransferFilters;
 	after: string | null;
 	window?: TransferWindow;
+	/** Cursor was issued to explicit pinned bounds, not the original unbounded filters. */
+	boundWindow?: boolean;
 };
 export const validTransferWindow = ([min, max]: TransferWindow): boolean =>
 	ledger(min) && ledger(max) && min <= max && max - min < 1_000_000;
@@ -36,7 +38,8 @@ export const validTransferWindow = ([min, max]: TransferWindow): boolean =>
 export function readTransferSelection(params: URLSearchParams): {
 	filters: TransferFilters; selection: TransferSelection | null; error: string | null;
 } {
-	const filters: TransferFilters = {};
+	const size = transferPageSize(params.get('limit') ?? undefined);
+	const filters: TransferFilters = { limit: String(size ?? 25) };
 	const active = params.has(runKey), after = params.get(pageKey), raw = params.get(windowKey);
 	const tuple = raw === null ? null : /^(\d+):(\d+)$/.exec(raw);
 	const window: TransferWindow | undefined =
@@ -50,7 +53,8 @@ export function readTransferSelection(params: URLSearchParams): {
 	const validTime = (value: string | undefined): boolean =>
 		!value || (/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value) &&
 			Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value);
-	if ([...transferFields.map(([name]) => name), runKey, pageKey, windowKey, 'after'].some(key => params.getAll(key).length > 1) ||
+	if ([...transferFields.map(([name]) => name), 'limit', runKey, pageKey, windowKey, boundKey, 'after'].some(key => params.getAll(key).length > 1) ||
+		size === null || (params.has(boundKey) && (params.get(boundKey) !== '1' || !window)) ||
 		transferFields.some(([name]) => (params.get(name)?.length ?? 0) > 512) ||
 		params.has('after') ||
 		(active && params.get(runKey) !== '1') ||
@@ -60,7 +64,7 @@ export function readTransferSelection(params: URLSearchParams): {
 		(raw !== null && (!window || !validTransferWindow(window) || raw !== window.join(':') ||
 			(!!filters.min_ledger && window[0] !== Number(filters.min_ledger)) ||
 			(!!filters.max_ledger && !(window[1] <= Number(filters.max_ledger)))))) return invalid();
-	return { filters, selection: active ? { filters, after, window } : null, error: null };
+	return { filters, selection: active ? { filters, after, window, boundWindow: params.has(boundKey) } : null, error: null };
 }
 
 export function transferSelectionHref(path: string, search: string, selection: TransferSelection): string {
@@ -68,8 +72,12 @@ export function transferSelectionHref(path: string, search: string, selection: T
 	params.delete('after');
 	params.delete(pageKey);
 	params.delete(windowKey);
+	params.delete(boundKey);
 	params.set(runKey, '1');
 	const filters = normalizeExplorerTimes(selection.filters);
+	const size = transferPageSize(filters.limit);
+	if (size === null) throw new Error('Select 25, 50 or 100 transfers per page.');
+	params.set('limit', String(size));
 	for (const [name] of transferFields) {
 		params.delete(name);
 		const value = filters[name]?.trim();
@@ -77,6 +85,7 @@ export function transferSelectionHref(path: string, search: string, selection: T
 	}
 	if (selection.after !== null) params.set(pageKey, selection.after);
 	if (selection.window) params.set(windowKey, selection.window.join(':'));
+	if (selection.boundWindow && selection.window) params.set(boundKey, '1');
 	if (readTransferSelection(params).error) throw new Error('Invalid transfer filters or continuation.');
 	const href = path + '?' + params.toString();
 	if (sanitizeExplorerReturnTo(href) === null) throw new Error('The transfer link is too long or invalid.');
@@ -85,7 +94,9 @@ export function transferSelectionHref(path: string, search: string, selection: T
 
 export function transferRequestFilters(selection: TransferSelection): TransferFilters {
 	const window = selection.window;
-	return window ? { ...selection.filters, min_ledger: String(window[0]), max_ledger: String(window[1]) } : selection.filters;
+	// The first cursor can be bound to implicit API defaults; do not change that fingerprint mid-page.
+	return window && (selection.after === null || selection.boundWindow)
+		? { ...selection.filters, min_ledger: String(window[0]), max_ledger: String(window[1]) } : selection.filters;
 }
 
 export function transferTransactionReference(hash: string | null | undefined, sequence: number) {

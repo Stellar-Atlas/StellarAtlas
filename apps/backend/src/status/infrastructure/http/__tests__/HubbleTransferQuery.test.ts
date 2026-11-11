@@ -219,7 +219,7 @@ describe('bounded exact transfer activity', () => {
 		{ after: 'not-a-cursor' },
 		{ eventTopic: 'payment' },
 		{ unknown: 'value' },
-		{ evidence: 'payment', account: transferAccount, limit: 21 },
+		{ evidence: 'payment', account: transferAccount, limit: 101 },
 		{ evidence: 'payment', limit: 10 },
 		{ evidence: 'all', account: transferAccount, limit: 10 }
 	])('rejects invalid inputs without running fact SQL: %j', async (input) => {

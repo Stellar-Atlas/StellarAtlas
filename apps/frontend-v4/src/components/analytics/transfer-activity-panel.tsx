@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { localTimeInput } from '../../api/explorer-search-route';
-import { formatTransferAmount, type TransferFilters } from '../../api/transfer-activity';
+import { formatTransferAmount, transferPageSizes, type TransferFilters } from '../../api/transfer-activity';
 import { ExplorerInvestigationScope, ExplorerLink } from '../blockchain/explorer-investigation';
 import { LocalDateTime } from '../local-date-time';
 import { transferFields, transferTransactionReference } from './transfer-investigation-route';
@@ -85,7 +85,7 @@ function TransferActivityView({ activity }: {
 					<button
 						type="button"
 						disabled={busy}
-						onClick={() => setFilters(sample)}
+						onClick={() => setFilters({ ...sample, limit: filters.limit ?? '25' })}
 					>
 						Load sample
 					</button>
@@ -102,6 +102,11 @@ function TransferActivityView({ activity }: {
 					: 'Edit filters and select Find transfers.')}
 			</p>
 			{activity.retry && <button type="button" onClick={activity.retry}>Retry transfers</button>}
+			<label className={styles.pageSize}>Rows per page
+				<select value={activity.pageSize} disabled={busy} onChange={event => activity.changePageSize(event.currentTarget.value)}>
+					{transferPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
+				</select>
+			</label>
 			{(result || activity.previous) && (
 				<div className={styles.actions}>
 					<button type="button" disabled={busy || !activity.previous} onClick={activity.previous ?? undefined}>

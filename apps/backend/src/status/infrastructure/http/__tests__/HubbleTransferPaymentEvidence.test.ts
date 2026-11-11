@@ -6,11 +6,11 @@ import type { HubblePreparedParameter, HubbleSemanticQueryExecutor } from '../Hu
 import { transferRow } from './HubbleTransferFixture.js';
 const source = Keypair.fromRawEd25519Seed(Buffer.alloc(32, 1));
 const recipient = Keypair.fromRawEd25519Seed(Buffer.alloc(32, 2));
-function payment(network = Networks.PUBLIC) {
-	const tx = new TransactionBuilder(new Account(source.publicKey(), '0'), { fee: '100', networkPassphrase: network })
+function payment(network = Networks.PUBLIC, index = 1) {
+	const tx = new TransactionBuilder(new Account(source.publicKey(), String(index)), { fee: '100', networkPassphrase: network })
 		.addOperation(Operation.payment({ destination: recipient.publicKey(), asset: Asset.native(), amount: '1.0000001' }))
 		.setTimeout(0).build();
-	const transactionId = ((63n << 32n) + 4096n).toString();
+	const transactionId = ((63n << 32n) + BigInt(index) * 4096n).toString();
 	const transfer: HubbleTransfer = { id: 'first', ledgerSequence: 63, closedAt: '2026-11-11T00:00:00Z',
 		transactionHash: Buffer.from(tx.hash()).toString('hex'), transactionId, operationId: (BigInt(transactionId) + 1n).toString(),
 		from: source.publicKey(), to: recipient.publicKey(), toMuxed: null, asset: { id: 'native', type: 'native', code: null, issuer: null },
@@ -35,6 +35,16 @@ it('uses one exact natural-key/partition batch and verifies successful mainnet e
 	for (const fragment of ['_ledger_sequence IN (', 'ledger_sequence IN (', 'tuple(ledger_sequence, id) IN (', '_ingestion_batches', 'LIMIT {payment_limit:UInt32}', 'substring(tx_envelope, 1, 262144)']) expect(sql).toContain(fragment);
 	expect(sql).not.toContain('transaction_hash =');
 	expect(sql).not.toContain('AND length(tx_envelope)');
+	const payments = Array.from({ length: 100 }, (_, i) => payment(Networks.PUBLIC, i + 1));
+	for (const size of [25, 50, 100]) {
+		const page = payments.slice(0, size), batch = executor(page.map(item => item.evidence));
+		const verified = await verifyTransferPayments(batch.executor, page.map(item => item.transfer));
+		expect(verified).toHaveLength(size);
+		expect(verified.every(row => row.paymentEvidence === 'mainnet-successful-payment')).toBe(true);
+		expect(batch.requests).toHaveLength(1);
+		expect(batch.requests[0]?.parameters).toContainEqual({ name: 'payment_limit', type: 'UInt32', value: String(size + 1) });
+	}
+	await expect(verifyTransferPayments(fixture.executor, Array.from({ length: 101 }, () => transfer))).rejects.toThrow('100 rows');
 });
 it('keeps unavailable, missing, duplicate and contradictory evidence unknown without losing the activity page or retrying', async () => {
 	const { transfer, evidence } = payment();

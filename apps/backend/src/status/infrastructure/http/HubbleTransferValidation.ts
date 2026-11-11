@@ -99,8 +99,8 @@ export function normalizeHubbleTransferInput(
 		validateTransferLedgerRange(result.minLedger, result.maxLedger);
 	values.limit ??= 100;
 	if (values.evidence !== undefined && (values.evidence !== 'payment' ||
-		typeof values.account !== 'string' || !/^G[A-Z2-7]{55}$/.test(values.account) || Number(values.limit) > 20))
-		fail('Payment evidence requires evidence=payment, a classic account and limit at most 20');
+		typeof values.account !== 'string' || !/^G[A-Z2-7]{55}$/.test(values.account) || Number(values.limit) > 100))
+		fail('Payment evidence requires evidence=payment, a classic account and limit at most 100');
 	return values as HubbleTransferInput;
 }
 
