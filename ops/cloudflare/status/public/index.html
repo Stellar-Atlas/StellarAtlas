@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>StellarAtlas · System status</title>
+  <meta name="description" content="StellarAtlas service availability, failover readiness and recorded incidents.">
+  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/history.css"><script type="module" src="/status.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="https://stellaratlas.io/"><span class="logo">SA</span>StellarAtlas</a><a class="app-link" href="https://stellaratlas.io/">Open app <span aria-hidden="true">↗</span></a></header>
+  <main>
+    <div class="eyebrow">SYSTEM STATUS</div>
+    <section class="summary" aria-live="polite">
+      <div class="summary-title"><span id="overall-dot" class="dot unknown"></span><h1 id="overall">Checking services</h1></div>
+      <p id="summary-detail">Loading the latest independent checks.</p>
+      <div class="check-time" id="checked">—</div>
+    </section>
+    <section class="services" aria-label="Current availability">
+      <article><div><h2>Primary server</h2><p>Website and public APIs</p></div><span id="primary" class="badge unknown">Checking</span></article>
+      <article><div><h2>Data server</h2><p>Data service readiness</p></div><span id="data" class="badge unknown">Checking</span></article>
+      <article><div><h2>Failover service</h2><p>Failover service when both primary servers are degraded or offline.</p></div><span id="failover" class="badge unknown">Checking</span></article>
+    </section>
+    <section class="snapshot-section" aria-labelledby="check-method">
+      <div class="section-heading"><h2 id="check-method">How we check services</h2><span>Every minute</span></div>
+      <p>All three checks run on a one-minute schedule. If the page cannot load the latest status record, or the record is more than 3 minutes old, the page shows the current status as unknown.</p>
+      <ul>
+        <li><strong>Primary server.</strong> Checks the primary service’s reported availability for the website and public APIs. The 3-minute limit applies to the observation.</li>
+        <li><strong>Data server.</strong> Checks that a small database query returns the expected result and that a completed publication is available. The health response must be less than 5 minutes old. Publication readiness requires at least one completed batch and at least one published row, a catalogue measurement at most 75 seconds old, and a latest completed batch at most 24 hours old.</li>
+        <li><strong>Failover service.</strong> Checks that saved network and archive data is available, Explorer reports ready, and both saved snapshots have capture timestamps. Snapshot age is shown for reference.</li>
+      </ul>
+      <p class="footnote">A valid health response can report stale data. “Last checked” is when monitoring recorded the result. The failover data times below show when the saved snapshots were captured.</p>
+    </section>
+    <section class="history-section">
+      <div class="section-heading"><h2>Availability history</h2><div id="history-ranges" class="range-controls" role="group" aria-label="History zoom"></div></div>
+      <div class="history-navigation"><button id="history-back" type="button" aria-label="Earlier period">←</button><span id="history-window"></span><button id="history-forward" type="button" aria-label="Later period">→</button><button id="history-latest" type="button">Latest</button></div>
+      <div id="history" class="history" aria-label="Service availability timeline"></div>
+      <div id="history-axis" class="history-axis" aria-hidden="true"></div>
+      <div id="history-selection" class="history-selection" aria-live="polite">Select an interval to see its duration and zoom in.</div>
+      <div class="legend"><span><i class="key operational"></i>No recorded outage</span><span><i class="key degraded"></i>Recorded outage</span><span><i class="key unknown"></i>Not monitored</span></div>
+      <p id="monitoring-since" class="footnote"></p>
+      <p class="footnote">Grey marks periods treated as unmonitored, such as before checks began or beyond the 3-minute window after the last check. Green means no outage was recorded. The chart can miss individual gaps within past coverage.</p>
+    </section>
+    <section class="snapshot-section">
+      <div class="section-heading"><h2>Failover data</h2><span>Last data refresh</span></div>
+      <dl><div><dt>Network and archives</dt><dd id="core-snapshot">—</dd></div><div><dt>Explorer</dt><dd id="explorer-snapshot">—</dd></div></dl>
+      <p class="footnote">Data may be older than live services during an interruption.</p>
+    </section>
+    <section class="incidents-section"><div class="section-heading"><h2>Incident history</h2><span>Downtime intervals only</span></div><div id="incidents" aria-live="polite"><p class="muted">Loading incidents.</p></div></section>
+  </main>
+  <footer><span>StellarAtlas status · Checks every minute. Incident times are observations.</span><span>Hosted independently · Times in UTC</span></footer>
+</body>
+</html>

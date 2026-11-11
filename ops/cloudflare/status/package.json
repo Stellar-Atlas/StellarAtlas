@@ -1,0 +1,1 @@
+{"name":"stellaratlas-status-pages","private":true,"type":"module","scripts":{"build":"node build.mjs","deploy":"node publish.mjs","test":"node --test test/*.test.mjs"}}
