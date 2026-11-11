@@ -316,6 +316,7 @@ export class VerifyArchiveObjects {
 		);
 		try {
 			const response = await this.httpService.get(urlResult.value, {
+				publicArchive: true,
 				responseType: 'stream',
 				connectionTimeoutMs: 60_000,
 				socketTimeoutMs: 60_000

@@ -62,17 +62,22 @@ async function assertInstalledPackageFloors(packageName, minimumForVersion) {
 }
 
 test('effective runtime and schema-tool versions contain the reviewed fixes', async () => {
-	assertVersionAtLeast(backendRequire('toml/package.json').version, '4.2.0');
+	assertVersionAtLeast(backendRequire('toml/package.json').version, '5.0.1');
 	assertVersionAtLeast(schemaRequire('vm2/package.json').version, '3.12.2');
-	assertVersionAtLeast(ajvRequire('fast-uri/package.json').version, '3.1.8');
-	assertVersionAtLeast(frontendRequire('next/package.json').version, '16.4.2');
+	assertVersionAtLeast(ajvRequire('fast-uri/package.json').version, '3.1.9');
+	assertVersionAtLeast(frontendRequire('next/package.json').version, '16.4.6');
+	assertDependencyVersionAtLeast(frontendRequire, 'react', '19.2.9');
+	assertDependencyVersionAtLeast(frontendRequire, 'react-dom', '19.2.9');
+	for (const requireFrom of [backendRequire, usersRequire, expressRequire]) {
+		assertDependencyVersionAtLeast(requireFrom, 'body-parser', '1.20.9');
+	}
 	assertVersionAtLeast(expressRequire('proxy-addr/package.json').version, '2.0.8');
 	assertVersionAtLeast(tsJestRequire('handlebars/package.json').version, '4.7.10');
 	assertVersionAtLeast(concurrentlyRequire('shell-quote/package.json').version, '1.12.0');
 	assertDependencyVersionAtLeast(backendRequire, 'axios', '1.20.0');
 	assertDependencyVersionAtLeast(usersRequire, 'axios', '1.20.0');
 	assertDependencyVersionAtLeast(httpHelperRequire, 'axios', '1.20.0');
-	assertDependencyVersionAtLeast(backendRequire, 'nodemailer', '10.0.9');
+	assertDependencyVersionAtLeast(backendRequire, 'nodemailer', '10.1.4');
 	assertDependencyVersionAtLeast(backendRequire, 'moment', '2.31.0');
 	await assertInstalledPackageFloors('brace-expansion', (version) => {
 		const major = Number(version.split('.')[0]);
@@ -85,9 +90,13 @@ test('effective runtime and schema-tool versions contain the reviewed fixes', as
 	await assertInstalledPackageFloors('source-map-js', () => '1.2.2');
 	await assertInstalledPackageFloors('postcss-selector-parser', () => '7.1.6');
 	await assertInstalledPackageFloors('markdown-it', () => '14.3.3');
-	await assertInstalledPackageFloors('follow-redirects', () => '1.16.1');
+	await assertInstalledPackageFloors('body-parser', (version) =>
+		version.startsWith('1.') ? '1.20.9' : null
+	);
+	await assertInstalledPackageFloors('follow-redirects', () => '1.16.2');
+	await assertInstalledPackageFloors('qs', () => '6.16.1');
 	await assertInstalledPackageFloors('vite', (version) =>
-		version.startsWith('6.') ? '6.4.4' : null
+		version.startsWith('6.') ? '6.4.5' : null
 	);
 });
 
@@ -126,11 +135,29 @@ test('TOML parsing preserves expected validator and organization metadata', () =
 test('TOML input cannot write a prototype property', () => {
 	assert.equal(Object.prototype.archiveSecurityProbe, undefined);
 	try {
-		toml.parse('[__proto__]\narchiveSecurityProbe = true\n');
-	} catch (error) {
-		assert.equal(error.name, 'SyntaxError');
+		for (const input of [
+			'[__proto__]\narchiveSecurityProbe = true\n',
+			'"b.c" = 1979-05-27T07:32:00Z\n[[\'"b\']]\n["b.c"]\n' +
+				'__proto__.__proto__.archiveSecurityProbe = "yes"\n'
+		]) {
+			try {
+				toml.parse(input);
+			} catch (error) {
+				assert.equal(error.name, 'SyntaxError');
+			}
+			assert.equal(Object.prototype.archiveSecurityProbe, undefined);
+		}
+	} finally {
+		delete Object.prototype.archiveSecurityProbe;
 	}
-	assert.equal(Object.prototype.archiveSecurityProbe, undefined);
+});
+
+test('TOML rejects unsafe integers without changing safe numeric metadata', () => {
+	assert.equal(toml.parse('display_decimals = 7').display_decimals, 7);
+	assert.throws(
+		() => toml.parse('large = 9223372036854775807'),
+		(error) => error instanceof Error && /cannot be represented losslessly/.test(error.message)
+	);
 });
 
 test('deep TOML arrays hit the parser depth limit rather than stack exhaustion', () => {

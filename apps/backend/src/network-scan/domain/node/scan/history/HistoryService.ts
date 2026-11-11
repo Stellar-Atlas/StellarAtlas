@@ -45,7 +45,9 @@ export class HistoryService {
 		if (urlResult.isErr())
 			return err(new FetchHistoryError(stellarHistoryUrl, urlResult.error));
 
-		const response = await this.httpService.get(urlResult.value);
+		const response = await this.httpService.get(urlResult.value, {
+			publicArchive: true
+		});
 		if (response.isErr()) {
 			await this.historyArchiveStateRepository.saveFailure({
 				archiveUrl: historyUrl,

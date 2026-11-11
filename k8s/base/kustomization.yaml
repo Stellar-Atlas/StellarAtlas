@@ -9,7 +9,6 @@ metadata:
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml
   - postgres.yaml
   - backend.yaml
   - frontend.yaml

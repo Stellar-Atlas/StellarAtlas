@@ -131,6 +131,7 @@ export class BucketScanner {
 				nrOfRetries: 6, //last retry is after 1 min wait. 2 minute total wait time
 				rampUpConnections: true,
 				httpOptions: {
+					publicArchive: true,
 					httpAgent: scanState.httpAgent,
 					httpsAgent: scanState.httpsAgent,
 					responseType: 'stream',
@@ -206,6 +207,7 @@ export class BucketScanner {
 					nrOfRetries: 6, //last retry is after 1 min wait. 2 minute total wait time
 					rampUpConnections: true,
 					httpOptions: {
+						publicArchive: true,
 						responseType: undefined,
 						socketTimeoutMs: 5000,
 						connectionTimeoutMs: 5000,

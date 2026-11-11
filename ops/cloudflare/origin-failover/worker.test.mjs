@@ -385,6 +385,58 @@ test('pinned document, RSC and Next Action go only to read-only mirror', async (
   }
 });
 
+test('mirror dispatch strips all visitor cookies after affinity without changing request semantics', async () => {
+  const credentials = '__Host-atlas-developer-session=fixture-session; __Host-atlas-developer-oauth=fixture-flow; unrelated=fixture';
+  for (const { path, affinity, action, rsc, origins } of [
+    { path: '/nodes?view=graph', affinity: true, origins: 0 },
+    { path: '/nodes?_rsc=fixture', affinity: true, rsc: true, origins: 0 },
+    { path: '/nodes', affinity: true, action: true, origins: 0 },
+    { path: '/nodes', affinity: false, origins: 1 },
+    { path: '/v1/assets/native', affinity: true, origins: 0 },
+    { path: '/api/snapshot/network', affinity: false, origins: 0 }
+  ]) {
+    const f = fixture(async () => new Response(null, { status: 503 }));
+    const controller = new AbortController();
+    const cookie = (affinity ? 'atlas_snapshot=1; ' : '') + credentials;
+    const request = new Request('https://stellaratlas.io' + path, {
+      method: action ? 'POST' : 'GET', signal: controller.signal,
+      headers: { ...html, cookie, ...(rsc ? { rsc: '1' } : {}),
+        ...(action ? { 'next-action': 'snapshot-action' } : {}) },
+      ...(action ? { body: 'read-only-payload' } : {})
+    });
+    const response = await f.run(request);
+    assert.equal(f.calls.origin.length, origins, path);
+    assert.equal(f.calls.mirror.length, 1, path);
+    const forwarded = f.calls.mirror[0];
+    assert.equal(forwarded.headers.get('cookie'), null, path);
+    assert.equal(request.headers.get('cookie'), cookie, 'original credential header is untouched');
+    assert.equal(forwarded.url, request.url);
+    assert.equal(forwarded.method, request.method);
+    assert.equal(forwarded.headers.get('accept'), html.accept);
+    assert.equal(forwarded.headers.get('rsc'), rsc ? '1' : null);
+    assert.equal(forwarded.headers.get('next-action'), action ? 'snapshot-action' : null);
+    if (action) assert.equal(await forwarded.text(), 'read-only-payload');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    controller.abort();
+    assert.equal(forwarded.signal.aborted, true);
+  }
+});
+
+test('private authentication and verification routes retain cookies at origin and never replay to mirror', async () => {
+  for (const path of ['/v1/developer-auth/session',
+    '/v1/developer-auth/oauth/github/callback?state=fixture&code=fixture',
+    '/v1/account-verification/review']) {
+    const f = fixture(async () => new Response(null, { status: 503 }));
+    const request = new Request('https://stellaratlas.io' + path, {
+      headers: { ...pinned, cookie: 'atlas_snapshot=1; __Host-atlas-developer-session=fixture-session' }
+    });
+    assert.equal((await f.run(request)).status, 503);
+    assert.equal(f.calls.mirror.length, 0);
+    assert.equal(f.calls.origin[0][0], request);
+    assert.match(f.calls.origin[0][0].headers.get('cookie'), /fixture-session/);
+  }
+});
+
 test('private API/arbitrary paths never fail over; snapshot API always mirrors reads', async () => {
   for (const path of ['/api/private', '/internal', '/v1/private', '/nodes-other']) {
     const f = fixture(async () => new Response(null, { status: 503 }));

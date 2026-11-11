@@ -114,6 +114,7 @@ export class ArchiveObjectCategoryVerifier {
 		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null, null);
 		const response = await this.httpService
 			.get(urlResult.value, {
+				publicArchive: true,
 				responseType: 'json',
 				requestTimeoutMs: 30_000,
 				socketTimeoutMs: 30_000
@@ -276,6 +277,7 @@ export class ArchiveObjectCategoryVerifier {
 		const response =
 			replay === undefined
 				? await this.httpService.get(urlResult.value, {
+						publicArchive: true,
 						responseType: 'stream',
 						connectionTimeoutMs: 60_000,
 						socketTimeoutMs: 60_000

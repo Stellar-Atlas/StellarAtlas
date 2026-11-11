@@ -1,6 +1,7 @@
 import { CategoryRequestMeta, RequestGenerator } from './RequestGenerator.js';
 import {
 	HttpQueue,
+	QueueError,
 	Request,
 	RequestMethod,
 	Url,
@@ -13,6 +14,7 @@ import { injectable } from 'inversify';
 import { Category } from '../history-archive/Category.js';
 import { sortDescending } from './sortDescending.js';
 import { err, ok, Result } from 'neverthrow';
+import { Readable } from 'node:stream';
 
 export interface PerformanceTestResult {
 	optimalConcurrency: number;
@@ -194,20 +196,45 @@ export class ArchivePerformanceTester {
 				[Category.transactions]
 			);
 
-		const successOrError = await this.httpQueue.sendRequests(requests, {
-			stallTimeMs: 150,
-			concurrency: settings.concurrency,
-			nrOfRetries: 1,
-			rampUpConnections: settings.warmup,
-			httpOptions: {
-				httpAgent: httpAgent,
-				httpsAgent: httpsAgent,
-				responseType: 'json',
-				socketTimeoutMs: settings.largeFiles ? 100000 : 2000,
-				connectionTimeoutMs: settings.largeFiles ? 100000 : 2000
+		const successOrError = await this.httpQueue.sendRequests(
+			requests,
+			{
+				stallTimeMs: 150,
+				concurrency: settings.concurrency,
+				nrOfRetries: 1,
+				rampUpConnections: settings.warmup,
+				httpOptions: {
+					publicArchive: true,
+					httpAgent: httpAgent,
+					httpsAgent: httpsAgent,
+					responseType: settings.largeFiles ? 'stream' : 'json',
+					socketTimeoutMs: settings.largeFiles ? 100000 : 2000,
+					connectionTimeoutMs: settings.largeFiles ? 100000 : 2000
+				},
+				cacheBusting: true
 			},
-			cacheBusting: true
-		});
+			async (data, request) => {
+				if (!settings.largeFiles) return ok(undefined);
+				if (!(data instanceof Readable)) return err(new QueueError(request));
+				// Measure the complete binary sample without buffering it as state JSON.
+				const deadline = setTimeout(
+					() => data.destroy(new Error('Archive performance sample timed out')),
+					100_000
+				);
+				try {
+					for await (const _chunk of data) {
+						/* discard bounded streaming sample */
+					}
+					return ok(undefined);
+				} catch (error) {
+					return err(
+						new QueueError(request, error instanceof Error ? error : undefined)
+					);
+				} finally {
+					clearTimeout(deadline);
+				}
+			}
+		);
 		httpAgent.destroy();
 		httpsAgent.destroy();
 

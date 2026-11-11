@@ -90,7 +90,8 @@ export class CategoryScanner {
 	public async findLatestLedger(
 		baseUrl: Url
 	): Promise<Result<LatestLedgerArchiveState, ScanError>> {
-		const rootHistoryArchiveStateUrl = UrlBuilder.getRootHistoryArchiveStateUrl(baseUrl);
+		const rootHistoryArchiveStateUrl =
+			UrlBuilder.getRootHistoryArchiveStateUrl(baseUrl);
 		const rootHistoryArchiveStateUrlRequest: Request[] = [
 			{
 				url: rootHistoryArchiveStateUrl,
@@ -108,6 +109,7 @@ export class CategoryScanner {
 				nrOfRetries: 6, //last retry is after 1 min wait. 2 minute total wait time
 				rampUpConnections: true,
 				httpOptions: {
+					publicArchive: true,
 					responseType: 'json',
 					socketTimeoutMs: 4000 //timeout to download file
 				}
@@ -116,7 +118,8 @@ export class CategoryScanner {
 				if (!isObject(result)) {
 					return err(new FileNotFoundError(request));
 				}
-				const validateHistoryArchiveStateResult = this.hasValidator.validate(result);
+				const validateHistoryArchiveStateResult =
+					this.hasValidator.validate(result);
 				if (validateHistoryArchiveStateResult.isOk()) {
 					archiveMetadata = {
 						stellarHistoryUrl: rootHistoryArchiveStateUrl.value,
@@ -125,7 +128,9 @@ export class CategoryScanner {
 					};
 					return ok(undefined);
 				} else {
-					return err(new QueueError(request, validateHistoryArchiveStateResult.error));
+					return err(
+						new QueueError(request, validateHistoryArchiveStateResult.error)
+					);
 				}
 			}
 		);
@@ -172,6 +177,7 @@ export class CategoryScanner {
 				nrOfRetries: 6, //last retry is after 1 min wait. 2 minute total wait time
 				rampUpConnections: true,
 				httpOptions: {
+					publicArchive: true,
 					httpAgent: scanState.httpAgent,
 					httpsAgent: scanState.httpsAgent,
 					responseType: 'json',
@@ -182,7 +188,8 @@ export class CategoryScanner {
 				if (!isObject(result)) {
 					return err(new FileNotFoundError(request));
 				}
-				const validateHistoryArchiveStateResult = this.hasValidator.validate(result);
+				const validateHistoryArchiveStateResult =
+					this.hasValidator.validate(result);
 				if (validateHistoryArchiveStateResult.isOk()) {
 					HistoryArchiveStateBucketHashExtractor.getNonZeroHashes(
 						validateHistoryArchiveStateResult.value
@@ -199,7 +206,9 @@ export class CategoryScanner {
 					}
 					return ok(undefined);
 				} else {
-					return err(new QueueError(request, validateHistoryArchiveStateResult.error));
+					return err(
+						new QueueError(request, validateHistoryArchiveStateResult.error)
+					);
 				}
 			}
 		);
@@ -305,6 +314,7 @@ export class CategoryScanner {
 				nrOfRetries: 6, //last retry is after 1 min wait. 2 minute total wait time
 				rampUpConnections: true,
 				httpOptions: {
+					publicArchive: true,
 					httpAgent: scanState.httpAgent,
 					httpsAgent: scanState.httpsAgent,
 					responseType: 'stream',
@@ -373,6 +383,7 @@ export class CategoryScanner {
 				nrOfRetries: 5,
 				rampUpConnections: true,
 				httpOptions: {
+					publicArchive: true,
 					responseType: undefined,
 					socketTimeoutMs: 10000,
 					httpAgent: scanState.httpAgent,

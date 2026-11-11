@@ -3,12 +3,14 @@ import type { Logger } from 'logger';
 import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import { BackfillArchiveMetadata } from '../BackfillArchiveMetadata.js';
 import type { HistoryArchiveStateRepository } from '@history-scan-coordinator/domain/history-archive-state/HistoryArchiveStateRepository.js';
+import { ok } from 'neverthrow';
+import type { HttpService } from 'http-helper';
 
 describe('BackfillArchiveMetadata', () => {
 	let scanRepositoryMock: MockProxy<ScanRepository>;
 	let stateRepositoryMock: MockProxy<HistoryArchiveStateRepository>;
 	let loggerMock: MockProxy<Logger>;
-	let fetchSpy: jest.SpiedFunction<typeof fetch>;
+	let httpService: MockProxy<HttpService>;
 	let backfillArchiveMetadata: BackfillArchiveMetadata;
 
 	beforeEach(() => {
@@ -16,19 +18,19 @@ describe('BackfillArchiveMetadata', () => {
 		scanRepositoryMock = mock<ScanRepository>();
 		stateRepositoryMock = mock<HistoryArchiveStateRepository>();
 		loggerMock = mock<Logger>();
-		fetchSpy = jest.spyOn(globalThis, 'fetch');
+		httpService = mock<HttpService>();
 		scanRepositoryMock.findDiscoveredUrlsMissingArchiveState.mockResolvedValue(
 			[]
 		);
 		backfillArchiveMetadata = new BackfillArchiveMetadata(
 			scanRepositoryMock,
 			stateRepositoryMock,
-			loggerMock
+			loggerMock,
+			httpService
 		);
 	});
 
 	afterEach(() => {
-		fetchSpy.mockRestore();
 		jest.useRealTimers();
 	});
 
@@ -37,9 +39,12 @@ describe('BackfillArchiveMetadata', () => {
 			['https://history.example.com/']
 		);
 		scanRepositoryMock.backfillSelectedArchiveMetadata.mockResolvedValue(true);
-		fetchSpy.mockResolvedValue(
-			new Response(JSON.stringify(createHistoryArchiveState()), {
-				status: 200
+		httpService.get.mockResolvedValue(
+			ok({
+				data: createHistoryArchiveState(),
+				status: 200,
+				statusText: 'OK',
+				headers: {}
 			})
 		);
 
@@ -53,9 +58,12 @@ describe('BackfillArchiveMetadata', () => {
 			failedCount: 0,
 			failures: []
 		});
-		expect(fetchSpy).toHaveBeenCalledWith(
-			'https://history.example.com/.well-known/stellar-history.json',
+		expect(httpService.get).toHaveBeenCalledWith(
 			expect.objectContaining({
+				value: 'https://history.example.com/.well-known/stellar-history.json'
+			}),
+			expect.objectContaining({
+				publicArchive: true,
 				headers: { accept: 'application/json' }
 			})
 		);
@@ -83,13 +91,16 @@ describe('BackfillArchiveMetadata', () => {
 		scanRepositoryMock.findUrlsMissingSelectedArchiveMetadata.mockResolvedValue(
 			[]
 		);
-		scanRepositoryMock.findDiscoveredUrlsMissingArchiveState.mockResolvedValue(
-			['https://node-history.example.com/']
-		);
+		scanRepositoryMock.findDiscoveredUrlsMissingArchiveState.mockResolvedValue([
+			'https://node-history.example.com/'
+		]);
 		scanRepositoryMock.backfillSelectedArchiveMetadata.mockResolvedValue(false);
-		fetchSpy.mockResolvedValue(
-			new Response(JSON.stringify(createHistoryArchiveState()), {
-				status: 200
+		httpService.get.mockResolvedValue(
+			ok({
+				data: createHistoryArchiveState(),
+				status: 200,
+				statusText: 'OK',
+				headers: {}
 			})
 		);
 
@@ -116,8 +127,13 @@ describe('BackfillArchiveMetadata', () => {
 		scanRepositoryMock.findUrlsMissingSelectedArchiveMetadata.mockResolvedValue(
 			['https://history.example.com']
 		);
-		fetchSpy.mockResolvedValue(
-			new Response(JSON.stringify({ currentLedger: 'bad' }), { status: 200 })
+		httpService.get.mockResolvedValue(
+			ok({
+				data: { currentLedger: 'bad' },
+				status: 200,
+				statusText: 'OK',
+				headers: {}
+			})
 		);
 
 		const result = await backfillArchiveMetadata.execute({ limit: 1 });
@@ -131,8 +147,7 @@ describe('BackfillArchiveMetadata', () => {
 			failures: [
 				{
 					archiveUrl: 'https://history.example.com',
-					error:
-						'History archive state response did not match expected shape'
+					error: 'History archive state response did not match expected shape'
 				}
 			]
 		});
@@ -142,7 +157,8 @@ describe('BackfillArchiveMetadata', () => {
 		expect(stateRepositoryMock.saveFailure).toHaveBeenCalledWith(
 			expect.objectContaining({
 				archiveUrl: 'https://history.example.com',
-				stateUrl: 'https://history.example.com/.well-known/stellar-history.json',
+				stateUrl:
+					'https://history.example.com/.well-known/stellar-history.json',
 				status: 'invalid',
 				errorType: 'invalid_shape',
 				source: 'backfill'

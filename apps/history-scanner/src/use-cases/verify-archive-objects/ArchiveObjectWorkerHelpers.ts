@@ -25,6 +25,11 @@ export function mapArchiveObjectHttpError(
 	error: unknown
 ): HistoryArchiveObjectFailureDTO {
 	if (isHttpError(error)) {
+		if (error.code === 'PUBLIC_ARCHIVE_POLICY')
+			return scannerIssueFailure({
+				error,
+				errorType: 'archive_destination_refused'
+			});
 		return archiveAvailabilityFailure({
 			error,
 			errorType: error.response

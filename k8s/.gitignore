@@ -1,0 +1,2 @@
+# Operator-supplied inputs for legacy overlays. Never commit their contents.
+**/.secrets/

@@ -12,6 +12,7 @@ export function archiveListingFetch(httpService: HttpService): typeof fetch {
 		const url = Url.create(rawUrl);
 		if (url.isErr()) throw url.error;
 		const result = await httpService.get(url.value, {
+			publicArchive: true,
 			responseType: 'arraybuffer',
 			requestTimeoutMs: 5_000,
 			socketTimeoutMs: 5_000,
