@@ -44,6 +44,10 @@ const transferSchema: OpenApiRecord = {
 			description:
 				'7 for classic/native assets; null when a contract scale is not known.'
 		},
+		paymentEvidence: {
+			type: 'string', nullable: true, enum: ['mainnet-successful-payment', null],
+			description: 'Opt-in evidence=payment: exact classic payment matched to a successful published transaction and hash-verified mainnet envelope. Null or absent is unverified, not failed. No claim for Soroban/custom event execution.'
+		},
 		asset: {
 			type: 'object',
 			additionalProperties: false,
@@ -93,6 +97,7 @@ function query(
 	return { in: 'query', name, description, required: false, schema };
 }
 const parameters: readonly OpenApiRecord[] = [
+	query('evidence', 'payment verifies only this page against successful mainnet classic-payment envelopes in one bounded batch. Requires a classic account and limit <=20. Missing or conflicting evidence stays unknown.', { type: 'string', enum: ['payment'] }),
 	query(
 		'account',
 		'Either sender, recipient, or muxed recipient. Directional filters are combined with AND.'

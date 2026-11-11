@@ -8,6 +8,8 @@ import { LocalDateTime } from '../local-date-time';
 import { transferFields, transferTransactionReference } from './transfer-investigation-route';
 import { useTransferInvestigation } from './use-transfer-investigation';
 import styles from './transfer-activity-panel.module.css';
+import { detectAddressPoisoning } from '../../domain/address-poisoning';
+import { AddressPoisoningNotice, TransferAddress } from './address-poisoning-notice';
 const sample: TransferFilters = {
 	asset: 'native',
 	event_topic: 'transfer',
@@ -30,6 +32,7 @@ function TransferActivityView({ activity }: {
 	const id = useId();
 	const [filters, setFilters] = useState<TransferFilters>(activity.filters);
 	const { page: result, error, busy, requestPath } = activity;
+	const matches = result ? detectAddressPoisoning(activity.filters.account?.trim() ?? '', result.transfers) : [];
 
 	return (
 		<section className={styles.panel} aria-labelledby={id} aria-busy={busy}>
@@ -112,6 +115,10 @@ function TransferActivityView({ activity }: {
 			{requestPath && <code className={styles.request}>GET {requestPath}</code>}
 			{result && (
 				<>
+					<AddressPoisoningNotice matches={matches} />
+					{activity.filters.account && <p>Address-poisoning checks cover only this page’s verified classic payments.
+						Dust: up to 0.01 XLM after a positive payment; matching first 5 and last 4 address characters.
+						Missing history or unverified transfers do not establish safety.</p>}
 					<p>
 						Returned window: ledgers{' '}
 						{result.watermark.minimumLedger.toLocaleString()}–
@@ -138,9 +145,9 @@ function TransferActivityView({ activity }: {
 											<LocalDateTime dateTime={row.closedAt} />
 										</dd>
 										<dt>From</dt>
-										<dd>{row.from ?? 'not supplied'}</dd>
+										<dd><TransferAddress key={row.from} address={row.from} match={matches.find(match => match.attackingAddress === row.from)} /></dd>
 										<dt>To</dt>
-										<dd>{row.toMuxed ?? row.to ?? 'not supplied'}</dd>
+										<dd><TransferAddress key={row.toMuxed ?? row.to} address={row.toMuxed ?? row.to} match={matches.find(match => match.attackingAddress === (row.toMuxed ?? row.to))} /></dd>
 										<dt>Transaction</dt>
 										<dd>{transaction.href
 											? <ExplorerLink href={transaction.href}>{transaction.label}</ExplorerLink>

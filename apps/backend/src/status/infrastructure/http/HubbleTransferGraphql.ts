@@ -25,6 +25,7 @@ export const hubbleTransferSchema = `
 		maxAmountRaw: String
 		limit: Int
 		after: String
+		evidence: String
 	}
 	type HubbleTransferPage {
 		transfers: [HubbleTransfer!]!
@@ -60,6 +61,7 @@ export const hubbleTransferSchema = `
 		eventTopic: String!
 		amountRaw: String!
 		amountScale: Int
+		paymentEvidence: String
 	}
 `;
 

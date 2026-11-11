@@ -15,6 +15,8 @@ export interface HubbleTransferInput {
 	readonly maxAmountRaw?: string;
 	readonly limit?: number;
 	readonly after?: string;
+	/** Opt-in bounded verification of classic payments against successful mainnet envelopes. */
+	readonly evidence?: 'payment';
 }
 
 export interface HubbleTransferAsset {
@@ -41,6 +43,8 @@ export interface HubbleTransfer {
 	readonly amountRaw: string;
 	/** Decimal places for classic assets only; unknown contract scales stay null. */
 	readonly amountScale: number | null;
+	/** Null/absent is unverified, not a failed payment. Never inferred from event text. */
+	readonly paymentEvidence?: 'mainnet-successful-payment' | null;
 }
 
 export interface HubbleTransferWatermark {

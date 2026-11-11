@@ -22,7 +22,8 @@ const allowedFields = new Set([
 	'minAmountRaw',
 	'maxAmountRaw',
 	'limit',
-	'after'
+	'after',
+	'evidence'
 ]);
 
 export function normalizeHubbleTransferInput(
@@ -97,6 +98,9 @@ export function normalizeHubbleTransferInput(
 	if (result.minLedger !== undefined && result.maxLedger !== undefined)
 		validateTransferLedgerRange(result.minLedger, result.maxLedger);
 	values.limit ??= 100;
+	if (values.evidence !== undefined && (values.evidence !== 'payment' ||
+		typeof values.account !== 'string' || !/^G[A-Z2-7]{55}$/.test(values.account) || Number(values.limit) > 20))
+		fail('Payment evidence requires evidence=payment, a classic account and limit at most 20');
 	return values as HubbleTransferInput;
 }
 

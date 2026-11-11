@@ -24,6 +24,8 @@ describe('transfer activity client', () => {
 		expect(params.has('account')).toBe(false);
 	});
 	it('uses encoded asset routes and never coerces amount precision', () => {
+		expect(new URLSearchParams(buildTransferActivityPath({ account: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF' }).split('?')[1]).get('evidence')).toBe('payment');
+		expect(new URLSearchParams(buildTransferActivityPath({ asset: 'native' }).split('?')[1]).has('evidence')).toBe(false);
 		expect(buildTransferActivityPath({ asset: 'USD:GISSUER' })).toContain(
 			'/assets/USD%3AGISSUER/activity/transfers?'
 		);

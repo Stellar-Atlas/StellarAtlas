@@ -18,6 +18,7 @@ export interface TransferActivity {
 	eventTopic: string;
 	amountRaw: string;
 	amountScale: number | null;
+	paymentEvidence?: 'mainnet-successful-payment' | null;
 }
 export interface TransferActivityPage {
 	transfers: TransferActivity[];
@@ -57,6 +58,7 @@ export function buildTransferActivityPath(
 			encodeURIComponent(params.get('account')!) +
 			'/activity/transfers';
 		params.delete('account');
+		if (/^G[A-Z2-7]{55}$/.test(filters.account?.trim() ?? '')) params.set('evidence', 'payment');
 	} else if (params.has('asset')) {
 		path =
 			'/v1/analytics/assets/' +
@@ -115,6 +117,7 @@ function transfer(value: unknown, allowUnrecordedHash: boolean): value is Transf
 		typeof value.amountRaw === 'string' &&
 		/^-?\d+$/.test(value.amountRaw) &&
 		(value.amountScale === null || typeof value.amountScale === 'number') &&
+		(value.paymentEvidence === undefined || value.paymentEvidence === null || value.paymentEvidence === 'mainnet-successful-payment') &&
 		record(value.asset) &&
 		typeof value.asset.id === 'string' &&
 		typeof value.asset.type === 'string' &&
