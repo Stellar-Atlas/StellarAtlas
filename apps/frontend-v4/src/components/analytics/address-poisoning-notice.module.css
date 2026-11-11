@@ -1,0 +1,22 @@
+.notice {
+	border: 1px solid var(--state-warning-border);
+	border-left: 4px solid var(--yellow);
+	border-radius: .5rem;
+	background: var(--state-warning-bg);
+	padding: 1rem;
+	min-width: 0;
+}
+.notice h3, .dialog h3 { margin: 0 0 .6rem; color: var(--state-warning-ink); font-size: 1rem; }
+.match + .match { margin-top: 1rem; border-top: 1px solid var(--state-warning-border); padding-top: 1rem; }
+.comparison { display: grid; gap: .65rem; margin: .8rem 0; }
+.comparison div { min-width: 0; }
+.comparison dt { font-size: .8rem; color: var(--muted); margin-bottom: .25rem; }
+.comparison dd { margin: 0; font-family: var(--font-mono, monospace); overflow-wrap: anywhere; line-height: 1.6; }
+.comparison mark { background: var(--state-warning-border); color: var(--ink); border-radius: 2px; }
+.address { display: inline-flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
+.address a { min-width: 0; overflow-wrap: anywhere; font-family: var(--font-mono, monospace); }
+.address button { font-size: .75rem; padding: .2rem .4rem; }
+.links { display: flex; flex-wrap: wrap; gap: 1rem; }
+.dialog { box-sizing: border-box; width: min(42rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; border: 1px solid var(--state-warning-border); border-radius: .6rem; padding: 1.25rem; color: var(--ink); background: var(--panel); }
+.dialog::backdrop { background: #000a; }
+.dialog .links button { padding: .6rem .8rem; font-size: .85rem; }

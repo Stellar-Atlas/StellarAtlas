@@ -22,8 +22,14 @@ describe('transfer activity client', () => {
 		expect(params.get('min_amount_raw')).toBe('9007199254740993001');
 		expect(params.get('after')).toBe('opaque+/=');
 		expect(params.has('account')).toBe(false);
+		expect(params.get('limit')).toBe('25');
+		for (const limit of ['25', '50', '100'])
+			expect(new URLSearchParams(buildTransferActivityPath({ limit }).split('?')[1]).get('limit')).toBe(limit);
+		expect(() => buildTransferActivityPath({ limit: '200' })).toThrow('25, 50 or 100');
 	});
 	it('uses encoded asset routes and never coerces amount precision', () => {
+		expect(new URLSearchParams(buildTransferActivityPath({ account: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF' }).split('?')[1]).get('evidence')).toBe('payment');
+		expect(new URLSearchParams(buildTransferActivityPath({ asset: 'native' }).split('?')[1]).has('evidence')).toBe(false);
 		expect(buildTransferActivityPath({ asset: 'USD:GISSUER' })).toContain(
 			'/assets/USD%3AGISSUER/activity/transfers?'
 		);

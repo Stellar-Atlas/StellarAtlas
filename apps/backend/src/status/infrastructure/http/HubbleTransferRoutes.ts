@@ -23,7 +23,8 @@ const queryNames: Readonly<Record<string, keyof HubbleTransferInput>> = {
 	min_amount_raw: 'minAmountRaw',
 	max_amount_raw: 'maxAmountRaw',
 	limit: 'limit',
-	after: 'after'
+	after: 'after',
+	evidence: 'evidence'
 };
 
 export function registerHubbleTransferRoutes(

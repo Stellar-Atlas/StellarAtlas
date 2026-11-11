@@ -218,7 +218,10 @@ describe('bounded exact transfer activity', () => {
 		{ limit: 201 },
 		{ after: 'not-a-cursor' },
 		{ eventTopic: 'payment' },
-		{ unknown: 'value' }
+		{ unknown: 'value' },
+		{ evidence: 'payment', account: transferAccount, limit: 101 },
+		{ evidence: 'payment', limit: 10 },
+		{ evidence: 'all', account: transferAccount, limit: 10 }
 	])('rejects invalid inputs without running fact SQL: %j', async (input) => {
 		const { executor, requests } = fixture();
 		await expect(

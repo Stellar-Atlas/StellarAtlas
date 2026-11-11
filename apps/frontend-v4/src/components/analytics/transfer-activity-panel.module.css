@@ -47,6 +47,8 @@
 .actions button:disabled {
 	opacity: 0.5;
 }
+.pageSize { display: flex; align-items: center; gap: .6rem; font-size: .85rem; }
+.pageSize select { padding: .45rem .65rem; border: 1px solid var(--border); border-radius: .3rem; background: var(--field); color: var(--ink); font: inherit; }
 .request {
 	display: block;
 	overflow-wrap: anywhere;

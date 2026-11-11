@@ -9,6 +9,7 @@ import {
 	transferFilterFingerprint
 } from './HubbleTransferCursor.js';
 import { mapHubbleTransfer, transferPosition } from './HubbleTransferMapper.js';
+import { verifyTransferPayments } from './HubbleTransferPaymentEvidence.js';
 import { normalizeHubbleTransferInput } from './HubbleTransferValidation.js';
 import { HubbleWarehouseUnavailableError } from './HubbleWarehouseErrors.js';
 import {
@@ -96,7 +97,10 @@ export async function queryHubbleTransferActivity(
 			'Transfer warehouse exceeded the bounded page size'
 		);
 	const selected = rows.slice(0, limit);
-	const transfers = selected.map(mapHubbleTransfer);
+	const mapped = selected.map(mapHubbleTransfer);
+	const transfers = input.evidence === 'payment'
+		? await verifyTransferPayments(executor, mapped)
+		: mapped;
 	const last = selected.at(-1);
 	return {
 		transfers,

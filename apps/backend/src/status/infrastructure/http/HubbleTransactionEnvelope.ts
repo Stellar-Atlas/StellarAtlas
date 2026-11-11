@@ -10,12 +10,19 @@ export function transactionEnvelopeOperations(
 	envelope: string,
 	hash: string
 ): readonly unknown[] | null {
+	return verifiedTransactionEnvelope(envelope, hash)?.operations ?? null;
+}
+
+export function verifiedTransactionEnvelope(envelope: string, hash: string): {
+	readonly source: string;
+	readonly operations: readonly unknown[];
+} | null {
 	try {
 		const parsed = TransactionBuilder.fromXDR(envelope, Networks.PUBLIC);
 		if (Buffer.from(parsed.hash()).toString('hex') !== hash) return null;
 		const transaction =
 			parsed instanceof FeeBumpTransaction ? parsed.innerTransaction : parsed;
-		return transaction.operations;
+		return { source: transaction.source, operations: transaction.operations };
 	} catch {
 		return null;
 	}
