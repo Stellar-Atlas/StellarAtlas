@@ -143,7 +143,8 @@ test('TOML input cannot write a prototype property', () => {
 			try {
 				toml.parse(input);
 			} catch (error) {
-				assert.equal(error.name, 'SyntaxError');
+				assert.ok(error instanceof Error);
+				assert.match(error.message, /Cannot redefine existing key/);
 			}
 			assert.equal(Object.prototype.archiveSecurityProbe, undefined);
 		}
