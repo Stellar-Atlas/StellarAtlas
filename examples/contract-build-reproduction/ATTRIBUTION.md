@@ -23,6 +23,19 @@ Changes for this example:
 - `wasm-target.sha256` records checksums of the matching Rust 1.80.1
   `wasm32-unknown-unknown` target files. It contains no target binaries.
 
+## Historical security warning
+
+These pinned dependencies have known security advisories, including the
+[Soroban contract macro dispatch issue](https://github.com/stellar/rs-soroban-sdk/security/advisories/GHSA-4chv-4c6w-w254)
+and
+[SDK range arithmetic issue](https://github.com/stellar/rs-soroban-sdk/security/advisories/GHSA-96xm-fv9w-pf3f).
+They are preserved to identify historical reproducibility evidence, not as a
+secure current development template or recommended dependency baseline for new
+contracts or deployments. Run this recipe only in the developer guide's
+credential-free, isolated, network-disabled sandbox; do not deploy its output.
+Do not update the retained lock or hashes to clear an advisory: changed inputs
+require a separately qualified recipe and new comparison evidence.
+
 The example does not redistribute the complete upstream source tree,
 dependency sources or tool binaries. Their applicable licenses and notices
 must accompany any separate redistribution. The developer guide records the

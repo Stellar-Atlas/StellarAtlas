@@ -19,6 +19,23 @@ export const contractReproductionSection: DeveloperGuidePage['sections'][number]
 					provenance API does not run this recipe or return a reproduction
 					status.
 				</p>
+				<p>
+					<strong>Historical security warning.</strong> These pinned
+					dependencies have known advisories, including the{' '}
+					<a href="https://github.com/stellar/rs-soroban-sdk/security/advisories/GHSA-4chv-4c6w-w254">
+						contract macro dispatch issue
+					</a>{' '}
+					and{' '}
+					<a href="https://github.com/stellar/rs-soroban-sdk/security/advisories/GHSA-96xm-fv9w-pf3f">
+						SDK range arithmetic issue
+					</a>
+					. This is not a secure current development template or recommended
+					dependency baseline for new contracts or deployments. Run it only in
+					the credential-free, isolated, network-disabled sandbox below; do not
+					deploy its output. Retain the exact historical lock, tool and output
+					identities for this comparison. Changed inputs require a separately
+					qualified recipe and new comparison evidence.
+				</p>
 				<h3>Prepare and identify the inputs</h3>
 				<p>
 					Obtain the{' '}

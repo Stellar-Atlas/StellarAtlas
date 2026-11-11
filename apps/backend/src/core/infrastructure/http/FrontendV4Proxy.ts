@@ -1,4 +1,9 @@
 import type { NextFunction, Request, Response } from 'express';
+import http, { type ClientRequest, type IncomingMessage } from 'node:http';
+import https from 'node:https';
+import { Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 
 const previewPathPattern = /^\/new-ui(?:[/?\\#]|$)/;
 const nextAssetPathPattern = /^\/_next(?:[/?\\#]|$)/;
@@ -56,7 +61,7 @@ function validatePathAndQuery(path: string, query: string): void {
 	}
 }
 
-function buildTargetUrl(originalUrl: string, origin: URL): URL {
+function buildTargetPath(originalUrl: string): string {
 	const queryIndex = originalUrl.indexOf('?');
 	const pathname = queryIndex < 0 ? originalUrl : originalUrl.slice(0, queryIndex);
 	const query = queryIndex < 0 ? '' : originalUrl.slice(queryIndex);
@@ -64,17 +69,14 @@ function buildTargetUrl(originalUrl: string, origin: URL): URL {
 		? pathname
 		: pathname.slice('/new-ui'.length) || '/';
 	validatePathAndQuery(path, query);
-	// Assign components: caller input must never be resolved as a URL authority.
-	const target = new URL(origin.href);
+	// Normalize only the origin-form path; no caller-controlled URL reaches transport.
+	const target = new URL('http://stellaratlas.invalid');
 	target.pathname = path;
 	target.search = query;
-	if (
-		target.origin !== origin.origin ||
-		decodeURIComponent(target.pathname) !== decodeURIComponent(path)
-	) {
+	if (decodeURIComponent(target.pathname) !== decodeURIComponent(path)) {
 		throw new InvalidPreviewPath();
 	}
-	return target;
+	return target.pathname + target.search;
 }
 
 function previewLocation(location: string, target: URL): string {
@@ -90,21 +92,27 @@ function previewLocation(location: string, target: URL): string {
 	return prefix + redirect.pathname + redirect.search + redirect.hash;
 }
 
-async function readBoundedBody(response: globalThis.Response): Promise<Buffer> {
-	const length = response.headers.get('content-length');
-	if (length && Number(length) > maximumResponseBytes) {
+async function readBoundedBody(
+	response: IncomingMessage,
+	signal: AbortSignal
+): Promise<Buffer> {
+	const encoding = response.headers['content-encoding']?.trim().toLowerCase();
+	const decoder = !encoding || encoding === 'identity' ? undefined
+		: encoding === 'gzip' ? createGunzip()
+			: encoding === 'deflate' ? createInflate()
+				: encoding === 'br' ? createBrotliDecompress() : null;
+	if (decoder === null) throw new Error('Unsupported upstream encoding');
+	const length = response.headers['content-length'];
+	if (!decoder && length && Number(length) > maximumResponseBytes) {
 		throw new Error('Upstream response too large');
 	}
-	if (!response.body) return Buffer.alloc(0);
-	const reader = response.body.getReader();
 	let body = Buffer.alloc(64 * 1024);
 	let size = 0;
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
+	const sink = new Writable({
+		write(value: Buffer, _encoding, done) {
 			if (value.byteLength > maximumResponseBytes - size) {
-				throw new Error('Upstream response too large');
+				done(new Error('Upstream response too large'));
+				return;
 			}
 			if (size + value.byteLength > body.length) {
 				const grown = Buffer.alloc(
@@ -116,14 +124,13 @@ async function readBoundedBody(response: globalThis.Response): Promise<Buffer> {
 			}
 			body.set(value, size);
 			size += value.byteLength;
+			done();
 		}
-		return body.subarray(0, size);
-	} catch (error) {
-		void reader.cancel().catch(() => undefined);
-		throw error;
-	} finally {
-		reader.releaseLock();
-	}
+	});
+	// pipeline destroys the socket-facing response, decoder and sink on any failure.
+	if (decoder) await pipeline(response, decoder, sink, { signal });
+	else await pipeline(response, sink, { signal });
+	return body.subarray(0, size);
 }
 
 async function proxyFrontendV4(req: Request, res: Response): Promise<void> {
@@ -134,46 +141,52 @@ async function proxyFrontendV4(req: Request, res: Response): Promise<void> {
 	}
 
 	const configuredOrigin = getFrontendV4Origin();
-	const targetUrl = buildTargetUrl(req.originalUrl, configuredOrigin);
+	const requestPath = buildTargetPath(req.originalUrl);
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), upstreamTimeoutMs);
 	const onClose = (): void => controller.abort();
 	res.once('close', onClose);
+	let outbound: ClientRequest | undefined;
+	let upstream: IncomingMessage | undefined;
 	try {
-		// Enforce the complete trusted authority again at the outbound boundary.
-		if (
-			targetUrl.origin !== configuredOrigin.origin ||
-			targetUrl.protocol !== configuredOrigin.protocol ||
-			targetUrl.hostname !== configuredOrigin.hostname ||
-			targetUrl.port !== configuredOrigin.port ||
-			targetUrl.username !== '' ||
-			targetUrl.password !== ''
-		) {
-			throw new Error('Untrusted preview destination');
-		}
-		const response = await fetch(targetUrl, {
-			headers: {
-				accept: req.get('accept') ?? '*/*',
-				'user-agent': req.get('user-agent') ?? 'stellaratlas-preview-proxy'
-			},
-			method: req.method,
-			redirect: 'manual',
-			signal: controller.signal
+		const transport = configuredOrigin.protocol === 'https:' ? https : http;
+		const response = await new Promise<IncomingMessage>((resolve, reject) => {
+			// Authority fields come only from trusted configuration. Native requests
+			// take the validated caller input solely as path and never follow redirects.
+			outbound = transport.request({
+				protocol: configuredOrigin.protocol,
+				hostname: configuredOrigin.hostname.replace(/^\[|\]$/g, ''),
+				port: configuredOrigin.port || undefined,
+				path: requestPath,
+				method: req.method,
+				headers: {
+					accept: req.get('accept') ?? '*/*',
+					'accept-encoding': 'gzip, deflate, br',
+					'user-agent': req.get('user-agent') ?? 'stellaratlas-preview-proxy'
+				},
+				signal: controller.signal
+			}, (message) => {
+				upstream = message;
+				resolve(message);
+			});
+			outbound.once('error', reject);
+			outbound.end();
 		});
-		const location = response.headers.get('location');
+		const status = response.statusCode ?? 502;
+		const location = response.headers.location;
 		let redirect: string | undefined;
 		if (location) {
 			try {
-				redirect = previewLocation(location, targetUrl);
+				redirect = previewLocation(location, new URL(requestPath, configuredOrigin));
 			} catch {
 				throw new Error('Invalid upstream redirect');
 			}
 		}
-		const noBody = req.method === 'HEAD' || [204, 205, 304].includes(response.status);
-		const body = noBody ? undefined : await readBoundedBody(response);
-		res.status(response.status);
+		const noBody = req.method === 'HEAD' || [204, 205, 304].includes(status);
+		const body = noBody ? undefined : await readBoundedBody(response, controller.signal);
+		res.status(status);
 		for (const headerName of ['cache-control', 'content-type', 'etag', 'last-modified']) {
-			const value = response.headers.get(headerName);
+			const value = response.headers[headerName];
 			if (value) res.setHeader(headerName, value);
 		}
 		if (redirect) res.setHeader('location', redirect);
@@ -182,6 +195,8 @@ async function proxyFrontendV4(req: Request, res: Response): Promise<void> {
 	} finally {
 		clearTimeout(timeout);
 		controller.abort();
+		outbound?.destroy();
+		upstream?.destroy();
 		res.removeListener('close', onClose);
 	}
 }
