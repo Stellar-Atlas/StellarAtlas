@@ -1,380 +1,118 @@
-# Monorepo for StellarAtlas project
+# StellarAtlas
 
-[![Known Vulnerabilities](https://snyk.io/test/github/Stellar-Atlas/StellarAtlas/badge.svg)](https://snyk.io/test/github/Stellar-Atlas/StellarAtlas)
-[![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat-square)](https://github.com/prettier/prettier)
+StellarAtlas is a Stellar network intelligence and observability platform. It
+combines validator and organization monitoring, quorum and SCP analysis, history
+archive verification, and an explorer over ingested ledger data.
 
-## About
+Use the [website](https://stellaratlas.io), [developer guides](https://stellaratlas.io/docs),
+and [public OpenAPI schema](https://api.stellaratlas.io/docs/openapi.json) for the
+public application and API contracts.
 
-StellarAtlas is a Stellar network, monitoring, data validatation and observability platform. Providing monitoring and analytics as a service for the Stellar network and its validators and organizations. It collects and visualizes network data with
-the ability to time-travel, has simulation options, provides REST APIs for
-integration, implements email notifications, scans validator history archives
-for errors and provides educational tools to aid in understanding the Stellar
-Consensus Protocol.
+## Components and data flow
 
-## Architecture
+| Component | Role |
+| --- | --- |
+| [Next.js frontend](apps/frontend-v4) | Current React application, explorer, network and archive views, and generated API documentation. |
+| [Legacy Vue frontend](apps/frontend) | Retained Vite application and compatibility journeys, including legacy notification screens. |
+| [Backend API](apps/backend) | TypeScript/Express API with REST and GraphQL reads, network SSE and WebSocket streams for network, status and warehouse updates. |
+| [Network scanning](apps/backend/src/network-scan) | Collects validator and organization observations, metadata and SCP evidence using the shared crawler and node connector. |
+| [Archive coordinator](apps/backend/src/history-scan-coordinator) and [scanner workers](apps/history-scanner) | Assign archive verification jobs, track leases and progress, and persist evidence and results. Workers run separately and report through the coordinator API. |
+| [Full-history ETL](apps/full-history-etl) | Go validation and conversion of ledger-close metadata into immutable range artifacts, including lossless XDR/Zstandard replay and typed Parquet projections. |
+| [Parsed-history importer](apps/hubble-etl) | Go workers ingest retained ledger-close metadata into the ClickHouse warehouse used by explorer queries. |
+| [Users service](apps/users) and [notifications](apps/backend/src/notifications) | Subscription, confirmation and email-delivery support with explicit service configuration. |
 
-This monorepo is organized into several main components:
+Network observations and archive scan results feed PostgreSQL-backed API views.
+The history pipeline validates source batches, publishes artifacts and catalogue
+metadata, and advances recorded coverage. ClickHouse supplies parsed historical
+queries to the API, which serves the frontend and other clients.
 
-### Apps
+- **PostgreSQL** holds application records, scan coordination and evidence,
+  history catalogue/checkpoints, and configured identity and verification state.
+- **Parquet and replay artifacts** provide immutable batch downloads and inputs
+  for offline processing. Their manifests identify schemas, source ranges and
+  hashes.
+- **ClickHouse** holds the analytical warehouse populated by the parsed-history
+  importer. API results expose the relevant coverage, observation or watermark
+  information.
 
-- **Backend** ([apps/backend](apps/backend/README.md)) - Core application with
-  three major modules:
+History coverage and supported datasets vary by pipeline and endpoint. Check
+returned ranges, freshness and completeness fields before using a result as
+network-wide or current-state evidence. The [ETL contract](apps/full-history-etl/README.md)
+explains artifact representations and opt-in formats.
 
-  - Network-scan: Collects and updates network data
-  - Notifications: Handles user subscriptions and email notifications
-  - History-scanner-coordinator: Determines scan schedule, persists and exposes
-    scan results.
+## Availability and trust boundaries
 
-  Provides REST APIs documented using the OpenAPI standard.
+The independently hosted [status site](ops/cloudflare/status) records sampled
+readiness checks and incident history. The [origin failover gateway](ops/cloudflare/origin-failover)
+can serve selected saved public reads. Saved data carries capture times and has
+limited route and data coverage. See the [public status page](https://status.stellaratlas.io).
 
-- **Frontend** ([apps/frontend](apps/frontend/README.MD)) - Vue.js based web
-  dashboard
-- **Users** ([apps/users](apps/users/README.md)) - User email microservice
+[Account verification and developer authentication](apps/backend/src/status/infrastructure/verification)
+require their explicit configuration, authentication and review boundaries.
+GitHub sign-in support requires provider credentials and validated ingress.
+Directory evidence, account-control verification and signed contract build
+attestations answer different questions. The contract catalogue reports stored
+build observations. Independent reproduction and security-audit assessments
+remain explicit in the response.
 
-- **History-scanner**
-  ([apps/history-scanner](apps/history-scanner/README.md)) - History Scanner
-  microservice/worker
+[Self-hosted analytics](ops/analytics/README.md) uses Plausible Community Edition
+for browser pageviews/product actions and API-request events. Its validated event
+receivers and protected dashboards have separate privacy and measurement contracts.
+Browser opt-out/GPC handling and API request-count semantics are documented in
+the [traffic contract](ops/analytics/TRAFFIC.md).
 
-### Packages
+Optional integrations and feature flags require their own configuration and
+qualification. A tracked implementation does not establish its activation or
+complete data coverage. The [builders SDK plan](docs/builders-sdk-plan.md) remains
+a design proposal. Dated roadmap and release documents describe their stated
+milestones rather than the current runtime inventory.
 
-- **Crawler** ([packages/crawler](packages/crawler/)) - Stellar network crawler
-  that identifies nodes and determines their status
-- **Shared** ([packages/shared](packages/shared/)) - Common code used by both
-  frontend and backend, including DTO classes and TrustGraph calculations
-- **SCP Simulation** ([packages/scp-simulation](packages/scp-simulation/)) -
-  Educational implementation of the Stellar Consensus Protocol
-- **Node Connector** ([packages/node-connector](packages/node-connector/)) -
-  Nodejs package to connect to Stellar nodes
-- Various utility packages
+## Development
 
-### Apps communication
+Use Node.js **26.x** and pnpm **10.12.1**, as declared in
+[package.json](package.json). Go components declare their toolchains separately
+in their `go.mod` files. The pnpm workspace contains the TypeScript applications
+and shared packages. Backend compilation uses TypeScript project references.
+Next.js and legacy Vue have separate build scripts.
 
-Backend, frontend and users share data through REST API's.
-
-### Development
-
-The project uses:
-
-- Nodejs on the backend
-- Vuejs on the frontend using Vite build system
-- REST for API's
-- TypeScript with unified configuration inherited from tsconfig.base.json
-- pnpm for package management and monorepo setup
-- Jest for testing
-- ESLint for code quality
-- Docker/Devcontainer support for development environments
-- OpenAPI documentation
-
-### Database
-
-- PostgreSQL for data persistence
-- Automatic migrations on first run (TypeORM)
-- Separate test database instance for integration testing
-
-### Deployment
-
-![C4 Containers Model](architecture-c4-containers.png)
-
-Adheres to
-[twelve factor app methodology](https://en.wikipedia.org/wiki/Twelve-Factor_App_methodology)
-for easy deployment on Heroku.
-
-For history scanning think carefully about network traffic and costs when
-choosing a provider.
-
-## Devcontainer development
-
-For easy development a devcontainer configuration is provided in the
-.devcontainer folder: <https://containers.dev/>
-
-You can develop on github codespaces or localy using vscode and devcontainers
-extension.
-
-A debian docker image with non-root user 'node' is used with nodejs and rust
-support. Two postgress databases are added for development and integration
-testing. A persistant volume is created linked to the remote 'workspace' folder.
-
-Also works with podman.
-
-Container config and postgresql credentials:
+Prepare an isolated checkout with local service configuration. Start from the
+backend [environment template](apps/backend/.env.dist) and the Next.js
+[environment example](apps/frontend-v4/.env.example), supplying your own local
+database connection and application settings. Keep credentials outside source.
+The [devcontainer configuration](.devcontainer) provides an optional starting
+point for tooling and PostgreSQL.
 
 ```sh
-cd .devcontainer
-cat docker-compose.yml
-```
-
-## Dev Container Usage
-
-The StellarAtlas project includes a development container configuration to simplify the development environment setup. This allows you to work in a consistent environment, whether locally or in GitHub Codespaces.
-
-### What is a Dev Container?
-
-A dev container is a Docker-based development environment that includes all the necessary tools, libraries, and dependencies pre-installed. It ensures consistency across development environments and eliminates the need for manual setup.
-
-### Features of the Dev Container
-
-- Pre-installed Node.js, npm, and pnpm for JavaScript/TypeScript development.
-- Pre-installed Git for version control.
-- PostgreSQL databases for development and integration testing.
-- Persistent volume for workspace data.
-- Non-root user `node` for security.
-- Rust support for specific packages.
-
-### Steps to Use the Dev Container
-
-1. **Install Prerequisites**:
-   - Install [Docker](https://www.docker.com/) on your machine.
-   - Install [Visual Studio Code](https://code.visualstudio.com/).
-   - Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) in VS Code.
-
-2. **Open the Project in the Dev Container**:
-   - Open the StellarAtlas project folder in VS Code.
-   - Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) to open the Command Palette.
-   - Select `Dev Containers: Reopen in Container`.
-
-3. **Wait for the Container to Build**:
-   - The first time you open the project in the dev container, it will build the container image. This may take a few minutes.
-   - Once the container is built, VS Code will automatically connect to it.
-
-4. **Verify the Environment**:
-   - Open a terminal in VS Code and run the following commands to verify the setup:
-
-     ```sh
-     node --version
-     pnpm --version
-     psql --version
-     ```
-
-5. **Run the Project**:
-   - Install dependencies:
-
-     ```bash
-     pnpm install
-     ```
-
-   - Build the project:
-
-    ```bash
-     pnpm build
-     ```
-
-   - Start the development environment:
-
-     ```bash
-     pnpm dev
-     ```
-
-6. **Access the Services**:
-   - Backend API: `http://localhost:3000`
-   - Frontend: `http://localhost:5173`
-
-### Notes
-
-- The dev container uses a `.devcontainer` folder for its configuration. You can inspect or modify the configuration files if needed.
-- PostgreSQL credentials and other environment variables are defined in the `.env` files. Ensure these files are correctly set up before running the project.
-- The dev container also works with Podman as an alternative to Docker.
-
-By using the dev container, you can ensure a consistent and hassle-free development experience. Let me know if you need further assistance!
-
-## install
-
-### Node.js and pnpm version requirements
-
-This monorepo requires specific versions of Node.js and pnpm, as defined in the `engines` key in the root `package.json`:
-
-```js
-  "engines": {
-    "node": "26.x",
-    "pnpm": "10.12.1"
-  }
-```
-
-#### Why is the `engines` key necessary?
-
-- **Consistency:** Ensures all developers and CI environments use the same versions, preventing subtle bugs and incompatibilities.
-- **Compatibility:** Some dependencies and scripts require Node.js 26.x and pnpm 10.12.1. Using other versions can cause build or runtime errors.
-- **Monorepo tooling:** pnpm 10.x is required for correct workspace and dependency management in this monorepo setup.
-
-#### Why these versions?
-
-- **Node.js 26.x** is the production runtime target for this codebase.
-- **pnpm 10.12.1** is the tested package manager version for this monorepo.
-
-#### How to install the correct versions
-
-If you encounter errors related to Node.js or pnpm versions, follow these steps:
-
-1. **Check your current versions:**
-
-   ```bash
-   node --version
-   pnpm --version
-   ```
-
-2. **Install Node.js 26.x:**
-   - Use [nvm](https://github.com/nvm-sh/nvm):
-
-     ```bash
-     nvm install 26
-     nvm use 26
-     ```
-
-   - Or download from [nodejs.org](https://nodejs.org/en/download/).
-3. **Install pnpm 10.12.1:**
-
-   ```bash
-   corepack enable
-   corepack prepare pnpm@10.12.1 --activate
-   ```
-
-4. After installing the correct versions, proceed with:
-
-```bash
-pnpm install
-```
-
-Afterwards, implement the necessary .env files (based on .env.dist) in the applications.
-
----
-
-## list available commands
-
-```sh
-pnpm run
-```
-
-## development
-
-### backend and packages
-
-```sh
+pnpm install --frozen-lockfile
 pnpm build:ts
+pnpm build:frontend-v4:staging
 ```
 
-### frontend and API
+Review pending backend migrations with `pnpm migrations:backend`. Applying them
+is a separate explicit command, `pnpm migrations:backend:apply`, after reviewing
+the target database and migration set.
+
+For the configured API and Next.js staging build, use separate terminals.
 
 ```sh
-pnpm dev
-```
-
-This will start the api on port 3000 and the frontend hot reload environment.
-API (backend) is not hot reloaded on changes. You have to manually stop and
-restart pnpm serve.
-
-## build
-
-```bash
-pnpm build
-```
-
-## run the app (in production)
-
-Make sure to build first.
-
-### Start the backend API
-
-Start REST API that exposes all data. Used by frontend.
-
-Source: apps/backend/core/infrastructure/http
-
-```bash
 pnpm start:api
+pnpm start:frontend-v4:staging
 ```
 
-### Start the frontend server and serve the website
+The tracked Next.js `dev` script directs development to production-mode staging
+builds. Root `pnpm dev` and `pnpm start:frontend` target the legacy Vue application.
+Next.js staging and production use separate build directories and release
+commands. Inspect [its scripts](apps/frontend-v4/package.json) when choosing a
+build, start, promotion or rollback operation.
 
-Host the web dashboard.
+Use `pnpm run` to list root commands. Common checks include `pnpm lint`,
+`pnpm test:unit:backend` and `pnpm test:unit:frontend`. Integration tests require
+configured test services, including a separate PostgreSQL database. Scanners,
+ingestion workers, email delivery and optional integrations have their own
+configuration and resource requirements. Run those components deliberately
+rather than treating a frontend start command as a full deployment.
 
-source: apps/frontend
-
-```bash
-pnpm start:frontend
-```
-
-### Run a stellar network scan (recommended: use dedicated worker or machine)
-
-Scans the a stellar network, detects nodes and validators, fetches geo data,
-performs network analysis,...
-
-Source: apps/backend/network-scan
-
-```bash
-pnpm start:scan-network 1 0
-```
-
-First argument controls if it should loop the scans (.env file in backend can
-supply a loop time interval), second argument controls if it's a dry run.
-
-### Run a history scan (recommended: use a dedicated machine)
-
-Fetches all known history archives from db and scans and verifies their content.
-Source: apps/backend/history-scan
-
-```sh
-pnpm start:scan-history 1 1
-```
-
-First argument controls persisting the results, the second argument if you want
-to loop the scanning forever.
-
-## typescript monorepo configuration
-
-The pure typescript packages and apps (backend, crawler, shared,...) have their
-tsconfigs linked through references in the root tsconfig.json and composite:true
-value in the local tsconfigs.
-
-They inherit common typescript settings from root tsconfig.base.json.
-
-When running build on top level, typescript compiler only recompiles changed
-apps/packages and does this in the correct order.
-
-To compile:
-
-```sh
-pnpm build:ts
-
-```
-
-The frontend is separate because it uses vite to build. To build frontend and
-all other apps and packages:
-
-```sh
-
-pnpm build
-
-```
-
-## eslint monorepo configuration
-
-Eslint is defined at the top level using the esling.config.mjs file. Every
-project needs to be defined here to enable linting.
-
-run linting:
-
-```sh
-pnpm lint
-```
-
-## testing
-
-Using Jest
-
-### unit
-
-```sh
-pnpm test:unit
-```
-
-### integration
-
-Using jest, needs postgres instance
-
-```sh
-pnpm test:integration
-```
-
-### run all tests (ci)
-
-```sh
-pnpm test:all
-```
+Shared [DTOs and graph utilities](packages/shared), the [crawler](packages/crawler),
+[node connector](packages/node-connector), and [SCP simulation](packages/scp-simulation)
+are maintained in the same repository. The project is licensed under
+[MIT](license), with component-specific attribution where included.
