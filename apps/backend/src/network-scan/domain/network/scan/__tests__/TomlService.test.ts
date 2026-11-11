@@ -205,7 +205,8 @@ describe('tomlService', () => {
 			const result = await tomlService.fetchToml('my-domain.com');
 
 			expect(result.isErr()).toBeTruthy();
-			expect(httpService.get).toHaveBeenCalledTimes(2);
+			// HTTP 404 is terminal under the shared retry policy, not a TLS failure.
+			expect(httpService.get).toHaveBeenCalledTimes(1);
 			expect(
 				httpService.get.mock.calls.some(
 					(call) => call[1]?.httpsAgent?.options.rejectUnauthorized === false
