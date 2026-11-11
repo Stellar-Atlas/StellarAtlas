@@ -133,12 +133,24 @@ async function proxyFrontendV4(req: Request, res: Response): Promise<void> {
 		return;
 	}
 
-	const targetUrl = buildTargetUrl(req.originalUrl, getFrontendV4Origin());
+	const configuredOrigin = getFrontendV4Origin();
+	const targetUrl = buildTargetUrl(req.originalUrl, configuredOrigin);
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), upstreamTimeoutMs);
 	const onClose = (): void => controller.abort();
 	res.once('close', onClose);
 	try {
+		// Enforce the complete trusted authority again at the outbound boundary.
+		if (
+			targetUrl.origin !== configuredOrigin.origin ||
+			targetUrl.protocol !== configuredOrigin.protocol ||
+			targetUrl.hostname !== configuredOrigin.hostname ||
+			targetUrl.port !== configuredOrigin.port ||
+			targetUrl.username !== '' ||
+			targetUrl.password !== ''
+		) {
+			throw new Error('Untrusted preview destination');
+		}
 		const response = await fetch(targetUrl, {
 			headers: {
 				accept: req.get('accept') ?? '*/*',
