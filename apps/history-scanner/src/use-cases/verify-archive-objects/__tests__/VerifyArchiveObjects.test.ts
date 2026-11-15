@@ -132,7 +132,7 @@ describe('VerifyArchiveObjects', () => {
 				statusText: 'OK'
 			})
 		);
-		bucketCache.verifyAndStore.mockResolvedValue(
+		bucketCache.verifyOnly.mockResolvedValue(
 			err(new BucketCacheFailure('source-stream', new Error('aborted')))
 		);
 
@@ -163,6 +163,7 @@ describe('VerifyArchiveObjects', () => {
 		);
 		expect(delivery.acknowledge).toHaveBeenCalledTimes(1);
 		expect(delivery.retry).not.toHaveBeenCalled();
+		expect(bucketCache.verifyAndStore).not.toHaveBeenCalled();
 	});
 
 	it('reports a worker outcome without sending a redundant object heartbeat', async () => {

@@ -363,13 +363,14 @@ export class VerifyArchiveObjects {
 					releaseDownloadPermit();
 				}
 			);
-			response.value.data.on('error', (error) => counter.destroy(error));
-			const countedStream = response.value.data.pipe(counter);
-			const verifyResult = await this.bucketCache.verifyAndStore(
-				job.bucketHash.toLowerCase(),
-				countedStream,
-				(streamToVerify) => verifyBucketHash(streamToVerify, job.bucketHash!)
-			);
+			const responseData = response.value.data;
+			responseData.on('error', (error) => counter.destroy(error));
+			const countedStream = responseData.pipe(counter);
+			const verifyResult = await this.bucketCache
+				.verifyOnly(countedStream, (streamToVerify) =>
+					verifyBucketHash(streamToVerify, job.bucketHash!)
+				)
+				.finally(() => responseData.destroy());
 			if (verifyResult.isErr()) {
 				if (verifyResult.error.kind === 'source-stream') {
 					return err(

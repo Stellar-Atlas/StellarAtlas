@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
+import { createHash } from 'node:crypto';
+import { createGunzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { mock } from 'jest-mock-extended';
 import type { Logger } from 'logger';
@@ -82,6 +84,83 @@ describe('BucketCache failure channels', () => {
 			failureChannel: 'scanner_issue',
 			kind: 'cache-storage'
 		});
+	});
+
+	it('verifies without touching a cache root that is a regular file', async () => {
+		const cacheRoot = join(temporaryDirectory, 'cache-root-file');
+		await writeFile(cacheRoot, 'root remains a file');
+		const cache = new BucketCache(cacheRoot, 1024, mock<Logger>());
+		let verified = '';
+
+		const result = await cache.verifyOnly(
+			Readable.from(Buffer.from('remote bytes')),
+			async (stream) => {
+				for await (const chunk of stream) verified += chunk.toString();
+				return ok(undefined);
+			}
+		);
+
+		expect(result.isOk()).toBe(true);
+		expect(verified).toBe('remote bytes');
+		expect(await readFile(cacheRoot, 'utf8')).toBe('root remains a file');
+	});
+
+	it('preserves content and source-stream failure classifications in verifyOnly', async () => {
+		const cache = new BucketCache(temporaryDirectory, 1024, mock<Logger>());
+		const mismatch = await cache.verifyOnly(
+			Readable.from(Buffer.from('remote bytes')),
+			async () => err(new Error('hash mismatch'))
+		);
+		expect(mismatch._unsafeUnwrapErr()).toMatchObject({
+			failureChannel: 'archive_evidence',
+			kind: 'content-verification',
+			message: 'hash mismatch'
+		});
+
+		const source = new Readable({
+			read() {
+				this.destroy(new Error('aborted'));
+			}
+		});
+		const sourceFailure = await cache.verifyOnly(source, async (stream) => {
+			try {
+				await pipeline(stream, async function* (chunks) {
+					for await (const chunk of chunks) yield chunk;
+				});
+				return ok(undefined);
+			} catch (error) {
+				return err(error instanceof Error ? error : new Error(String(error)));
+			}
+		});
+		expect(sourceFailure._unsafeUnwrapErr()).toMatchObject({
+			failureChannel: 'archive_evidence',
+			kind: 'source-stream',
+			message: 'aborted'
+		});
+	});
+
+	it('classifies invalid gzip as content verification and destroys its source', async () => {
+		const cache = new BucketCache(temporaryDirectory, 1024, mock<Logger>());
+		const source = new Readable({
+			read() {
+				this.push(Buffer.from('not gzip data'));
+			}
+		});
+
+		const result = await cache.verifyOnly(source, async (stream) => {
+			try {
+				await pipeline(stream, createGunzip(), createHash('sha256'));
+				return ok(undefined);
+			} catch (error) {
+				return err(error instanceof Error ? error : new Error(String(error)));
+			}
+		});
+
+		expect(result._unsafeUnwrapErr()).toMatchObject({
+			failureChannel: 'archive_evidence',
+			kind: 'content-verification'
+		});
+		expect(source.destroyed).toBe(true);
 	});
 
 	it('does not block a verified write on a fresh shared maintenance marker', async () => {
