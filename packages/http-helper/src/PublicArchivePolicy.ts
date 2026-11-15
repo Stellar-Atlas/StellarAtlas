@@ -1,5 +1,9 @@
 import { lookup, type LookupAddress } from 'node:dns';
-import { Agent as HttpAgent } from 'node:http';
+import {
+	Agent as HttpAgent,
+	type ClientRequest,
+	type ClientRequestArgs
+} from 'node:http';
 import { Agent as HttpsAgent } from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import type { AxiosRequestConfig } from 'axios';
@@ -94,6 +98,92 @@ const agentOptions = {
 };
 const publicHttpAgent = new HttpAgent(agentOptions);
 const publicHttpsAgent = new HttpsAgent(agentOptions);
+releaseForeignIdleCapacity(publicHttpAgent);
+releaseForeignIdleCapacity(publicHttpsAgent);
+
+function releaseForeignIdleCapacity(agent: HttpAgent): void {
+	// Native Node 26 exposes these members without @types declarations; forward
+	// its addRequest entry point unchanged, including this and legacy/rest args.
+	type NativeRequest = ClientRequest & {
+		onSocket(socket: undefined, error: Error): void;
+	};
+	type NativeAgent = HttpAgent & {
+		readonly options: ClientRequestArgs & { servername?: string };
+		readonly totalSocketCount: number;
+		addRequest(
+			this: NativeAgent,
+			request: NativeRequest,
+			...args: unknown[]
+		): void;
+	};
+	const native = agent as NativeAgent;
+	const addRequest = native.addRequest;
+	native.addRequest = function (
+		this: NativeAgent,
+		request: NativeRequest,
+		...args: unknown[]
+	): void {
+		const options = args[0];
+		if (
+			typeof options === 'object' &&
+			options !== null &&
+			!Array.isArray(options) &&
+			this.totalSocketCount >= this.maxTotalSockets
+		) {
+			const effective = { ...options, ...this.options };
+			if (effective.socketPath) effective.path = effective.socketPath;
+			if (!effective.servername && effective.servername !== '') {
+				const host = request.getHeader('host');
+				if (host !== undefined && typeof host !== 'string')
+					return addRequest.call(this, request, ...args);
+				let servername = effective.host;
+				if (host) {
+					const end = host.indexOf(']');
+					servername =
+						host[0] === '['
+							? end === -1 ? host : host.substring(1, end)
+							: host.split(':', 1)[0];
+				}
+				effective.servername =
+					typeof servername === 'string'
+						? isIP(servername) ? '' : servername
+						: undefined;
+			}
+			const origin = this.getName(effective);
+			if (
+				!this.freeSockets[origin]?.some((socket) => !socket.destroyed) &&
+				(this.sockets[origin]?.length ?? 0) < this.maxSockets
+			) {
+				const active = new Set(
+					Object.values(this.sockets).flatMap((sockets) => sockets ?? [])
+				);
+				for (const [name, sockets] of Object.entries(this.freeSockets)) {
+					if (name === origin) continue;
+					const idle = sockets?.find(
+						(socket) =>
+							!socket.destroyed && socket.writable && !active.has(socket)
+					);
+					if (!idle) continue;
+					// Native close bookkeeping runs first. Forward even cancellations
+					// so native ClientRequest cleanup still emits its terminal events.
+					idle.once('close', () => {
+						try {
+							addRequest.call(this, request, ...args);
+						} catch (error) {
+							request.onSocket(
+								undefined,
+								error instanceof Error ? error : new Error(String(error))
+							);
+						}
+					});
+					idle.destroy();
+					return;
+				}
+			}
+		}
+		return addRequest.call(this, request, ...args);
+	};
+}
 
 export function requirePublicArchiveUrl(value: string): URL {
 	if (/[\\\s\p{Cc}]/u.test(value)) throw policyError();
