@@ -9,6 +9,7 @@ import type {
 import type { FullHistoryCheckpointCandidateRepository } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidateRepository.js';
 import {
 	FullHistoryLedgerObservationsMissingError,
+	FullHistoryTransactionObservationsMissingError,
 	FullHistoryPromotionError
 } from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import { FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
@@ -203,7 +204,7 @@ async function loadCandidate(
 		fullHistoryObservedTransactionBoundsSql,
 		[sources.ledger.remoteId]
 	)) as TransactionBoundsRow[];
-	validateTransactionBounds(boundsRows);
+	validateTransactionBounds(boundsRows, target, sources.ledger.remoteId);
 	const envelopeRows = (await manager.query(fullHistoryObservedEnvelopesSql, [
 		sources.ledger.remoteId,
 		FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT + 1
@@ -243,7 +244,9 @@ async function loadCandidate(
 }
 
 function validateTransactionBounds(
-	rows: readonly TransactionBoundsRow[]
+	rows: readonly TransactionBoundsRow[],
+	target: FullHistoryPromotionTarget,
+	ledgerObjectRemoteId: string
 ): void {
 	const bounds = rows[0];
 	if (rows.length !== 1 || bounds === undefined) {
@@ -258,14 +261,22 @@ function validateTransactionBounds(
 		readFullHistoryDatabaseBigint(bounds.envelopeBytes) +
 		readFullHistoryDatabaseBigint(bounds.resultBytes);
 	if (
-		envelopeCount !== resultCount ||
 		envelopeCount > BigInt(FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT) ||
+		resultCount > BigInt(FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT) ||
 		encodedBytes > maximumCheckpointBase64Bytes
 	) {
 		throw promotionError(
 			'xdr-bound-exceeded',
 			'Observed transaction XDR counts or bytes exceed the checkpoint bound'
 		);
+	}
+	if (envelopeCount !== resultCount) {
+		throw new FullHistoryTransactionObservationsMissingError({
+			checkpointLedger: target.checkpointLedger,
+			ledgerObjectRemoteId,
+			envelopeCount: envelopeCount.toString(),
+			resultCount: resultCount.toString()
+		});
 	}
 }
 
