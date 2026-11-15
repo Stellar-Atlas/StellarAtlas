@@ -21,7 +21,7 @@ const builds = [
 	}
 ];
 const goBinary =
-	process.env.GO_BIN ?? '/home/observe/.local/toolchains/go1.26.5/bin/go';
+	process.env.GO_BIN ?? '/home/observe/.local/toolchains/go1.26.11/bin/go';
 
 await access(goBinary, constants.X_OK);
 for (const build of builds) {

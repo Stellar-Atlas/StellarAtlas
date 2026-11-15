@@ -5,6 +5,7 @@ import express, {
   type Response,
 } from "express";
 import { rewriteApiDocsHtml } from "./api-docs-proxy.js";
+import { compatibilityRedirect, InvalidProxyPath, proxyRequest } from "./proxy-transport.js";
 
 const defaultPort = 3000;
 const assetCacheTimeMs = 86_400_000 * 7;
@@ -66,10 +67,6 @@ function stripPathPrefix(path: string, prefix: string): string {
   return stripped.length === 0 ? "/" : stripped;
 }
 
-function getModernCompatibilityRedirect(path: string): string {
-  return stripPathPrefix(path, "/new-ui");
-}
-
 function getApiDocsPath(path: string): string {
   return `/docs${stripPathPrefix(path, "/api-docs")}`;
 }
@@ -88,58 +85,6 @@ function getForwardHeaders(req: Request): Record<string, string> {
     headers["user-agent"] ?? "stellaratlas-frontend-proxy";
 
   return headers;
-}
-
-function readRequestBody(req: Request): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
-
-async function proxyRequest(
-  req: Request,
-  res: Response,
-  origin: string,
-  path: string,
-  transformBody?: (body: Buffer, response: globalThis.Response) => Buffer,
-): Promise<void> {
-  const targetUrl = new URL(path, origin);
-  const hasBody = req.method !== "GET" && req.method !== "HEAD";
-  const requestBody = hasBody ? await readRequestBody(req) : undefined;
-
-  const response = await fetch(targetUrl, {
-    body: requestBody,
-    headers: getForwardHeaders(req),
-    method: req.method,
-  });
-
-  res.status(response.status);
-
-  for (const headerName of [
-    "access-control-allow-origin",
-    "cache-control",
-    "content-type",
-    "etag",
-    "location",
-  ]) {
-    const headerValue = response.headers.get(headerName);
-    if (headerValue) res.setHeader(headerName, headerValue);
-  }
-  if (transformBody) res.setHeader("cache-control", "no-store");
-
-  if (req.method === "HEAD") {
-    res.end();
-    return;
-  }
-
-  const upstreamBody = Buffer.from(await response.arrayBuffer());
-  const responseBody = transformBody
-    ? transformBody(upstreamBody, response)
-    : upstreamBody;
-  res.send(responseBody);
 }
 
 function rewriteApiDocsBody(
@@ -216,7 +161,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     return;
   }
 
-  res.redirect(308, getModernCompatibilityRedirect(req.originalUrl));
+  try {
+    res.redirect(308, compatibilityRedirect(req.originalUrl));
+  } catch {
+    res.status(400).send("Invalid compatibility path");
+  }
 });
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -237,8 +186,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     res,
     getApiOrigin(),
     targetPath,
+    getForwardHeaders(req),
     apiDocsPathPattern.test(req.path) ? rewriteApiDocsBody : undefined,
   ).catch((error) => {
+    if (error instanceof InvalidProxyPath) {
+      res.status(400).send("Invalid proxy path");
+      return;
+    }
     const message = error instanceof Error ? error.message : "Proxy failed";
     res.status(502).send(`API unavailable: ${message}`);
   });
@@ -250,8 +204,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     return;
   }
 
-  proxyRequest(req, res, getFrontendV4Origin(), req.originalUrl).catch(
+  proxyRequest(req, res, getFrontendV4Origin(), req.originalUrl, getForwardHeaders(req)).catch(
     (error) => {
+      if (error instanceof InvalidProxyPath) {
+        res.status(400).send("Invalid proxy path");
+        return;
+      }
       if (shouldServeModernFallback(req)) {
         req.url = "/legacy/index.html";
         next();

@@ -26,6 +26,7 @@
 <script lang="ts" setup>
 import { computed, watch, ref, nextTick } from "vue";
 import { federatedVotingStore } from "@/store/useFederatedVotingStore";
+import { escapeEventText } from "./escape-event-text";
 import {
   AcceptVoteVBlocked,
   VoteRatified,
@@ -78,6 +79,7 @@ const nodeEvents = computed(() => {
     .map((event: any) => {
       const nodeId = event.publicKey;
       const statement = event.statement.toString();
+      const statementText = escapeEventText(statement);
 
       const result = {
         nodeId,
@@ -90,26 +92,26 @@ const nodeEvents = computed(() => {
       if (event instanceof AcceptVoteVBlocked) {
         const vBlockingSet = Array.from(event.vBlockingSet);
         result.eventClass = "vblocking-event";
-        result.message = `V-Blocking set accepted "<span class="statement-text">${result.statement}</span>"`;
+        result.message = `V-Blocking set accepted "<span class="statement-text">${statementText}</span>"`;
 
         if (props.selectedNodeId && vBlockingSet.length > 0) {
-          result.details = `<span class="node-list">${vBlockingSet.join(", ")}</span>`;
+          result.details = `<span class="node-list">${escapeEventText(vBlockingSet.join(", "))}</span>`;
         }
       } else if (event instanceof VoteRatified) {
         const quorum = Array.from(event.quorum.keys());
         result.eventClass = "ratified-event";
-        result.message = `Quorum ratified "<span class="statement-text">${result.statement}</span>"`;
+        result.message = `Quorum ratified "<span class="statement-text">${statementText}</span>"`;
 
         if (props.selectedNodeId && quorum.length > 0) {
-          result.details = `<span class="node-list">${quorum.join(", ")}</span>`;
+          result.details = `<span class="node-list">${escapeEventText(quorum.join(", "))}</span>`;
         }
       } else if (event instanceof AcceptVoteRatified) {
         const quorum = Array.from(event.quorum.keys());
         result.eventClass = "confirmed-event";
-        result.message = `Quorum ratified Accept("<span class="statement-text">${result.statement}</span>")`;
+        result.message = `Quorum ratified Accept("<span class="statement-text">${statementText}</span>")`;
 
         if (props.selectedNodeId && quorum.length > 0) {
-          result.details = `<span class="node-list">${quorum.join(", ")}</span>`;
+          result.details = `<span class="node-list">${escapeEventText(quorum.join(", "))}</span>`;
         }
       }
 
