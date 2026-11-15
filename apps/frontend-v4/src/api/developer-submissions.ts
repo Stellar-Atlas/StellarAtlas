@@ -30,6 +30,10 @@ export type SubmissionResponse = { readonly kind: 'saved'; readonly submission: 
 export type SubmissionCapability = { readonly kind: 'available'; readonly retentionDays: number }
 	| { readonly kind: 'disabled' } | { readonly kind: 'unavailable' };
 
+export function readDeveloperSubmissionId(value: unknown): string | null {
+	return typeof value === 'string' && uuid.test(value) ? value : null;
+}
+
 function record(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

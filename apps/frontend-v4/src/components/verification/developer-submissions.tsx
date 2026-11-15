@@ -22,8 +22,9 @@ const messages: Record<SubmissionError['kind'], string> = {
 	busy: 'Verification is busy. Wait before retrying.'
 };
 
-export function DeveloperSavedSubmissions({ session, onSessionExpired }: {
+export function DeveloperSavedSubmissions({ session, initialId = null, onSessionExpired }: {
 	readonly session: Session;
+	readonly initialId?: string | null;
 	readonly onSessionExpired: () => void;
 }): React.JSX.Element {
 	const [capability, setCapability] = useState<SubmissionCapability | { readonly kind: 'checking' }>({ kind: 'checking' });
@@ -32,6 +33,7 @@ export function DeveloperSavedSubmissions({ session, onSessionExpired }: {
 	const [repository, setRepository] = useState('');
 	const [commit, setCommit] = useState('');
 	const [attempt, setAttempt] = useState<Attempt | null>(null);
+	const [restoreId, setRestoreId] = useState(initialId);
 	const [saved, setSaved] = useState<SavedSubmission | null>(null);
 	const [error, setError] = useState<SubmissionError | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -64,23 +66,42 @@ export function DeveloperSavedSubmissions({ session, onSessionExpired }: {
 	}, [retryAt]);
 
 	function accept(response: SubmissionResponse): void {
-		if (response.kind === 'saved') { setSaved(response.submission); setError(null); setRetryAt(0); }
+		if (response.kind === 'saved') {
+			setSaved(response.submission); setError(null); setRetryAt(0);
+			setContractId(response.submission.request.contractId);
+			setRepository(response.submission.request.repository);
+			setCommit(response.submission.request.commit);
+		}
 		else {
 			setError(response);
 			if (response.kind === 'busy') setRetryAt(response.retryAt ?? Date.now() + 60_000);
 			if (response.kind === 'signed-out') expired.current();
 		}
 	}
+	useEffect(() => {
+		if (!restoreId || session.kind !== 'signed-in' || capability.kind !== 'available') return;
+		const controller = new AbortController();
+		active.current = controller;
+		setBusy(true);
+		void readDeveloperSubmission(restoreId, controller.signal).then(response => {
+			if (alive.current && !controller.signal.aborted) accept(response);
+		}).finally(() => {
+			if (active.current === controller) active.current = null;
+			if (alive.current && !controller.signal.aborted) setBusy(false);
+		});
+		return () => controller.abort();
+	}, [restoreId, session.kind, capability.kind]);
 
 	async function run(mode: 'save' | 'read', request: Attempt | null = attempt): Promise<void> {
 		if (active.current || session.kind !== 'signed-in' || capability.kind !== 'available' || retryAt > Date.now()) return;
-		if ((mode === 'save' && !request) || (mode === 'read' && !saved)) return;
+		const readId = saved?.id ?? restoreId;
+		if ((mode === 'save' && !request) || (mode === 'read' && !readId)) return;
 		const controller = new AbortController();
 		active.current = controller;
 		setBusy(true);
 		setError(null);
 		try {
-			const response = mode === 'read' ? await readDeveloperSubmission(saved!.id, controller.signal)
+			const response = mode === 'read' ? await readDeveloperSubmission(readId!, controller.signal)
 				: await saveDeveloperSubmission(request!.input, request!.key, controller.signal);
 			if (!controller.signal.aborted && alive.current) accept(response);
 		} finally {
@@ -103,7 +124,7 @@ export function DeveloperSavedSubmissions({ session, onSessionExpired }: {
 
 	function submit(event: FormEvent<HTMLFormElement>): void {
 		event.preventDefault();
-		if (attempt || active.current) return;
+		if (attempt || saved || restoreId || active.current) return;
 		const input = submissionInput({ contractId: contractId.trim(), repository: repository.trim(), commit: commit.trim().toLowerCase() });
 		if (!input) { setError({ kind: 'invalid' }); return; }
 		try {
@@ -114,9 +135,9 @@ export function DeveloperSavedSubmissions({ session, onSessionExpired }: {
 	}
 	function startAnother(): void {
 		if (active.current || retryAt > Date.now()) return;
-		setAttempt(null); setSaved(null); setError(null);
+		setAttempt(null); setSaved(null); setRestoreId(null); setError(null);
 	}
-	const locked = busy || attempt !== null;
+	const locked = busy || attempt !== null || saved !== null || restoreId !== null;
 	return <section className={styles.section} aria-labelledby="developer-saved-requests">
 		<h3 id="developer-saved-requests">Saved verification requests</h3>
 		{capability.kind === 'checking' ? <p role="status">Checking saved-request availability…</p>
@@ -135,19 +156,19 @@ export function DeveloperSavedSubmissions({ session, onSessionExpired }: {
 									value={repository} onChange={event => setRepository(event.target.value)} /></label>
 								<label>Source commit (40 hex characters)<input required maxLength={40} autoComplete="off" spellCheck={false} disabled={locked}
 									value={commit} onChange={event => setCommit(event.target.value)} /></label>
-								{!attempt && <div className={styles.actions}><button type="submit" disabled={busy}>Save and check build</button></div>}
+								{!attempt && !saved && !restoreId && <div className={styles.actions}><button type="submit" disabled={busy}>Save and check build</button></div>}
 							</form>
-							{busy && <p role="status">{saved ? 'Refreshing saved result…' : 'Saving and checking published evidence…'}</p>}
+							{busy && <p role="status">{saved || restoreId ? 'Loading saved result…' : 'Saving and checking published evidence…'}</p>}
 							{error && <p role="alert">{saved && error.kind === 'unavailable' ? 'The saved result could not be refreshed. Try again.' : messages[error.kind]}{error.kind === 'wrong-origin' &&
 								<> <a href="https://stellaratlas.io/developer/verification">Open main site</a></>}</p>}
 							{retryAt > 0 && <p role="status">Retry after {new Date(retryAt).toLocaleTimeString()}.</p>}
 							{saved && <DeveloperSubmissionResult value={saved} />}
 							<div className={styles.actions}>
-								{attempt && error && !saved && <button type="button" disabled={busy || retryAt > Date.now()}
+								{attempt && error && !saved && !restoreId && <button type="button" disabled={busy || retryAt > Date.now()}
 									onClick={() => void run('save')}>Retry same request</button>}
-								{saved && error && <button type="button" disabled={busy || retryAt > Date.now()}
+								{(saved || restoreId) && error && <button type="button" disabled={busy || retryAt > Date.now()}
 									onClick={() => void run('read')}>Refresh saved result</button>}
-								{attempt && !busy && saved?.status !== 'checking' && <button type="button" disabled={retryAt > Date.now()}
+								{(attempt || saved || restoreId) && !busy && saved?.status !== 'checking' && <button type="button" disabled={retryAt > Date.now()}
 									onClick={startAnother}>Start a new request</button>}
 							</div>
 						</>}

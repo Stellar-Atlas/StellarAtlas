@@ -21,13 +21,14 @@ const record = (status = 'checking', outcome = 'unavailable') => ({ id,
 	result: status === 'checking' ? null : { status: outcome, evidence: null },
 	contractOwnership: 'not_assessed', independentReproduction: 'not_assessed', securityAudit: 'not_assessed' });
 let session: DeveloperSession;
+let initialId: string | null;
 type Element = React.ReactElement<Record<string, unknown>>;
 function elements(node: React.ReactNode): Element[] {
 	if (Array.isArray(node)) return node.flatMap(elements);
 	if (!React.isValidElement<Record<string, unknown>>(node)) return [];
 	return [node, ...elements(node.props.children as React.ReactNode)];
 }
-const render = () => harness.render(() => DeveloperSavedSubmissions({ session, onSessionExpired: expired }));
+const render = () => harness.render(() => DeveloperSavedSubmissions({ session, initialId, onSessionExpired: expired }));
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const html = () => renderToStaticMarkup(render());
 function click(label: string) {
@@ -49,6 +50,7 @@ beforeEach(() => {
 	harness.reset(); send.mockReset(); expired.mockReset();
 	jest.useFakeTimers({ doNotFake: ['setImmediate'] });
 	session = { kind: 'signed-in', expiresAt: Date.now() + 60_000 };
+	initialId = null;
 	globalThis.fetch = send;
 	Object.defineProperty(globalThis, 'window', { configurable: true,
 		value: { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout } });
@@ -125,4 +127,22 @@ it('aborts an in-flight owner read on unmount and reports session expiry', async
 	send.mockResolvedValueOnce(capability()).mockResolvedValueOnce(new Response(null, { status: 401 }));
 	render(); await settle(); fill(); submit(); await settle();
 	expect(expired).toHaveBeenCalledTimes(1);
+});
+
+it('opens a saved-request link only after sign-in and capability checks, without a new submission', async () => {
+	initialId = id;
+	session = { kind: 'signed-out' };
+	send.mockResolvedValueOnce(capability());
+	render(); await settle(); render();
+	expect(send).toHaveBeenCalledTimes(1);
+	harness.reset();
+	session = { kind: 'signed-in', expiresAt: Date.now() + 60_000 };
+	send.mockResolvedValueOnce(capability()).mockResolvedValueOnce(Response.json(record('completed', 'not_published')));
+	render(); await settle(); render(); await settle();
+	expect(html()).toContain('Open this saved request');
+	expect(html()).toContain('Only available to the GitHub account that saved it');
+	expect(send.mock.calls[2]![0]).toBe('/v1/developer-auth/submissions/' + id);
+	expect(send.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+	submit();
+	expect(send).toHaveBeenCalledTimes(3);
 });

@@ -31,6 +31,7 @@ export function DeveloperSubmissionResult({ value }: { readonly value: SavedSubm
 			<dt>Saved</dt><dd><LocalDateTime dateTime={value.submittedAt} /></dd>
 			<dt>Retained until</dt><dd><LocalDateTime dateTime={value.expiresAt} /></dd>
 		</dl>
+		<p><a href={'/developer/verification?submission=' + value.id}>Open this saved request</a> · Only available to the GitHub account that saved it.</p>
 		<p>GitHub sign-in identifies the submitter, not ownership of this contract or repository.
 			{' '}This checks published attestations; independent source reproduction and a security audit are not assessed.</p>
 		{evidence && <details><summary>Observation scope</summary><p>Network: {value.networkPassphrase}.

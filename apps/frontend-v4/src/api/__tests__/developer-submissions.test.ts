@@ -1,6 +1,6 @@
 import { expect, it, jest } from '@jest/globals';
 import { loadSubmissionCapability, parseSavedSubmission, readDeveloperSubmission, saveDeveloperSubmission,
-	submissionInput } from '../developer-submissions';
+	readDeveloperSubmissionId, submissionInput } from '../developer-submissions';
 
 const input = { contractId: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4', repository: 'owner/repo', commit: 'a'.repeat(40) };
 const id = '12345678-1234-4234-8234-123456789abc';
@@ -24,6 +24,9 @@ it('admits saved requests independently of GitHub sign-in capability', async () 
 });
 
 it('validates exact source and contract inputs without accepting URLs or branches', () => {
+	expect(readDeveloperSubmissionId(id)).toBe(id);
+	expect(readDeveloperSubmissionId([id])).toBeNull();
+	expect(readDeveloperSubmissionId('https://other.example/' + id)).toBeNull();
 	expect(submissionInput(input)).toEqual(input);
 	expect(submissionInput({ ...input, repository: 'Owner/Repo' })?.repository).toBe('owner/repo');
 	for (const invalid of [{ ...input, contractId: 'C'.repeat(56) }, { ...input, repository: 'https://github.com/owner/repo' },
