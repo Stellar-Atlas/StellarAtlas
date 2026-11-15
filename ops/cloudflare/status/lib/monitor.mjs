@@ -27,7 +27,7 @@ export function dataReadiness(body, now) {
     return { ok: false, reasonCode: 'data_unavailable', probeDetail: { kind: 'response', status: 'invalid' } };
   if (now - timestamp >= 300_000)
     return { ok: false, reasonCode: 'data_stale', probeDetail: { kind: 'response', status: 'stale', ageSeconds: Math.min(864000, Math.floor((now - timestamp) / 1000)) } };
-  // This component measures the data service, not archive-verification freshness.
+  // This component measures serving availability, not ingestion or archive freshness.
   for (const check of ['clickhouse', 'publication']) {
     const reported = body?.checks?.[check]?.status;
     if (reported === 'ready') continue;
@@ -36,6 +36,8 @@ export function dataReadiness(body, now) {
     const observed = Date.parse(check === 'publication' && status === 'stale'
       ? body?.checks?.[check]?.latestCompletedAt ?? body?.checks?.[check]?.observedAt : body?.checks?.[check]?.observedAt);
     if (Number.isFinite(observed) && observed <= now) detail.ageSeconds = Math.min(864000, Math.floor((now - observed) / 1000));
+    if (check === 'publication' && ['stale', 'empty', 'incomplete'].includes(status))
+      return { ok: true, reasonCode: 'ok', probeDetail: detail };
     return { ok: false, reasonCode: status === 'stale' ? 'data_stale' : 'data_unavailable', probeDetail: detail };
   }
   return { ok: true, reasonCode: 'ok', probeDetail: null };
@@ -49,8 +51,8 @@ async function probe(url, mode, fetchImpl, clock) {
         headers: { accept: 'application/json', 'cache-control': 'no-cache' },
         redirect: 'manual', signal: AbortSignal.timeout(10_000), cf: { cacheTtl: 0 } });
       let result = { ok: false, probeDetail: { kind: 'http', httpStatus: response.status } };
-      // A composite 503 can still report healthy data checks and an unrelated
-      // archive-summary issue. Inspect the bounded structured response first.
+      // Retain structured failure details, but an actual dependency 503 is not
+      // made operational by a successful ClickHouse check or stale publication.
       if (response.ok || mode === 'data' && response.status === 503) {
         let body;
         try { body = await readJson(response); }
@@ -59,6 +61,8 @@ async function probe(url, mode, fetchImpl, clock) {
         if (body) {
           if (mode === 'data') {
             result = dataReadiness(body, clock());
+            if (result.ok && !response.ok) result = { ok: false, reasonCode: 'data_unavailable',
+              probeDetail: { kind: 'http', httpStatus: response.status } };
             if (!result.ok && !response.ok) result.probeDetail.httpStatus = response.status;
           }
           else if (mode === 'primary') result = body.available === true

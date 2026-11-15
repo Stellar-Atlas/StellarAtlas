@@ -66,6 +66,27 @@ test('unready data is degraded without inventing a primary outage',async()=>{
   await runCheck(f.env,f.options);const s=await readStatus(f.env.DB,f.now());
   assert.equal(s.components.find(x=>x.id==='primary').state,'operational');assert.equal(s.recentIncidents[0].component,'data');
 });
+test('publication lag stays visible without opening an availability incident',async()=>{
+  const f=await fixture(),original=f.options.fetchImpl;
+  f.options.fetchImpl=(url,init)=>String(url).includes('public-goods')?Response.json({status:'not_ready',
+    generatedAt:new Date(f.now()).toISOString(),checks:{clickhouse:{status:'ready'},
+      publication:{status:'stale',latestCompletedAt:new Date(f.now()-90000000).toISOString()}}}):original(url,init);
+  await runCheck(f.env,f.options);const s=await readStatus(f.env.DB,f.now());
+  assert.equal(s.components.find(x=>x.id==='data').state,'operational');
+  assert.deepEqual(s.components.find(x=>x.id==='data').probeDetail,
+    {kind:'readiness',check:'publication',status:'stale',ageSeconds:90000});
+  assert.equal(s.recentIncidents.length,0);
+});
+test('dependency HTTP 503 cannot be hidden by otherwise healthy checks',async()=>{
+  const f=await fixture(),original=f.options.fetchImpl;
+  f.options.fetchImpl=(url,init)=>String(url).includes('public-goods')?Response.json({status:'not_ready',
+    generatedAt:new Date(f.now()).toISOString(),checks:{clickhouse:{status:'ready'},
+      publication:{status:'ready'},archive:{status:'unavailable'}}},{status:503}):original(url,init);
+  await runCheck(f.env,f.options);const s=await readStatus(f.env.DB,f.now());
+  assert.equal(s.components.find(x=>x.id==='data').state,'degraded');
+  assert.deepEqual(s.components.find(x=>x.id==='data').probeDetail,{kind:'http',httpStatus:503});
+  assert.equal(s.recentIncidents[0].component,'data');
+});
 test('history includes cutoff overlaps and marks overflow incomplete',async()=>{
   const f=await fixture(),cutoff=f.now()-90*86400000;
   const insert=f.env.DB.raw.prepare(`INSERT INTO outages
