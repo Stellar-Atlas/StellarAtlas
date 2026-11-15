@@ -29,7 +29,9 @@ export function validateProxyPath(path: string): string {
 
 export function compatibilityRedirect(path: string): string {
   const stripped = path.slice("/new-ui".length);
-  return validateProxyPath(!stripped || stripped.startsWith("?") ? `/${stripped}` : stripped);
+  // A fixed local dot segment pins URL interpretation to this origin. Browsers
+  // normalize /./nodes to /nodes; caller text can never supply an authority.
+  return "/." + validateProxyPath(!stripped || stripped.startsWith("?") ? `/${stripped}` : stripped);
 }
 
 export function configuredProxyOrigin(value: string): URL {

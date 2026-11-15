@@ -1,7 +1,7 @@
 // Usage: node scripts/prepare-hubble-native-companion.mjs ORIGINAL_ARCHIVE FRESH_OUTPUT
 // Requires GNU objcopy 2.42. Consume the output only in an isolated build view;
 // preserve upstream go.sum/cache and retain this helper's JSON provenance.
-// Run from the private build workspace containing both paths. Neither path may
+// Run from the private build workspace containing both paths and an output subdirectory. Neither path may
 // escape that workspace, including through a symbolic link.
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -39,11 +39,11 @@ async function prepare() {
 	if (!original.endsWith(`${sep}${suffix}`)) throw new Error('Unexpected native archive layout');
 	const sourceRoot = resolve(dirname(original), '../../..');
 	const requestedDirectory = resolve(workspace, dirname(process.argv[3]));
-	if (requestedDirectory !== workspace && !requestedDirectory.startsWith(workspace + sep)) {
+	if (!requestedDirectory.startsWith(workspace + sep)) {
 		throw new Error('Output directory must be inside the build workspace');
 	}
 	const outputDirectory = await realpath(requestedDirectory);
-	if (outputDirectory !== workspace && !outputDirectory.startsWith(workspace + sep)) {
+	if (!outputDirectory.startsWith(workspace + sep)) {
 		throw new Error('Output directory symlink leaves the build workspace');
 	}
 	const output = join(outputDirectory, basename(process.argv[3]));

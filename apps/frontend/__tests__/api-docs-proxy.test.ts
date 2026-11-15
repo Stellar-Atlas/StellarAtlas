@@ -17,9 +17,19 @@ describe("legacy proxy target boundary", () => {
     const signedPath = `/v1/history-scan/${encodeURIComponent(signedArchive)}`;
     expect(proxyRequestOptions(origin, signedPath).path).toBe(signedPath);
     expect(proxyInactivityMs).toBe(300_000);
-    expect(compatibilityRedirect("/new-ui/nodes?view=graph")).toBe("/nodes?view=graph");
-    expect(compatibilityRedirect("/new-ui?view=graph")).toBe("/?view=graph");
-    expect(compatibilityRedirect("/new-ui")).toBe("/");
+    expect(compatibilityRedirect("/new-ui/nodes?view=graph")).toBe("/./nodes?view=graph");
+    expect(compatibilityRedirect("/new-ui?view=graph")).toBe("/./?view=graph");
+    expect(compatibilityRedirect("/new-ui")).toBe("/./");
+    for (const [input, expected] of [
+      ["/new-ui/nodes?view=graph", "/nodes?view=graph"],
+      ["/new-ui?view=graph", "/?view=graph"],
+      ["/new-ui", "/"],
+      ["/new-ui/v1/archive%2Fid?signature=abc%2Fdef", "/v1/archive%2Fid?signature=abc%2Fdef"],
+    ]) {
+      const target = new URL(compatibilityRedirect(input), "https://www.stellaratlas.io/new-ui/");
+      expect(target.origin).toBe("https://www.stellaratlas.io");
+      expect(target.pathname + target.search).toBe(expected);
+    }
   });
 
   it("refuses external compatibility and upstream redirects", () => {
