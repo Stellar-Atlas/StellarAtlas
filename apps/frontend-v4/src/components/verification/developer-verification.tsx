@@ -7,6 +7,7 @@ import {
 } from '../../api/developer-verification';
 import { isContractAccount } from '../../domain/classic-account';
 import { ExplorerContractProvenance } from '../blockchain/explorer-contract-provenance';
+import { DeveloperSavedSubmissions } from './developer-submissions';
 import styles from '../blockchain/explorer-entity.module.css';
 
 type View = DeveloperSession | { readonly kind: 'checking' };
@@ -98,7 +99,8 @@ export function DeveloperVerificationAccount({ signIn }: { readonly signIn: Sign
 			{error && <p role="alert">{error === 'busy' ? 'Sign-in is busy. Wait one minute before trying again.'
 				: error === 'wrong-origin' ? <>Use the <a href="https://stellaratlas.io/developer/verification">main StellarAtlas site</a> to sign in or out.</>
 					: 'The request could not be completed. Try again.'}</p>}
-			<p>Saved submissions are not available. You can check a public build without signing in.</p>
+			<DeveloperSavedSubmissions key={view.kind === 'signed-in' ? view.expiresAt : view.kind}
+				session={view} onSessionExpired={() => setView({ kind: 'signed-out' })} />
 		</section>
 	);
 }
