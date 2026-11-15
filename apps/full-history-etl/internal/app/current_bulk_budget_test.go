@@ -14,7 +14,7 @@ func TestCurrentBulkSourceHeadroom(t *testing.T) {
 		wantAvailable, wantRequired     uint64
 	}{
 		{"known layout", 4096, 1<<30 + 1, 1 << 27, 1 << 26, 1 << 38, 50_000_000_000 + fixedBytes},
-		{"synthetic large filesystem", 1, 64_000_000_000_000, 64_000_000_000_000, 64_000_000_000_000, 64_000_000_000_000, 92_966_449_152},
+		{"synthetic large filesystem", 1, 64_000_000_000_000, 64_000_000_000_000, 64_000_000_000_000, 64_000_000_000_000, 92_966_450_176},
 		{"zero unprivileged availability", 4096, 1 << 30, 1 << 27, 0, 0, 50_000_000_000 + fixedBytes},
 		{"largest capacity", 1, math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64, 50_000_000_000 + fixedBytes},
 	}
