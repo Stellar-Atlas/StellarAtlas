@@ -128,12 +128,11 @@ test('bucket download releases its permit before verification finishes, with ide
   const harness = await loadCandidate(t, 'bucket', {
     httpService: { get: async () => ok({ data: Readable.from([payload]), status: 200, headers: { 'content-length': String(payload.length) } }) },
     bucketCache: {
-      async verifyStream(expectedHash, stream, verify) {
+      async verifyOnly(stream, verify) {
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
         const bytes = Buffer.concat(chunks);
         assert.deepEqual(bytes, payload);
-        assert.equal(expectedHash, hash);
         reachedVerification();
         await verificationGate;
         return verify(Readable.from([bytes]));
@@ -141,6 +140,7 @@ test('bucket download releases its permit before verification finishes, with ide
     },
     async verifyBucketHash(stream, expectedHash) {
       hashChecks += 1;
+      assert.equal(expectedHash.toLowerCase(), hash);
       const chunks = [];
       for await (const chunk of stream) chunks.push(chunk);
       assert.equal(createHash('sha256').update(Buffer.concat(chunks)).digest('hex'), expectedHash.toLowerCase());
