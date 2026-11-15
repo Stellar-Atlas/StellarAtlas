@@ -7,18 +7,34 @@ import {
 } from '../../api/developer-verification';
 import { isContractAccount } from '../../domain/classic-account';
 import { ExplorerContractProvenance } from '../blockchain/explorer-contract-provenance';
+import { DeveloperSavedSubmissions } from './developer-submissions';
+import { readDeveloperSubmissionId } from '../../api/developer-submissions';
 import styles from '../blockchain/explorer-entity.module.css';
 
 type View = DeveloperSession | { readonly kind: 'checking' };
 type ActionError = 'wrong-origin' | 'busy' | 'unavailable';
+const savedRequestReturn = 'atlas.developer-verification-return';
 
-export function DeveloperVerificationAccount({ signIn }: { readonly signIn: SignInReturn | null }): React.JSX.Element {
+export function DeveloperVerificationAccount({ signIn, submissionId = null }: {
+	readonly signIn: SignInReturn | null;
+	readonly submissionId?: string | null;
+}): React.JSX.Element {
 	const [view, setView] = useState<View>({ kind: 'checking' });
 	const [attempt, setAttempt] = useState(0);
 	const [callback, setCallback] = useState(signIn);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<ActionError | null>(null);
+	const [savedId, setSavedId] = useState(submissionId);
 	const action = useRef<AbortController | null>(null);
+	useEffect(() => setSavedId(submissionId), [submissionId]);
+	useEffect(() => {
+		if (signIn === null) return;
+		try {
+			const id = readDeveloperSubmissionId(window.sessionStorage.getItem(savedRequestReturn));
+			window.sessionStorage.removeItem(savedRequestReturn);
+			if (signIn === 'complete' && id) setSavedId(id);
+		} catch { /* Browser storage can be disabled; the original saved link still works. */ }
+	}, [signIn]);
 	useEffect(() => {
 		const controller = new AbortController();
 		void loadDeveloperSession(controller.signal).then(result => {
@@ -48,12 +64,16 @@ export function DeveloperVerificationAccount({ signIn }: { readonly signIn: Sign
 			if (view.kind === 'signed-in') {
 				const result = await endDeveloperSession(controller.signal);
 				if (controller.signal.aborted) return;
-				if (result === 'signed-out') setView({ kind: 'signed-out' });
+				if (result === 'signed-out') { setView({ kind: 'signed-out' }); setSavedId(null); }
 				else setError(result);
 			} else {
 				const result = await startDeveloperSignIn(window.location.origin, controller.signal);
 				if (controller.signal.aborted) return;
 				if (result.kind === 'redirect') {
+					try {
+						if (savedId) window.sessionStorage.setItem(savedRequestReturn, savedId);
+						else window.sessionStorage.removeItem(savedRequestReturn);
+					} catch { /* Do not make sign-in depend on optional browser storage. */ }
 					window.location.assign(result.url);
 					return;
 				}
@@ -98,7 +118,8 @@ export function DeveloperVerificationAccount({ signIn }: { readonly signIn: Sign
 			{error && <p role="alert">{error === 'busy' ? 'Sign-in is busy. Wait one minute before trying again.'
 				: error === 'wrong-origin' ? <>Use the <a href="https://stellaratlas.io/developer/verification">main StellarAtlas site</a> to sign in or out.</>
 					: 'The request could not be completed. Try again.'}</p>}
-			<p>Saved submissions are not available. You can check a public build without signing in.</p>
+			<DeveloperSavedSubmissions key={(view.kind === 'signed-in' ? view.expiresAt : view.kind) + ':' + (savedId ?? 'new')}
+				session={view} initialId={savedId} onSessionExpired={() => setView({ kind: 'signed-out' })} />
 		</section>
 	);
 }

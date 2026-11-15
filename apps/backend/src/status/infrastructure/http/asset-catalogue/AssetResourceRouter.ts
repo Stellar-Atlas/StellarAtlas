@@ -19,7 +19,7 @@ import { registerHubbleContractEventRoutes } from '../HubbleContractEventRoutes.
 import { HubbleWarehouseUnavailableError } from '../HubbleWarehouseErrors.js';
 import { registerHubbleDatasetRoutes } from '../HubbleWarehouseRouter.js';
 import { contractProvenanceRouter } from '../contract-provenance/ContractProvenanceRouter.js';
-import type { ContractProvenance } from '../contract-provenance/ContractProvenanceService.js';
+import type { ContractProvenance, ContractProvenanceService } from '../contract-provenance/ContractProvenanceService.js';
 
 export interface AssetResourceConfig {
 	readonly rpcUrl?: string;
@@ -30,6 +30,7 @@ export interface AssetResourceConfig {
 	readonly metadata?: AssetMetadataService;
 	readonly source?: AssetCatalogueSource;
 	readonly observeContractVerification?: (value: ContractProvenance) => Promise<void>;
+	readonly contractProvenance?: Pick<ContractProvenanceService, 'get'>;
 }
 
 export function assetResourceRouter(config: AssetResourceConfig): Router {
@@ -61,7 +62,7 @@ export function assetResourceRouter(config: AssetResourceConfig): Router {
 			provenanceRpcUrl: process.env.STELLAR_PROVENANCE_RPC_URL,
 			networkPassphrase: config.networkPassphrase,
 			observe: config.observeContractVerification
-		})
+		}, config.contractProvenance)
 	);
 	registerHubbleDatasetRoutes(router, config.warehouse);
 	registerAssetRelatedRoutes(
