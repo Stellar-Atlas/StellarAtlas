@@ -6,7 +6,6 @@ import type {
 } from '../http/contract-provenance/ContractProvenanceService.js';
 
 export const developerSubmissionRetentionDays = 30;
-export const developerSubmissionLifetimeMs = 2 * 60_000;
 export const developerSubmissionIdPattern =
 	/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -110,19 +109,4 @@ export function developerSubmissionResult(
 	)
 		return { status: 'source_mismatch', evidence };
 	return { status: build.status, evidence };
-}
-
-export function projectDeveloperSubmission(
-	value: DeveloperSubmission
-): DeveloperSubmission {
-	if (
-		value.status === 'checking' &&
-		Date.parse(value.submittedAt) + developerSubmissionLifetimeMs <= Date.now()
-	)
-		return {
-			...value,
-			status: 'unavailable',
-			result: { status: 'unavailable', evidence: null }
-		};
-	return value;
 }

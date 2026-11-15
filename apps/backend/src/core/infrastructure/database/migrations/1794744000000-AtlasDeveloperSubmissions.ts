@@ -24,6 +24,9 @@ export class AtlasDeveloperSubmissions1794744000000 implements MigrationInterfac
 			CREATE INDEX atlas_developer_submission_expiry ON atlas_developer_submission(expires_at);
 			CREATE INDEX atlas_developer_submission_created ON atlas_developer_submission(created_at);
 			CREATE INDEX atlas_developer_submission_owner_created ON atlas_developer_submission(user_id,created_at);
+			CREATE UNIQUE INDEX atlas_developer_submission_active_contract
+				ON atlas_developer_submission(network_passphrase,(request->>'contractId'))
+				WHERE status='checking';
 		`);
 	}
 

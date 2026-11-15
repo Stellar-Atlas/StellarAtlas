@@ -4,7 +4,6 @@ import { verificationReturnedRows } from './VerificationSqlRows.js';
 import {
 	DeveloperSubmissionError,
 	developerSubmissionRetentionDays,
-	projectDeveloperSubmission,
 	type DeveloperSubmission,
 	type DeveloperSubmissionInput,
 	type DeveloperSubmissionResult,
@@ -65,14 +64,15 @@ export class TypeOrmDeveloperSubmissionStore implements DeveloperSubmissionStore
 			);
 			await manager.query(`
 				DELETE FROM atlas_developer_submission WHERE id IN (
-					SELECT id FROM atlas_developer_submission WHERE expires_at<=clock_timestamp()
+					SELECT id FROM atlas_developer_submission
+					WHERE status<>'checking' AND expires_at<=clock_timestamp()
 					ORDER BY expires_at LIMIT 200
 				)
 			`);
 			const existing = await manager.query<SubmissionRow[]>(
 				`
 				SELECT * FROM atlas_developer_submission WHERE user_id=$1 AND idempotency_key=$2
-					AND expires_at>clock_timestamp()
+					AND (status='checking' OR expires_at>clock_timestamp())
 			`,
 				[userId, key]
 			);
@@ -87,6 +87,18 @@ export class TypeOrmDeveloperSubmissionStore implements DeveloperSubmissionStore
 					throw new DeveloperSubmissionError(409, 'idempotency_conflict');
 				return { created: false, submission: project(value) };
 			}
+			// A durable active row owns this contract check across serving processes.
+			// Only settlement releases it. Age or another idempotency key cannot.
+			const pending = await manager.query<{ id: string }[]>(
+				`
+				SELECT id FROM atlas_developer_submission
+				WHERE network_passphrase=$1 AND request->>'contractId'=$2 AND status='checking'
+				LIMIT 1
+			`,
+				[networkPassphrase, input.contractId]
+			);
+			if (pending.length)
+				throw new DeveloperSubmissionError(429, 'submission_busy');
 			const [budget] = await manager.query<{ full: boolean }[]>(
 				`
 				SELECT
@@ -132,7 +144,8 @@ export class TypeOrmDeveloperSubmissionStore implements DeveloperSubmissionStore
 			const rows = await manager.query<SubmissionRow[]>(
 				`
 				SELECT * FROM atlas_developer_submission
-				WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp()
+				WHERE id=$1 AND user_id=$2
+					AND (status='checking' OR expires_at>clock_timestamp())
 			`,
 				[id, userId]
 			);
@@ -153,17 +166,17 @@ export class TypeOrmDeveloperSubmissionStore implements DeveloperSubmissionStore
 			const rows = verificationReturnedRows(
 				await manager.query<unknown>(
 					`
-				UPDATE atlas_developer_submission SET status=$3, result=$4::jsonb
+				UPDATE atlas_developer_submission SET status=$3, result=$4::jsonb,
+					expires_at=clock_timestamp()+make_interval(days=>$5)
 				WHERE id=$1 AND user_id=$2 AND status='checking'
-					AND expires_at>clock_timestamp()
-					AND created_at>clock_timestamp()-interval '2 minutes'
 				RETURNING *
 			`,
 					[
 						id,
 						userId,
 						result.status === 'unavailable' ? 'unavailable' : 'completed',
-						encoded
+						encoded,
+						developerSubmissionRetentionDays
 					]
 				)
 			);
@@ -202,7 +215,7 @@ export class TypeOrmDeveloperSubmissionStore implements DeveloperSubmissionStore
 }
 
 function project(row: SubmissionRow): DeveloperSubmission {
-	return projectDeveloperSubmission({
+	return {
 		id: row.id,
 		submittedAt: row.created_at.toISOString(),
 		expiresAt: row.expires_at.toISOString(),
@@ -213,5 +226,5 @@ function project(row: SubmissionRow): DeveloperSubmission {
 		contractOwnership: 'not_assessed',
 		independentReproduction: 'not_assessed',
 		securityAudit: 'not_assessed'
-	});
+	};
 }

@@ -4,9 +4,7 @@ import type { ContractProvenance } from '../../http/contract-provenance/Contract
 import { AtlasDeveloperSubmissions1794744000000 } from '../../../../core/infrastructure/database/migrations/1794744000000-AtlasDeveloperSubmissions.js';
 import {
 	developerSubmissionResult,
-	parseDeveloperSubmission,
-	projectDeveloperSubmission,
-	type DeveloperSubmission
+	parseDeveloperSubmission
 } from '../DeveloperSubmission.js';
 import { TypeOrmDeveloperSubmissionStore } from '../TypeOrmDeveloperSubmissionStore.js';
 
@@ -112,23 +110,39 @@ it('requires the observed contract, network, repository and commit before report
 	}
 });
 
-it('projects an interrupted request as unavailable after its bounded check window', () => {
-	const checking: DeveloperSubmission = {
-		id,
-		submittedAt: new Date(Date.now() - 121_000).toISOString(),
-		expiresAt: row.expires_at.toISOString(),
-		request,
-		networkPassphrase: Networks.PUBLIC,
-		status: 'checking',
-		result: null,
-		contractOwnership: 'not_assessed',
-		independentReproduction: 'not_assessed',
-		securityAudit: 'not_assessed'
+it('keeps an aged active check readable and prevents another service instance starting it', async () => {
+	const pending = {
+		...row,
+		created_at: new Date(Date.now() - 180_000),
+		expires_at: new Date(Date.now() - 60_000)
 	};
-	expect(projectDeveloperSubmission(checking)).toMatchObject({
-		status: 'unavailable',
-		result: { status: 'unavailable', evidence: null }
+	const query = jest.fn(async (sql: string) => {
+		if (sql === 'SHOW transaction_read_only')
+			return [{ transaction_read_only: 'off' }];
+		if (
+			sql.includes('SELECT id FROM atlas_developer_submission') &&
+			sql.includes("status='checking'")
+		)
+			return [{ id }];
+		if (sql.includes('idempotency_key=$2')) return [];
+		if (sql.includes('SELECT * FROM atlas_developer_submission'))
+			return [pending];
+		return [];
 	});
+	const first = storage(query),
+		second = storage(query);
+	expect(await first.read('github:1234567', id)).toMatchObject({
+		status: 'checking',
+		result: null
+	});
+	await expect(
+		second.create('github:1234567', key, request, Networks.PUBLIC)
+	).rejects.toThrow('submission_busy');
+	expect(
+		query.mock.calls.some(([sql]) =>
+			String(sql).includes('INSERT INTO atlas_developer_submission')
+		)
+	).toBe(false);
 });
 
 it('locks shared admission, saves the server-bound owner and replays only an identical request', async () => {
