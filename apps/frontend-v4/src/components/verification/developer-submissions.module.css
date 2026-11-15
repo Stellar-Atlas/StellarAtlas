@@ -1,0 +1,12 @@
+.form, .section { display: grid; gap: .85rem; min-width: 0; }
+.form label { display: grid; gap: .35rem; min-width: 0; font-size: .9rem; }
+.form input { box-sizing: border-box; width: 100%; min-width: 0; padding: .65rem .75rem; border: 1px solid var(--border); border-radius: .35rem; background: var(--panel); color: var(--ink); font: inherit; }
+.actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.actions button { min-height: 40px; padding: .5rem .8rem; }
+.section :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.result { display: grid; gap: .75rem; min-width: 0; border-top: 1px solid var(--border); padding-top: 1rem; }
+.result dl { display: grid; grid-template-columns: minmax(7rem, auto) minmax(0, 1fr); gap: .5rem 1rem; margin: 0; }
+.result dt { color: var(--muted); font-size: .85rem; }
+.result dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.result p, .result details { color: var(--muted); font-size: .85rem; line-height: 1.5; }
+@media (max-width: 600px) { .result dl { grid-template-columns: minmax(0, 1fr); gap: .3rem; } .result dd { margin-bottom: .5rem; } }
