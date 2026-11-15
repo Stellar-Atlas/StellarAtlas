@@ -175,6 +175,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 	}
 	private nextTransientSourceSweepAt = 0;
 	async admitDailyTransientSourceRetries(limit: number): Promise<number> {
+		if (getHistoryArchiveRetryPhase() === 'first-pass') return 0;
 		if (limit < 1 || Date.now() < this.nextTransientSourceSweepAt) return 0;
 		this.nextTransientSourceSweepAt = Date.now() + 1_000;
 		const result = await withBoundedArchiveBrokerMaintenance(
