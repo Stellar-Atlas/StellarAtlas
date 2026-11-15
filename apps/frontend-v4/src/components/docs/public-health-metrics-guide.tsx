@@ -29,7 +29,7 @@ export const publicHealthMetricsSection: DeveloperGuideSection = {
 		<>
 			<p>
 				Use the <a href="/docs/api/getPublicGoodsHealth">health endpoint</a> for
-				combined service readiness and the{' '}
+				serving availability and detailed readiness, and the{' '}
 				<a href="/docs/api/getPublicGoodsMetrics">metrics endpoint</a> for
 				measured publication and archive counts. These observations do not
 				establish complete chain history or replace a query’s{' '}
@@ -46,13 +46,16 @@ export const publicHealthMetricsSection: DeveloperGuideSection = {
 				not prove data absence or that server work stopped.
 			</p>
 			<p>
-				Health returns HTTP 200 with <code>status: ready</code> only when its
-				ClickHouse, publication and archive checks pass. HTTP 503 with{' '}
-				<code>status: not_ready</code> can report <code>stale</code>,{' '}
-				<code>empty</code>, <code>incomplete</code> or <code>unavailable</code>{' '}
-				evidence. Read each check’s status and observation time. This combines
-				service signals; it does not say every dataset window or archive history
-				is complete.
+				Health returns HTTP 200 when its live ClickHouse probe and publication
+				and archive metadata reads succeed. HTTP 200 means serving dependency
+				availability, not fresh ingestion or complete evidence. JSON reports{' '}
+				<code>status: ready</code> only when every check passes; HTTP 200 can
+				still contain <code>status: not_ready</code> with <code>stale</code>,{' '}
+				<code>empty</code> or <code>incomplete</code> evidence. An actual
+				dependency probe or source-read failure returns HTTP 503 with{' '}
+				<code>unavailable</code> checks. Read each check’s status and observation
+				time; neither HTTP 200 nor readiness proves every dataset window or
+				archive history is complete.
 			</p>
 			<p>
 				Metrics returns HTTP 200 when both metric sources were read, even when
@@ -65,7 +68,7 @@ export const publicHealthMetricsSection: DeveloperGuideSection = {
 			<p>
 				These synthetic examples illustrate the same stale publication and
 				incomplete archive inventory. They are not a live status report. The
-				health example is HTTP 503:
+				health example is HTTP 200 with JSON status not_ready:
 			</p>
 			<Code language="json">{responseExample('/v1/public-goods/health')}</Code>
 			<p>
