@@ -106,3 +106,63 @@ it('refuses read-only transactions before checking table privileges', async () =
 	);
 	expect(query.mock.calls).toEqual([['SHOW transaction_read_only']]);
 });
+
+it('keeps saved submissions off independently and admits them only with writable schema and a verifier', async () => {
+	const query = jest.fn(async (sql: string) => {
+		if (sql === 'SHOW transaction_read_only')
+			return [{ transaction_read_only: 'off' }];
+		if (sql.includes('AS ready')) return [{ ready: true }];
+		return [];
+	});
+	const transaction = jest.fn((run: (manager: unknown) => unknown) =>
+		run({ query })
+	);
+	const database = { transaction } as unknown as DataSource;
+	const verifier = { get: mocks.fn() };
+	const verification = {
+		networkPassphrase: 'Public Global Stellar Network ; September 2015',
+		verifier
+	};
+	const disabled = await createAtlasDeveloperAuth(
+		config,
+		database,
+		undefined,
+		verification
+	);
+	await supertest(express().use(developerAuthPath, disabled!))
+		.get(developerAuthPath + '/submissions/capabilities')
+		.expect(404);
+	await expect(
+		createAtlasDeveloperAuth(
+			{
+				...config,
+				ATLAS_DEVELOPER_SUBMISSIONS_ENABLED: 'true'
+			},
+			database
+		)
+	).rejects.toThrow('configured contract verifier');
+	const enabled = await createAtlasDeveloperAuth(
+		{
+			...config,
+			ATLAS_DEVELOPER_SUBMISSIONS_ENABLED: 'true'
+		},
+		database,
+		undefined,
+		verification
+	);
+	const api = supertest(express().use(developerAuthPath, enabled!));
+	await api.get(developerAuthPath + '/submissions/capabilities').expect(200, {
+		available: true,
+		verification: 'published_build_attestation',
+		retentionDays: 30
+	});
+	await api
+		.get(
+			developerAuthPath + '/submissions/6caad803-bb79-483f-8068-e04e79ab76fc'
+		)
+		.expect(401, { code: 'sign_in_required' });
+	expect(
+		query.mock.calls.some(([sql]) => sql.includes('atlas_developer_submission'))
+	).toBe(true);
+	expect(verifier.get).not.toHaveBeenCalled();
+});

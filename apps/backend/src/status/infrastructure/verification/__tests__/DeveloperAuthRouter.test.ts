@@ -6,6 +6,16 @@ import {
 	type DeveloperAuthStore
 } from '../DeveloperAuthRouter.js';
 import { developerAuthPath } from '../DeveloperGithubOAuth.js';
+import { Networks, StrKey } from '@stellar/stellar-sdk';
+import {
+	developerSubmissionBodyParser,
+	developerSubmissionRouter
+} from '../DeveloperSubmissionRouter.js';
+import type {
+	DeveloperSubmission,
+	DeveloperSubmissionStore
+} from '../DeveloperSubmission.js';
+import type { ContractProvenanceService } from '../../http/contract-provenance/ContractProvenanceService.js';
 
 const origin = 'https://atlas.example';
 const config = { origin, clientId: 'test-client', clientSecret: 'test-only' };
@@ -18,7 +28,10 @@ const unavailable = origin + '/developer/verification?signIn=unavailable';
 const hash = (value: string) =>
 	createHash('sha256').update(value).digest('hex');
 
-function fixture() {
+function fixture(submissions?: {
+	readonly store: DeveloperSubmissionStore;
+	readonly verifier: Pick<ContractProvenanceService, 'get'>;
+}) {
 	const flows = new Map<
 		string,
 		Parameters<DeveloperAuthStore['issueFlow']>[0]
@@ -62,7 +75,18 @@ function fixture() {
 	>();
 	const app = () => {
 		const { router, applicant } = developerAuthRouter(config, store, provider);
+		if (submissions)
+			router.use(
+				developerSubmissionRouter({
+					origin,
+					networkPassphrase: Networks.PUBLIC,
+					applicant,
+					...submissions
+				})
+			);
 		return express()
+			.use(developerAuthPath + '/submissions', developerSubmissionBodyParser)
+			.use(express.json())
 			.use(developerAuthPath, router)
 			.post('/submission-test', async (req, res) => {
 				const session = await applicant(req);
@@ -304,6 +328,117 @@ it('strips sensitive request fields before downstream diagnostics', async () => 
 	expect(JSON.stringify(response.body)).not.toMatch(
 		/private-(state|code|cookie|token)/
 	);
+});
+
+it('saves and reads results only through the GitHub session, preserving origin and user isolation', async () => {
+	const id = '6caad803-bb79-483f-8068-e04e79ab76fc';
+	const key = '2beb8b84-ac09-4a94-b27f-7332f05641f1';
+	const request = {
+		contractId: StrKey.encodeContract(Buffer.alloc(32, 7)),
+		repository: 'example/contract',
+		commit: 'a'.repeat(40)
+	};
+	const checking: DeveloperSubmission = {
+		id,
+		submittedAt: new Date().toISOString(),
+		expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+		networkPassphrase: Networks.PUBLIC,
+		request,
+		status: 'checking',
+		result: null,
+		contractOwnership: 'not_assessed',
+		independentReproduction: 'not_assessed',
+		securityAudit: 'not_assessed'
+	};
+	const completed: DeveloperSubmission = {
+		...checking,
+		status: 'unavailable',
+		result: { status: 'unavailable', evidence: null }
+	};
+	const create = jest.fn(async () => ({ created: true, submission: checking }));
+	const read = jest.fn(async (subject: string) =>
+		subject === 'github:1234567' ? completed : null
+	);
+	const finish = jest.fn(async () => completed);
+	const get = jest.fn(async () => {
+		throw new Error('provider-secret-diagnostic');
+	});
+	const { provider, app, begin } = fixture({
+		store: { create, read, finish },
+		verifier: { get }
+	});
+	const path = developerAuthPath + '/submissions';
+	const api = supertest(app());
+	const submit = () =>
+		api.post(path).set('Origin', origin).set('Idempotency-Key', key);
+	await submit().send(request).expect(401);
+	expect(create).not.toHaveBeenCalled();
+	const login = async (userId: number) => {
+		provider
+			.mockResolvedValueOnce(token())
+			.mockResolvedValueOnce(Response.json({ type: 'User', id: userId }));
+		const flow = await begin();
+		const response = await api
+			.get(callbackPath)
+			.set('Cookie', flow.browser)
+			.query({ state: flow.state, code: 'code' })
+			.expect(303);
+		return (response.headers['set-cookie'] as string[])
+			.find((cookie) => cookie.startsWith('__Host-atlas-developer-session='))!
+			.split(';')[0]!;
+	};
+	const owner = await login(1234567);
+	await api
+		.post(path)
+		.set('Cookie', owner)
+		.set('Origin', 'https://foreign.example')
+		.set('Idempotency-Key', key)
+		.send(request)
+		.expect(403);
+	expect(create).not.toHaveBeenCalled();
+	const response = await submit()
+		.set('Cookie', owner)
+		.send(request)
+		.expect('Cache-Control', 'private, no-store')
+		.expect(201, completed);
+	expect(response.headers.etag).toBeUndefined();
+	expect(JSON.stringify(response.body)).not.toMatch(/github:|provider-secret/);
+	expect(create).toHaveBeenCalledWith(
+		'github:1234567',
+		key,
+		request,
+		Networks.PUBLIC
+	);
+	await api
+		.get(path + '/' + id)
+		.set('Cookie', owner)
+		.expect(200, completed);
+	const foreign = await login(7654321);
+	await api
+		.get(path + '/' + id)
+		.set('Cookie', foreign)
+		.expect(404, { code: 'submission_not_found' });
+	await submit()
+		.set('Cookie', owner)
+		.send({ ...request, subjectId: 'github:7654321' })
+		.expect(400);
+	await submit()
+		.set('Cookie', owner)
+		.set('Content-Type', 'application/json')
+		.send(' '.repeat(2048) + JSON.stringify(request))
+		.expect(413, { code: 'invalid_submission' });
+	create.mockResolvedValueOnce({ created: false, submission: completed });
+	await submit().set('Cookie', owner).send(request).expect(200, completed);
+	expect(get).toHaveBeenCalledTimes(1);
+	await api
+		.delete(sessionPath)
+		.set('Cookie', owner)
+		.set('Origin', origin)
+		.expect(204);
+	await api
+		.get(path + '/' + id)
+		.set('Cookie', owner)
+		.expect(401);
 });
 
 it('rejects an identity without a stable numeric user ID', async () => {

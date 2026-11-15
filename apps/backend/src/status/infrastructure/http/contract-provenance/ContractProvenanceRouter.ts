@@ -11,14 +11,18 @@ import {
 	scopedRpcEndpoint
 } from './ProvenanceEndpointPolicy.js';
 
-export function contractProvenanceRouter(config: {
+interface ContractProvenanceConfig {
 	readonly rpcUrl?: string;
 	readonly provenanceRpcUrl?: string;
 	readonly approvedNativeRpcUrl?: string;
 	readonly approvedProvenanceRpcUrl?: string;
 	readonly networkPassphrase: string;
 	readonly observe?: (value: ContractProvenance) => Promise<void>;
-}): Router {
+}
+
+export function createContractProvenanceService(
+	config: ContractProvenanceConfig
+): ContractProvenanceService {
 	const scoped =
 		config.provenanceRpcUrl === undefined
 			? undefined
@@ -29,7 +33,7 @@ export function contractProvenanceRouter(config: {
 					),
 					config.networkPassphrase
 				);
-	const service = new ContractProvenanceService(
+	return new ContractProvenanceService(
 		scoped
 			? undefined
 			: nativeRpcEndpoint(config.rpcUrl, config.approvedNativeRpcUrl),
@@ -37,6 +41,15 @@ export function contractProvenanceRouter(config: {
 		scoped,
 		config.observe
 	);
+}
+
+export function contractProvenanceRouter(
+	config: ContractProvenanceConfig,
+	service: Pick<
+		ContractProvenanceService,
+		'get'
+	> = createContractProvenanceService(config)
+): Router {
 	const router = express.Router();
 	router.get('/contracts/:contractId/provenance', async (request, response) => {
 		const contractId = request.params.contractId ?? '';
@@ -51,7 +64,9 @@ export function contractProvenanceRouter(config: {
 			const result = await service.get(contractId);
 			response.setHeader(
 				'Cache-Control',
-				scoped ? 'no-store' : 'public, max-age=30'
+				config.provenanceRpcUrl !== undefined
+					? 'no-store'
+					: 'public, max-age=30'
 			);
 			response.json(result);
 		} catch (error) {
