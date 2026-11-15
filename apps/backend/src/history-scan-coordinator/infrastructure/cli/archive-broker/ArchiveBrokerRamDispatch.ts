@@ -40,6 +40,7 @@ export class ArchiveBrokerRamDispatch {
 	private contextTime = 0;
 	private nextRebuildAt = 0;
 	private nextFallbackAt = 0;
+	private residualFallbackOwed = false;
 	private nextBroaderCapacityFallbackAt = 0;
 	private nextReportAt = 0;
 	private claimedSinceReport = 0;
@@ -238,6 +239,10 @@ export class ArchiveBrokerRamDispatch {
 	): Promise<readonly HistoryArchiveBrokerJob[] | null> {
 		if (this.stopped) return [];
 		this.ensureRebuild();
+		if (this.residualFallbackOwed) {
+			this.residualFallbackOwed = false;
+			return this.fallback(15_000);
+		}
 		if (!this.ready || !this.connected) {
 			const broader = this.broaderCapacityFallback(root, afterEmptyCanonicalDurable);
 			if (broader !== undefined) return broader;
@@ -289,10 +294,8 @@ export class ArchiveBrokerRamDispatch {
 				context: this.context,
 				nowUs
 			});
-			// Preserve the old selector's ability to fill spare capacity with an
-			// explicitly allowed recovery/manual job alongside a trickle of fresh work.
-			if (selected.length < limit && this.clock() >= this.nextFallbackAt)
-				return this.fallback(15_000);
+			const residualFallbackDue = selected.length < limit &&
+				this.clock() >= this.nextFallbackAt;
 			if (selected.length === 0) {
 				// Recovery/manual lanes keep their original authoritative policy, but
 				// capacity messages must not turn empty RAM into repeated global scans.
@@ -305,6 +308,10 @@ export class ArchiveBrokerRamDispatch {
 			if (!stillCurrent()) return [];
 			durableClaimStarted = true;
 			const jobs = await this.claim(selected, root, fallbackObjectIds);
+			// Publish useful partial work first. The next capacity-bearing loop
+			// still gives recovery/manual work its existing durable opportunity.
+			if (jobs.length > 0 && residualFallbackDue && !this.stopped)
+				this.residualFallbackOwed = true;
 			// A durable claim must be returned even if its in-memory mirror was
 			// replaced while the database was committing it.
 			if (!stillCurrent()) return jobs;

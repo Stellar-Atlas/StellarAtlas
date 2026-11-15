@@ -69,6 +69,53 @@ function fixture(canonicalFirstRoot: string | null = null) {
 describe('event-driven empty broker recovery', () => {
 	beforeEach(() => jest.useFakeTimers({ doNotFake: ['setImmediate'] }));
 	afterEach(() => jest.useRealTimers());
+	it('refreshes broker capacity after RAM publication before durable fallback', async () => {
+		const test = fixture();
+		const trace: string[] = [];
+		let capacityReads = 0;
+		let publications = 0;
+		Object.assign(test.runtime, {
+			getBrokerCapacity: async () => {
+				const availableCapacity = capacityReads++ === 0 ? 2 : 1;
+				trace.push(`capacity:${availableCapacity}`);
+				return { availableCapacity, empty: false };
+			},
+			ram: {
+				reserve: jest.fn(async (limit: number) => {
+					const jobs = limit === 2 ? fresh : null;
+					trace.push(`ram:${limit}:${jobs === null ? 'null' : 'fresh'}`);
+					return jobs;
+				}),
+				isCapacityFallbackActive: jest.fn(() => false),
+				recordBroaderFallbackResult: jest.fn(),
+				stopAdmission: jest.fn(),
+				close: jest.fn(async () => undefined)
+			}
+		});
+		test.repository.reserveJobs.mockImplementation(async (limit) => {
+			trace.push(`durable:${limit}`);
+			return fresh;
+		});
+		test.publish.mockImplementation(async () => {
+			publications++;
+			trace.push(`publish:${publications}`);
+			if (publications === 2) test.runtime.stopping = true;
+		});
+
+		await test.dispatcher.run();
+
+		expect(trace.slice(0, 6)).toEqual([
+			'capacity:2',
+			'ram:2:fresh',
+			'publish:1',
+			'capacity:1',
+			'ram:1:null',
+			'durable:1'
+		]);
+		expect(test.repository.reserveJobs.mock.calls[0]?.[0]).toBe(1);
+		expect(publications).toBe(2);
+		await test.dispatcher.close();
+	});
 	it('does one reservation for a no-op recovery cycle, then waits for the existing poll', async () => {
 		const test = fixture();
 		const running = test.dispatcher.run();

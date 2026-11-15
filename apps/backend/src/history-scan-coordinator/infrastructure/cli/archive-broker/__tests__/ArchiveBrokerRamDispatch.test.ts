@@ -415,10 +415,17 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		expect(test.logger.error).not.toHaveBeenCalled();
 		await test.dispatch.close();
 	});
-	it('leaves periodic residual capacity for recovery during sustained fresh trickle', async () => {
+	it('claims partial fresh work before preserving the next durable recovery opportunity', async () => {
 		const test = fixture();
 		await ready(test);
+		expect((await test.dispatch.reserve(2, null))?.map((job) => job.job.remoteId))
+			.toEqual([id(1)]);
+		test.state.set(id(9), candidate(9));
+		test.dispatch.notify({ ids: [id(9)] });
 		expect(await test.dispatch.reserve(2, null)).toBeNull();
+		expect(test.claim).toHaveBeenCalledTimes(1);
+		test.state.delete(id(9));
+		test.dispatch.notify({ ids: [id(9)] });
 		for (let index = 2; index <= 4; index++) {
 			test.advance(1_000);
 			test.state.clear();
@@ -432,8 +439,10 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		test.state.clear();
 		test.state.set(id(5), candidate(5));
 		test.dispatch.notify({ ids: [id(4), id(5)] });
+		expect((await test.dispatch.reserve(2, null))?.map((job) => job.job.remoteId))
+			.toEqual([id(5)]);
 		expect(await test.dispatch.reserve(2, null)).toBeNull();
-		expect(test.claim).toHaveBeenCalledTimes(3);
+		expect(test.claim).toHaveBeenCalledTimes(5);
 		await test.dispatch.close();
 	});
 	it('keeps a full fresh batch in RAM even when the recovery fallback cadence is due', async () => {
@@ -443,6 +452,16 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 			(await test.dispatch.reserve(2, null))?.map((job) => job.job.remoteId)
 		).toEqual([id(1), id(2)]);
 		expect(test.claim).toHaveBeenCalledTimes(1);
+		await test.dispatch.close();
+	});
+	it('does not owe a recovery turn for a rejected partial claim', async () => {
+		const test = fixture();
+		await ready(test);
+		test.claim.mockResolvedValueOnce([]);
+		expect(await test.dispatch.reserve(2, null)).toEqual([]);
+		expect((await test.dispatch.reserve(2, null))?.map((job) => job.job.remoteId))
+			.toEqual([id(1)]);
+		expect(test.claim).toHaveBeenCalledTimes(2);
 		await test.dispatch.close();
 	});
 	it('drains snapshot work and suppresses post-close wake or claims', async () => {

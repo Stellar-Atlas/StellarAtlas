@@ -8,6 +8,7 @@ import { historyArchiveExecutionReconciliationLockName } from '../HistoryArchive
 
 describe('HistoryArchiveBrokerFrontierRepository', () => {
 	const adjacentBefore = process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
+	const phaseBefore = process.env.HISTORY_ARCHIVE_RETRY_PHASE;
 	beforeEach(() => {
 		delete process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
 	});
@@ -15,8 +16,18 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		if (adjacentBefore === undefined)
 			delete process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED;
 		else process.env.HISTORY_ARCHIVE_ADJACENT_PREFETCH_ENABLED = adjacentBefore;
+		if (phaseBefore === undefined) delete process.env.HISTORY_ARCHIVE_RETRY_PHASE;
+		else process.env.HISTORY_ARCHIVE_RETRY_PHASE = phaseBefore;
+	});
+	it('does not acquire a transaction for disabled first-pass retry admission', async () => {
+		process.env.HISTORY_ARCHIVE_RETRY_PHASE = 'first-pass';
+		const transaction = jest.fn().mockRejectedValue(new Error('must not acquire'));
+		const repository = new HistoryArchiveBrokerFrontierRepository({ transaction } as unknown as DataSource);
+		expect(await repository.admitDailyTransientSourceRetries(10)).toBe(0);
+		expect(transaction).not.toHaveBeenCalled();
 	});
 	it('backs off bounded retry timeouts while ordinary dispatch remains available', async () => {
+		process.env.HISTORY_ARCHIVE_RETRY_PHASE = 'recheck';
 		const transaction = jest.fn().mockRejectedValue({ code: '57014' });
 		const repository = new HistoryArchiveBrokerFrontierRepository({
 			transaction
@@ -26,6 +37,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(transaction).toHaveBeenCalledTimes(1);
 	});
 	it('defers an unavailable retry sweep without blocking ordinary broker reservations', async () => {
+		process.env.HISTORY_ARCHIVE_RETRY_PHASE = 'recheck';
 		const query = jest.fn().mockResolvedValue([]);
 		const manager = { query } as unknown as EntityManager;
 		const transaction = jest
@@ -279,7 +291,8 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(query.mock.calls[1]?.[1]).toEqual([
 			'http://history.stellar.org/prd/core-live/core_live_001',
 			expect.any(Number),
-			expect.any(Number)
+			expect.any(Number),
+			[]
 		]);
 		expect(planned).toBe(6);
 	});
