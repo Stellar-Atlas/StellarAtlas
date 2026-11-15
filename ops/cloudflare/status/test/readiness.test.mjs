@@ -15,9 +15,23 @@ test('an actual unavailable data check retains its specific reported reason', ()
   assert.deepEqual(dataReadiness(body, now), { ok: false, reasonCode: 'data_unavailable',
     probeDetail: { kind: 'readiness', check: 'clickhouse', status: 'unavailable' } });
 });
-test('stale publication observations retain whole-second age, not a rounded minute', () => {
+test('stale publication is available and retains whole-second lag detail', () => {
   const body = ready(); body.checks.publication = { status: 'stale', observedAt: new Date(now - 97_750).toISOString() };
+  body.status = 'not_ready';
+  assert.equal(dataReadiness(body, now).ok, true);
+  assert.equal(dataReadiness(body, now).reasonCode, 'ok');
   assert.deepEqual(dataReadiness(body, now).probeDetail, { kind: 'readiness', check: 'publication', status: 'stale', ageSeconds: 97 });
+});
+test('publication lag uses the actual completed-publication time', () => {
+  const body = ready(); body.checks.publication = { status: 'stale', observedAt: new Date(now).toISOString(),
+    latestCompletedAt: new Date(now - 90_000_000).toISOString() };
+  assert.deepEqual(dataReadiness(body, now), { ok: true, reasonCode: 'ok',
+    probeDetail: { kind: 'readiness', check: 'publication', status: 'stale', ageSeconds: 90000 } });
+});
+test('a failed publication dependency is not hidden by live ClickHouse', () => {
+  const body = ready(); body.checks.publication = { status: 'unavailable' };
+  assert.deepEqual(dataReadiness(body, now), { ok: false, reasonCode: 'data_unavailable',
+    probeDetail: { kind: 'readiness', check: 'publication', status: 'unavailable' } });
 });
 test('missing, old and future health observations fail closed', () => {
   assert.equal(dataReadiness({}, now).ok, false);

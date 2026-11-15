@@ -119,9 +119,9 @@ export function withPublicGoodsOpenApiPaths(document: unknown): OpenApiRecord {
 			...readOpenApiRecord(source?.paths),
 			'/v1/public-goods/health': operation(
 				'getPublicGoodsHealth',
-				'Check public-goods readiness',
+				'Check serving availability and report public-goods readiness',
 				publicGoodsHealthSchema,
-				'A required check is unavailable, incomplete, empty, or stale. Latest completed publication must be within 24 hours; archive measurements must be fresh and include a recent observation.'
+				'A serving dependency probe or measurement-source read failed. HTTP 200 means the dependency probe and source reads succeeded, not that publication or archive evidence is current. JSON retains ready/not_ready and every check, including the 24-hour publication freshness threshold, stale or empty publication, and incomplete or stale archive evidence.'
 			),
 			'/v1/public-goods/metrics': operation(
 				'getPublicGoodsMetrics',

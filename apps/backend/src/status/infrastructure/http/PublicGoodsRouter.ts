@@ -33,8 +33,10 @@ export function publicGoodsRouter(config: PublicGoodsRouterConfig): Router {
 	const readSnapshot = createSnapshotReader(config);
 
 	router.get('/health', async (_request, response) => {
-		const body = await readChecks(config);
-		sendNoCacheJson(response, body.status === 'ready' ? 200 : 503, body);
+		const { body, available } = await readChecks(config);
+		// Availability is not publication or archive-evidence freshness. Preserve
+		// the full readiness result in JSON even when the serving dependencies work.
+		sendNoCacheJson(response, available ? 200 : 503, body);
 	});
 
 	router.get('/metrics', async (_request, response) => {
@@ -163,7 +165,7 @@ function createSnapshotReader(config: PublicGoodsRouterConfig) {
 
 async function readChecks(
 	config: PublicGoodsRouterConfig
-): Promise<PublicGoodsHealthV1> {
+): Promise<{ readonly body: PublicGoodsHealthV1; readonly available: boolean }> {
 	const [probeResult, snapshotResult] = await Promise.allSettled([
 		config.warehouse.probe === undefined
 			? Promise.reject(new Error('ClickHouse probe unavailable'))
@@ -226,9 +228,12 @@ async function readChecks(
 		}
 	};
 	return {
-		generatedAt,
-		status: Object.values(checks).every(check => check.status === 'ready') ? 'ready' : 'not_ready',
-		checks
+		available: probeResult.status === 'fulfilled' && catalog !== null && summary !== null,
+		body: {
+			generatedAt,
+			status: Object.values(checks).every(check => check.status === 'ready') ? 'ready' : 'not_ready',
+			checks
+		}
 	};
 }
 

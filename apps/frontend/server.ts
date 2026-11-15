@@ -162,7 +162,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   }
 
   try {
-    res.redirect(308, compatibilityRedirect(req.originalUrl));
+    const destination = compatibilityRedirect(req.originalUrl);
+    if (new URL(destination, "https://stellaratlas.io").origin !== "https://stellaratlas.io") {
+      throw new InvalidProxyPath("External compatibility redirect");
+    }
+    res.redirect(308, destination);
   } catch {
     res.status(400).send("Invalid compatibility path");
   }

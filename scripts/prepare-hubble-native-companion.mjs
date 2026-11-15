@@ -1,6 +1,8 @@
 // Usage: node scripts/prepare-hubble-native-companion.mjs ORIGINAL_ARCHIVE FRESH_OUTPUT
 // Requires GNU objcopy 2.42. Consume the output only in an isolated build view;
 // preserve upstream go.sum/cache and retain this helper's JSON provenance.
+// Run from the private build workspace containing both paths. Neither path may
+// escape that workspace, including through a symbolic link.
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { constants, createReadStream } from 'node:fs';
@@ -24,11 +26,26 @@ async function prepare() {
 	if (process.argv.length !== 4 || process.platform !== 'linux' || process.arch !== 'x64') {
 		throw new Error('Expected Linux x64 and two arguments: ORIGINAL_ARCHIVE FRESH_OUTPUT');
 	}
-	const original = await realpath(resolve(process.argv[2]));
+	const workspace = await realpath(process.cwd());
+	const requestedOriginal = resolve(workspace, process.argv[2]);
+	if (!requestedOriginal.startsWith(workspace + sep)) {
+		throw new Error('Original archive must be inside the build workspace');
+	}
+	const original = await realpath(requestedOriginal);
+	if (!original.startsWith(workspace + sep)) {
+		throw new Error('Original archive symlink leaves the build workspace');
+	}
 	const suffix = join('xdrjson', 'libs', 'x86_64-unknown-linux-gnu', 'libxdrjson.a');
 	if (!original.endsWith(`${sep}${suffix}`)) throw new Error('Unexpected native archive layout');
 	const sourceRoot = resolve(dirname(original), '../../..');
-	const outputDirectory = await realpath(dirname(resolve(process.argv[3])));
+	const requestedDirectory = resolve(workspace, dirname(process.argv[3]));
+	if (requestedDirectory !== workspace && !requestedDirectory.startsWith(workspace + sep)) {
+		throw new Error('Output directory must be inside the build workspace');
+	}
+	const outputDirectory = await realpath(requestedDirectory);
+	if (outputDirectory !== workspace && !outputDirectory.startsWith(workspace + sep)) {
+		throw new Error('Output directory symlink leaves the build workspace');
+	}
 	const output = join(outputDirectory, basename(process.argv[3]));
 	const withinSource = relative(sourceRoot, output);
 	if (!withinSource.startsWith(`..${sep}`) && !isAbsolute(withinSource)) {

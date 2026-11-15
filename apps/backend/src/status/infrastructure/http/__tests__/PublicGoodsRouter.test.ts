@@ -100,6 +100,7 @@ function appFor(options: {
 	probeFails?: boolean;
 	archiveFails?: boolean;
 	catalogFails?: boolean;
+	readinessFails?: boolean;
 }) {
 	const warehouse = {
 		probe: options.probeFails
@@ -118,11 +119,29 @@ function appFor(options: {
 			: jest.fn().mockResolvedValue(ok(options.archive ?? archiveSummary()))
 	};
 	const app = express();
+	const publication = options.catalog ?? catalog();
+	const archive = options.archive ?? archiveSummary();
 	app.use(
 		'/v1/public-goods',
 		publicGoodsRouter({
 			warehouse,
-			getArchiveStatusSummary: getArchiveStatusSummary as never
+			getArchiveStatusSummary: getArchiveStatusSummary as never,
+			readReadinessSnapshot: options.readinessFails
+				? jest.fn().mockRejectedValue(new Error('readiness unavailable'))
+				: async () => ({
+					catalog: options.catalogFails ? null : {
+						generatedAt: publication.generatedAt,
+						...publication.ingestion
+					},
+					archiveSummary: options.archiveFails ? null : {
+						generatedAt: archive.generatedAt,
+						sourceCount: archive.sourceCount,
+						checkedRoots: archive.sources.filter(source =>
+							Date.parse(source.observedAt) >= Date.now() - 24 * 60 * 60 * 1000
+						).length,
+						complete: !archive.sourcesTruncated && archive.sourceCount === archive.sources.length
+					}
+				})
 		})
 	);
 	return { app, getArchiveStatusSummary, warehouse };
@@ -143,30 +162,47 @@ describe('public goods health and metrics', () => {
 		expect(response.headers['cloudflare-cdn-cache-control']).toBe('no-store');
 	});
 
-	it('returns 503 when live ClickHouse is down or publication is stale', async () => {
+	it('returns 503 when live ClickHouse is down', async () => {
 		const down = await request(appFor({ probeFails: true }).app).get(
 			'/v1/public-goods/health'
 		);
 		expect(down.status).toBe(503);
+		expect(down.body.status).toBe('not_ready');
 		expect(down.body.checks.clickhouse.status).toBe('unavailable');
+	});
 
+	it('returns 200 for available dependencies while preserving stale publication readiness', async () => {
 		const staleCatalog = catalog(
 			new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
 		);
 		const stale = await request(appFor({ catalog: staleCatalog }).app).get(
 			'/v1/public-goods/health'
 		);
-		expect(stale.status).toBe(503);
+		expect(stale.status).toBe(200);
+		expect(stale.body.status).toBe('not_ready');
 		expect(stale.body.checks.publication.status).toBe('stale');
+		expect(stale.body.checks.publication.latestCompletedAt).toBe(staleCatalog.ingestion.latestCompletedAt);
+		expect(stale.body.checks.clickhouse.status).toBe('ready');
+		expect(stale.headers['cache-control']).toContain('no-store');
 	});
 
-	it('fails health closed for incomplete archive inventory and stale root observations', async () => {
+	it.each(['catalogFails', 'archiveFails', 'readinessFails'] as const)(
+		'returns 503 when the %s dependency read fails', async failure => {
+			const response = await request(appFor({ [failure]: true }).app).get('/v1/public-goods/health');
+			expect(response.status).toBe(503);
+			expect(response.body.status).toBe('not_ready');
+			expect(response.body.checks[failure === 'archiveFails' ? 'archive' : 'publication'].status).toBe('unavailable');
+		}
+	);
+
+	it('keeps incomplete and stale archive evidence separate from serving availability', async () => {
 		const truncated = await request(
 			appFor({
 				archive: archiveSummary({ truncated: true, sourceCount: 300 })
 			}).app
 		).get('/v1/public-goods/health');
-		expect(truncated.status).toBe(503);
+		expect(truncated.status).toBe(200);
+		expect(truncated.body.status).toBe('not_ready');
 		expect(truncated.body.checks.archive.status).toBe('incomplete');
 		expect(truncated.body.checks.archive.checkedRoots).toBeNull();
 
@@ -177,7 +213,8 @@ describe('public goods health and metrics', () => {
 				})
 			}).app
 		).get('/v1/public-goods/health');
-		expect(old.status).toBe(503);
+		expect(old.status).toBe(200);
+		expect(old.body.status).toBe('not_ready');
 		expect(old.body.checks.archive.status).toBe('stale');
 	});
 
