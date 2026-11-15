@@ -146,3 +146,16 @@ it('opens a saved-request link only after sign-in and capability checks, without
 	submit();
 	expect(send).toHaveBeenCalledTimes(3);
 });
+
+it('keeps a long-running saved check pending beyond two minutes without a fresh POST or key', async () => {
+	session = { kind: 'signed-in', expiresAt: Date.now() + 20 * 60_000 };
+	send.mockResolvedValueOnce(capability()).mockImplementation(() => Promise.resolve(Response.json(record())));
+	render(); await settle(); fill(); submit(); await settle(); render();
+	for (let step = 0; step < 5; step++) {
+		jest.advanceTimersByTime(30_000); await settle(); render();
+	}
+	expect(html()).toContain('Saved · checking published build evidence');
+	expect(html()).not.toContain('Start a new request');
+	expect(send.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+	expect(send.mock.calls.slice(2).every(([url]) => url === '/v1/developer-auth/submissions/' + id)).toBe(true);
+});
