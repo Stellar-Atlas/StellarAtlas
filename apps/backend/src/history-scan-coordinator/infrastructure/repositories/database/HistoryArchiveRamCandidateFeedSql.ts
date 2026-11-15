@@ -61,6 +61,36 @@ with page as materialized (
 select ${candidateFields} from page ready ${metadata}
 order by ready."objectRemoteId"`;
 
+// Loose index seeks visit one unpublished entry per root, plus one sentinel.
+export const historyArchiveRamRootPageSql = `
+with recursive roots as (
+  (select "archiveUrlIdentity",1 as ordinal from history_archive_object_ready
+   where "publishedAt" is null
+     and "archiveUrlIdentity">coalesce($1::text,'')
+   order by "archiveUrlIdentity" limit 1)
+  union all
+  select next."archiveUrlIdentity",roots.ordinal+1 from roots
+  cross join lateral (
+    select ready."archiveUrlIdentity" from history_archive_object_ready ready
+    where ready."publishedAt" is null
+      and ready."archiveUrlIdentity">roots."archiveUrlIdentity"
+    order by ready."archiveUrlIdentity" limit 1
+  ) next
+  where roots.ordinal<$2::integer
+)
+select "archiveUrlIdentity" from roots order by ordinal`;
+
+// Bound the raw exact-root window before metadata joins or fresh filtering.
+export const historyArchiveRamWindowPageSql = `
+with page as materialized (
+  select * from history_archive_object_ready
+  where "archiveUrlIdentity"=$1::text and "publishedAt" is null
+    and (priority,"updatedAt","objectRemoteId")>($2::smallint,$3::timestamptz,$4::uuid)
+  order by priority,"updatedAt","objectRemoteId" limit $5::integer
+)
+select ${candidateFields} from page ready ${metadata}
+order by ready.priority,ready."updatedAt",ready."objectRemoteId"`;
+
 export const historyArchiveRamRefreshIdsSql = `
 select ${candidateFields}
 from unnest($1::uuid[]) requested(id)

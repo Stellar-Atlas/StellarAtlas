@@ -165,6 +165,57 @@ describe('RAM candidate metadata feed and commit-bound notification hints', () =
 				.sort()
 		);
 	});
+	it('pages unpublished root names once per root with a bounded sentinel', async () => {
+		await seed(3);
+		const firstRoot = 'https://a.example/history';
+		const lastRoot = 'https://z.example/history';
+		await db.query(`insert into history_archive_object_ready
+		 ("objectRemoteId","archiveUrlIdentity",priority,"availableAt","updatedAt","publishedAt") values
+		 ($1,$5,2,now(),now(),null),($2,$5,2,now(),now(),null),
+		 ($3,$6,2,now(),now(),null),($4,'https://published.example',2,now(),now(),now())`,
+		[randomUUID(), randomUUID(), randomUUID(), randomUUID(), firstRoot, lastRoot]);
+		expect(await feed.listRootPage(null, 1)).toEqual({ roots: [firstRoot], nextCursor: firstRoot, hasMore: true });
+		expect(await feed.listRootPage(firstRoot, 1)).toEqual({ roots: [root], nextCursor: root, hasMore: true });
+		expect(await feed.listRootPage(root, 1)).toEqual({ roots: [lastRoot], nextCursor: lastRoot, hasMore: false });
+		expect(await feed.listRootPage(lastRoot, 1)).toEqual({ roots: [], nextCursor: null, hasMore: false });
+		await expect(feed.listRootPage('', 1)).rejects.toThrow('root');
+		await expect(feed.listRootPage('x'.repeat(4097), 1)).rejects.toThrow('root');
+		for (const limit of [0, 33]) await expect(feed.listRootPage(null, limit)).rejects.toThrow('32');
+	});
+	it('bounds exact-root raw windows and advances past a fully filtered prefix with exact microseconds', async () => {
+		const objects = await seed(5);
+		await db.query(`update history_archive_object_queue set attempts=1 where "remoteId"=$1`, [objects[0]!.remoteId]);
+		await db.query(`update history_archive_object_ready set
+		 priority=case when "objectRemoteId"=any($1::uuid[]) then 0 when "objectRemoteId"=$2 then 1 else 2 end,
+		 "updatedAt"=case when "objectRemoteId"=$3 then '2001-01-01 00:00:00.000125Z'::timestamptz else "updatedAt" end,
+		 "publishedAt"=case when "objectRemoteId"=$4 then now() else null end`,
+		[objects.slice(0, 2).map((object) => object.remoteId), objects[2]!.remoteId, objects[1]!.remoteId, objects[4]!.remoteId]);
+		const missingId = randomUUID();
+		await db.query(`insert into history_archive_object_ready
+		 ("objectRemoteId","archiveUrlIdentity",priority,"availableAt","updatedAt") values
+		 ($1,$2,0,now(),'2001-01-01 00:00:00.000124Z'),
+		 ($3,'https://other.example/history',0,now(),'2000-01-01Z')`, [missingId, root, randomUUID()]);
+		const first = await feed.windowPage(root, null, 2);
+		expect(first).toEqual({ rows: [], nextCursor: {
+			priority: 0, updatedAtUs: '978307200000124', remoteId: missingId
+		}, hasMore: true });
+		const second = await feed.windowPage(root, first.nextCursor, 2);
+		expect(second.rows.map((row) => row.remoteId)).toEqual([objects[1]!.remoteId, objects[2]!.remoteId]);
+		expect(second.rows[0]?.updatedAtUs).toBe('978307200000125');
+		expect(second.hasMore).toBe(true);
+		const third = await feed.windowPage(root, second.nextCursor, 2);
+		expect(third.rows.map((row) => row.remoteId)).toEqual([objects[3]!.remoteId]);
+		expect(third.hasMore).toBe(false);
+		expect(await feed.windowPage(root, third.nextCursor, 2)).toEqual({ rows: [], nextCursor: null, hasMore: false });
+		expect((await feed.windowPage('https://absent.example', null)).rows).toEqual([]);
+		for (const cursor of [
+			{ priority: 3, updatedAtUs: '978307200000124', remoteId: missingId },
+			{ priority: 0, updatedAtUs: '1.5', remoteId: missingId },
+			{ priority: 0, updatedAtUs: '978307200000124', remoteId: 'invalid' }
+		]) await expect(feed.windowPage(root, cursor)).rejects.toThrow();
+		for (const limit of [0, 129]) await expect(feed.windowPage(root, null, limit)).rejects.toThrow('128');
+		await expect(feed.windowPage('', null)).rejects.toThrow('root');
+	});
 	it('refresh missing, removed and no-longer-fresh IDs as removals and enforces bounded input', async () => {
 		const objects = await seed(2);
 		await db.query(hydrateHistoryArchiveBrokerCandidatesSql, [null, 512]);

@@ -96,6 +96,21 @@ export class ArchiveBrokerRamScheduler {
 	get size(): number {
 		return this.entries.size;
 	}
+	has(remoteId: string): boolean {
+		return this.entries.has(remoteId);
+	}
+	rootSize(root: string): number {
+		return this.rootCounts.get(root) ?? 0;
+	}
+	ids(): readonly string[] {
+		return [...this.entries.keys()];
+	}
+	pruneWindow(keep: (row: ArchiveBrokerRamCandidate) => boolean): void {
+		const removed: string[] = [];
+		for (const entry of this.entries.values())
+			if (!keep(entry.row)) removed.push(entry.remoteId);
+		this.remove(removed);
+	}
 	roots(): readonly string[] {
 		return [...this.rootCounts.keys()];
 	}
@@ -120,6 +135,49 @@ export class ArchiveBrokerRamScheduler {
 		this.examined = 0;
 		this.selected = 0;
 	}
+	/** A full window is backpressure, not a reason to discard useful work. */
+	applyWindowRow(
+		row: ArchiveBrokerRamCandidate,
+		maximumPerRoot: number
+	): boolean {
+		if (!Number.isSafeInteger(maximumPerRoot) || maximumPerRoot < 1)
+			throw new Error('Invalid RAM scheduling per-root row ceiling');
+		const entry = this.createEntry(row);
+		if (entry) {
+			const previous = this.entries.get(row.remoteId);
+			if (!previous && this.size >= this.maxRows) return false;
+			if (
+				previous?.row.archiveUrlIdentity !== row.archiveUrlIdentity &&
+				this.rootSize(row.archiveUrlIdentity) >= maximumPerRoot
+			)
+				return false;
+		}
+		this.apply([row]);
+		return true;
+	}
+	private createEntry(row: ArchiveBrokerRamCandidate): Entry | null {
+		if (
+			row.status !== 'pending' ||
+			(row.attempts !== 0 && row.proofCompletionReserve !== true) ||
+			row.publishedAtUs !== null
+		)
+			return null;
+		if (
+			![0, 1, 2].includes(row.priority) ||
+			!Number.isSafeInteger(row.objectOrder) ||
+			(row.checkpointLedger !== null &&
+				!Number.isSafeInteger(row.checkpointLedger))
+		)
+			throw new Error('Invalid RAM candidate ordering fields');
+		return {
+			remoteId: row.remoteId,
+			row,
+			available: ramTime(row.availableAtUs),
+			updated: ramTime(row.updatedAtUs),
+			lane: null,
+			active: false
+		};
+	}
 	/** Last upsert wins; deletion precedes upsert, matching snapshot/ID refreshes. */
 	apply(
 		rows: readonly ArchiveBrokerRamCandidate[],
@@ -127,31 +185,7 @@ export class ArchiveBrokerRamScheduler {
 	): void {
 		const updates = new Map<string, Entry | null>();
 		for (const id of deletedIds) updates.set(id, null);
-		for (const row of rows) {
-			if (
-				row.status !== 'pending' ||
-				(row.attempts !== 0 && row.proofCompletionReserve !== true) ||
-				row.publishedAtUs !== null
-			) {
-				updates.set(row.remoteId, null);
-				continue;
-			}
-			if (
-				![0, 1, 2].includes(row.priority) ||
-				!Number.isSafeInteger(row.objectOrder) ||
-				(row.checkpointLedger !== null &&
-					!Number.isSafeInteger(row.checkpointLedger))
-			)
-				throw new Error('Invalid RAM candidate ordering fields');
-			updates.set(row.remoteId, {
-				remoteId: row.remoteId,
-				row,
-				available: ramTime(row.availableAtUs),
-				updated: ramTime(row.updatedAtUs),
-				lane: null,
-				active: false
-			});
-		}
+		for (const row of rows) updates.set(row.remoteId, this.createEntry(row));
 		let count = this.size;
 		for (const [id, value] of updates)
 			count += Number(value !== null) - Number(this.entries.has(id));
