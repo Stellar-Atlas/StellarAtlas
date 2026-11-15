@@ -49,6 +49,7 @@ function fixture(canonicalFirstRoot: string | null = null) {
 		initializeReadyListener(): Promise<void>;
 		getBrokerCapacity(): Promise<{ availableCapacity: number; empty: boolean }>;
 		signalWork(): void;
+		waitForWork(version: number): Promise<void>;
 		publish(jobs: readonly HistoryArchiveBrokerJob[]): Promise<void>;
 		stopping: boolean;
 	};
@@ -136,8 +137,27 @@ describe('event-driven empty broker recovery', () => {
 		expect(test.publish).toHaveBeenCalledTimes(1);
 		await test.dispatcher.close();
 	});
-	it('still queries the broader scope for canonical-root fallback without new admissions', async () => {
+	it('keeps an already-ready canonical reservation ahead of broader work', async () => {
 		const test = fixture('https://canonical.example');
+		test.repository.reserveJobs.mockResolvedValueOnce(fresh);
+		await test.dispatcher.run();
+		expect(test.repository.reserveJobs.mock.calls.map((call) => call[3]))
+			.toEqual(['https://canonical.example']);
+		expect(test.publish).toHaveBeenCalledTimes(1);
+		await test.dispatcher.close();
+	});
+	it('publishes already-ready broader work before optional canonical maintenance settles', async () => {
+		const test = fixture('https://canonical.example');
+		const feedback = jest.fn();
+		Object.assign(test.runtime, { ram: {
+			reserve: jest.fn(async () => null), recordBroaderFallbackResult: feedback,
+			isCapacityFallbackActive: jest.fn(() => false),
+			stopAdmission: jest.fn(), close: jest.fn(async () => undefined)
+		} });
+		let release!: (count: number) => void;
+		const maintenance = new Promise<number>((resolve) => { release = resolve; });
+		test.repository.ensurePrefetch.mockReturnValueOnce(maintenance);
+		test.repository.maintainAdaptiveProbes.mockReturnValueOnce(maintenance);
 		test.repository.reserveJobs.mockImplementation(
 			async (_limit, _host, _priority, root) => (root === null ? fresh : [])
 		);
@@ -146,6 +166,58 @@ describe('event-driven empty broker recovery', () => {
 			test.repository.reserveJobs.mock.calls.map((call) => call[3])
 		).toEqual(['https://canonical.example', null]);
 		expect(test.publish).toHaveBeenCalledTimes(1);
+		expect(feedback.mock.calls).toEqual([[fresh.length]]);
+		expect(test.repository.ensureFrontier).not.toHaveBeenCalled();
+		expect(test.repository.ensurePrefetch).toHaveBeenCalledWith('https://canonical.example');
+		let drained = false;
+		const closing = test.dispatcher.close().then(() => { drained = true; });
+		await setImmediate();
+		expect(drained).toBe(false);
+		release(0);
+		await closing;
+		expect(drained).toBe(true);
+	});
+	it('joins existing maintenance and reselects canonical work when both initial scopes are empty', async () => {
+		const test = fixture('https://canonical.example');
+		Object.assign(test.runtime, { ram: {
+			reserve: jest.fn(async () => null), isCapacityFallbackActive: jest.fn(() => true),
+			recordBroaderFallbackResult: jest.fn(), stopAdmission: jest.fn(), close: jest.fn(async () => undefined)
+		} });
+		let release!: (count: number) => void;
+		test.repository.ensurePrefetch.mockReturnValueOnce(new Promise<number>((resolve) => { release = resolve; }));
+		test.repository.reserveJobs.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce(fresh);
+		const running = test.dispatcher.run();
+		await setImmediate();
+		expect(test.repository.reserveJobs.mock.calls.map((call) => call[3]))
+			.toEqual(['https://canonical.example', null]);
+		expect(test.publish).not.toHaveBeenCalled();
+		release(1);
+		await running;
+		expect(test.repository.reserveJobs.mock.calls.map((call) => call[3]))
+			.toEqual(['https://canonical.example', null, 'https://canonical.example']);
+		expect(test.repository.ensurePrefetch).toHaveBeenCalledTimes(1);
+		expect(test.repository.recoverMissingFrontierReady).toHaveBeenCalledTimes(1);
+		expect(test.publish).toHaveBeenCalledTimes(1);
+		await test.dispatcher.close();
+	});
+	it('waits for the existing poll instead of joining maintenance on a throttle-only empty wake', async () => {
+		const test = fixture('https://canonical.example');
+		Object.assign(test.runtime, { ram: {
+			reserve: jest.fn(async () => []), isCapacityFallbackActive: jest.fn(() => true),
+			recordBroaderFallbackResult: jest.fn(), stopAdmission: jest.fn(), close: jest.fn(async () => undefined)
+		} });
+		let release!: (count: number) => void;
+		const maintenance = new Promise<number>((resolve) => { release = resolve; });
+		test.repository.ensurePrefetch.mockReturnValueOnce(maintenance);
+		test.repository.maintainAdaptiveProbes.mockReturnValueOnce(maintenance);
+		const wait = jest.fn(async () => { test.runtime.stopping = true; });
+		test.runtime.waitForWork = wait;
+		await test.dispatcher.run();
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(test.repository.reserveJobs).not.toHaveBeenCalled();
+		expect(test.repository.ensureFrontier).not.toHaveBeenCalled();
+		expect(test.publish).not.toHaveBeenCalled();
+		release(0);
 		await test.dispatcher.close();
 	});
 });

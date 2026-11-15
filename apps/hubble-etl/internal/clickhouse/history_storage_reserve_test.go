@@ -33,26 +33,67 @@ func TestHistoryStorageMetadataBindingRejectsReportedPathDrift(t *testing.T) {
 func TestHistoryStorageBudgetsBothSlotsAndProtectsSourceReserve(t *testing.T) {
 	const GiB = uint64(1) << 30
 	policy := HistoricalStoragePolicy{
-		BulkRoot: t.TempDir(), SourceMinimumFreeBytes: 4 * 1024 * GiB,
-		SourceMinimumFreeBasisPoints: 500, SourceCycleOutputBytes: 8 * GiB,
-		CurrentWarehouseMarginBytes: 32 * GiB, UnreservedGrowthPerHistorySlotBytes: 12 * GiB,
+		BulkRoot: t.TempDir(), SourceMinimumFreeBytes: 50_000_000_000,
+		SourceMinimumFreeBasisPoints: 0, SourceCycleOutputBytes: 8 * GiB,
+		CurrentWarehouseMarginBytes: 64 * GiB, UnreservedGrowthPerHistorySlotBytes: 32 * GiB,
 	}
 	for _, tc := range []struct{ total, want uint64 }{
-		{60 * 1024 * GiB, (4*1024 + 8 + 32 + 2*12) * GiB},
-		{100 * 1024 * GiB, (5*1024 + 8 + 32 + 2*12) * GiB},
+		{64_000_000_000_000, 196_028_888_064},
+		{100 * 1024 * GiB, 196_028_888_064},
+		{math.MaxUint64, 196_028_888_064},
 	} {
 		got, err := policy.requiredBytes(tc.total, 2)
 		if err != nil || got != tc.want {
 			t.Fatalf("required=%d, want=%d, error=%v", got, tc.want, err)
 		}
 	}
-	policy.SourceMinimumFreeBytes = GiB
-	if got, err := policy.requiredBytes(1000*GiB, 2); err != nil || got != (500+8+32+2*12)*GiB {
-		t.Fatalf("history growth consumed the ordinary publisher reserve: required=%d, error=%v", got, err)
+	for _, slots := range []int{1, 3} {
+		want := uint64(50_000_000_000) + (8+64+uint64(slots)*32)*GiB
+		if got, err := policy.requiredBytes(64_000_000_000_000, slots); err != nil || got != want {
+			t.Fatalf("history slots %d: required=%d, want=%d, error=%v", slots, got, want, err)
+		}
+	}
+	for _, tc := range []struct {
+		total uint64
+		slots int
+	}{{0, 2}, {64_000_000_000_000, 0}, {64_000_000_000_000, 4}} {
+		if _, err := policy.requiredBytes(tc.total, tc.slots); err == nil {
+			t.Fatalf("invalid capacity or slot count accepted: %+v", tc)
+		}
 	}
 	policy.UnreservedGrowthPerHistorySlotBytes = math.MaxUint64
 	if _, err := policy.requiredBytes(60*1024*GiB, 2); err == nil {
 		t.Fatal("overflow was not rejected")
+	}
+	policy.UnreservedGrowthPerHistorySlotBytes = 32 * GiB
+	policy.SourceCycleOutputBytes = math.MaxUint64
+	if _, err := policy.requiredBytes(60*1024*GiB, 2); err == nil {
+		t.Fatal("source allowance overflow was not rejected")
+	}
+	policy.SourceCycleOutputBytes = 8 * GiB
+	policy.CurrentWarehouseMarginBytes = math.MaxUint64
+	if _, err := policy.requiredBytes(60*1024*GiB, 2); err == nil {
+		t.Fatal("warehouse allowance overflow was not rejected")
+	}
+}
+
+func TestHistoryStoragePolicyRequiresFixedEmergencyAllowance(t *testing.T) {
+	policy := HistoricalStoragePolicy{
+		BulkRoot: t.TempDir(), SourceMinimumFreeBytes: 50_000_000_000,
+		SourceCycleOutputBytes: 8 << 30, CurrentWarehouseMarginBytes: 64 << 30,
+		UnreservedGrowthPerHistorySlotBytes: 32 << 30,
+	}
+	if err := policy.Validate(); err != nil {
+		t.Fatalf("fixed base with zero percentage rejected: %v", err)
+	}
+	for _, tc := range []struct {
+		bytes uint64
+		bps   uint32
+	}{{4 << 40, 500}, {4 << 40, 0}, {50_000_000_000, 500}, {0, 0}} {
+		policy.SourceMinimumFreeBytes, policy.SourceMinimumFreeBasisPoints = tc.bytes, tc.bps
+		if err := policy.Validate(); err == nil || !strings.Contains(err.Error(), "sourceMinimumFreeBytes=50000000000 and sourceMinimumFreeBasisPoints=0") {
+			t.Fatalf("stale reserve did not receive an explicit diagnostic: %+v, %v", tc, err)
+		}
 	}
 }
 

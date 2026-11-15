@@ -1,5 +1,6 @@
 import { dirname, relative, resolve, sep } from 'node:path';
 import {
+	CURRENT_BULK_MINIMUM_FREE_BYTES,
 	parseFullHistoryCurrentCapacityAllowance,
 	parseFullHistoryCurrentOnlyCapacity,
 	SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES,
@@ -187,7 +188,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	}
 	const minimumFreeBytes = positiveBigInt(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES,
-		5n * 1_024n ** 4n,
+		CURRENT_BULK_MINIMUM_FREE_BYTES,
 		'minimum free bytes'
 	);
 	const currentOnlyCapacity = parseFullHistoryCurrentOnlyCapacity(
@@ -206,14 +207,15 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	);
 	const minimumFreeBasisPoints = integer(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS,
-		1_000, 0, 10_000, 'minimum free basis points'
+		0, 0, 10_000, 'minimum free basis points'
 	);
 	if (currentBulkCommitGuard &&
 		(currentOnlyCapacity === undefined || pairedCurrentAdmission === undefined ||
 			scopedCurrentAttempt !== undefined || publicationStagingRoot === null ||
-			minimumFreeBasisPoints !== 500 || typedShardLedgerCount !== 128 ||
+			minimumFreeBasisPoints !== 0 || minimumFreeBytes !== CURRENT_BULK_MINIMUM_FREE_BYTES ||
+			currentOnlyCapacity.minimumFreeBytes !== CURRENT_BULK_MINIMUM_FREE_BYTES || typedShardLedgerCount !== 128 ||
 			cycleLedgerCount !== 128 || processingConcurrency !== 1)) {
-		throw new Error('Current bulk commit guard requires the standing paired 128-ledger mode, five-percent floor and separate staging');
+		throw new Error('Current bulk commit guard requires the standing paired 128-ledger mode, fixed 50 GB floors, zero basis points and separate staging');
 	}
 	const publisherReadyPath = currentBulkCommitGuard ? parseCurrentPublisherReadyPath(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_PUBLISHER_READY_FILE

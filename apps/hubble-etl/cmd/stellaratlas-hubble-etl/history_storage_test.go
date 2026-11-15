@@ -14,7 +14,7 @@ func TestHistoryStoragePolicyIsOptInAndRequiresReservedCurrent(t *testing.T) {
 		t.Fatalf("unconfigured policy changed existing defaults: policy=%v, error=%v", got, err)
 	}
 	want := clickhouse.HistoricalStoragePolicy{
-		BulkRoot: t.TempDir(), SourceMinimumFreeBytes: 100, SourceMinimumFreeBasisPoints: 500,
+		BulkRoot: t.TempDir(), SourceMinimumFreeBytes: 50_000_000_000, SourceMinimumFreeBasisPoints: 0,
 		SourceCycleOutputBytes: 8, CurrentWarehouseMarginBytes: 32, UnreservedGrowthPerHistorySlotBytes: 16,
 	}
 	value, err := json.Marshal(want)
@@ -40,7 +40,7 @@ func TestHistoryStoragePolicyIsOptInAndRequiresReservedCurrent(t *testing.T) {
 }
 
 func TestHistoryStorageMetadataBindingRequiresAllExactFields(t *testing.T) {
-	required := `{"bulkRoot":"/bulk","sourceMinimumFreeBytes":100,"sourceMinimumFreeBasisPoints":500,"sourceCycleOutputBytes":8,"currentWarehouseMarginBytes":32,"unreservedGrowthPerHistorySlotBytes":16,`
+	required := `{"bulkRoot":"/bulk","sourceMinimumFreeBytes":50000000000,"sourceMinimumFreeBasisPoints":0,"sourceCycleOutputBytes":8,"currentWarehouseMarginBytes":32,"unreservedGrowthPerHistorySlotBytes":16,`
 	binding := `"clickhouseReportedPath":"/bulk/warehouse","clickhouseMetadataPath":"/run/private/warehouse","clickhouseMetadataInode":42}`
 	t.Setenv(historyStoragePolicyEnv, required+binding)
 	policy, err := loadHistoryStoragePolicy(true)

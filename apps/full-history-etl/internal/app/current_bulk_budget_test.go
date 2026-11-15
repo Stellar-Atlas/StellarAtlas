@@ -13,9 +13,10 @@ func TestCurrentBulkSourceHeadroom(t *testing.T) {
 		blocks, freeBlocks, availBlocks uint64
 		wantAvailable, wantRequired     uint64
 	}{
-		{"known layout", 4096, 1<<30 + 1, 1 << 27, 1 << 26, 1 << 38, 219902325760 + fixedBytes},
-		{"zero unprivileged availability", 4096, 1 << 30, 1 << 27, 0, 0, 219902325556 + fixedBytes},
-		{"largest capacity", 1, math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64, 922337203685477581 + fixedBytes},
+		{"known layout", 4096, 1<<30 + 1, 1 << 27, 1 << 26, 1 << 38, 50_000_000_000 + fixedBytes},
+		{"synthetic large filesystem", 1, 64_000_000_000_000, 64_000_000_000_000, 64_000_000_000_000, 64_000_000_000_000, 92_966_449_152},
+		{"zero unprivileged availability", 4096, 1 << 30, 1 << 27, 0, 0, 50_000_000_000 + fixedBytes},
+		{"largest capacity", 1, math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64, 50_000_000_000 + fixedBytes},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

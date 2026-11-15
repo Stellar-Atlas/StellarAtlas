@@ -29,8 +29,10 @@ type HistoricalStoragePolicy struct {
 }
 
 func (p HistoricalStoragePolicy) Validate() error {
-	if !filepath.IsAbs(p.BulkRoot) || p.SourceMinimumFreeBytes == 0 ||
-		p.SourceMinimumFreeBasisPoints == 0 || p.SourceMinimumFreeBasisPoints > 10_000 || p.SourceCycleOutputBytes == 0 ||
+	if p.SourceMinimumFreeBytes != minimumBulkReserveBytes || p.SourceMinimumFreeBasisPoints != 0 {
+		return fmt.Errorf("history storage policy requires sourceMinimumFreeBytes=50000000000 and sourceMinimumFreeBasisPoints=0; percentage and legacy multi-TB reserves are not supported")
+	}
+	if !filepath.IsAbs(p.BulkRoot) || p.SourceCycleOutputBytes == 0 ||
 		p.CurrentWarehouseMarginBytes == 0 || p.UnreservedGrowthPerHistorySlotBytes == 0 {
 		return fmt.Errorf("history storage policy requires an absolute bulk root and explicit, valid byte budgets")
 	}
@@ -66,9 +68,9 @@ func (p HistoricalStoragePolicy) requiredBytes(total uint64, historySlots int) (
 	if total == 0 || historySlots < 1 || historySlots > 3 {
 		return 0, fmt.Errorf("invalid bulk size or historical worker count")
 	}
-	basisPoints := uint64(p.SourceMinimumFreeBasisPoints)
-	proportional := total/10_000*basisPoints + (total%10_000*basisPoints+9_999)/10_000
-	required := max(minimumBulkReserveBytes, p.SourceMinimumFreeBytes, proportional)
+	// Workload budgets are added to the fixed HDD emergency allowance, not a
+	// whole-filesystem percentage or an NVMe/unallocated-space reserve.
+	required := minimumBulkReserveBytes
 	// Charge every configured historical slot, including baseline history and
 	// concurrently checked admissions. This avoids racing check-and-debits and
 	// does not assume another worker (or an ambiguous write) has drained.

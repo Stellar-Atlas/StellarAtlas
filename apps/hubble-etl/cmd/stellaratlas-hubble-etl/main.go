@@ -298,7 +298,7 @@ func runBackfill(ctx context.Context, cfg config) error {
 			"baselineHistoryFullPressureBasisPoints": baselineFull,
 			"baselineHistorySomePressureBasisPoints": baselineSome,
 			"maximumInflight":                        cfg.currentGuard.MaximumInflight,
-			"bulkReserveBytes":                       uint64(500) << 30,
+			"bulkReserveBytes":                       uint64(50_000_000_000),
 			"currentWriteBudgetBytes":                cfg.currentWriteBudgetBytes,
 		})
 		// A controlled upgrade can drain admission without cancelling writes.

@@ -10,7 +10,7 @@ import (
 func TestCurrentWriteBudgetIsScopedToReservedCurrentPublisher(t *testing.T) {
 	root := t.TempDir()
 	policy := &clickhouse.HistoricalStoragePolicy{
-		BulkRoot: root, SourceMinimumFreeBytes: 1, SourceMinimumFreeBasisPoints: 500,
+		BulkRoot: root, SourceMinimumFreeBytes: 50_000_000_000, SourceMinimumFreeBasisPoints: 0,
 		SourceCycleOutputBytes: 8 << 30, CurrentWarehouseMarginBytes: 64 << 30,
 		UnreservedGrowthPerHistorySlotBytes: 1, ClickHouseMetadataInode: 1,
 		ClickHouseMetadataPath: filepath.Join(root, "meta"),

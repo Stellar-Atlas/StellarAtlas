@@ -17,8 +17,8 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 				typedShardLedgerCount: 1_024
 			})
 		);
-		expect(config.minimumFreeBytes).toBe(5n * 1_024n ** 4n);
-		expect(config.minimumFreeBasisPoints).toBe(1_000);
+		expect(config.minimumFreeBytes).toBe(50_000_000_000n);
+		expect(config.minimumFreeBasisPoints).toBe(0);
 		expect(config.maximumStoredBytes).toBe(40n * 1_024n ** 4n);
 	});
 
@@ -67,6 +67,9 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		expect(config.currentOnlyCapacity).toEqual({ minimumLedger: 1000, minimumFreeBytes: 4000n });
 		expect(config.minimumFreeBytes).toBe(5000n);
 		expect(config.pairedCurrentAdmission?.minimumUnreservedBytes).toBe(10_000_000_000n);
+		expect(parseFullHistoryLedgerCloseMetaServiceConfig({ ...values,
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '5000'
+		}).currentOnlyCapacity?.minimumFreeBytes).toBe(5000n);
 		for (const overrides of [
 			{ FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'false' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_ENABLED: 'false' },
@@ -77,7 +80,7 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '2' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '0' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '4000\n' },
-			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '5000' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '5001' },
 			{
 				FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_MIN_LEDGER: '1000',
 				FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_CAPACITY_RESERVE_BORROW_BYTES: '1000',
@@ -105,17 +108,17 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		const paired = JSON.stringify({
 			bootId: 'current', warehouseReportedPath: '/bulk/warehouse',
 			warehouseMetadataPath: '/run/warehouse-metadata', warehouseMetadataInode: '1',
-			minimumUnreservedBytes: '3311714749645'
+			minimumUnreservedBytes: '127309411328'
 		});
 		const values = {
 			...environment(),
 			FULL_HISTORY_LEDGER_CLOSE_META_PRIORITIZE_CURRENT: 'true',
 			FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '128',
 			FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '128',
-			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '4398046511104',
-			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '500',
+			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '50000000000',
+			FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '0',
 			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MIN_LEDGER: '65366208',
-			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '3200045599949',
+			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '50000000000',
 			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_PAIRED_ADMISSION: paired,
 			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_BULK_COMMIT_GUARD: 'true',
 			FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_PUBLISHER_READY_FILE: '/run/publisher/current.json',
@@ -130,6 +133,9 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 			{ FULL_HISTORY_LEDGER_CLOSE_META_PUBLICATION_STAGING_ROOT: undefined },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_PUBLISHER_READY_FILE: undefined },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '472' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS: '500' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES: '4398046511104' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_CURRENT_ONLY_MINIMUM_FREE_BYTES: '49999999999' },
 			{ FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '64', FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '64' }
 		]) expect(() => parseFullHistoryLedgerCloseMetaServiceConfig({ ...values, ...override })).toThrow();
 	});
