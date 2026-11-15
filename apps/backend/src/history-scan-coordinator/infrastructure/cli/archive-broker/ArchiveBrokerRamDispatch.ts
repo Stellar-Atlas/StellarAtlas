@@ -316,6 +316,17 @@ export class ArchiveBrokerRamDispatch {
 			return broader === undefined ? null : broader;
 		}
 	}
+	isCapacityFallbackActive(): boolean {
+		return !this.stopped && this.clock() < this.capacityHoldUntil;
+	}
+	recordBroaderFallbackResult(count: number): void {
+		const now = this.clock();
+		if (count > 0 && !this.stopped && now < this.capacityHoldUntil)
+			this.nextBroaderCapacityFallbackAt = Math.min(
+				this.nextBroaderCapacityFallbackAt,
+				now + Math.max(1_000, this.config.pollIntervalMs)
+			);
+	}
 	private broaderCapacityFallback(
 		root: string | null,
 		afterEmptyCanonicalDurable: boolean

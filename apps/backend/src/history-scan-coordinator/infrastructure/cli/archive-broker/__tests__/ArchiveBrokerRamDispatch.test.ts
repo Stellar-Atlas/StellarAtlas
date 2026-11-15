@@ -264,6 +264,29 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		await settle();
 		await test.dispatch.close();
 	});
+	it('polls productive broader durable fallback after two seconds but keeps empty results at fifteen', async () => {
+		const test = fixture([candidate(1), candidate(2)], { ramMaximumRows: 1, canonicalFirstRoot: root });
+		expect(test.dispatch.isCapacityFallbackActive()).toBe(false);
+		await ready(test);
+		expect(test.dispatch.isCapacityFallbackActive()).toBe(true);
+		expect(await test.dispatch.reserve(1, root)).toBeNull();
+		expect(await test.dispatch.reserve(1, null, true)).toBeNull();
+		test.dispatch.recordBroaderFallbackResult(1);
+		test.advance(1_999);
+		expect(await test.dispatch.reserve(1, null, true)).toEqual([]);
+		test.advance(1);
+		expect(await test.dispatch.reserve(1, root)).toBeNull();
+		expect(await test.dispatch.reserve(1, null, true)).toBeNull();
+		test.dispatch.recordBroaderFallbackResult(0);
+		test.advance(14_999);
+		expect(await test.dispatch.reserve(1, null, true)).toEqual([]);
+		test.advance(1);
+		expect(await test.dispatch.reserve(1, null, true)).toBeNull();
+		expect(test.feed.snapshotPage).toHaveBeenCalledTimes(1);
+		expect(test.claim).not.toHaveBeenCalled();
+		await test.dispatch.close();
+		expect(test.dispatch.isCapacityFallbackActive()).toBe(false);
+	});
 	it('refreshes context on ID changes and preserves context invalidation arriving mid-query', async () => {
 		const test = fixture();
 		await ready(test);
@@ -372,7 +395,7 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		expect(test.wake).not.toHaveBeenCalled();
 		test.dispatch.notify({ ids: [id(1)] });
 		test.dispatch.setConnected(true);
-		expect(await test.dispatch.reserve(1, null)).toBeNull();
+		expect(await test.dispatch.reserve(1, null)).toEqual([]);
 		expect(test.claim).not.toHaveBeenCalled();
 	});
 });

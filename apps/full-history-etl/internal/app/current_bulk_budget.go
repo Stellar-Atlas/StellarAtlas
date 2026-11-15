@@ -16,12 +16,8 @@ func currentBulkSourceHeadroom(blockSize int64, blocks, freeBlocks, availableBlo
 	if blockSize <= 0 || blocks == 0 || availableBlocks > freeBlocks || freeBlocks > blocks || blocks > math.MaxUint64/uint64(blockSize) {
 		return 0, 0, fmt.Errorf("invalid source filesystem capacity counters")
 	}
-	total := blocks * uint64(blockSize)
-	// Round 5% up without overflowing even at MaxUint64 bytes.
-	reserve := total / 20
-	if total%20 != 0 {
-		reserve++
-	}
-	required = reserve + currentBulkSourceCushion + currentBulkMaxOutputBytes + currentBulkMetadataBudget
+	// The fixed HDD emergency allowance is independent of filesystem size and
+	// NVMe reserves. Keep the bounded source-copy and metadata budgets additive.
+	required = uint64(50_000_000_000) + currentBulkSourceCushion + currentBulkMaxOutputBytes + currentBulkMetadataBudget
 	return availableBlocks * uint64(blockSize), required, nil
 }

@@ -25,6 +25,7 @@ export interface FullHistoryCurrentOnlyCapacity {
 	readonly scopedReserve?: true;
 }
 
+export const CURRENT_BULK_MINIMUM_FREE_BYTES = 50_000_000_000n;
 export const SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES = 11n * 1024n ** 4n / 4n;
 export const SCOPED_CURRENT_RESERVE_BASIS_POINTS = 472;
 export const SCOPED_CURRENT_START_ALLOWANCE_BYTES = 328n * 1024n ** 3n;
@@ -48,8 +49,8 @@ export function parseFullHistoryCurrentOnlyCapacity(
 		throw new TypeError(`${currentOnlyMinimumFreeBytesKey} must be a positive decimal integer`);
 	}
 	const minimumFreeBytes = BigInt(freeBytes);
-	if (minimumFreeBytes >= ordinaryMinimumFreeBytes) {
-		throw new RangeError('Current-only free-space floor must be below the ordinary absolute floor');
+	if (minimumFreeBytes > ordinaryMinimumFreeBytes) {
+		throw new RangeError('Current-only free-space floor must not exceed the ordinary absolute floor');
 	}
 	return Object.freeze({ minimumLedger, minimumFreeBytes });
 }

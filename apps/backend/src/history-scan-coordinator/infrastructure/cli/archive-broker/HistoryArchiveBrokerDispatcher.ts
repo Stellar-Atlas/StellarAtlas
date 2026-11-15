@@ -210,6 +210,7 @@ export class HistoryArchiveBrokerDispatcher {
 				if (this.stopping) return;
 				const limit = Math.min(capacity, this.config.batchSize);
 				let emptyCanonicalDurable = false;
+				let broaderDurableAttempted = false;
 				const reserve = async (root = this.config.canonicalFirstRoot) => {
 					if (this.stopping) return [];
 					// Consume only wakes preceding this SELECT; later events must survive.
@@ -222,6 +223,7 @@ export class HistoryArchiveBrokerDispatcher {
 							: null;
 					if (ramJobs !== undefined && ramJobs !== null) return ramJobs;
 					if (this.stopping) return [];
+					if (root === null) broaderDurableAttempted = true;
 					const durableJobs = await this.repository.reserveJobs(
 						limit,
 						this.config.maximumPerHost,
@@ -230,12 +232,20 @@ export class HistoryArchiveBrokerDispatcher {
 					);
 					if (root !== null && root === this.config.canonicalFirstRoot)
 						emptyCanonicalDurable = durableJobs.length === 0;
+					if (afterEmptyCanonicalDurable)
+						this.ram?.recordBroaderFallbackResult(durableJobs.length);
 					return durableJobs;
 				};
 				await this.repository.admitDailyTransientSourceRetries(limit);
 				if (this.stopping) return;
 				const adaptive = this.adaptiveMaintenance.run(limit);
 				let jobs = await reserve();
+				if (!this.stopping && jobs.length === 0 && this.config.canonicalFirstRoot !== null)
+					jobs = await reserve(null);
+				if (jobs.length === 0 && !broaderDurableAttempted && this.ram?.isCapacityFallbackActive()) {
+					await this.waitForWork(observedWakeVersion);
+					continue;
+				}
 				if (!this.stopping && jobs.length === 0) {
 					const changed = await adaptive;
 					if (changed > 0 || this.wakeVersion !== observedWakeVersion)

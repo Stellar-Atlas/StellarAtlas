@@ -98,7 +98,7 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 				!Number.isSafeInteger(currentOnly.minimumLedger) ||
 				currentOnly.minimumLedger < 1 || currentOnly.minimumLedger > 0xffff_ffff ||
 				typeof currentOnly.minimumFreeBytes !== 'bigint' ||
-				currentOnly.minimumFreeBytes <= 0n || currentOnly.minimumFreeBytes >= this.#minimumFreeBytes ||
+				currentOnly.minimumFreeBytes <= 0n || currentOnly.minimumFreeBytes > this.#minimumFreeBytes ||
 				(currentOnly.scopedReserve === true && currentOnly.minimumFreeBytes !== SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES))) {
 			throw new RangeError('Invalid current-only capacity policy');
 		}
@@ -131,7 +131,8 @@ export class FullHistoryBulkStorageBudget implements FullHistoryBulkStorageBudge
 				const scopedRatio = (capacity.totalBytes * BigInt(SCOPED_CURRENT_RESERVE_BASIS_POINTS) + 9_999n) / 10_000n;
 				reserve = scopedRatio > SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES
 					? scopedRatio : SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES;
-			} else {
+			} else if (currentOnly.minimumFreeBytes !== this.#minimumFreeBytes) {
+				// Only a reduced current floor inherits the legacy five-percent hard ratio.
 				reserve = currentOnlyReserve(capacity, this.#minimumFreeBasisPoints, currentOnly.minimumFreeBytes);
 			}
 		} else if (allowance !== undefined &&

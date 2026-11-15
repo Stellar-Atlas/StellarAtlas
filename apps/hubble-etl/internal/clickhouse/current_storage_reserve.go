@@ -10,7 +10,6 @@ import (
 const (
 	currentSourceOutputBytes = uint64(8) << 30
 	currentWarehouseRunway   = uint64(64) << 30
-	currentStartupCushion    = uint64(32) << 30
 )
 
 var ErrCurrentBulkHeadroom = errors.New("current warehouse bulk headroom")
@@ -23,7 +22,7 @@ func CurrentWriteCapacityDeferred(err error) bool {
 }
 
 // ValidateCurrentPublicationPolicy requires the same device binding used by the
-// historical writer. Its higher historical threshold remains unchanged.
+// historical writer, plus the explicit source and warehouse workload budgets.
 func ValidateCurrentPublicationPolicy(policy HistoricalStoragePolicy) error {
 	if err := policy.Validate(); err != nil {
 		return err
@@ -40,13 +39,17 @@ func currentPublicationStartBytes(total uint64, minimumBasisPoints uint32) (uint
 	if total == 0 || minimumBasisPoints > 10_000 {
 		return 0, fmt.Errorf("invalid current bulk capacity")
 	}
-	basisPoints := uint64(max(minimumBasisPoints, 500))
-	floor := total/10_000*basisPoints + (total%10_000*basisPoints+9_999)/10_000
-	allowance := currentSourceOutputBytes + currentWarehouseRunway + currentStartupCushion
-	if floor > math.MaxUint64-allowance {
+	if minimumBasisPoints != 0 {
+		return 0, fmt.Errorf("current bulk capacity requires zero percentage reserve")
+	}
+	// The fixed HDD base already provides the emergency allowance; do not add
+	// another startup cushion or reserve a percentage of the whole filesystem.
+	// NVMe reservations are independent and remain configured in ClickHouse.
+	allowance := currentSourceOutputBytes + currentWarehouseRunway
+	if minimumBulkReserveBytes > math.MaxUint64-allowance {
 		return 0, fmt.Errorf("current bulk admission budget overflows")
 	}
-	return floor + allowance, nil
+	return minimumBulkReserveBytes + allowance, nil
 }
 
 // CheckCurrentPublicationBulkReserve reads only disk metadata. It is a fresh

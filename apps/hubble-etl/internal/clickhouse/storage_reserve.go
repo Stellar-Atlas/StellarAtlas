@@ -8,7 +8,9 @@ import (
 	"strings"
 )
 
-const minimumBulkReserveBytes = uint64(500) << 30
+// minimumBulkReserveBytes is the HDD emergency allowance, not an NVMe,
+// unallocated-space, or percentage-of-filesystem reserve.
+const minimumBulkReserveBytes = uint64(50_000_000_000)
 
 // CheckBulkReserve includes ClickHouse's active merge reservations. The NVMe
 // read-model disks retain their configured ClickHouse free-space reservations.

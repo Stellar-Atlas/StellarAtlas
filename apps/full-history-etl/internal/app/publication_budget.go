@@ -38,7 +38,7 @@ func checkCurrentBulkCommitBudget(stage, parent string) error {
 		return fmt.Errorf("current bulk commit guard: %w", err)
 	}
 	if available < required {
-		return fmt.Errorf("current bulk commit guard: source filesystem has %d available bytes at resolved output parent %q; need at least %d bytes for the 5%% reserve, 32 GiB cushion, 8 GiB output cap, and 16 MiB metadata allowance", available, parent, required)
+		return fmt.Errorf("current bulk commit guard: source filesystem has %d available bytes at resolved output parent %q; need at least %d bytes for the 50 GB HDD emergency reserve, 32 GiB cushion, 8 GiB output cap, and 16 MiB metadata allowance", available, parent, required)
 	}
 	return nil
 }

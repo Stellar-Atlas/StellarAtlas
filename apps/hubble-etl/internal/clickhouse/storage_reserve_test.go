@@ -13,7 +13,7 @@ func TestBulkReserveUsesUnreservedSpaceAndFailsClosed(t *testing.T) {
 		value   string
 		blocked bool
 	}{
-		{"536870912000", false}, {"536870911999", true}, {"", true}, {"malformed", true},
+		{"50000000000", false}, {"49999999999", true}, {"", true}, {"malformed", true},
 	} {
 		t.Run(tc.value, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -137,6 +137,15 @@ describe('FullHistoryBulkStorageBudget', () => {
 		}
 		await expect(createBudget({ ...config, maximumStoredBytes: 5n * tebibyte })
 			.assertCanAllocate(outputBytes, priority)).rejects.toThrow('store-size-limit');
+		const standing = createBudget({
+			...config, currentOnlyCapacity: { ...currentOnlyCapacity, minimumFreeBytes: 50_000_000_000n },
+			minimumFreeBytes: 50_000_000_000n, minimumFreeBasisPoints: 0,
+			capacityReader: createCapacityReader(50_000_000_000n + outputBytes, 60n * tebibyte)
+		});
+		await expect(standing.assertCanAllocate(outputBytes, priority)).resolves.toBeUndefined();
+		await expect(standing.assertCanAllocate(outputBytes + 1n, priority)).rejects.toThrow('free-space-reserve');
+		await expect(standing.assertCanAllocate(outputBytes, { ...priority, kind: 'historical' }))
+			.rejects.toThrow('non-current storage');
 	});
 
 	it('rejects relative roots and invalid reserve ratios', () => {

@@ -6,6 +6,7 @@ import type { PendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import { assertCurrentPublisherReady } from './FullHistoryCurrentPublisherReady.js';
 import { readCurrentSourcePublication } from './FullHistoryPairedSourceManifest.js';
 import {
+	CURRENT_BULK_MINIMUM_FREE_BYTES,
 	SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES, SCOPED_CURRENT_RESERVE_BASIS_POINTS,
 	SCOPED_CURRENT_START_ALLOWANCE_BYTES
 } from '../../full-history-ledger-close-meta/FullHistoryCurrentCapacityAllowance.js';
@@ -83,8 +84,8 @@ const publisherCurrentWindowLedgers = 4_096;
 export function publisherCurrentWindowStart(tip: number): number {
 	return Math.max(1, tip - publisherCurrentWindowLedgers + 1);
 }
-// The publisher's per-insert fence retains these same two cushions.
-const guardedCurrentPublisherAndStartupAllowanceBytes = 96n * 1024n ** 3n;
+// Match the publisher's future bounded warehouse-write allowance, without a startup cushion.
+const guardedCurrentWarehouseWriteAllowanceBytes = 64n * 1024n ** 3n;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const datasets = [
 	'account_signers', 'accounts', 'claimable_balances', 'config_settings',
@@ -308,16 +309,21 @@ export function assertPairedCapacity(
 	}
 	const physical = [before.available, after.available, typed.available, warehouse.available, free]
 		.reduce((minimum, bytes) => bytes < minimum ? bytes : minimum);
-	const paired = physical - (free - unreserved);
+	const reserved = free - unreserved;
+	const paired = physical > reserved ? physical - reserved : 0n;
 	const scoped = config.scopedBulkDevice !== undefined;
 	if (scoped && before.device !== config.scopedBulkDevice)
 		throw new Error('Scoped current bulk device binding changed');
-	const bps = BigInt(scoped ? SCOPED_CURRENT_RESERVE_BASIS_POINTS : Math.max(500, config.minimumFreeBasisPoints));
+	const guarded = config.currentBulkCommitGuard === true;
+	if (guarded && (config.minimumFreeBasisPoints !== 0 ||
+		config.currentMinimumFreeBytes !== CURRENT_BULK_MINIMUM_FREE_BYTES))
+		throw new Error('Standing current capacity requires the fixed 50 GB floor and zero basis points');
+	const bps = BigInt(scoped ? SCOPED_CURRENT_RESERVE_BASIS_POINTS : guarded ? 0 : Math.max(500, config.minimumFreeBasisPoints));
 	const ratioFloor = (total * bps + 9_999n) / 10_000n;
 	const absoluteFloor = scoped ? SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES : config.currentMinimumFreeBytes;
 	const sourceFloor = ratioFloor > absoluteFloor ? ratioFloor : absoluteFloor;
 	const allowance = scoped ? SCOPED_CURRENT_START_ALLOWANCE_BYTES : config.sourceOutputBytes +
-		(config.currentBulkCommitGuard === true ? guardedCurrentPublisherAndStartupAllowanceBytes : 0n);
+		(guarded ? guardedCurrentWarehouseWriteAllowanceBytes : 0n);
 	const required = sourceFloor + allowance;
 	if (config.currentBulkCommitGuard !== true && policy.minimumUnreservedBytes < required)
 		throw new Error('Paired current minimum must cover the source floor and full cycle output');

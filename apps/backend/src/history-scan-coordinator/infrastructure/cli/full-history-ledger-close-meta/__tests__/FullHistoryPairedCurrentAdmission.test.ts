@@ -68,6 +68,8 @@ describe('paired current source admission', () => {
 		}, 5)).toThrow(/mismatch/);
 		expect(() => assertPairedCapacity(policy, config, before, { ...before, available: 999n }, before, warehouse, row, 5))
 			.toThrow(/reserve refused/);
+		expect(() => assertPairedCapacity(policy, config, before, { ...before, available: 100n }, before, warehouse, row, 5))
+			.toThrow(/reserve refused/);
 	});
 
 	it('keeps all 328 GiB above the scoped floor and refuses another bulk device', () => {
@@ -85,10 +87,11 @@ describe('paired current source admission', () => {
 		expect(() => check(reservedPolicy, scoped, { ...available, unreserved_space: String(start - 1n) })).toThrow(/reserve refused/);
 	});
 
-	it('computes the standing current gate from the physical floor and separate remaining allowances', () => {
-		const minimum = 3_311_714_749_645n;
+	it('keeps the standing gate at 50 GB plus source output and 64 GiB of future warehouse writes', () => {
+		const minimum = 127_309_411_328n;
 		const disk = { ...before, total: 64_000_911_998_976n, available: minimum };
-		const cfg = { ...config, currentBulkCommitGuard: true, sourceOutputBytes: 8n << 30n };
+		const cfg = { ...config, currentBulkCommitGuard: true, sourceOutputBytes: 8n << 30n,
+			currentMinimumFreeBytes: 50_000_000_000n, minimumFreeBasisPoints: 0 };
 		const paired = { ...policy, minimumUnreservedBytes: 1n };
 		const diskRow = { ...row, total_space: String(disk.total), free_space: String(minimum) };
 		const check = (unreserved: bigint, minimumOverride = paired.minimumUnreservedBytes) =>
@@ -96,8 +99,14 @@ describe('paired current source admission', () => {
 				disk, disk, disk, { ...disk, inode: 12n },
 				{ ...diskRow, unreserved_space: String(unreserved) }, 1);
 		expect(() => check(minimum)).not.toThrow();
+		expect(() => check(minimum, minimum)).not.toThrow();
 		expect(() => check(minimum - 1n)).toThrow(/reserve refused/);
 		expect(() => check(minimum, minimum + 1n)).toThrow(/reserve refused/);
+		for (const override of [{ minimumFreeBasisPoints: 500 }, { currentMinimumFreeBytes: 3_200_045_599_949n }]) {
+			expect(() => assertPairedCapacity(paired, { ...cfg, ...override }, disk, disk, disk,
+				{ ...disk, inode: 12n }, { ...diskRow, unreserved_space: String(minimum) }, 1))
+				.toThrow(/fixed 50 GB floor and zero basis points/);
+		}
 	});
 
 	it('requires one exact completed manifest with the same source digest, range and all 20 dataset counts', () => {
