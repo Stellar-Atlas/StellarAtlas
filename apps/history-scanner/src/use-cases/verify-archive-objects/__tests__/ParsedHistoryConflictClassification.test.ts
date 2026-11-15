@@ -1,5 +1,5 @@
 import { ParsedHistoryRegistrationConflictError } from '../../../infrastructure/services/ParsedHistoryRegistrationConflictError.js';
-import { classifyCategoryVerificationFailure } from '../ArchiveObjectCategoryVerifier.js';
+import { classifyCategoryVerificationFailure } from '../ArchiveObjectCategoryFailureClassifier.js';
 
 it('classifies a parsed-history content conflict as archive evidence', () => {
 	const conflict = new ParsedHistoryRegistrationConflictError(
