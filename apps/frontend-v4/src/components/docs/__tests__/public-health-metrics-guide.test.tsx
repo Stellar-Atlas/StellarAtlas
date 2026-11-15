@@ -37,11 +37,14 @@ describe('public readiness and metrics guide', () => {
 		}
 	);
 
-	it('renders exact source-backed HTTP503 health and HTTP200 metrics examples', () => {
+	it('renders exact HTTP200 examples without hiding stale health readiness', () => {
 		const selected = fixtures.filter(
 			(row) => row.scenario === 'stale-incomplete'
 		);
-		expect(selected.map((row) => row.status)).toEqual([503, 200]);
+		expect(selected.map((row) => row.status)).toEqual([200, 200]);
+		expect(selected[0]!.body.status).toBe('not_ready');
+		expect(selected[0]!.body.checks?.publication.status).toBe('stale');
+		expect(selected[0]!.body.checks?.archive.status).toBe('incomplete');
 		expect(blocks().slice(2)).toEqual(
 			selected.map((row) => escaped(JSON.stringify(row.body, null, 2)))
 		);
@@ -51,7 +54,7 @@ describe('public readiness and metrics guide', () => {
 
 	it.each([
 		{ scenario: 'ready', statuses: [200, 200] },
-		{ scenario: 'stale-incomplete', statuses: [503, 200] },
+		{ scenario: 'stale-incomplete', statuses: [200, 200] },
 		{ scenario: 'unavailable', statuses: [503, 503] }
 	])(
 		'retains actual route $scenario statuses, exact strings and unknown nulls',
@@ -93,6 +96,10 @@ describe('public readiness and metrics guide', () => {
 	it('distinguishes availability, coverage, inventory and root verification', () => {
 		const html = renderSection();
 		for (const text of [
+			'HTTP 200 means serving dependency availability',
+			'not fresh ingestion or complete evidence',
+			'HTTP 200 can still contain',
+			'dependency probe or source-read failure returns HTTP 503',
 			'both metric sources were read',
 			'Keep null distinct from zero',
 			'not a readiness certificate',

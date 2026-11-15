@@ -60,7 +60,7 @@
 	{
 		"scenario": "stale-incomplete",
 		"path": "/v1/public-goods/health",
-		"status": 503,
+		"status": 200,
 		"body": {
 			"generatedAt": "2026-01-02T00:00:00.000Z",
 			"status": "not_ready",
