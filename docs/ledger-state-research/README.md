@@ -4,6 +4,44 @@ Status: bounded research results as of 2026-11-02, not an operational prover or 
 
 The research goal is independently generated ledger-state claims bound to authenticated Stellar checkpoints, attributable publication, practical verifier experiments and evaluation of a five-second generation target. The [published research scope](https://github.com/SCF-Public-Goods-Maintenance/scf-public-goods-maintenance.github.io/blob/e136962d7549f82a2cd8c66fd83a2d4238c05487/docs/projects/stellaratlas.md) describes ongoing investigation, not delivery of a completed BLS12-381 prover or watchtower system.
 
+## Publisher-manifest follow-up (2026-11-03)
+
+The [offline publisher-manifest experiment](publisher-manifest.md) now executes
+the limited authorization experiment proposed later on this page. Its
+[module](publisher-manifest.mjs) and [tests](publisher-manifest.test.mjs) are
+published together. The historical results and future-work wording below remain
+the 2026-11-02 snapshot; the proposed manifest step has since been executed.
+
+The experiment verifies a domain-separated, fixed-field Ed25519 manifest against
+an externally supplied test publisher, network, public-key policy and exact
+expected claim. It binds ledger/header/root/key/value/relation/evidence
+commitments, key ID, issue/expiry times and a nonce. The recorded qualification
+passed **58 tests**, with zero failures or skips, on Node **22.20.0** and OpenSSL
+**3.5.2**. Cases include signed-field mutation, wrong signer or expected claim,
+externally authorized key changes, time-policy boundaries and bounded nonce
+replay handling.
+
+Reproduce just this dependency-free Node experiment from the repository root:
+
+```sh
+node --max-old-space-size=128 --test --test-concurrency=1 --test-timeout=10000 docs/ledger-state-research/publisher-manifest.test.mjs
+```
+
+The keys are intentionally **public RFC 8032 test-vector seeds**, not credentials.
+They must never authorize a real identity or publication. The tests use a fixed
+logical clock and synthetic claim; they do not contact the network or rerun the
+historical Core or Soroban-host experiments.
+
+Successful verification establishes attribution only to a key authorized by the
+caller's **test policy**. It does not establish real StellarAtlas key ownership,
+an authenticated consensus checkpoint, true state, state inclusion or evidence
+availability. Commitments are compared, not independently derived. The caller's
+clock, key policy, expected claim and synchronous process-local replay map remain
+external trust assumptions; no durable/distributed replay service or clock
+rollback protection is implemented. No BLS12-381 prover, current-protocol on-chain
+cost, privacy feature or five-second result follows, and test-run duration is not
+a proving-performance measurement.
+
 ## What the experiments establish
 
 | Experiment | Observed result | Boundary |
