@@ -3,6 +3,9 @@ import type { DataSource } from 'typeorm';
 import { developerAuthRouter } from './DeveloperAuthRouter.js';
 import { readProtectedVerificationCredential } from './ProtectedVerificationCredential.js';
 import { TypeOrmDeveloperAuthStore } from './TypeOrmDeveloperAuthStore.js';
+import { developerSubmissionRouter } from './DeveloperSubmissionRouter.js';
+import { TypeOrmDeveloperSubmissionStore } from './TypeOrmDeveloperSubmissionStore.js';
+import type { ContractProvenanceService } from '../http/contract-provenance/ContractProvenanceService.js';
 
 export const developerGithubSecretFile =
 	'/etc/stellaratlas/developer-auth/github.client-secret';
@@ -10,9 +13,26 @@ export const developerGithubSecretFile =
 export async function createAtlasDeveloperAuth(
 	environment: NodeJS.ProcessEnv,
 	database: DataSource,
-	request?: typeof fetch
+	request?: typeof fetch,
+	verification?: {
+		readonly networkPassphrase: string;
+		readonly verifier: Pick<ContractProvenanceService, 'get'>;
+	}
 ): Promise<Router | null> {
 	const enabled = environment.ATLAS_DEVELOPER_AUTH_GITHUB_ENABLED;
+	const submissions = environment.ATLAS_DEVELOPER_SUBMISSIONS_ENABLED;
+	if (
+		submissions !== undefined &&
+		submissions !== 'false' &&
+		submissions !== 'true'
+	)
+		throw new Error(
+			'ATLAS_DEVELOPER_SUBMISSIONS_ENABLED must be true or false'
+		);
+	if (submissions === 'true' && (enabled !== 'true' || !verification))
+		throw new Error(
+			'Developer submissions require GitHub authentication and the configured contract verifier'
+		);
 	if (enabled === undefined || enabled === 'false') return null;
 	if (enabled !== 'true')
 		throw new Error(
@@ -42,12 +62,24 @@ export async function createAtlasDeveloperAuth(
 			257
 		);
 		const store = new TypeOrmDeveloperAuthStore(database, clientSecret);
-		const { router } = developerAuthRouter(
+		const { router, applicant } = developerAuthRouter(
 			{ origin, clientId, clientSecret },
 			store,
 			request
 		);
 		await store.assertReady();
+		if (submissions === 'true' && verification) {
+			const submissionsStore = new TypeOrmDeveloperSubmissionStore(database);
+			await submissionsStore.assertReady();
+			router.use(
+				developerSubmissionRouter({
+					origin,
+					applicant,
+					store: submissionsStore,
+					...verification
+				})
+			);
+		}
 		return router;
 	} catch {
 		throw new Error(

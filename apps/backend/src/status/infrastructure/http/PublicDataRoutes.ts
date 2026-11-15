@@ -16,6 +16,8 @@ import type { DirectoryReader } from '../directory/DirectoryReader.js';
 import { directoryRoutePrefix, directoryRouter } from './DirectoryRouter.js';
 import { contractCatalogueRouter } from './contract-provenance/ContractCatalogueRouter.js';
 import { ContractCatalogueStore } from './contract-provenance/ContractCatalogueStore.js';
+import { createContractProvenanceService } from './contract-provenance/ContractProvenanceRouter.js';
+import type { ContractProvenanceService } from './contract-provenance/ContractProvenanceService.js';
 
 interface PublicDataRouteConfig {
 	readonly warehouse: PublicGoodsRouterConfig['warehouse'];
@@ -26,10 +28,16 @@ interface PublicDataRouteConfig {
 	readonly directory?: DirectoryReader;
 }
 
-export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfig): void {
+export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfig): ContractProvenanceService {
 	const contractCatalogue = process.env.STELLAR_ATLAS_CONTRACT_CATALOGUE_ENABLED === '1'
 		? new ContractCatalogueStore(config.manager, config.networkPassphrase)
 		: undefined;
+	const contractProvenance = createContractProvenanceService({
+		rpcUrl: process.env.STELLAR_RPC_URL,
+		provenanceRpcUrl: process.env.STELLAR_PROVENANCE_RPC_URL,
+		networkPassphrase: config.networkPassphrase,
+		observe: contractCatalogue?.observe.bind(contractCatalogue)
+	});
 	app.use('/v1', contractCatalogueRouter(config.networkPassphrase, contractCatalogue));
 	if (config.directory)
 		app.use(directoryRoutePrefix, directoryRouter(config.directory));
@@ -53,6 +61,7 @@ export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfi
 		cacheRoot,
 		source,
 		catalogue,
+		contractProvenance,
 		observeContractVerification: contractCatalogue?.observe.bind(contractCatalogue)
 	}));
 	app.use('/v1/public-goods', publicGoodsRouter({
@@ -63,4 +72,5 @@ export function mountPublicDataRoutes(app: Express, config: PublicDataRouteConfi
 		})
 	}));
 	app.all('/graphql', hubbleWarehouseGraphqlHandler(config.warehouse));
+	return contractProvenance;
 }

@@ -3,6 +3,7 @@ import { createAccountDirectory } from '../../../status/infrastructure/directory
 import { createAtlasVerification } from '../../../status/infrastructure/verification/VerificationActivation.js';
 import { createAtlasDeveloperAuth } from '../../../status/infrastructure/verification/DeveloperAuthActivation.js';
 import { developerAuthPath } from '../../../status/infrastructure/verification/DeveloperGithubOAuth.js';
+import { developerSubmissionBodyParser } from '../../../status/infrastructure/verification/DeveloperSubmissionRouter.js';
 import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
 import { resolve } from 'node:path';
@@ -144,6 +145,7 @@ const apiTraffic = process.env.ATLAS_API_TRAFFIC_LOG === '1' || apiEvents
 	? createAtlasApiTraffic(createPublicOpenApiDocument(openApiDocument), process.stdout, apiEvents) : undefined;
 if (apiTraffic) api.use(apiTraffic.observe);
 api.use(corsMiddleware);
+api.use(developerAuthPath + '/submissions', developerSubmissionBodyParser);
 mountParsedHistoryRequestBodyParser(api);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
 api.use('/rpc', bodyParser.json({ limit: '2mb' }));
@@ -164,8 +166,6 @@ const setup = async (): Promise<{ config: Config; kernel: Kernel }> => {
 	const kernel = await Kernel.getInstance(config);
 	const database = kernel.container.get(DataSource);
 	api.use('/v1/account-verification', createAtlasVerification(process.env, database));
-	const developerAuth = await createAtlasDeveloperAuth(process.env, database);
-	if (developerAuth) api.use(developerAuthPath, developerAuth);
 
 	return {
 		config: config,
@@ -224,7 +224,7 @@ const listen = async () => {
 		})
 	);
 
-	mountPublicDataRoutes(api, {
+	const contractVerifier = mountPublicDataRoutes(api, {
 		directory: createAccountDirectory(process.env, kernel.container.get(DataSource)),
 		backgroundTasksEnabled: backgroundTasks,
 		warehouse: hubbleWarehouse,
@@ -232,6 +232,11 @@ const listen = async () => {
 		networkPassphrase: config.networkConfig.networkPassphrase,
 		getArchiveStatusSummary: kernel.container.get(GetHistoryArchiveObjectStatusSummary)
 	});
+	const developerAuth = await createAtlasDeveloperAuth(
+		process.env, kernel.container.get(DataSource), undefined,
+		{ networkPassphrase: config.networkConfig.networkPassphrase, verifier: contractVerifier }
+	);
+	if (developerAuth) api.use(developerAuthPath, developerAuth);
 
 	mountOpenApiDocumentation(api, {
 		document: openApiDocument
