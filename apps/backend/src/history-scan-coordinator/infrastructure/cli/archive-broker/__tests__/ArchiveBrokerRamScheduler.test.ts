@@ -340,6 +340,77 @@ describe('RAM first-pass scheduler', () => {
 		queue.clear();
 		expect(queue.roots()).toEqual([]);
 	});
+	it('retains a full window and validates rows before returning backpressure', () => {
+		const queue = new ArchiveBrokerRamScheduler(2);
+		queue.apply([row(1), row(2)]);
+		const selected = take(queue);
+		expect(queue.applyWindowRow(row(3), 2)).toBe(false);
+		expect(queue.ids()).toEqual([id(1), id(2)]);
+		expect(take(queue)).toEqual(selected);
+		for (const cap of [0, 1.5, NaN])
+			expect(() => queue.applyWindowRow(row(3), cap)).toThrow('per-root');
+		for (const invalid of [
+			row(3, { objectOrder: NaN }),
+			row(3, { checkpointLedger: 1.5 }),
+			row(3, { availableAtUs: 'invalid' }),
+			row(3, { updatedAtUs: 'invalid' })
+		])
+			expect(() => queue.applyWindowRow(invalid, 2)).toThrow();
+		expect(queue.size).toBe(2);
+	});
+	it('prunes blocked RAM hints to free window capacity without losing eligible work', () => {
+		const queue = new ArchiveBrokerRamScheduler(2);
+		queue.apply([row(1, { dependencyReady: false }), row(2)]);
+		expect(queue.applyWindowRow(row(3), 2)).toBe(false);
+		const selected = take(queue);
+		queue.pruneWindow((candidate) => candidate.dependencyReady);
+		expect(queue.ids()).toEqual([id(2)]);
+		expect(take(queue)).toEqual(selected);
+		expect(queue.rootSize(rootA)).toBe(1);
+		expect(queue.applyWindowRow(row(3), 2)).toBe(true);
+	});
+	it('caps one root without blocking a different root or mutating ID snapshots', () => {
+		const queue = new ArchiveBrokerRamScheduler(3);
+		expect(queue.applyWindowRow(row(1), 1)).toBe(true);
+		const ids = queue.ids();
+		expect(queue.applyWindowRow(row(2), 1)).toBe(false);
+		expect(
+			queue.applyWindowRow(row(3, { archiveUrlIdentity: rootB }), 1)
+		).toBe(true);
+		expect(ids).toEqual([id(1)]);
+		expect(queue.has(id(1))).toBe(true);
+		expect(queue.has(id(2))).toBe(false);
+		expect(queue.rootSize(rootA)).toBe(1);
+		expect(queue.rootSize(rootB)).toBe(1);
+		expect(queue.rootSize('https://missing.example')).toBe(0);
+	});
+	it('processes tracked updates, removals and destination-capped root moves', () => {
+		const queue = new ArchiveBrokerRamScheduler(2);
+		queue.apply([row(1), row(2, { archiveUrlIdentity: rootB })]);
+		take(queue);
+		expect(
+			queue.applyWindowRow(row(1, { availableAtUs: String(now + 1n) }), 1)
+		).toBe(true);
+		expect(take(queue).map((value) => value.remoteId)).toEqual([id(2)]);
+		expect(
+			queue.applyWindowRow(row(1, { archiveUrlIdentity: rootB }), 1)
+		).toBe(false);
+		expect(queue.rootSize(rootA)).toBe(1);
+		expect(queue.rootSize(rootB)).toBe(1);
+		expect(queue.applyWindowRow(row(2, { status: 'failed' }), 1)).toBe(true);
+		expect(
+			queue.applyWindowRow(row(1, { archiveUrlIdentity: rootB }), 1)
+		).toBe(true);
+		expect(queue.rootSize(rootA)).toBe(0);
+		expect(queue.rootSize(rootB)).toBe(1);
+		expect(queue.applyWindowRow(row(1, { attempts: 1 }), 1)).toBe(true);
+		expect(queue.size).toBe(0);
+		expect(queue.applyWindowRow(row(3), 1)).toBe(true);
+		expect(
+			queue.applyWindowRow(row(3, { publishedAtUs: String(now) }), 1)
+		).toBe(true);
+		expect(queue.ids()).toEqual([]);
+	});
 	it('visits bounded lane prefixes rather than the full healthy cache per take', () => {
 		const queue = new ArchiveBrokerRamScheduler();
 		queue.apply(Array.from({ length: 10_000 }, (_, i) => row(i + 1)));

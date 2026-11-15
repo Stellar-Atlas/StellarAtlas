@@ -1,12 +1,17 @@
 import { setImmediate } from 'node:timers/promises';
 import type { Logger } from 'logger';
 import { ArchiveBrokerRamDispatch } from '../ArchiveBrokerRamDispatch.js';
+import type { ArchiveBrokerRamScheduler } from '../ArchiveBrokerRamScheduler.js';
 import type {
 	ArchiveBrokerRamCandidate,
 	ArchiveBrokerRamContext,
 	ArchiveBrokerRamSelected
 } from '../ArchiveBrokerRamTypes.js';
-import type { HistoryArchiveRamCandidatePage } from '../../../repositories/database/HistoryArchiveRamCandidateFeed.js';
+import type {
+	HistoryArchiveRamRootPage,
+	HistoryArchiveRamWindowCursor,
+	HistoryArchiveRamWindowPage
+} from '../../../repositories/database/HistoryArchiveRamCandidateFeed.js';
 import type { HistoryArchiveBrokerJob } from '../../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
 import type { HistoryArchiveBrokerConfig } from '../HistoryArchiveBrokerConfig.js';
 
@@ -71,15 +76,64 @@ function fixture(
 	let elapsed = 0;
 	const state = new Map(rows.map((row) => [row.remoteId, row]));
 	const feed = {
-		snapshotPage: jest.fn(
+		listRootPage: jest.fn(
 			async (
-				_cursor: string | null,
-				_limit = 512
-			): Promise<HistoryArchiveRamCandidatePage> => ({
-				rows: [...state.values()],
-				hasMore: false,
-				nextCursor: [...state.keys()].at(-1) ?? null
-			})
+				after: string | null,
+				limit = 8
+			): Promise<HistoryArchiveRamRootPage> => {
+				const allRoots = [...new Set(
+					[...state.values()]
+						.filter((row) => row.publishedAtUs === null)
+						.map((row) => row.archiveUrlIdentity)
+				)].sort((a, b) => a.localeCompare(b));
+				const afterRoots = allRoots.filter((archiveUrlIdentity) =>
+					after === null || archiveUrlIdentity > after
+				);
+				const sentinel = afterRoots.slice(0, limit + 1);
+				const roots = sentinel.slice(0, limit);
+				return {
+					roots,
+					nextCursor: roots.at(-1) ?? null,
+					hasMore: sentinel.length > limit
+				};
+			}
+		),
+		windowPage: jest.fn(
+			async (
+				archiveUrlIdentity: string,
+				cursor: HistoryArchiveRamWindowCursor | null,
+				limit = 128
+			): Promise<HistoryArchiveRamWindowPage> => {
+				const ordered = [...state.values()]
+					.filter((row) => row.archiveUrlIdentity === archiveUrlIdentity && row.publishedAtUs === null)
+					.sort((a, b) => {
+						const aUpdated = BigInt(a.updatedAtUs);
+						const bUpdated = BigInt(b.updatedAtUs);
+						return a.priority - b.priority ||
+							(aUpdated < bUpdated ? -1 : aUpdated > bUpdated ? 1 : 0) ||
+							a.remoteId.localeCompare(b.remoteId);
+					})
+					.filter((row) => {
+						if (cursor === null) return true;
+						const updatedAtUs = BigInt(row.updatedAtUs);
+						const cursorUpdatedAtUs = BigInt(cursor.updatedAtUs);
+						return row.priority > cursor.priority ||
+							(row.priority === cursor.priority && updatedAtUs > cursorUpdatedAtUs) ||
+							(row.priority === cursor.priority && updatedAtUs === cursorUpdatedAtUs && row.remoteId > cursor.remoteId);
+					});
+				const raw = ordered.slice(0, limit);
+				const last = raw.at(-1);
+				return {
+					rows: raw.filter((row) =>
+						row.status === 'pending' &&
+						(row.attempts === 0 || row.proofCompletionReserve === true)
+					),
+					nextCursor: last
+						? { priority: last.priority, updatedAtUs: last.updatedAtUs, remoteId: last.remoteId }
+						: null,
+					hasMore: raw.length === limit
+				};
+			}
 		),
 		refreshIds: jest.fn(
 			async (
@@ -174,18 +228,18 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		const jobs = await test.dispatch.reserve(1, null);
 		expect(jobs?.map((job) => job.job.remoteId)).toEqual([id(1)]);
 		expect(test.claim).toHaveBeenCalledTimes(1);
-		expect(test.feed.snapshotPage).toHaveBeenCalledWith(null, 512);
+		expect(test.feed.windowPage).toHaveBeenCalledWith(root, null, 128);
 		await test.dispatch.close();
 	});
 	it('replays IDs changed during bootstrap after the page snapshot, including deletions', async () => {
 		const test = fixture();
-		const gate = deferred<HistoryArchiveRamCandidatePage>();
-		test.feed.snapshotPage.mockImplementationOnce(() => gate.promise);
+		const gate = deferred<HistoryArchiveRamWindowPage>();
+		test.feed.windowPage.mockImplementationOnce(() => gate.promise);
 		test.dispatch.setConnected(true);
 		test.state.delete(id(1));
 		test.state.set(id(2), candidate(2));
 		test.dispatch.notify({ ids: [id(1), id(2)] });
-		gate.resolve({ rows: [candidate(1)], nextCursor: id(1), hasMore: false });
+		gate.resolve({ rows: [candidate(1)], nextCursor: { priority: 2, updatedAtUs: String(nowUs - 100n), remoteId: id(1) }, hasMore: false });
 		await settle();
 		expect(
 			(await test.dispatch.reserve(1, null))?.map((job) => job.job.remoteId)
@@ -211,21 +265,22 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 	});
 	it('discards old-generation bootstrap results and fully rebuilds after reconnect', async () => {
 		const test = fixture();
-		const gate = deferred<HistoryArchiveRamCandidatePage>();
-		test.feed.snapshotPage.mockImplementationOnce(() => gate.promise);
+		const gate = deferred<HistoryArchiveRamWindowPage>();
+		test.feed.windowPage.mockImplementationOnce(() => gate.promise);
 		test.dispatch.setConnected(true);
+		await setImmediate();
 		test.dispatch.setConnected(false);
 		test.state.clear();
 		test.state.set(id(2), candidate(2));
 		test.dispatch.setConnected(true);
-		gate.resolve({ rows: [candidate(1)], nextCursor: id(1), hasMore: false });
+		gate.resolve({ rows: [candidate(1)], nextCursor: { priority: 2, updatedAtUs: String(nowUs - 100n), remoteId: id(1) }, hasMore: false });
 		await settle();
 		await test.dispatch.reserve(1, null);
 		await settle();
 		expect(
 			(await test.dispatch.reserve(1, null))?.map((job) => job.job.remoteId)
 		).toEqual([id(2)]);
-		expect(test.feed.snapshotPage).toHaveBeenCalledTimes(2);
+		expect(test.feed.windowPage).toHaveBeenCalledTimes(2);
 		await test.dispatch.close();
 	});
 	it.each([
@@ -239,7 +294,7 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		await ready(test);
 		test.dispatch.notify(hint);
 		await settle();
-		expect(test.feed.snapshotPage).toHaveBeenCalledTimes(2);
+		expect(test.feed.windowPage).toHaveBeenCalledTimes(2);
 		expect((await test.dispatch.reserve(1, null))?.length).toBe(1);
 		await test.dispatch.close();
 	});
@@ -256,36 +311,27 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		const test = fixture();
 		expect(await test.dispatch.reserve(1, null)).toBeNull();
 		expect(await test.dispatch.reserve(1, null)).toEqual([]);
-		const gate = deferred<HistoryArchiveRamCandidatePage>();
-		test.feed.snapshotPage.mockImplementationOnce(() => gate.promise);
+		const gate = deferred<HistoryArchiveRamWindowPage>();
+		test.feed.windowPage.mockImplementationOnce(() => gate.promise);
 		test.dispatch.setConnected(true);
 		expect(await test.dispatch.reserve(1, null)).toEqual([]);
 		gate.resolve({ rows: [], nextCursor: null, hasMore: false });
 		await settle();
 		await test.dispatch.close();
 	});
-	it('polls productive broader durable fallback after two seconds but keeps empty results at fifteen', async () => {
+	it('pauses prefetch at capacity without clearing retained work, then refills after dispatch', async () => {
 		const test = fixture([candidate(1), candidate(2)], { ramMaximumRows: 1, canonicalFirstRoot: root });
-		expect(test.dispatch.isCapacityFallbackActive()).toBe(false);
 		await ready(test);
-		expect(test.dispatch.isCapacityFallbackActive()).toBe(true);
-		expect(await test.dispatch.reserve(1, root)).toBeNull();
-		expect(await test.dispatch.reserve(1, null, true)).toBeNull();
-		test.dispatch.recordBroaderFallbackResult(1);
-		test.advance(1_999);
-		expect(await test.dispatch.reserve(1, null, true)).toEqual([]);
-		test.advance(1);
-		expect(await test.dispatch.reserve(1, root)).toBeNull();
-		expect(await test.dispatch.reserve(1, null, true)).toBeNull();
-		test.dispatch.recordBroaderFallbackResult(0);
-		test.advance(14_999);
-		expect(await test.dispatch.reserve(1, null, true)).toEqual([]);
-		test.advance(1);
-		expect(await test.dispatch.reserve(1, null, true)).toBeNull();
-		expect(test.feed.snapshotPage).toHaveBeenCalledTimes(1);
-		expect(test.claim).not.toHaveBeenCalled();
+		expect(test.logger.error).not.toHaveBeenCalled();
+		expect((await test.dispatch.reserve(1, root))?.map((job) => job.job.remoteId)).toEqual([id(1)]);
+		test.advance(2_000);
+		const first = await test.dispatch.reserve(1, root);
+		await settle();
+		const next = first?.length ? first : await test.dispatch.reserve(1, root);
+		expect(next?.map((job) => job.job.remoteId)).toEqual([id(2)]);
+		expect(test.claim).toHaveBeenCalledTimes(2);
+		expect(test.logger.error).not.toHaveBeenCalled();
 		await test.dispatch.close();
-		expect(test.dispatch.isCapacityFallbackActive()).toBe(false);
 	});
 	it('refreshes context on ID changes and preserves context invalidation arriving mid-query', async () => {
 		const test = fixture();
@@ -302,7 +348,7 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		gate.resolve(await original(null, [root]));
 		await reserving;
 		await test.dispatch.reserve(1, null);
-		expect(test.feed.loadContext).toHaveBeenCalledTimes(3);
+		expect(test.feed.loadContext).toHaveBeenCalledTimes(4);
 		await test.dispatch.close();
 	});
 	it('refreshes collation ranks for roots introduced by a later bounded dirty batch', async () => {
@@ -335,6 +381,26 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		expect(test.claim).toHaveBeenCalledTimes(1);
 		await test.dispatch.close();
 	});
+	it('retries collation context when an in-place refill adds a root during the read', async () => {
+		const test = fixture();
+		await ready(test);
+		const original = test.feed.loadContext.getMockImplementation()!;
+		const gate = deferred<ArchiveBrokerRamContext>();
+		test.feed.loadContext.mockImplementationOnce(() => gate.promise);
+		const reserving = test.dispatch.reserve(1, null);
+		await setImmediate();
+		const mirror = (test.dispatch as unknown as { queue: ArchiveBrokerRamScheduler }).queue;
+		mirror.applyWindowRow(candidate(2, {
+			archiveUrlIdentity: 'https://later.example', hostIdentity: 'later.example'
+		}), 8);
+		test.dispatch.notify({ context: true });
+		gate.resolve(await original(null, [root]));
+		expect(await reserving).toBeNull();
+		expect(test.logger.error).not.toHaveBeenCalled();
+		expect((await test.dispatch.reserve(1, null))?.length).toBe(1);
+		expect(test.logger.error).not.toHaveBeenCalled();
+		await test.dispatch.close();
+	});
 	it('keeps the mirror and refreshes only selected IDs after a rolled-back empty claim', async () => {
 		const test = fixture();
 		await ready(test);
@@ -343,7 +409,7 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 		expect(
 			(await test.dispatch.reserve(1, null))?.map((job) => job.job.remoteId)
 		).toEqual([id(1)]);
-		expect(test.feed.snapshotPage).toHaveBeenCalledTimes(1);
+		expect(test.feed.windowPage).toHaveBeenCalledTimes(1);
 		expect(test.feed.refreshIds).toHaveBeenCalledWith([id(1)]);
 		expect(test.claim).toHaveBeenCalledTimes(2);
 		expect(test.logger.error).not.toHaveBeenCalled();
@@ -381,9 +447,10 @@ describe('RAM dispatcher snapshot, invalidation and durable fallback ownership',
 	});
 	it('drains snapshot work and suppresses post-close wake or claims', async () => {
 		const test = fixture();
-		const gate = deferred<HistoryArchiveRamCandidatePage>();
-		test.feed.snapshotPage.mockImplementationOnce(() => gate.promise);
+		const gate = deferred<HistoryArchiveRamWindowPage>();
+		test.feed.windowPage.mockImplementationOnce(() => gate.promise);
 		test.dispatch.setConnected(true);
+		await setImmediate();
 		let closed = false;
 		const closing = test.dispatch.close().then(() => {
 			closed = true;
