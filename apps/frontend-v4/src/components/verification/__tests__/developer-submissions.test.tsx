@@ -155,6 +155,7 @@ it('keeps a long-running saved check pending beyond two minutes without a fresh 
 		jest.advanceTimersByTime(30_000); await settle(); render();
 	}
 	expect(html()).toContain('Saved · checking published build evidence');
+	expect(html()).toContain('30 days after the check finishes');
 	expect(html()).not.toContain('Start a new request');
 	expect(send.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
 	expect(send.mock.calls.slice(2).every(([url]) => url === '/v1/developer-auth/submissions/' + id)).toBe(true);

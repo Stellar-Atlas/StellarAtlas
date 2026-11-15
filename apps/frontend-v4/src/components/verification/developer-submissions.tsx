@@ -148,7 +148,7 @@ export function DeveloperSavedSubmissions({ session, initialId = null, onSession
 						: session.kind === 'disabled' || session.kind === 'unavailable' ? <p>GitHub sign-in must be available to save a request. Public checks remain available.</p>
 							: session.kind !== 'signed-in' ? <p>Sign in with GitHub to save a private build-attestation check. Public checks do not require sign-in.</p>
 						: <>
-							<p>Check a published build attestation for an exact repository and commit. Requests are private and retained for {capability.retentionDays} days.</p>
+							<p>Check a published build attestation for an exact repository and commit. Results are private and retained for {capability.retentionDays} days after the check finishes.</p>
 							<form className={styles.form} onSubmit={submit} aria-label="Save verification request">
 								<label>Contract address<input required maxLength={56} autoComplete="off" spellCheck={false} disabled={locked}
 									value={contractId} onChange={event => setContractId(event.target.value)} /></label>

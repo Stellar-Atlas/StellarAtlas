@@ -29,7 +29,8 @@ export function DeveloperSubmissionResult({ value }: { readonly value: SavedSubm
 				{evidence.wasmSha256 && <><dt>Wasm SHA-256</dt><dd><code>{evidence.wasmSha256}</code></dd></>}</>}
 			<dt>Request ID</dt><dd><code>{value.id}</code></dd>
 			<dt>Saved</dt><dd><LocalDateTime dateTime={value.submittedAt} /></dd>
-			<dt>Retained until</dt><dd><LocalDateTime dateTime={value.expiresAt} /></dd>
+			{value.status === 'checking' ? <><dt>Result retention</dt><dd>30 days after the check finishes</dd></>
+				: <><dt>Retained until</dt><dd><LocalDateTime dateTime={value.expiresAt} /></dd></>}
 		</dl>
 		<p><a href={'/developer/verification?submission=' + value.id}>Open this saved request</a> · Only available to the GitHub account that saved it.</p>
 		<p>GitHub sign-in identifies the submitter, not ownership of this contract or repository.
