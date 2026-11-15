@@ -128,7 +128,7 @@ test('bucket download releases its permit before verification finishes, with ide
   const harness = await loadCandidate(t, 'bucket', {
     httpService: { get: async () => ok({ data: Readable.from([payload]), status: 200, headers: { 'content-length': String(payload.length) } }) },
     bucketCache: {
-      async verifyAndStore(expectedHash, stream, verify) {
+      async verifyStream(expectedHash, stream, verify) {
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
         const bytes = Buffer.concat(chunks);

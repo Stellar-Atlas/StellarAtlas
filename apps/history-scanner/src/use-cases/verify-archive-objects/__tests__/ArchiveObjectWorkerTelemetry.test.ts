@@ -1,11 +1,8 @@
 import { mock, type MockProxy } from 'jest-mock-extended';
-import { ok } from 'neverthrow';
 import type { ExceptionLogger } from 'exception-logger';
 import type { Logger } from 'logger';
-import type {
-	HistoryArchiveObjectJobDTO,
-	ScanCoordinatorService
-} from '../../../domain/scan/ScanCoordinatorService.js';
+import type { HistoryArchiveObjectJobDTO } from '../../../domain/scan/ScanCoordinatorService.js';
+import type { HistoryArchiveObjectJobLease } from '../HistoryArchiveObjectJobDelivery.js';
 import {
 	ArchiveObjectWorkerTelemetry,
 	createHistoryArchiveWorkerProcessIdentity,
@@ -14,16 +11,15 @@ import {
 import type { HistoryArchiveWorkerReportSink } from '../CoalescingHistoryArchiveWorkerReporter.js';
 
 describe('ArchiveObjectWorkerTelemetry', () => {
-	let scanCoordinator: MockProxy<ScanCoordinatorService>;
+	let lease: MockProxy<HistoryArchiveObjectJobLease>;
 	let statusReporter: MockProxy<HistoryArchiveWorkerReportSink>;
 	let telemetry: ArchiveObjectWorkerTelemetry;
 
 	beforeEach(() => {
-		scanCoordinator = mock<ScanCoordinatorService>();
+		lease = mock<HistoryArchiveObjectJobLease>();
 		statusReporter = mock<HistoryArchiveWorkerReportSink>();
-		scanCoordinator.touchHistoryArchiveObject.mockResolvedValue(ok(undefined));
+		lease.heartbeat.mockResolvedValue(undefined);
 		telemetry = new ArchiveObjectWorkerTelemetry(
-			scanCoordinator,
 			statusReporter,
 			mock<ExceptionLogger>(),
 			mock<Logger>(),
@@ -40,15 +36,14 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 	});
 
 	it('coalesces object heartbeats and reports typed progress', async () => {
-		let resolveTouch:
-			((value: ReturnType<typeof ok<void, Error>>) => void) | undefined;
-		scanCoordinator.touchHistoryArchiveObject.mockImplementationOnce(
+		let resolveTouch: (() => void) | undefined;
+		lease.heartbeat.mockImplementationOnce(
 			() =>
-				new Promise((resolve) => {
+				new Promise<void>((resolve) => {
 					resolveTouch = resolve;
 				})
 		);
-		await telemetry.startObject(0, createObjectJob());
+		telemetry.startObject(0, createObjectJob(), lease);
 		telemetry.updateProgress(
 			'82a309de-a5df-457b-9412-f267ed5e7388',
 			'downloading_bucket',
@@ -63,7 +58,7 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 			'82a309de-a5df-457b-9412-f267ed5e7388'
 		);
 
-		expect(scanCoordinator.touchHistoryArchiveObject).toHaveBeenCalledTimes(1);
+		expect(lease.heartbeat).toHaveBeenCalledTimes(1);
 		expect(statusReporter.enqueue).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				bytesDownloaded: 2048,
@@ -74,7 +69,7 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 				workerId: 'object-host-4-0'
 			})
 		);
-		resolveTouch?.(ok(undefined));
+		resolveTouch?.();
 		await Promise.all([first, second]);
 
 		await telemetry.finishObject(
@@ -114,15 +109,14 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 	});
 
 	it('writes the terminal idle row after an in-flight active heartbeat', async () => {
-		let resolveTouch:
-			((value: ReturnType<typeof ok<void, Error>>) => void) | undefined;
-		scanCoordinator.touchHistoryArchiveObject.mockImplementationOnce(
+		let resolveTouch: (() => void) | undefined;
+		lease.heartbeat.mockImplementationOnce(
 			() =>
-				new Promise((resolve) => {
+				new Promise<void>((resolve) => {
 					resolveTouch = resolve;
 				})
 		);
-		await telemetry.startObject(0, createObjectJob());
+		telemetry.startObject(0, createObjectJob(), lease);
 		const heartbeat = telemetry.heartbeatObject(
 			'82a309de-a5df-457b-9412-f267ed5e7388'
 		);
@@ -134,7 +128,7 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 		expect(statusReporter.enqueue).toHaveBeenLastCalledWith(
 			expect.objectContaining({ currentObject: expect.any(Object) })
 		);
-		resolveTouch?.(ok(undefined));
+		resolveTouch?.();
 		await Promise.all([heartbeat, finish]);
 
 		expect(statusReporter.enqueue).toHaveBeenLastCalledWith(
@@ -147,17 +141,15 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 	});
 
 	it('reports a released outcome when shutdown returns a claim', async () => {
-		scanCoordinator.releaseHistoryArchiveObject.mockResolvedValue(
-			ok(undefined)
+		lease.release.mockResolvedValue(
+			undefined
 		);
-		await telemetry.startObject(0, createObjectJob());
+		telemetry.startObject(0, createObjectJob(), lease);
 
 		await telemetry.releaseActiveObjectJobs();
 
-		expect(scanCoordinator.releaseHistoryArchiveObject).toHaveBeenCalledWith(
-			'82a309de-a5df-457b-9412-f267ed5e7388',
-			3
-		);
+		expect(lease.release).toHaveBeenCalledTimes(1);
+		expect(lease.release).toHaveBeenCalledWith();
 		expect(statusReporter.enqueue).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				currentObject: null,

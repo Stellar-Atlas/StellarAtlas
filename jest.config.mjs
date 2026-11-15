@@ -149,7 +149,12 @@ export default {
 			]
 		}),
 		project({
-			testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/lib'],
+			testPathIgnorePatterns: [
+				'<rootDir>/node_modules/',
+				'<rootDir>/lib',
+				// This emitted-runtime suite uses Node's test runner and native module mocks.
+				'<rootDir>/ops/verify-download-telemetry.test.cjs'
+			],
 			preset: 'ts-jest',
 			displayName: 'history-scanner',
 			rootDir: 'apps/history-scanner'

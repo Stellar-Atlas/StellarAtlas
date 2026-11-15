@@ -130,6 +130,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					scanJobRemoteId: '82a309de-a5df-457b-9412-f267ed5e7388'
 				}),
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					headers: {
 						Authorization: `Bearer ${apiKey}`
 					}
@@ -174,6 +176,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				)._unsafeUnwrap(),
 				batch as unknown as Record<string, unknown>,
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					auth: {
 						username,
 						password: secret
@@ -239,6 +243,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				)._unsafeUnwrap(),
 				batch as unknown as Record<string, unknown>,
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					auth: {
 						username,
 						password: secret
@@ -305,6 +311,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				)._unsafeUnwrap(),
 				batch as unknown as Record<string, unknown>,
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					auth: {
 						username,
 						password: secret
@@ -424,6 +432,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					`${baseUrl}/v1/community-scanners/${scannerId}/job`
 				)._unsafeUnwrap(),
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					responseType: 'json',
 					headers: {
 						Authorization: `Bearer ${apiKey}`
@@ -480,6 +490,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				)._unsafeUnwrap(),
 				{},
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					auth: {
 						username,
 						password: secret
@@ -517,6 +529,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				)._unsafeUnwrap(),
 				progress,
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					auth: {
 						username,
 						password: secret
@@ -556,6 +570,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				)._unsafeUnwrap(),
 				{},
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					headers: {
 						Authorization: `Bearer ${apiKey}`
 					}
@@ -586,6 +602,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				)._unsafeUnwrap(),
 				{},
 				{
+					connectionTimeoutMs: 30_000,
+					socketTimeoutMs: 30_000,
 					auth: {
 						username,
 						password: secret
