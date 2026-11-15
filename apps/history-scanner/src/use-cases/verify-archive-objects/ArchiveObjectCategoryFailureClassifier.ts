@@ -1,4 +1,5 @@
 import type { HistoryArchiveObjectFailureDTO } from '../../domain/scan/ScanCoordinatorService.js';
+import { ParsedHistoryRegistrationConflictError } from '../../infrastructure/services/ParsedHistoryRegistrationConflictError.js';
 import { isArchiveXdrError } from '../../domain/scanner/hash-worker.js';
 import {
 	archiveAvailabilityFailure,
@@ -36,7 +37,11 @@ export function classifyCategoryVerificationFailure(
 			errorType: 'category_scanner_failure'
 		});
 	}
-	if (isArchiveXdrError(error) || hasErrorCode(error, contentErrorCodes)) {
+	if (
+		error instanceof ParsedHistoryRegistrationConflictError ||
+		isArchiveXdrError(error) ||
+		hasErrorCode(error, contentErrorCodes)
+	) {
 		return archiveEvidenceFailure({
 			error,
 			errorType: 'category_content_invalid',

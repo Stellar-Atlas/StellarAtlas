@@ -71,7 +71,7 @@ export class BucketCache {
 	): Promise<Result<void, BucketCacheFailure>> {
 		const finalPath = this.getBucketPath(hash);
 		if (await this.hasCachedFile(finalPath)) {
-			return this.verifySourceWithoutRewritingCache(source, verify);
+			return this.verifyOnly(source, verify);
 		}
 		const temporaryPath = `${finalPath}.${process.pid}.${randomUUID()}.tmp`;
 
@@ -144,17 +144,21 @@ export class BucketCache {
 		}
 	}
 
-	private async verifySourceWithoutRewritingCache(
+	async verifyOnly(
 		source: Readable,
 		verify: (stream: Readable) => Promise<Result<void, Error>>
 	): Promise<Result<void, BucketCacheFailure>> {
 		let sourceError: Error | null = null;
+		const verificationStream = new PassThrough();
 		source.on('error', (error) => {
 			sourceError = mapUnknownToError(error);
+			verificationStream.destroy(error);
 		});
 
 		try {
-			const verifyResult = await verify(source);
+			const verifyPromise = verify(verificationStream);
+			source.pipe(verificationStream);
+			const verifyResult = await verifyPromise;
 			if (verifyResult.isOk()) return ok(undefined);
 			return err(
 				new BucketCacheFailure(
@@ -169,6 +173,10 @@ export class BucketCache {
 					sourceError ?? mapUnknownToError(error)
 				)
 			);
+		} finally {
+			source.unpipe(verificationStream);
+			verificationStream.destroy();
+			source.destroy();
 		}
 	}
 
