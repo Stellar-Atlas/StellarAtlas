@@ -37,3 +37,19 @@ export class FullHistoryLedgerObservationsMissingError extends FullHistoryPromot
 		);
 	}
 }
+
+export interface FullHistoryTransactionObservationCount {
+	readonly checkpointLedger: number;
+	readonly ledgerObjectRemoteId: string;
+	readonly envelopeCount: string;
+	readonly resultCount: string;
+}
+
+export class FullHistoryTransactionObservationsMissingError extends FullHistoryPromotionError {
+	constructor(readonly diagnostic: FullHistoryTransactionObservationCount) {
+		super(
+			'parsed-projection-missing',
+			'Exact checkpoint transaction observations are incomplete'
+		);
+	}
+}

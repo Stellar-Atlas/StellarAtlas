@@ -10,6 +10,7 @@ import type {
 } from '../../domain/full-history-promotion/FullHistoryCheckpointCandidate.js';
 import {
 	FullHistoryLedgerObservationsMissingError,
+	FullHistoryTransactionObservationsMissingError,
 	FullHistoryPromotionError
 } from '../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import type { HistoryArchiveRepairObjectArtifactRepository } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairObjectArtifactRepository.js';
@@ -48,7 +49,10 @@ export class VerifiedArchiveFullHistoryCheckpointCandidateRepository implements 
 		try {
 			return await this.parsed.load(target);
 		} catch (error) {
-			if (!(error instanceof FullHistoryLedgerObservationsMissingError))
+			if (
+				!(error instanceof FullHistoryLedgerObservationsMissingError) &&
+				!(error instanceof FullHistoryTransactionObservationsMissingError)
+			)
 				throw error;
 		}
 		return this.loadFromVerifiedArchives(target);

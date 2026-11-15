@@ -11,6 +11,7 @@ import { VerifiedArchiveFullHistoryCheckpointCandidateRepository } from '../Veri
 import { StellarFullHistoryCheckpointDecoder } from '../StellarFullHistoryCheckpointDecoder.js';
 import {
 	FullHistoryLedgerObservationsMissingError,
+	FullHistoryTransactionObservationsMissingError,
 	FullHistoryPromotionError
 } from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import {
@@ -140,6 +141,38 @@ it('recovers the exact real checkpoint without parsed writes and retains canonic
 			decoder.version
 		)
 	);
+});
+
+it('recovers verified artifacts when parsed transaction observation counts differ', async () => {
+	const { parsed, repository, close, openVerifiedObject } = setup();
+	parsed.load.mockRejectedValueOnce(
+		new FullHistoryTransactionObservationsMissingError({
+			checkpointLedger: 556863,
+			ledgerObjectRemoteId: proof.sources.ledger.remoteId,
+			envelopeCount: '4',
+			resultCount: '3'
+		})
+	);
+	const candidate = await repository.load(target);
+	expect(candidate.ledgers).toHaveLength(64);
+	expect(candidate.envelopes.length).toBeGreaterThan(0);
+	expect(candidate.envelopes).toHaveLength(candidate.results.length);
+	expect(parsed.loadProof).toHaveBeenCalledTimes(1);
+	expect(parsed.loadProof).toHaveBeenCalledWith(target);
+	expect(openVerifiedObject).toHaveBeenCalledTimes(3);
+	expect(close).toHaveBeenCalledTimes(3);
+});
+
+it('propagates XDR bound errors without loading proof or opening verified objects', async () => {
+	const { parsed, repository, openVerifiedObject } = setup();
+	const failure = new FullHistoryPromotionError(
+		'xdr-bound-exceeded',
+		'Archive XDR exceeds configured bound'
+	);
+	parsed.load.mockRejectedValueOnce(failure);
+	await expect(repository.load(target)).rejects.toBe(failure);
+	expect(parsed.loadProof).not.toHaveBeenCalled();
+	expect(openVerifiedObject).not.toHaveBeenCalled();
 });
 
 it('never falls back for an invalid proof or for a complete parsed candidate', async () => {
