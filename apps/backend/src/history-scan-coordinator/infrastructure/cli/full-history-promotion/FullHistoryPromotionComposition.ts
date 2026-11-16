@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { AppDataSource } from '@core/infrastructure/database/AppDataSource.js';
+import { managedMigrations } from '@core/infrastructure/database/ManagedMigrations.js';
 import { fullHistoryCanonicalEntities } from '../../database/full-history/FullHistoryCanonicalEntityRegistry.js';
 import { TypeOrmFullHistoryCanonicalRepository } from '../../database/full-history/TypeOrmFullHistoryCanonicalRepository.js';
 import { TypeOrmFullHistoryCheckpointCandidateRepository } from '../../database/full-history-promotion/TypeOrmFullHistoryCheckpointCandidateRepository.js';
@@ -12,6 +13,7 @@ import { VerifiedArchiveFullHistoryCheckpointCandidateRepository } from '../../f
 import { RemoteHistoryArchiveRepairObjectArtifactRepository } from '../../repositories/filesystem/RemoteHistoryArchiveRepairObjectArtifactRepository.js';
 import { PostgresHistoryArchiveRepairArtifactWorkPermit } from '../../repositories/database/PostgresHistoryArchiveRepairArtifactWorkPermit.js';
 import type { FullHistoryCheckpointCandidateRepository } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidateRepository.js';
+import { selectFullHistoryPromotionMigrations } from './FullHistoryPromotionSchemaReadiness.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -48,6 +50,7 @@ export function createFullHistoryPromotionDataSource(poolSize = 2): DataSource {
 	return new DataSource({
 		...options,
 		entities: [...fullHistoryCanonicalEntities],
+		migrations: selectFullHistoryPromotionMigrations(managedMigrations),
 		migrationsRun: false,
 		poolSize,
 		synchronize: false

@@ -1,5 +1,24 @@
 import type { DataSource } from 'typeorm';
 
+// These exact migrations affect website identity/submissions or a separate
+// proof-refresh scheduling hint, not promotion's canonical schema or permits.
+// Keep every other migration, including unknown future migrations, fail-closed.
+const unrelatedMigrationNames = new Set([
+	'HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000',
+	'AtlasAccountVerification1794091000000',
+	'AtlasVerificationAuthentication1794092000000',
+	'AtlasDeveloperAuthentication1794232800000',
+	'AtlasDeveloperSubmissions1794744000000'
+]);
+
+export function selectFullHistoryPromotionMigrations<
+	T extends { readonly name: string }
+>(migrations: readonly T[]): T[] {
+	return migrations.filter(
+		(migration) => !unrelatedMigrationNames.has(migration.name)
+	);
+}
+
 const requiredRelations = [
 	'history_archive_checkpoint_proof',
 	'history_archive_object_queue',
