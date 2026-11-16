@@ -2,6 +2,7 @@ import {
 	parseLoopConfig,
 	waitForFullHistoryPromotionSchemaReadiness
 } from '../ContinuousFullHistoryPromotionCli.js';
+import { selectFullHistoryPromotionMigrations } from '../FullHistoryPromotionSchemaReadiness.js';
 
 const enabledEnvironment = {
 	FULL_HISTORY_CONTINUOUS_PROMOTION_ENABLED: 'true',
@@ -33,6 +34,37 @@ describe('continuous full-history promotion CLI', () => {
 				FULL_HISTORY_PROMOTION_ERROR_BACKOFF_MS: '999'
 			})
 		).toThrow('between 1000 and 86400000');
+	});
+
+	it('filters only exact unrelated names without mutating input or cloning entries', () => {
+		const migrations = [
+			{ name: 'HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000' },
+			{ name: 'FullHistoryCanonicalSchemaMigration1784860000000' },
+			{ name: 'AtlasAccountVerification1794091000000' },
+			{ name: 'FutureUnreviewedMigration1999999999999' },
+			{ name: 'AtlasVerificationAuthentication1794092000000' },
+			{ name: 'AtlasDeveloperAuthentication1794232800000' },
+			{ name: 'AtlasDeveloperSubmissions1794744000000' }
+		];
+		const originalOrder = [...migrations];
+		const selected = selectFullHistoryPromotionMigrations(migrations);
+
+		expect(selected.map(({ name }) => name)).toEqual([
+			'FullHistoryCanonicalSchemaMigration1784860000000',
+			'FutureUnreviewedMigration1999999999999'
+		]);
+		expect(selected[0]).toBe(migrations[1]);
+		expect(selected[1]).toBe(migrations[3]);
+		expect(migrations).toEqual(originalOrder);
+		for (const index of migrations.keys())
+			expect(migrations[index]).toBe(originalOrder[index]);
+	});
+
+	it('does not filter a similarly named migration with a different timestamp', () => {
+		const nearby = { name: 'AtlasDeveloperSubmissions1794744000001' };
+		const selected = selectFullHistoryPromotionMigrations([nearby]);
+		expect(selected).toEqual([nearby]);
+		expect(selected[0]).toBe(nearby);
 	});
 
 	it('waits in process for pending migrations and then becomes ready', async () => {
