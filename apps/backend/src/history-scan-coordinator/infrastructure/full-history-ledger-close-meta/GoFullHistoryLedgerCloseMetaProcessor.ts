@@ -1,5 +1,6 @@
 import type { DerivedOutputRecoveryReader } from './FullHistoryDerivedOutputRetirement.js';
 import { createHash } from 'node:crypto';
+import { hash as stellarHash } from '@stellar/stellar-sdk';
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import type {
@@ -116,7 +117,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		const outputExistedBeforeRun = await directoryExists(outputPath);
 		const retirementRecovery = outputExistedBeforeRun
 			? await this.#retirementRecoveryReader?.(
-				createHash('sha256').update(request.networkPassphrase).digest(), range.startLedger, range.endLedger
+				Buffer.from(stellarHash(Buffer.from(request.networkPassphrase, 'utf8'))), range.startLedger, range.endLedger
 			) : undefined;
 		await mkdir(this.#temporaryInputRoot, { mode: 0o700, recursive: true });
 		const temporaryDirectory = await mkdtemp(
