@@ -23,6 +23,12 @@ const (
 // ErrCurrentWriteBudgetExceeded identifies a local byte or request limit refusal.
 var ErrCurrentWriteBudgetExceeded = errors.New("ClickHouse current write budget exceeded")
 
+// ErrCurrentWriteInFlight refuses another INSERT until the admitted request settles.
+var ErrCurrentWriteInFlight = errors.New("ClickHouse current write request is still in flight")
+
+// ErrCurrentWriteUncertain permanently fences this attempt after an uncertain outcome.
+var ErrCurrentWriteUncertain = errors.New("ClickHouse current write outcome is uncertain")
+
 type currentWriteBudgetKey struct{}
 
 type currentWriteStage uint8
@@ -50,6 +56,8 @@ type currentWriteBudget struct {
 	beforeInsert  func(context.Context) error
 	stagedBytes   [currentWriteStageCount]uint64
 	promoted      [currentWriteStageCount]bool
+	inFlight      bool
+	uncertain     bool
 }
 
 // WithCurrentWriteBudget guards the ClickHouse writes of one immutable File
@@ -75,19 +83,19 @@ func isGuardedCurrentInsert(ctx context.Context, query string) bool {
 	return ctx.Value(currentWriteBudgetKey{}) != nil && strings.HasPrefix(query, "INSERT INTO ")
 }
 
-func admitCurrentWrite(ctx context.Context, quotedDatabase, query string, bodyLen int) error {
+func admitCurrentWrite(ctx context.Context, quotedDatabase, query string, bodyLen int) (settle func(confirmedSuccess bool), err error) {
 	budget, _ := ctx.Value(currentWriteBudgetKey{}).(*currentWriteBudget)
 	if budget == nil {
-		return nil
+		return nil, nil
 	}
 	read := strings.TrimSpace(query)
 	if end := strings.IndexAny(read, " \t\r\n"); bodyLen == 0 && end >= 0 && strings.EqualFold(read[:end], "SELECT") {
-		return nil
+		return nil, nil
 	}
 	base := quotedDatabase
 	tail, canonical := strings.CutPrefix(query, "INSERT INTO "+base+".")
 	if !canonical {
-		return fmt.Errorf("unsupported SQL under ClickHouse current write budget")
+		return nil, fmt.Errorf("unsupported SQL under ClickHouse current write budget")
 	}
 	var stage currentWriteStage
 	var promotion bool
@@ -110,30 +118,38 @@ func admitCurrentWrite(ctx context.Context, quotedDatabase, query string, bodyLe
 	default:
 		match := currentWriteRowQuery.FindStringSubmatch(tail)
 		if match == nil {
-			return fmt.Errorf("unsupported INSERT under ClickHouse current write budget")
+			return nil, fmt.Errorf("unsupported INSERT under ClickHouse current write budget")
 		}
 		switch strings.Trim(match[1], "`") {
 		case "_ingestion_batches", "_asset_holder_index_batches", "_asset_holder_stage", "_asset_pool_stage", "_asset_holder_current", "_asset_pool_current":
-			return fmt.Errorf("noncanonical manifest or read-model INSERT under ClickHouse current write budget")
+			return nil, fmt.Errorf("noncanonical manifest or read-model INSERT under ClickHouse current write budget")
 		}
 	}
 	if promotion != (bodyLen == 0) {
-		return fmt.Errorf("invalid INSERT body under ClickHouse current write budget")
+		return nil, fmt.Errorf("invalid INSERT body under ClickHouse current write budget")
 	}
 	return budget.charge(ctx, uint64(bodyLen), stage, promotion, status)
 }
 
-func (b *currentWriteBudget) charge(ctx context.Context, body uint64, stage currentWriteStage, promotion bool, status currentWriteStatus) error {
+func (b *currentWriteBudget) charge(ctx context.Context, body uint64, stage currentWriteStage, promotion bool, status currentWriteStatus) (settle func(confirmedSuccess bool), err error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
+	}
+	// No quota counters or callbacks change while another request is active or
+	// after any uncertain submission. SELECTs are handled above this fence.
+	if b.uncertain {
+		return nil, ErrCurrentWriteUncertain
+	}
+	if b.inFlight {
+		return nil, ErrCurrentWriteInFlight
 	}
 	if promotion && (b.stagedBytes[stage] == 0 || b.promoted[stage]) {
-		return fmt.Errorf("ClickHouse current promotion requires matching staged bytes and may run only once")
+		return nil, fmt.Errorf("ClickHouse current promotion requires matching staged bytes and may run only once")
 	}
 	// Stage rows prepay their bounded grouped copy of the same staged tuple.
 	// Promotion later charges only a separate fixed request overhead.
@@ -147,25 +163,35 @@ func (b *currentWriteBudget) charge(ctx context.Context, body uint64, stage curr
 			maximum = currentWriteIndexStatusCount
 		}
 		if b.statusChecks[status] >= maximum || body > currentWriteStatusBytes-currentWriteOverhead {
-			return fmt.Errorf("%w: manifest status reserve", ErrCurrentWriteBudgetExceeded)
+			return nil, fmt.Errorf("%w: manifest status reserve", ErrCurrentWriteBudgetExceeded)
 		}
 		b.statusChecks[status]++
 	} else {
 		if b.dataChecks >= currentWriteMaxRequests-currentWriteReservedRequests {
-			return fmt.Errorf("%w: data request limit", ErrCurrentWriteBudgetExceeded)
+			return nil, fmt.Errorf("%w: data request limit", ErrCurrentWriteBudgetExceeded)
 		}
 		if b.dataRemaining < currentWriteOverhead || body > (b.dataRemaining-currentWriteOverhead)/multiplier {
-			return fmt.Errorf("%w: data byte limit (body %d bytes, %d bytes remaining)", ErrCurrentWriteBudgetExceeded, body, b.dataRemaining)
+			return nil, fmt.Errorf("%w: data byte limit (body %d bytes, %d bytes remaining)", ErrCurrentWriteBudgetExceeded, body, b.dataRemaining)
 		}
 		b.dataChecks++
 	}
+	// Exposure is only this prospective request. Earlier stage allocations are
+	// not charged again; promotion's grouped copy was already prepaid in quota.
+	stagedExposure := uint64(0)
+	if promotion {
+		stagedExposure = b.stagedBytes[stage]
+	}
+	requestContext, err := withCurrentRequestExposure(ctx, body, stagedExposure, promotion)
+	if err != nil {
+		return nil, err
+	}
 	// Failed fresh checks use a request slot but send no HTTP and spend no data
 	// bytes. Once charged, a request is never refunded after HTTP ambiguity.
-	if err := b.beforeInsert(ctx); err != nil {
-		return err
+	if err := b.beforeInsert(requestContext); err != nil {
+		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
 	}
 	if status == currentWriteNoStatus {
 		b.dataRemaining -= body*multiplier + currentWriteOverhead
@@ -175,5 +201,21 @@ func (b *currentWriteBudget) charge(ctx context.Context, body uint64, stage curr
 	} else if stage != currentWriteNoStage {
 		b.stagedBytes[stage] += body
 	}
-	return nil
+	b.inFlight = true
+	var once sync.Once
+	return func(confirmedSuccess bool) {
+		once.Do(func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if confirmedSuccess {
+				// Only the full synchronous response confirms success. No debit
+				// or request/status allowance is ever refunded here.
+				b.inFlight = false
+				return
+			}
+			// Preserve the in-flight latch as well as the distinct sticky poison.
+			// A later success call, status INSERT or retry cannot clear it.
+			b.uncertain = true
+		})
+	}, nil
 }

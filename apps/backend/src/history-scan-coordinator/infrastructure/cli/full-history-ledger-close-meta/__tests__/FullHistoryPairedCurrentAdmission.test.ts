@@ -4,6 +4,7 @@ import {
 	fencePairedCurrentAdmission,
 	matchesFullPublication,
 	publisherCurrentWindowStart,
+	parsePairedCurrentAdmissionPolicy,
 	type PairedCurrentAdmissionPolicy,
 	type PairedFilesystem
 } from '../FullHistoryPairedCurrentAdmission.js';
@@ -107,6 +108,31 @@ describe('paired current source admission', () => {
 				{ ...disk, inode: 12n }, { ...diskRow, unreserved_space: String(minimum) }, 1))
 				.toThrow(/fixed 50 GB floor and zero basis points/);
 		}
+	});
+
+	it('requires explicit request-scoped capability and reserves only bounded future source output', () => {
+		const minimum = 50_000_000_000n + (8n << 30n) + (16n << 20n);
+		const paired: PairedCurrentAdmissionPolicy = {
+			...policy, minimumUnreservedBytes: minimum, capacityMode: 'request-scoped-v1'
+		};
+		const parsed = { ...paired, warehouseMetadataInode: '12', minimumUnreservedBytes: String(minimum) };
+		expect(parsePairedCurrentAdmissionPolicy(JSON.stringify(parsed))).toEqual(paired);
+		expect(() => parsePairedCurrentAdmissionPolicy(JSON.stringify({ ...parsed, capacityMode: 'unknown' })))
+			.toThrow(/capacity mode/);
+		const cfg = { ...config, currentBulkCommitGuard: true, sourceOutputBytes: 8n << 30n,
+			currentMinimumFreeBytes: 50_000_000_000n, minimumFreeBasisPoints: 0 };
+		const disk = { ...before, total: 64_000_911_998_976n, available: minimum + 200n };
+		const diskRow = { ...row, total_space: String(disk.total), free_space: String(disk.available),
+			unreserved_space: String(minimum) };
+		const check = (p = paired, c = cfg, r = diskRow) =>
+			assertPairedCapacity(p, c, disk, disk, disk, { ...disk, inode: 12n }, r, 1);
+		expect(() => check()).not.toThrow(); // The unrelated 200-byte reservation stays unavailable.
+		expect(() => check(paired, cfg, { ...diskRow, unreserved_space: String(minimum - 1n) }))
+			.toThrow(/reserve refused/);
+		expect(() => check({ ...paired, minimumUnreservedBytes: minimum + 1n })).toThrow(/reserve refused/);
+		expect(() => check(paired, { ...cfg, currentBulkCommitGuard: false })).toThrow(/standing current/);
+		// Legacy policy still requires its full warehouse runway, even at the same free space.
+		expect(() => check({ ...policy, minimumUnreservedBytes: minimum })).toThrow(/reserve refused/);
 	});
 
 	it('requires one exact completed manifest with the same source digest, range and all 20 dataset counts', () => {

@@ -21,6 +21,7 @@ export interface PairedCurrentAdmissionPolicy {
 	readonly warehouseMetadataPath: string;
 	readonly warehouseMetadataInode: bigint;
 	readonly minimumUnreservedBytes: bigint;
+	readonly capacityMode?: 'request-scoped-v1';
 }
 
 type PendingPublicationStatus = 'not-captured' | 'waiting' | 'published' | 'deferred-aged-out';
@@ -86,6 +87,10 @@ export function publisherCurrentWindowStart(tip: number): number {
 }
 // Match the publisher's future bounded warehouse-write allowance, without a startup cushion.
 const guardedCurrentWarehouseWriteAllowanceBytes = 64n * 1024n ** 3n;
+// The native capture separately retains its physical copy cushion. This is
+// only the bounded future source output plus its existing metadata allowance;
+// warehouse requests are admitted later by the versioned publisher capability.
+const currentSourceMetadataAllowanceBytes = 16n * 1024n ** 2n;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const datasets = [
 	'account_signers', 'accounts', 'claimable_balances', 'config_settings',
@@ -109,6 +114,11 @@ export function parsePairedCurrentAdmissionPolicy(
 	}
 	const fields = ['bootId', 'warehouseReportedPath', 'warehouseMetadataPath',
 		'warehouseMetadataInode', 'minimumUnreservedBytes'];
+	if (Object.hasOwn(input, 'capacityMode')) {
+		if (input.capacityMode !== 'request-scoped-v1')
+			throw new Error('Invalid paired current capacity mode');
+		fields.push('capacityMode');
+	}
 	if (Object.keys(input).length !== fields.length || fields.some((k) => !Object.hasOwn(input, k)) ||
 		typeof input.bootId !== 'string' ||
 		(!uuid.test(input.bootId) && !(allowBootRebind && input.bootId === 'current')) ||
@@ -122,7 +132,8 @@ export function parsePairedCurrentAdmissionPolicy(
 		warehouseReportedPath: input.warehouseReportedPath,
 		warehouseMetadataPath: input.warehouseMetadataPath,
 		warehouseMetadataInode: positiveUint(input.warehouseMetadataInode),
-		minimumUnreservedBytes: positiveUint(input.minimumUnreservedBytes)
+		minimumUnreservedBytes: positiveUint(input.minimumUnreservedBytes),
+		...(input.capacityMode === 'request-scoped-v1' ? { capacityMode: input.capacityMode } : {})
 	});
 }
 
@@ -132,6 +143,10 @@ export function createPairedCurrentAdmission(
 	environment: NodeJS.ProcessEnv,
 	dataSource: DataSource
 ): PairedCurrentAdmission {
+	if (policy.capacityMode !== undefined &&
+		(config.currentBulkCommitGuard !== true || config.scopedBulkDevice !== undefined ||
+			config.sourceOutputBytes !== 8n << 30n))
+		throw new Error('Request-scoped capacity requires the standing current publisher guard');
 	let endpoint: URL;
 	try {
 		endpoint = new URL(environment.HUBBLE_CLICKHOUSE_URL ?? '');
@@ -163,7 +178,7 @@ export function createPairedCurrentAdmission(
 				if (config.publisherReadyPath === undefined || config.currentMinimumLedger === undefined)
 					throw new Error('Standing current publisher identity is not configured');
 				assertPublisher = await assertCurrentPublisherReady(
-					config.publisherReadyPath, policy.bootId, config.currentMinimumLedger, caller);
+					config.publisherReadyPath, policy.bootId, config.currentMinimumLedger, caller, policy.capacityMode);
 			}
 			const before = await filesystem(config.bulkRoot);
 			const rows = await select(
@@ -315,6 +330,9 @@ export function assertPairedCapacity(
 	if (scoped && before.device !== config.scopedBulkDevice)
 		throw new Error('Scoped current bulk device binding changed');
 	const guarded = config.currentBulkCommitGuard === true;
+	const requestScoped = policy.capacityMode === 'request-scoped-v1';
+	if (policy.capacityMode !== undefined && (!requestScoped || !guarded || scoped || config.sourceOutputBytes !== 8n << 30n))
+		throw new Error('Request-scoped capacity requires the standing current publisher guard');
 	if (guarded && (config.minimumFreeBasisPoints !== 0 ||
 		config.currentMinimumFreeBytes !== CURRENT_BULK_MINIMUM_FREE_BYTES))
 		throw new Error('Standing current capacity requires the fixed 50 GB floor and zero basis points');
@@ -323,7 +341,7 @@ export function assertPairedCapacity(
 	const absoluteFloor = scoped ? SCOPED_CURRENT_RESERVE_ABSOLUTE_BYTES : config.currentMinimumFreeBytes;
 	const sourceFloor = ratioFloor > absoluteFloor ? ratioFloor : absoluteFloor;
 	const allowance = scoped ? SCOPED_CURRENT_START_ALLOWANCE_BYTES : config.sourceOutputBytes +
-		(guarded ? guardedCurrentWarehouseWriteAllowanceBytes : 0n);
+		(requestScoped ? currentSourceMetadataAllowanceBytes : guarded ? guardedCurrentWarehouseWriteAllowanceBytes : 0n);
 	const required = sourceFloor + allowance;
 	if (config.currentBulkCommitGuard !== true && policy.minimumUnreservedBytes < required)
 		throw new Error('Paired current minimum must cover the source floor and full cycle output');
