@@ -2,6 +2,7 @@ import type { DataSource } from 'typeorm';
 import { createPairedCurrentAdmission, fencePairedCurrentAdmission, isPairedCurrentBoot, readPairedCurrentBootId } from './FullHistoryPairedCurrentAdmission.js';
 import { join } from 'node:path';
 import { FileFullHistoryLedgerCloseMetaPendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
+import { assertFullHistoryLedgerEntryCompactSchemaReady } from './FullHistoryLedgerEntryCompactSchemaReadiness.js';
 import { readScopedCurrentArm } from './FullHistoryScopedCurrentAttempt.js';
 import {
 	composeFullHistoryLedgerCloseMetaService,
@@ -201,6 +202,9 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 			);
 			await dependencies.runLoop(
 				{
+					...(config.compactLedgerEntryChanges === undefined ? {} : {
+						compactLedgerEntryChanges: config.compactLedgerEntryChanges
+					}),
 					...(config.currentCapacityAllowance === undefined ? {} : {
 						currentCapacityAllowance: config.currentCapacityAllowance
 					}),
@@ -219,6 +223,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					typedShardLedgerCount: config.typedShardLedgerCount
 				},
 				{
+					assertCompactSchemaReady: () => assertFullHistoryLedgerEntryCompactSchemaReady(activeComposition.dataSource),
 					admitCycle: (current) => {
 						const admission = current
 							? activeComposition.currentAdmission

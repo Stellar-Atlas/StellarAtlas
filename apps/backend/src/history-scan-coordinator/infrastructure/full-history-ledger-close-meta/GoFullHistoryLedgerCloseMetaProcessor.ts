@@ -8,6 +8,10 @@ import type {
 	FullHistoryLedgerCloseMetaProcessorPort
 } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { BoundedAsyncTaskPool } from './BoundedAsyncTaskPool.js';
+import {
+	selectsCompactLedgerEntryChanges,
+	type FullHistoryLedgerEntryCompactSelection
+} from './FullHistoryLedgerEntryCompactSelection.js';
 import type { FullHistoryPublishedOutputRecorder } from './FullHistoryPublishedOutputInventory.js';
 import { claimFullHistoryLedgerCloseMetaTransientDirectory } from './FullHistoryLedgerCloseMetaTransientOwnership.js';
 import { runBoundedGoFullHistoryProcess } from './GoFullHistoryLedgerCloseMetaProcessRunner.js';
@@ -21,6 +25,7 @@ const sharedMemoryRoot = '/dev/shm';
 export interface GoFullHistoryLedgerCloseMetaProcessorOptions {
 	readonly executablePath: string;
 	readonly currentBulkCommitGuard?: true;
+	readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection;
 	readonly limits: GoFullHistoryLedgerCloseMetaProcessorLimits;
 	readonly maximumConcurrency: number;
 	readonly maximumQueueDepth: number;
@@ -45,6 +50,7 @@ export interface GoFullHistoryLedgerCloseMetaProcessorLimits {
 export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerCloseMetaProcessorPort {
 	readonly #executablePath: string;
 	readonly #currentBulkCommitGuard: boolean;
+	readonly #compactLedgerEntryChanges: FullHistoryLedgerEntryCompactSelection | undefined;
 	readonly #limits: GoFullHistoryLedgerCloseMetaProcessorLimits;
 	readonly #minimumLedgers: number;
 	readonly #networkName: string;
@@ -59,6 +65,8 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		assertOptions(options);
 		this.#executablePath = resolve(options.executablePath);
 		this.#currentBulkCommitGuard = options.currentBulkCommitGuard === true;
+		this.#compactLedgerEntryChanges = options.compactLedgerEntryChanges === undefined
+			? undefined : Object.freeze({ ...options.compactLedgerEntryChanges });
 		this.#limits = Object.freeze({ ...options.limits });
 		this.#minimumLedgers = options.minimumLedgers;
 		this.#networkName = options.networkName;
@@ -91,6 +99,14 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		assertBeforeConversion?: FullHistoryLedgerCloseMetaConversionGate
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt> {
 		const range = requestRange(request, this.#minimumLedgers);
+		const selectedSchema = request.ledgerEntryChangesSchemaVersion;
+		if (selectedSchema !== undefined && selectedSchema !== 3 && selectedSchema !== 4) {
+			throw new TypeError('Ledger-entry changes schema must be 3 or 4');
+		}
+		// Pending plans pin this choice across restarts and environment changes.
+		const compactLedgerEntryChanges = selectedSchema === undefined
+			? selectsCompactLedgerEntryChanges(this.#compactLedgerEntryChanges, range)
+			: selectedSchema === 4;
 		signal.throwIfAborted();
 		await mkdir(this.#temporaryInputRoot, { mode: 0o700, recursive: true });
 		const temporaryDirectory = await mkdtemp(
@@ -107,7 +123,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 				temporaryDirectory,
 				request
 			);
-			const args = this.#arguments(request, inputPaths, outputPath, range);
+			const args = this.#arguments(request, inputPaths, outputPath, range, compactLedgerEntryChanges);
 			// Fetching input, waiting for the pool and staging it can outlast the held session.
 			if (assertBeforeConversion !== undefined) {
 				const assertAtLaunch = await assertBeforeConversion();
@@ -159,7 +175,8 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		request: FullHistoryLedgerCloseMetaProcessingRequest,
 		inputPaths: readonly string[],
 		outputPath: string,
-		range: ProcessingRange
+		range: ProcessingRange,
+		compactLedgerEntryChanges: boolean
 	): readonly string[] {
 		const sourceArguments = request.inputs.flatMap((input, index) => [
 			'--input',
@@ -170,6 +187,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		const limits = this.#limits;
 		return [
 			...sourceArguments,
+			...(compactLedgerEntryChanges ? ['--compact-ledger-entry-changes'] : []),
 			...(this.#currentBulkCommitGuard ? ['--current-bulk-commit-guard'] : []),
 			...(this.#publicationStagingRoot === null
 				? []

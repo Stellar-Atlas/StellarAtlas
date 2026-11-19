@@ -14,6 +14,10 @@ import {
 } from './FullHistoryPairedCurrentAdmission.js';
 import { parseScopedCurrentAttemptPolicy, type ScopedCurrentAttemptPolicy } from './FullHistoryScopedCurrentAttempt.js';
 import { parseCurrentPublisherReadyPath } from './FullHistoryCurrentPublisherReady.js';
+import {
+	parseFullHistoryLedgerEntryCompactSelection,
+	type FullHistoryLedgerEntryCompactSelection
+} from '../../full-history-ledger-close-meta/FullHistoryLedgerEntryCompactSelection.js';
 
 const maximumIngressBytesPerSecond = 187_500_000;
 const maximumFetchConcurrency = 1_024;
@@ -24,6 +28,7 @@ const maximumCycleLedgers = 65_536;
 const sharedMemoryRoot = '/dev/shm';
 
 export interface FullHistoryLedgerCloseMetaServiceConfig {
+	readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection;
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
 	readonly pairedCurrentAdmission?: PairedCurrentAdmissionPolicy;
@@ -73,6 +78,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	if (environment.FULL_HISTORY_LEDGER_CLOSE_META_ENABLED !== 'true') {
 		throw new Error('FULL_HISTORY_LEDGER_CLOSE_META_ENABLED must equal true');
 	}
+	const compactLedgerEntryChanges = parseFullHistoryLedgerEntryCompactSelection(environment);
 	const bulkRoot = absolutePath(
 		environment.FULL_HISTORY_BULK_ROOT ?? '/home/observe/stellarbeat-data',
 		'bulk storage root'
@@ -271,6 +277,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		);
 	}
 	return Object.freeze({
+		...(compactLedgerEntryChanges === undefined ? {} : { compactLedgerEntryChanges }),
 		...(currentCapacityAllowance === undefined ? {} : { currentCapacityAllowance }),
 		...(currentOnlyCapacity === undefined ? {} : { currentOnlyCapacity: scopedCurrentAttempt === undefined
 			? currentOnlyCapacity : Object.freeze({ ...currentOnlyCapacity, scopedReserve: true as const }) }),
