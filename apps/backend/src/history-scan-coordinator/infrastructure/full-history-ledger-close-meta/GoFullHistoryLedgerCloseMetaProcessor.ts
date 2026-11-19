@@ -1,4 +1,6 @@
+import type { DerivedOutputRecoveryReader } from './FullHistoryDerivedOutputRetirement.js';
 import { createHash } from 'node:crypto';
+import { hash as stellarHash } from '@stellar/stellar-sdk';
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import type {
@@ -24,6 +26,7 @@ const sharedMemoryRoot = '/dev/shm';
 
 export interface GoFullHistoryLedgerCloseMetaProcessorOptions {
 	readonly executablePath: string;
+	readonly retirementRecoveryReader?: DerivedOutputRecoveryReader;
 	readonly currentBulkCommitGuard?: true;
 	readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection;
 	readonly limits: GoFullHistoryLedgerCloseMetaProcessorLimits;
@@ -49,6 +52,7 @@ export interface GoFullHistoryLedgerCloseMetaProcessorLimits {
 
 export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerCloseMetaProcessorPort {
 	readonly #executablePath: string;
+	readonly #retirementRecoveryReader: DerivedOutputRecoveryReader | undefined;
 	readonly #currentBulkCommitGuard: boolean;
 	readonly #compactLedgerEntryChanges: FullHistoryLedgerEntryCompactSelection | undefined;
 	readonly #limits: GoFullHistoryLedgerCloseMetaProcessorLimits;
@@ -64,6 +68,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 	constructor(options: GoFullHistoryLedgerCloseMetaProcessorOptions) {
 		assertOptions(options);
 		this.#executablePath = resolve(options.executablePath);
+		this.#retirementRecoveryReader = options.retirementRecoveryReader;
 		this.#currentBulkCommitGuard = options.currentBulkCommitGuard === true;
 		this.#compactLedgerEntryChanges = options.compactLedgerEntryChanges === undefined
 			? undefined : Object.freeze({ ...options.compactLedgerEntryChanges });
@@ -108,12 +113,16 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 			? selectsCompactLedgerEntryChanges(this.#compactLedgerEntryChanges, range)
 			: selectedSchema === 4;
 		signal.throwIfAborted();
+		const outputPath = this.#outputPath(request, range);
+		const outputExistedBeforeRun = await directoryExists(outputPath);
+		const retirementRecovery = outputExistedBeforeRun
+			? await this.#retirementRecoveryReader?.(
+				Buffer.from(stellarHash(Buffer.from(request.networkPassphrase, 'utf8'))), range.startLedger, range.endLedger
+			) : undefined;
 		await mkdir(this.#temporaryInputRoot, { mode: 0o700, recursive: true });
 		const temporaryDirectory = await mkdtemp(
 			join(this.#temporaryInputRoot, 'ledger-close-meta-')
 		);
-		const outputPath = this.#outputPath(request, range);
-		const outputExistedBeforeRun = await directoryExists(outputPath);
 		let launchAttempted = false;
 		try {
 			await claimFullHistoryLedgerCloseMetaTransientDirectory(
@@ -123,7 +132,13 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 				temporaryDirectory,
 				request
 			);
-			const args = this.#arguments(request, inputPaths, outputPath, range, compactLedgerEntryChanges);
+			const recoveryArguments: string[] = [];
+			if (retirementRecovery !== undefined) {
+				const authorityPath = join(temporaryDirectory, 'retirement-recovery.json');
+				await writeFile(authorityPath, JSON.stringify(retirementRecovery), { flag: 'wx', mode: 0o600 });
+				recoveryArguments.push('--retirement-recovery', authorityPath);
+			}
+			const args = [...this.#arguments(request, inputPaths, outputPath, range, compactLedgerEntryChanges), ...recoveryArguments];
 			// Fetching input, waiting for the pool and staging it can outlast the held session.
 			if (assertBeforeConversion !== undefined) {
 				const assertAtLaunch = await assertBeforeConversion();
@@ -145,7 +160,8 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 				outputPath,
 				receipt,
 				request,
-				typedOutputRoot: this.#typedOutputRoot
+				typedOutputRoot: this.#typedOutputRoot,
+				...(retirementRecovery === undefined ? {} : { retirementRecovery })
 			});
 		} finally {
 			try {

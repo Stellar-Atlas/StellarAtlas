@@ -42,7 +42,11 @@ func recoverExistingOutput(
 	if err != nil {
 		return ProcessingReceipt{}, err
 	}
-	if err := validateRecoveredManifest(config, evidence, manifest, storageDirectory, publishPath); err != nil {
+	retirement, err := readRetirementRecovery(config.RetirementRecoveryPath, rawManifest, manifest)
+	if err != nil {
+		return ProcessingReceipt{}, err
+	}
+	if err := validateRecoveredManifestWithRetirement(config, evidence, manifest, storageDirectory, publishPath, retirement); err != nil {
 		return ProcessingReceipt{}, err
 	}
 	unchangedManifest, err := readManifest(manifestPath)
@@ -71,6 +75,13 @@ func validateRecoveredManifest(
 	evidence ShardEvidence,
 	manifest Manifest,
 	storageDirectory, publishPath string,
+) error {
+	return validateRecoveredManifestWithRetirement(config, evidence, manifest, storageDirectory, publishPath, nil)
+}
+
+func validateRecoveredManifestWithRetirement(
+	config Config, evidence ShardEvidence, manifest Manifest,
+	storageDirectory, publishPath string, retirement map[string]bool,
 ) error {
 	expected := newManifest(config, evidence, nil)
 	if !isSupportedManifestVersion(manifest.ManifestVersion) {
@@ -114,7 +125,7 @@ func validateRecoveredManifest(
 	if !reflect.DeepEqual(manifest.Unsupported, expectedUnsupported) {
 		return fmt.Errorf("unsupported dataset declaration does not match this transformer")
 	}
-	return validateRecoveredOutputs(manifest, storageDirectory, publishPath)
+	return validateRecoveredOutputsWithRetirement(manifest, storageDirectory, publishPath, retirement)
 }
 
 func validateRecoveredLimits(manifest Manifest) error {
@@ -198,6 +209,10 @@ func validateRecoveredSources(manifest Manifest) error {
 }
 
 func validateRecoveredOutputs(manifest Manifest, storageDirectory, publishPath string) error {
+	return validateRecoveredOutputsWithRetirement(manifest, storageDirectory, publishPath, nil)
+}
+
+func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory, publishPath string, retirement map[string]bool) error {
 	specifications, err := outputSpecificationsForVersion(manifest.ManifestVersion)
 	if err != nil {
 		return err
@@ -243,6 +258,9 @@ func validateRecoveredOutputs(manifest Manifest, storageDirectory, publishPath s
 		if (descriptor.Dataset == "transaction-results" || descriptor.Dataset == "transaction-meta") &&
 			(transactionCount == nil || descriptor.RecordCount != *transactionCount) {
 			return fmt.Errorf("%s count does not match transaction count", descriptor.Dataset)
+		}
+		if retirement[descriptor.Dataset] {
+			continue
 		}
 		if err := validateOutputFile(filepath.Join(publishPath, specification.Filename), descriptor); err != nil {
 			return fmt.Errorf("validate %s: %w", descriptor.Dataset, err)

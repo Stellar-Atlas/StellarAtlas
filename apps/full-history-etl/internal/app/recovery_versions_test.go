@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/internal/output"
@@ -75,4 +77,86 @@ func readTypedManifest(t *testing.T, manifestPath string) Manifest {
 		t.Fatalf("decode manifest: %v", err)
 	}
 	return manifest
+}
+
+func TestRetiredDerivedOutputRecoveryPreservesOriginalManifest(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "network=pubnet", "range=53312000-53312000")
+	config := fixtureConfig(root, directory)
+	receipt, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := checkedStoragePath(t, root, receipt.ManifestStorageKey)
+	rawManifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := readTypedManifest(t, manifestPath)
+	var derived, canonical output.Descriptor
+	for _, descriptor := range manifest.Outputs {
+		if descriptor.Dataset == "transactions" {
+			derived = descriptor
+		}
+		if descriptor.Dataset == "ledger-close-meta" {
+			canonical = descriptor
+		}
+	}
+	authority := derivedRetirementRecovery{
+		Version: 1, BatchID: "00000000-0000-4000-8000-000000000001",
+		NetworkID: manifest.Network.NetworkIDSHA256, Start: manifest.Range.StartLedger,
+		End: manifest.Range.EndLedger, ManifestSHA256: receipt.ManifestSHA256,
+		CanonicalSHA256: canonical.SHA256,
+		Outputs: []derivedRetirementOutput{{
+			Dataset: derived.Dataset, SHA256: derived.SHA256, Bytes: strconv.FormatInt(derived.ByteCount, 10),
+			Rows: strconv.FormatUint(derived.RecordCount, 10), StorageKey: derived.StorageKey,
+			EvidenceSHA256: strings.Repeat("a", 64), TransformRevision: strings.Repeat("b", 40),
+		}},
+	}
+	if _, err := validateRetirementRecovery(authority, rawManifest, manifest); err != nil {
+		t.Fatal(err)
+	}
+	invalid := authority
+	invalid.CanonicalSHA256 = strings.Repeat("c", 64)
+	if _, err := validateRetirementRecovery(invalid, rawManifest, manifest); err == nil {
+		t.Fatal("wrong canonical authority accepted")
+	}
+	if err := os.Remove(checkedStoragePath(t, root, derived.StorageKey)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(context.Background(), config); err == nil {
+		t.Fatal("missing output accepted without authority")
+	}
+	authorityPath := filepath.Join(t.TempDir(), "authority.json")
+	writeAuthority := func() {
+		raw, err := json.Marshal(authority)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(authorityPath, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeAuthority()
+	config.RetirementRecoveryPath = authorityPath
+	if _, err := Run(context.Background(), config); err == nil {
+		t.Fatal("unconfirmed removal accepted")
+	}
+	authority.Outputs[0].Removed = true
+	writeAuthority()
+	recovered, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(recovered.Outputs, receipt.Outputs) || recovered.ManifestSHA256 != receipt.ManifestSHA256 {
+		t.Fatal("recovery rewrote immutable evidence")
+	}
+	after, err := os.ReadFile(manifestPath)
+	if err != nil || string(after) != string(rawManifest) {
+		t.Fatal("manifest bytes changed")
+	}
+	authority.Outputs[0].Dataset = "ledger-close-meta"
+	if _, err := validateRetirementRecovery(authority, rawManifest, manifest); err == nil {
+		t.Fatal("canonical retirement accepted")
+	}
 }

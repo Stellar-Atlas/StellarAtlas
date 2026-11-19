@@ -32,6 +32,7 @@ describe('HistoryDataRouter.integration', () => {
 
 	it('reports continuous and supplemental catalog coverage', async () => {
 		dataSource.query.mockImplementation(async (sql: string) => {
+			if (sql.includes('to_regclass')) return [{ available: false }];
 			if (sql.includes('full_history_lcm_dataset_status_rollup')) {
 				return [
 					{
@@ -89,7 +90,7 @@ describe('HistoryDataRouter.integration', () => {
 	});
 
 	it('lists immutable batches with exact download paths', async () => {
-		dataSource.query.mockResolvedValue([
+		dataSource.query.mockImplementation(async (sql: string) => sql.includes('to_regclass') ? [{ available: false }] : [
 			{
 				batchId: '00000000-0000-4000-8000-000000000001',
 				byteCount: '4',
@@ -126,7 +127,7 @@ describe('HistoryDataRouter.integration', () => {
 			recursive: true
 		});
 		await writeFile(join(storageRoot, storageKey), Buffer.from('data'));
-		dataSource.query.mockResolvedValue([
+		dataSource.query.mockImplementation(async (sql: string) => sql.includes('to_regclass') ? [{ available: false }] : [
 			{
 				byteCount: '4',
 				mediaType: 'application/vnd.apache.parquet',
@@ -143,6 +144,29 @@ describe('HistoryDataRouter.integration', () => {
 			.expect(206)
 			.expect('Content-Range', 'bytes 1-2/4')
 			.expect('X-Content-SHA256', '02'.repeat(32));
+	});
+
+
+	const retirementRow = {
+		batchId: '00000000-0000-4000-8000-000000000001', networkIdSha256: '',
+		startLedger: 3, endLedger: 1026, manifestSha256: '03'.repeat(32), canonicalSha256: '04'.repeat(32),
+		dataset: 'transactions', outputSha256: '02'.repeat(32), byteCount: '4', recordCount: '10',
+		storageKey: 'network/ledger-close-meta/3-1026/transactions.parquet',
+		removed: false, evidenceSha256: '05'.repeat(32), transformRevision: '06'.repeat(20)
+	};
+	it('returns Gone before filesystem access for explicitly retired exports', async () => {
+		const { createHash } = await import('node:crypto');
+		const row = { ...retirementRow, networkIdSha256: createHash('sha256')
+			.update('Public Global Stellar Network ; September 2015').digest('hex') };
+		dataSource.query.mockImplementation(async (sql: string) => {
+			if (sql.includes('to_regclass')) return [{ available: true }];
+			if (sql.includes('from full_history_lcm_derived_output_retirement')) return [row];
+			return [{ byteCount: '4', mediaType: 'application/vnd.apache.parquet',
+				sha256: Buffer.alloc(32, 2), storageKey: row.storageKey }];
+		});
+		await request(app).get('/v1/history-data/batches/' + row.batchId + '/transactions')
+			.expect(410).expect('Cache-Control', 'no-store')
+			.expect(response => expect(response.body.replacementPath).toMatch(/\/ledger-close-meta$/));
 	});
 
 	it('rejects invalid dataset and batch identifiers without a query', async () => {

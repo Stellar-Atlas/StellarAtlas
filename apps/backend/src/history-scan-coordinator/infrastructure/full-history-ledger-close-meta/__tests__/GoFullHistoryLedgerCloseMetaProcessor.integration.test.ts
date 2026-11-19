@@ -7,6 +7,7 @@ import {
 	fullHistoryLedgerCloseMetaSha256Digest
 } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import { GoFullHistoryLedgerCloseMetaProcessor } from '../GoFullHistoryLedgerCloseMetaProcessor.js';
+import type { DerivedOutputRecoveryReader } from '../FullHistoryDerivedOutputRetirement.js';
 import { runGoFullHistoryStateExport } from '../../full-history-state-import/GoFullHistoryStateExportProcess.js';
 
 const executablePath = process.env.FULL_HISTORY_ETL_TEST_BINARY;
@@ -35,7 +36,8 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 				'apps/full-history-etl/internal/testdata/FCD285FF--53312000.xdr.zstd'
 			)
 		);
-		const processor = createProcessor(compact);
+		const retirementRecoveryReader = jest.fn(async () => undefined);
+		const processor = createProcessor(compact, retirementRecoveryReader);
 		const request = requestFor(bytes);
 
 		const first = await processor.processAndCommit(
@@ -60,6 +62,12 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 			'trustline-state-changes'
 		]);
 		expect(replay).toEqual(first);
+		expect(retirementRecoveryReader).toHaveBeenCalledTimes(1);
+		expect(retirementRecoveryReader).toHaveBeenCalledWith(
+			Buffer.from('7ac33997544e3175d266bd022439b22cdb16508c01163f26e5cb2a3e1045a979', 'hex'),
+			53_312_000,
+			53_312_000
+		);
 		expect(first.outputs.find((output) => output.dataset === 'ledger-entry-changes')?.schemaVersion)
 			.toBe(`stellar-atlas.full-history.ledger-entry-changes.v${compact ? '4' : '3'}`);
 		await expect(createProcessor(!compact).processAndCommit(request, new AbortController().signal))
@@ -117,9 +125,10 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 		expect(await readdir(temporaryInputRoot)).toEqual([]);
 	});
 
-	function createProcessor(compact = false): GoFullHistoryLedgerCloseMetaProcessor {
+	function createProcessor(compact = false, retirementRecoveryReader?: DerivedOutputRecoveryReader): GoFullHistoryLedgerCloseMetaProcessor {
 		return new GoFullHistoryLedgerCloseMetaProcessor({
 			executablePath: executablePath!,
+			...(retirementRecoveryReader === undefined ? {} : { retirementRecoveryReader }),
 			...(compact ? { compactLedgerEntryChanges: { startLedger: 53_312_000, endLedger: 53_312_000 } } : {}),
 			limits: {
 				maximumCompressedBytes: 256 << 20,

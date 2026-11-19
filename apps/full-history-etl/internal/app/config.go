@@ -32,6 +32,7 @@ type Source struct {
 }
 
 type Config struct {
+	RetirementRecoveryPath    string
 	Sources                   []Source
 	TypedOutputRoot           string
 	OutputPath                string
@@ -71,6 +72,7 @@ func ParseConfig(args []string, stderr io.Writer) (Config, error) {
 	flags.Var(&objectKeys, "input-object-key", "ordered SEP-54 source object key; repeat once per input")
 	flags.StringVar(&config.TypedOutputRoot, "typed-output-root", "", "root used to resolve published storage keys")
 	flags.StringVar(&config.OutputPath, "output", "", "new output directory to publish atomically")
+	flags.StringVar(&config.RetirementRecoveryPath, "retirement-recovery", "", "explicit catalogue-bound recovery authority for an already registered retired output")
 	flags.StringVar(&config.PublicationStagingRoot, "publication-staging-root", "", "optional fast local root used to stage output before serialized atomic publication")
 	flags.BoolVar(&config.CurrentBulkCommitGuard, "current-bulk-commit-guard", false, "require separate-device staging and source filesystem headroom for current bulk publication")
 	flags.StringVar(&config.NetworkName, "network", "", "stable network label")
