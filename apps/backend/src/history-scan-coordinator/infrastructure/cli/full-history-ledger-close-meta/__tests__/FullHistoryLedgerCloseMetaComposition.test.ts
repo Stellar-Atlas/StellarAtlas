@@ -20,7 +20,8 @@ describe('FullHistoryLedgerCloseMetaComposition', () => {
 			'AccountDirectory1794090000000',
 			'AtlasAccountVerification1794091000000',
 			'AtlasDeveloperAuthentication1794232800000',
-			'AtlasVerificationAuthentication1794092000000'
+			'AtlasVerificationAuthentication1794092000000',
+			'AtlasDeveloperSubmissions1794744000000'
 		]);
 		expect(dataSource.options.migrations).toEqual(
 			managedMigrations.filter((migration) => !unrelatedNames.has(migration.name))
