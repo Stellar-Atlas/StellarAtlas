@@ -111,13 +111,18 @@ function assertLiteralPredicate(expression: string): void {
 	// another relation, subquery or function call into this literals-only check.
 	const columns = new Set(['dataset', 'schema_version', 'media_type', 'representation']);
 	const keywords = new Set(['and', 'or', 'in', 'any', 'array', 'text', 'true', 'false']);
-	const tokens = /\s+|'(?:[^']|'')*'|"[a-z_]+"|::|[a-z_]+|[()[\],=]/giy;
+	const tokens = /\s+|'(?:[^']|'')*'|"[a-z_]+"|::\s*character\s+varying\b|::|[a-z_]+|[()[\],=]/giy;
 	let offset = 0;
 	while (offset < expression.length) {
 		tokens.lastIndex = offset;
 		const token = tokens.exec(expression)?.[0];
 		if (token === undefined) throw notReady();
 		offset = tokens.lastIndex;
+		// PostgreSQL deparses varchar ARRAY elements with this two-word cast.
+		if (/^::\s*character\s+varying$/i.test(token)) {
+			if (/^\s*\(/.test(expression.slice(offset))) throw notReady();
+			continue;
+		}
 		if (/^\s+$/.test(token) || token.startsWith("'") ||
 			/^(?:::|[()[\],=])$/.test(token)) continue;
 		if (/^\s*\(/.test(expression.slice(offset)) &&

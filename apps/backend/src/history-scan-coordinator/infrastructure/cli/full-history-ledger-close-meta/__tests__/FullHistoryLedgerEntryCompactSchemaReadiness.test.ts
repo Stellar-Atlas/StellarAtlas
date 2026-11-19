@@ -54,6 +54,17 @@ describe('compact ledger entry catalogue readiness', () => {
 		expect(query).toHaveBeenCalledTimes(1);
 	});
 
+	it('accepts PostgreSQL varchar ARRAY elements followed by a text-array cast', async () => {
+		const expression = fullHistoryLedgerCloseMetaCompactDatasetContractPredicateSql
+			.replace(/"schema_version" in \(([^)]+)\)/g, (_match: string, versions: string) =>
+				`(schema_version)::text = ANY ((ARRAY[${versions.replace(/('(?:[^']|'')*')/g, '$1::character varying')}])::text[])`);
+		const { dataSource, query } = mockDataSource({ expression });
+		await expect(assertFullHistoryLedgerEntryCompactSchemaReady(dataSource))
+			.resolves.toBeUndefined();
+		expect(query.mock.calls[1]?.[0]).toContain('::character varying');
+		expect(query.mock.calls[1]?.[0]).toContain('])::text[])');
+	});
+
 	it('does not remove meaningful internal function whitespace when comparing', async () => {
 		const { dataSource } = mockDataSource({
 			body: assertionBody().replace('batch_ledgers integer;', 'batch_ledgers  integer;')
@@ -111,7 +122,8 @@ describe('compact ledger entry catalogue readiness', () => {
 	);
 
 	it.each(['pg_sleep(1) is null', "dataset('x') = 'x'", "\"dataset\"('x') = 'x'",
-		"text('x') = 'x'", "(select dataset from archive) = 'x'"])(
+		"text('x') = 'x'", "character varying('x') = 'x'",
+		"'x'::character varying('x') = 'x'", "(select dataset from archive) = 'x'"])(
 		'rejects relation references and function calls in CHECK drift: %s', async (expression) => {
 			const { dataSource, query } = mockDataSource({ expression });
 			await expect(assertFullHistoryLedgerEntryCompactSchemaReady(dataSource))
@@ -122,7 +134,7 @@ describe('compact ledger entry catalogue readiness', () => {
 
 	it('propagates a failed read instead of treating it as ready', async () => {
 		const { dataSource, query } = mockDataSource();
-		query.mockRejectedValueOnce(new Error('metadata unavailable'));
+		query.mockReset().mockRejectedValueOnce(new Error('metadata unavailable'));
 		await expect(assertFullHistoryLedgerEntryCompactSchemaReady(dataSource))
 			.rejects.toThrow('metadata unavailable');
 	});
