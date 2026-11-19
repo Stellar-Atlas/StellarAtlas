@@ -1,6 +1,35 @@
 import { parseFullHistoryLedgerCloseMetaServiceConfig } from '../FullHistoryLedgerCloseMetaServiceConfig.js';
+import { selectsCompactLedgerEntryChanges } from '../../../full-history-ledger-close-meta/FullHistoryLedgerEntryCompactSelection.js';
 
 describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
+	it('keeps compact output default-off and selects the same exact shard after restart', () => {
+		const range = { startLedger: 53_312_000, endLedger: 53_312_127 };
+		const values = { ...environment(),
+			FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_FIRST_LEDGER: String(range.startLedger),
+			FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_LAST_LEDGER: String(range.endLedger)
+		};
+		expect(parseFullHistoryLedgerCloseMetaServiceConfig(environment()).compactLedgerEntryChanges).toBeUndefined();
+		expect(selectsCompactLedgerEntryChanges(undefined, range)).toBe(false);
+		for (let restart = 0; restart < 2; restart += 1) {
+			const selection = parseFullHistoryLedgerCloseMetaServiceConfig(values).compactLedgerEntryChanges;
+			expect(selection).toEqual(range);
+			expect(Object.isFrozen(selection)).toBe(true);
+			expect(selectsCompactLedgerEntryChanges(selection, range)).toBe(true);
+			expect(selectsCompactLedgerEntryChanges(selection, { startLedger: 53_312_128, endLedger: 53_312_255 })).toBe(false);
+			expect(() => selectsCompactLedgerEntryChanges(selection, { ...range, endLedger: 53_312_063 })).toThrow(/exact configured shard range/);
+		}
+		for (const overrides of [
+			{ FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_FIRST_LEDGER: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_LAST_LEDGER: undefined },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_FIRST_LEDGER: '0' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_FIRST_LEDGER: '53312128' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_LAST_LEDGER: '4294967296' },
+			{ FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_FIRST_LEDGER: '53312000\n' }
+		]) {
+			expect(() => parseFullHistoryLedgerCloseMetaServiceConfig({ ...values, ...overrides })).toThrow(/Compact ledger-entry changes/);
+		}
+	});
+
 	it('uses the bounded production resource and storage defaults', () => {
 		const config = parseFullHistoryLedgerCloseMetaServiceConfig(environment());
 

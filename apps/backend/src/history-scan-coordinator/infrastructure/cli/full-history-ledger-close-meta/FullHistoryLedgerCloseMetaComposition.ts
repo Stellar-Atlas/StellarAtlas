@@ -78,6 +78,9 @@ export function composeFullHistoryLedgerCloseMetaService(
 	);
 	const processor = new GoFullHistoryLedgerCloseMetaProcessor({
 		executablePath: config.executablePath,
+		...(config.compactLedgerEntryChanges === undefined ? {} : {
+			compactLedgerEntryChanges: config.compactLedgerEntryChanges
+		}),
 		...(config.currentBulkCommitGuard === undefined ? {} : { currentBulkCommitGuard: true }),
 		limits: {
 			maximumCompressedBytes:

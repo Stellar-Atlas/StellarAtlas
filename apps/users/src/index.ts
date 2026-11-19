@@ -204,6 +204,26 @@ api.post(
 				req.body.title
 			);
 
+			// Record only bounded diagnostics; provider acceptance is not inbox delivery.
+			const rawStatus = result instanceof HttpError
+				? result.response?.status
+				: result.status;
+			const status = typeof rawStatus === 'number' && Number.isInteger(rawStatus) && rawStatus >= 100 && rawStatus <= 599
+				? rawStatus
+				: undefined;
+			const code = result instanceof HttpError
+				? ['PROVIDER_HTTP', 'PROVIDER_TIMEOUT', 'PROVIDER_TRANSPORT'].find(
+					(value) => value === result.code
+				) ?? 'PROVIDER_UNKNOWN'
+				: undefined;
+			console.info(JSON.stringify({
+				event: 'mail_provider_outcome',
+				outcome: !(result instanceof HttpError) && status === 200 ? 'accepted'
+					: status !== undefined && status >= 400 && status < 500 ? 'rejected' : 'unknown',
+				code,
+				status
+			}));
+
 			if (result instanceof HttpError) {
 				Sentry.captureMessage('Mail provider request failed', {
 					extra: { code: result.code, status: result.response?.status }

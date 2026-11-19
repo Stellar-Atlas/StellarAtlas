@@ -28,14 +28,14 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 		]);
 	});
 
-	it('publishes typed datasets, discards input, and replays exact output', async () => {
+	it.each([false, true])('publishes and replays exact output with compact ledger entries: %s', async (compact) => {
 		const bytes = await readFile(
 			join(
 				process.cwd(),
 				'apps/full-history-etl/internal/testdata/FCD285FF--53312000.xdr.zstd'
 			)
 		);
-		const processor = createProcessor();
+		const processor = createProcessor(compact);
 		const request = requestFor(bytes);
 
 		const first = await processor.processAndCommit(
@@ -60,6 +60,10 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 			'trustline-state-changes'
 		]);
 		expect(replay).toEqual(first);
+		expect(first.outputs.find((output) => output.dataset === 'ledger-entry-changes')?.schemaVersion)
+			.toBe(`stellar-atlas.full-history.ledger-entry-changes.v${compact ? '4' : '3'}`);
+		await expect(createProcessor(!compact).processAndCommit(request, new AbortController().signal))
+			.rejects.toThrow(/different ledger-entry-changes projection mode/);
 		expect(first.sourceDisposition).toBe('discarded-after-processing');
 		for (const dataset of [
 			'account-state-changes',
@@ -113,9 +117,10 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 		expect(await readdir(temporaryInputRoot)).toEqual([]);
 	});
 
-	function createProcessor(): GoFullHistoryLedgerCloseMetaProcessor {
+	function createProcessor(compact = false): GoFullHistoryLedgerCloseMetaProcessor {
 		return new GoFullHistoryLedgerCloseMetaProcessor({
 			executablePath: executablePath!,
+			...(compact ? { compactLedgerEntryChanges: { startLedger: 53_312_000, endLedger: 53_312_000 } } : {}),
 			limits: {
 				maximumCompressedBytes: 256 << 20,
 				maximumDecodedMemoryBytes: 512 << 20,
