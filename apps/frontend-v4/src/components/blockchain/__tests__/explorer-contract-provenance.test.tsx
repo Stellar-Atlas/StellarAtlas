@@ -160,6 +160,7 @@ afterEach(() => cleanup?.());
 describe('synthetic contract provenance interaction journey', () => {
 	it('parses the exact marker and conservatively distinguishes absent and unexpected values', () => {
 		expect(parseLedgerEvidence('configured_rpc_observation')).toBe('configured_rpc_observation');
+		expect(parseLedgerEvidence('configured_rpc_archived_observation')).toBe('configured_rpc_archived_observation');
 		expect(parseLedgerEvidence(undefined)).toBe('unspecified');
 		for (const marker of [null, {}, 'CONFIGURED_RPC_OBSERVATION', 'independent_proof']) {
 			expect(parseLedgerEvidence(marker)).toBe('unknown');
@@ -322,6 +323,43 @@ describe('synthetic contract provenance interaction journey', () => {
 		expect(html).toContain(label);
 		expect(html).not.toContain('private.invalid');
 		expect(html.includes(commit)).toBe(status === 'verified');
+	});
+	it.each(['verified', 'invalid', 'unavailable'])('labels archived bytes separately from the %s build verdict', async (status) => {
+		request.mockResolvedValue({ ...evidence(status), ledgerEvidence: 'configured_rpc_archived_observation' });
+		render();
+		click('Check build');
+		render();
+		effects();
+		await settled();
+		const html = render();
+		expect(html).toContain('Archived contract bytes');
+		expect(html).toMatch(/does not establish that\s*the contract is currently live or usable/);
+		expect(html).toContain('Configured RPC archived observation. Not current live-state evidence or an independent ledger-state proof.');
+		expect(html).not.toContain('matches the deployed Wasm hash');
+		expect(html).not.toContain('Configured RPC observation. Not an independent ledger-state proof.');
+		expect(html.includes('Build attested')).toBe(status === 'verified');
+		if (status === 'verified') expect(html).toContain('The signed build matches these archived Wasm bytes.');
+	});
+	it('qualifies a matching manual build as archived and keeps hash mismatches rejected', async () => {
+		request.mockResolvedValue({ ...evidence(), ledgerEvidence: 'configured_rpc_archived_observation' });
+		render();
+		submitBuild();
+		render();
+		effects();
+		await settled();
+		const matched = render();
+		expect(matched).toContain('Your build is attested');
+		expect(matched).toContain('archived contract bytes, not a currently live contract');
+		expect(matched).not.toContain('matches the deployed Wasm hash');
+		submitBuild(commit, 'c'.repeat(64));
+		render();
+		effects();
+		await settled();
+		const mismatch = render();
+		expect(mismatch).toContain('Wasm hash mismatch');
+		expect(mismatch).toContain('The archived Wasm hash differs');
+		expect(mismatch).not.toContain('Your build is attested');
+		expect(request).toHaveBeenCalledTimes(2);
 	});
 	it('does not echo an unrecognized ledger evidence value or use it as proof', async () => {
 		const marker = 'https://private.invalid/claimed-ledger-proof';

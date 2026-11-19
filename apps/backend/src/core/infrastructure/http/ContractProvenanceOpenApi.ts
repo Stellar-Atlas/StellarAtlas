@@ -86,7 +86,7 @@ export const contractProvenancePaths: Record<string, unknown> = {
 			security: [],
 			summary: 'Inspect observed contract build provenance',
 			description:
-				'Reads the deployed contract executable and associated build attestation at the RPC-observed ledger. The observed ledger is not a promise that the response reflects the current network head. A verified build signature is not a security audit or a claim of reproducible builds; securityAudit remains not_assessed.',
+				'Reads contract executable bytes and associated build attestation at the RPC-observed ledger. Archived bytes use configured_rpc_archived_observation and do not establish a live or usable contract or qualify for the verified catalogue. The observed ledger is not a promise that the response reflects the current network head. A verified build signature is not a security audit or a claim of reproducible builds; securityAudit remains not_assessed.',
 			parameters: [
 				{
 					name: 'contractId',
@@ -178,6 +178,11 @@ export const contractProvenanceSchemas: Record<string, unknown> = {
 				type: 'integer',
 				minimum: 0,
 				description: 'Ledger at which the contract executable was observed.'
+			},
+			ledgerEvidence: {
+				type: 'string',
+				enum: ['configured_rpc_observation', 'configured_rpc_archived_observation'],
+				description: 'Network-bound RPC evidence. The archived variant attests returned archived bytes, not live contract state, and is excluded from catalogue admission.'
 			},
 			instanceModifiedLedger: { type: 'integer', nullable: true, minimum: 0 },
 			checkedAt: { type: 'string', format: 'date-time' },

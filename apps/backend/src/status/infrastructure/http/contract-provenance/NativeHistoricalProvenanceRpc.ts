@@ -73,7 +73,8 @@ export async function readNativeHistoricalProvenance(
 					throw new Error('Native provenance RPC ledger evidence is inconsistent');
 				instanceLedger ??= ledger;
 				return result;
-			}
+			},
+			true
 		);
 		if (performance.now() >= deadline)
 			throw new Error('Native provenance RPC deadline expired');

@@ -187,7 +187,7 @@ describe('synthetic registered provenance journey', () => {
 		const observe = jest.fn(async (_value: ContractProvenance) => undefined);
 		const result = await invoke(contractId, observe);
 		expect(result.status).toBe(200);
-		expect(readContractCode).toHaveBeenCalledWith(undefined, contractId, expect.any(Function));
+		expect(readContractCode).toHaveBeenCalledWith(undefined, contractId, expect.any(Function), true);
 		expect(observe).toHaveBeenCalledWith(result.body);
 		expect(projectCatalogueItem(result.body as ContractProvenance)).toMatchObject({
 			contractId,
@@ -198,6 +198,28 @@ describe('synthetic registered provenance journey', () => {
 			build: { status: 'verified', record: { commit } }
 		});
 		expect(result.body).toMatchObject({ networkPassphrase: 'synthetic network' });
+	});
+	it('attests archived bytes without admitting them to the live catalogue', async () => {
+		fetchRpcJson.mockResolvedValueOnce({
+			jsonrpc: '2.0', id: 1,
+			result: { passphrase: 'synthetic network', protocolVersion: 29 }
+		});
+		readContractCode.mockResolvedValue({
+			ledger: 150, modifiedLedger: 100, executable: 'wasm',
+			wasmSha256: hash, wasm, archived: true
+		});
+		const observe = jest.fn(async (_value: ContractProvenance) => undefined);
+		const result = await invoke(contractId, observe);
+		expect(result.status).toBe(200);
+		expect(result.body).toMatchObject({
+			ledgerEvidence: 'configured_rpc_archived_observation',
+			observedLedger: 150, wasmSha256: hash,
+			build: { status: 'verified', record: { commit } },
+			securityAudit: 'not_assessed'
+		});
+		expect(verify).toHaveBeenCalledTimes(1);
+		expect(observe).not.toHaveBeenCalled();
+		expect(projectCatalogueItem(result.body as ContractProvenance)).toBeNull();
 	});
 	it('projects scoped evidence without holding verifier slots or queuing saturated writes', async () => {
 		const writes: { resolve: () => void; reject: (error: Error) => void }[] = [];

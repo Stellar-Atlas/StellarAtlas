@@ -36,6 +36,9 @@ describe('controlled contract reproduction guide', () => {
 		expect(html).toContain('build.record.commit');
 		expect(html).toContain('<code>ledgerEvidence</code>');
 		expect(html).toContain('<code>configured_rpc_observation</code>');
+		expect(html).toContain('<code>configured_rpc_archived_observation</code>');
+		expect(html).toMatch(/does not establish that the contract\s*is currently live or usable/);
+		expect(html).toMatch(/Archived observations are not admitted\s*to the verified-contract catalogue/);
 		expect(html).toContain('not an independent ledger-state proof');
 		expect(html).toMatch(/absent or unrecognized value does not\s+establish independent proof/);
 		expect(html).toMatch(/<code>build.status<\/code> separately\s+for the attestation outcome/);

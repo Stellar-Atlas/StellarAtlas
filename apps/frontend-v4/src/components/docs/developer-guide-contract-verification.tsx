@@ -102,6 +102,14 @@ export const contractVerificationGuide: DeveloperGuidePage = {
 						establish independent proof. Read <code>build.status</code> separately
 						for the attestation outcome.
 					</p>
+					<p>
+						<code>configured_rpc_archived_observation</code> identifies archived
+						contract bytes returned by the configured RPC. The build attestation
+						can match those bytes, but this does not establish that the contract
+						is currently live or usable. Archived observations are not admitted
+						to the verified-contract catalogue. Source reproduction and security
+						audits remain separate checks.
+					</p>
 				</>
 			)
 		},
