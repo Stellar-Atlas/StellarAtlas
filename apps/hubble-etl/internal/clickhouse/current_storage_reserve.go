@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	currentSourceOutputBytes = uint64(8) << 30
-	currentWarehouseRunway   = uint64(64) << 30
+	currentSourceOutputBytes   = uint64(8) << 30
+	currentWarehouseRunway     = uint64(64) << 30
+	CurrentRequestCapacityMode = "request-scoped-v1"
 )
 
 var ErrCurrentBulkHeadroom = errors.New("current warehouse bulk headroom")
@@ -42,19 +43,47 @@ func currentPublicationStartBytes(total uint64, minimumBasisPoints uint32) (uint
 	if minimumBasisPoints != 0 {
 		return 0, fmt.Errorf("current bulk capacity requires zero percentage reserve")
 	}
-	// The fixed HDD base already provides the emergency allowance; do not add
-	// another startup cushion or reserve a percentage of the whole filesystem.
-	// NVMe reservations are independent and remain configured in ClickHouse.
-	allowance := currentSourceOutputBytes + currentWarehouseRunway
-	if minimumBulkReserveBytes > math.MaxUint64-allowance {
+	// Unbudgeted startup is a read-only preflight, never HTTP write admission.
+	// Already captured source files are reflected in the fresh capacity sample.
+	return minimumBulkReserveBytes, nil
+}
+
+func currentPublicationRequiredBytes(ctx context.Context, total uint64, minimumBasisPoints uint32) (uint64, error) {
+	if ctx == nil {
+		return 0, fmt.Errorf("current bulk capacity requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	floor, err := currentPublicationStartBytes(total, minimumBasisPoints)
+	if err != nil {
+		return 0, err
+	}
+	if ctx.Value(currentWriteBudgetKey{}) == nil {
+		if ctx.Value(currentRequestExposureKey{}) != nil {
+			return 0, fmt.Errorf("current request exposure requires a write budget")
+		}
+		return floor, nil
+	}
+	_, allowance, err := CurrentRequestExposureFromContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if floor > math.MaxUint64-allowance {
 		return 0, fmt.Errorf("current bulk admission budget overflows")
 	}
-	return minimumBulkReserveBytes + allowance, nil
+	// This is a request-proportional PLANNING allowance, not a bound on physical
+	// output, merge growth or other writers. Existing allocations/reservations
+	// remain reflected in fresh paired space; none is credited to this request.
+	return floor + allowance, nil
 }
 
 // CheckCurrentPublicationBulkReserve reads only disk metadata. It is a fresh
 // admission fence, not an atomic reservation against other filesystem writers.
 func (c *Client) CheckCurrentPublicationBulkReserve(ctx context.Context, policy HistoricalStoragePolicy) error {
+	if c.currentWriteUncertain.Load() {
+		return ErrCurrentWriteUncertain
+	}
 	if err := ValidateCurrentPublicationPolicy(policy); err != nil {
 		return err
 	}
@@ -62,7 +91,7 @@ func (c *Client) CheckCurrentPublicationBulkReserve(ctx context.Context, policy 
 	if err != nil {
 		return err
 	}
-	required, err := currentPublicationStartBytes(total, policy.SourceMinimumFreeBasisPoints)
+	required, err := currentPublicationRequiredBytes(ctx, total, policy.SourceMinimumFreeBasisPoints)
 	if err != nil {
 		return err
 	}

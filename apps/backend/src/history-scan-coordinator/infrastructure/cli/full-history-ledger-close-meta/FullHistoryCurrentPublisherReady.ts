@@ -3,6 +3,7 @@ import { lstat, open, readFile, realpath } from 'node:fs/promises';
 import { posix } from 'node:path';
 
 const keys = ['version', 'bootId', 'invocationId', 'pid', 'startTicks', 'minimumLedger', 'maximumWriteBytes'] as const;
+const requestScopedKeys = [...keys, 'capacityMode'] as const;
 
 export function parseCurrentPublisherReadyPath(raw: string | undefined): string {
 	if (raw === undefined || !/^\/run\/(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+$/u.test(raw) ||
@@ -13,12 +14,18 @@ export function parseCurrentPublisherReadyPath(raw: string | undefined): string 
 }
 
 export function currentPublisherReadyIdentity(
-	value: unknown, bootId: string, minimumLedger: number
+	value: unknown, bootId: string, minimumLedger: number,
+	expectedCapacityMode?: 'request-scoped-v1'
 ): { readonly pid: number; readonly startTicks: string } | null {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+	if (expectedCapacityMode !== undefined && expectedCapacityMode !== 'request-scoped-v1') return null;
 	const row = value as Record<string, unknown>;
-	if (Object.keys(row).length !== keys.length || keys.some(key => !Object.hasOwn(row, key)) ||
-		row.version !== 1 || row.bootId !== bootId || row.minimumLedger !== minimumLedger ||
+	const expectedKeys = row.version === 2 ? requestScopedKeys : keys;
+	const validCapability = row.version === 1
+		? expectedCapacityMode === undefined
+		: row.version === 2 && row.capacityMode === 'request-scoped-v1';
+	if (Object.keys(row).length !== expectedKeys.length || expectedKeys.some(key => !Object.hasOwn(row, key)) ||
+		!validCapability || row.bootId !== bootId || row.minimumLedger !== minimumLedger ||
 		typeof row.invocationId !== 'string' || !/^[0-9a-f]{32}$/u.test(row.invocationId) ||
 		typeof row.pid !== 'number' || !Number.isInteger(row.pid) || row.pid < 2 || row.pid > 0x7fff_ffff ||
 		typeof row.startTicks !== 'string' || !/^[1-9][0-9]{0,19}$/u.test(row.startTicks) ||
@@ -31,7 +38,8 @@ export function currentPublisherReadyIdentity(
 }
 
 export async function assertCurrentPublisherReady(
-	path: string, bootId: string, minimumLedger: number, signal: AbortSignal
+	path: string, bootId: string, minimumLedger: number, signal: AbortSignal,
+	expectedCapacityMode?: 'request-scoped-v1'
 ): Promise<() => void> {
 	const refused = () => new Error('Waiting for the bounded current publisher in the same server boot');
 	try {
@@ -50,7 +58,7 @@ export async function assertCurrentPublisherReady(
 		} finally {
 			await file.close();
 		}
-		const ready = currentPublisherReadyIdentity(value, bootId, minimumLedger);
+		const ready = currentPublisherReadyIdentity(value, bootId, minimumLedger, expectedCapacityMode);
 		if (ready === null) throw refused();
 		const base = `/proc/${ready.pid}`;
 		const cgroup = await readFile(base + '/cgroup', { encoding: 'utf8', signal });

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/schema"
@@ -43,6 +44,7 @@ type Client struct {
 	singleCopyOperations      bool
 	virtualLedgerTransactions bool
 	autoStorageLayout         bool
+	currentWriteUncertain     atomic.Bool
 }
 
 type BatchStatus struct {
@@ -356,14 +358,33 @@ func (c *Client) executeTimed(ctx context.Context, query string, params url.Valu
 		// Pin the per-query setting for auxiliary INSERT SELECT as well as
 		// ordinary payload INSERTs, without changing historical queries.
 		values.Set("async_insert", "0")
+		values.Set("wait_end_of_query", "1")
 	}
 	request.URL.RawQuery = values.Encode()
 	if c.user != "" {
 		request.SetBasicAuth(c.user, c.password)
 	}
 	request.Header.Set("Content-Type", "application/octet-stream")
-	if err := admitCurrentWrite(ctx, quoted(c.database), query, len(body)); err != nil {
+	if isGuardedCurrentInsert(ctx, query) && c.currentWriteUncertain.Load() {
+		return nil, ErrCurrentWriteUncertain
+	}
+	settle, err := admitCurrentWrite(ctx, quoted(c.database), query, len(body))
+	if err != nil {
 		return nil, err
+	}
+	responseConfirmed := false
+	if settle != nil {
+		// Admission remains outstanding until the entire synchronous response
+		// confirms success. Transport, body, status or server errors are uncertain:
+		// retain the debit and fence further writes in this immutable attempt.
+		defer func() {
+			if !responseConfirmed {
+				// Survive a fresh File budget: the server may still be executing
+				// an INSERT whose response was lost. Never clear this in-process.
+				c.currentWriteUncertain.Store(true)
+			}
+			settle(responseConfirmed)
+		}()
 	}
 	if timings != nil {
 		var finish func()
@@ -388,12 +409,21 @@ func (c *Client) executeTimed(ctx context.Context, query string, params url.Valu
 	}
 	defer response.Body.Close()
 	readStarted := time.Now()
-	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, 32<<20))
+	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, (32<<20)+1))
 	if timings != nil {
 		timings.bodyRead += time.Since(readStarted)
 	}
 	if readErr != nil {
 		return nil, readErr
+	}
+	if len(responseBody) > 32<<20 {
+		return nil, fmt.Errorf("ClickHouse response exceeds 32 MiB")
+	}
+	if code := response.Header.Get("X-ClickHouse-Exception-Code"); code != "" && code != "0" {
+		return nil, fmt.Errorf("ClickHouse server exception %s", code)
+	}
+	if code := response.Trailer.Get("X-ClickHouse-Exception-Code"); code != "" && code != "0" {
+		return nil, fmt.Errorf("ClickHouse server exception %s", code)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, fmt.Errorf(
@@ -402,6 +432,7 @@ func (c *Client) executeTimed(ctx context.Context, query string, params url.Valu
 			strings.TrimSpace(string(responseBody)),
 		)
 	}
+	responseConfirmed = true
 	return responseBody, nil
 }
 

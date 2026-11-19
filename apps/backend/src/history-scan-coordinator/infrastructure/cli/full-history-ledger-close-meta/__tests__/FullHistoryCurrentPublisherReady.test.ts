@@ -17,6 +17,19 @@ describe('standing current publisher identity', () => {
 			{ maximumWriteBytes: '1073741823' }, { extra: true }
 		]) expect(currentPublisherReadyIdentity({ ...marker, ...change }, bootId, marker.minimumLedger)).toBeNull();
 	});
+	it('requires the exact new capability when request-scoped pairing is expected', () => {
+		const requestScoped = { ...marker, version: 2, capacityMode: 'request-scoped-v1' };
+		expect(currentPublisherReadyIdentity(marker, bootId, marker.minimumLedger, 'request-scoped-v1')).toBeNull();
+		expect(currentPublisherReadyIdentity(requestScoped, bootId, marker.minimumLedger, 'request-scoped-v1'))
+			.toEqual({ pid: 42, startTicks: '901' });
+		expect(currentPublisherReadyIdentity(requestScoped, bootId, marker.minimumLedger)).toEqual({ pid: 42, startTicks: '901' });
+		for (const change of [
+			{ version: 1 }, { version: 3 }, { capacityMode: undefined }, { capacityMode: 'unknown' },
+			{ capacityMode: null }, { extra: true }, { maximumWriteBytes: '34359738369' }
+		]) expect(currentPublisherReadyIdentity({ ...requestScoped, ...change }, bootId, marker.minimumLedger, 'request-scoped-v1')).toBeNull();
+		for (const change of [{ capacityMode: 'unknown' }, { extra: true }])
+			expect(currentPublisherReadyIdentity({ ...requestScoped, ...change }, bootId, marker.minimumLedger)).toBeNull();
+	});
 	it('requires a canonical pathname in a runtime directory', () => {
 		expect(parseCurrentPublisherReadyPath('/run/publisher/current.json')).toBe('/run/publisher/current.json');
 		for (const path of [undefined, '/run/current.json', '/tmp/current.json', '/run/../run/publisher/current.json'])

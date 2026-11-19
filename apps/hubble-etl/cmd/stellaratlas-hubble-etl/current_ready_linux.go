@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/stellar/stellar-etl/v2/stellaratlas-hubble/internal/clickhouse"
 )
 
 var (
@@ -26,9 +28,13 @@ type currentWriterReadyRecord struct {
 	StartTicks        string `json:"startTicks"`
 	MinimumLedger     uint32 `json:"minimumLedger"`
 	MaximumWriteBytes string `json:"maximumWriteBytes"`
+	CapacityMode      string `json:"capacityMode"`
 }
 
 func publishCurrentWriterReady(path string, minimumLedger uint32, budget uint64) error {
+	if minimumLedger == 0 || budget < 1<<30 || budget > 32<<30 {
+		return fmt.Errorf("current writer capability requires a positive minimum ledger and 1..32 GiB write budget")
+	}
 	invocation := os.Getenv("INVOCATION_ID")
 	if !currentWriterInvocationPattern.MatchString(invocation) {
 		return fmt.Errorf("missing or invalid systemd invocation ID")
@@ -89,8 +95,9 @@ func publishCurrentWriterReady(path string, minimumLedger uint32, budget uint64)
 		return fmt.Errorf("current writer readiness parent changed while opening")
 	}
 	record := currentWriterReadyRecord{
-		Version: 1, BootID: bootID, InvocationID: invocation, PID: os.Getpid(), StartTicks: startTicks,
+		Version: 2, BootID: bootID, InvocationID: invocation, PID: os.Getpid(), StartTicks: startTicks,
 		MinimumLedger: minimumLedger, MaximumWriteBytes: strconv.FormatUint(budget, 10),
+		CapacityMode: clickhouse.CurrentRequestCapacityMode,
 	}
 	return writeCurrentWriterReady(root, dir, filepath.Base(path), record)
 }
