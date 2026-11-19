@@ -31,7 +31,7 @@ export interface ContractProvenance {
 	readonly contractId: string;
 	readonly networkPassphrase: string;
 	readonly observedLedger: number;
-	readonly ledgerEvidence?: 'configured_rpc_observation';
+	readonly ledgerEvidence?: 'configured_rpc_observation' | 'configured_rpc_archived_observation';
 	readonly instanceModifiedLedger: number | null;
 	readonly checkedAt: string;
 	readonly executable: 'wasm' | 'stellar_asset' | 'not_found';
@@ -177,7 +177,9 @@ export class ContractProvenanceService {
 				contractId,
 				networkPassphrase: this.networkPassphrase,
 				observedLedger: observation.ledger,
-				...(scoped || nativeHistorical
+				...(nativeHistorical?.archived
+					? ({ ledgerEvidence: 'configured_rpc_archived_observation' } as const)
+					: scoped || nativeHistorical
 					? ({ ledgerEvidence: 'configured_rpc_observation' } as const)
 					: {}),
 				instanceModifiedLedger: observation.modifiedLedger || null,

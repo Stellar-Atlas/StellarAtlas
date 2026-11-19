@@ -195,6 +195,39 @@ describe('contract provenance RPC path', () => {
 		id: 1,
 		result: { passphrase: networkPassphrase, protocolVersion: 29 }
 	};
+	it.each([[0, 0], [0, 200], [200, 0]])(
+		'classifies archived instance/code bytes separately (%s, %s)', async (instanceTtl, codeTtl) => {
+			const { id, hash, instanceKey, instance, codeKey, code, evidence } = rpcFixture();
+			const instanceReply = evidence(instanceKey, instance, 2);
+			const codeReply = evidence(codeKey, code, 3);
+			instanceReply.result.entries[0]!.liveUntilLedgerSeq = instanceTtl!;
+			codeReply.result.entries[0]!.liveUntilLedgerSeq = codeTtl!;
+			fetchRpc.mockResolvedValueOnce(networkReply)
+				.mockResolvedValueOnce(instanceReply).mockResolvedValueOnce(codeReply);
+			const { app, observe } = nativeCatalogueApp();
+			const result = await request(app).get('/v1/contracts/' + id + '/provenance').expect(200);
+			expect(result.body).toMatchObject({
+				ledgerEvidence: 'configured_rpc_archived_observation',
+				observedLedger: 150, wasmSha256: hash,
+				build: { status: 'metadata_missing' }
+			});
+			expect(observe).not.toHaveBeenCalled();
+			expect(fetchRpc).toHaveBeenCalledTimes(3);
+		}
+	);
+	it.each([undefined, '0', -1, 149])(
+		'rejects missing, malformed or stale-positive TTL instead of calling it archived (%s)', async (ttl) => {
+			const { id, instanceKey, instance, evidence } = rpcFixture();
+			const reply = evidence(instanceKey, instance, 2);
+			const entry = { ...reply.result.entries[0], liveUntilLedgerSeq: ttl };
+			fetchRpc.mockResolvedValueOnce(networkReply)
+				.mockResolvedValueOnce({ ...reply, result: { ...reply.result, entries: [entry] } });
+			const { app, observe } = nativeCatalogueApp();
+			await request(app).get('/v1/contracts/' + id + '/provenance').expect(503);
+			expect(observe).not.toHaveBeenCalled();
+			expect(fetchRpc).toHaveBeenCalledTimes(2);
+		}
+	);
 	it('binds native Wasm to the RPC network and the instance observation ledger', async () => {
 		const { id, hash, instanceKey, instance, codeKey, code, evidence } = rpcFixture();
 		fetchRpc
@@ -252,9 +285,11 @@ describe('contract provenance RPC path', () => {
 					code: Buffer.from('tampered')
 				}))
 			: code;
+		const instanceReply = evidence(instanceKey, instance, 2);
+		if (tamper) instanceReply.result.entries[0]!.liveUntilLedgerSeq = 0;
 		fetchRpc
 			.mockResolvedValueOnce(networkReply)
-			.mockResolvedValueOnce(evidence(instanceKey, instance, 2))
+			.mockResolvedValueOnce(instanceReply)
 			.mockResolvedValueOnce(evidence(codeKey, codeEntry, 3, ledger, modified));
 		const { app, observe } = nativeCatalogueApp();
 		await request(app).get('/v1/contracts/' + id + '/provenance').expect(503);

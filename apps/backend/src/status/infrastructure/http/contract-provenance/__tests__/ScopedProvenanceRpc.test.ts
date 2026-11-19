@@ -197,6 +197,7 @@ it.each([
 		3
 	],
 	['archived instance', { instance: { liveUntilLedgerSeq: 0 } }, 3],
+	['archived code', { code: { liveUntilLedgerSeq: 0 } }, 4],
 	['missing TTL', { instance: { liveUntilLedgerSeq: undefined } }, 3],
 	['missing code', { codeResult: { entries: [] } }, 4],
 	[

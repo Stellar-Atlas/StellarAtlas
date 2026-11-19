@@ -43,8 +43,8 @@ function text(value: unknown): string {
 	return typeof value === 'string' ? value : '';
 }
 
-export function parseLedgerEvidence(value: unknown): 'configured_rpc_observation' | 'unspecified' | 'unknown' {
-	if (value === 'configured_rpc_observation') return value;
+export function parseLedgerEvidence(value: unknown): 'configured_rpc_observation' | 'configured_rpc_archived_observation' | 'unspecified' | 'unknown' {
+	if (value === 'configured_rpc_observation' || value === 'configured_rpc_archived_observation') return value;
 	return value === undefined ? 'unspecified' : 'unknown';
 }
 
@@ -99,6 +99,8 @@ export function ExplorerContractProvenance({
 	const source = recordValue(build?.record);
 	const metadata = recordValue(value?.metadata);
 	const status = text(build?.status);
+	const ledgerEvidence = parseLedgerEvidence(value?.ledgerEvidence);
+	const archived = ledgerEvidence === 'configured_rpc_archived_observation';
 	const expected =
 		!inputRejected && expectedBuild?.contractId === contractId ? expectedBuild : null;
 	const pending = !inputRejected && attempt > 0 && activeResult === null;
@@ -107,10 +109,11 @@ export function ExplorerContractProvenance({
 	if (expected && value) {
 		if (text(value.wasmSha256) && value.wasmSha256 !== expected.wasmSha256) {
 			builderResult = 'Wasm hash mismatch';
-			builderDetail = 'The deployed Wasm hash differs from the hash you entered. Check the release artifact and contract address.';
+			builderDetail = `The ${archived ? 'archived' : 'observed'} Wasm hash differs from the hash you entered. Check the release artifact and contract address.`;
 		} else if (status === 'verified' && value.wasmSha256 === expected.wasmSha256) {
 			if (source?.commit === expected.commit) {
 				builderResult = 'Your build is attested';
+				if (archived) builderDetail = 'Your source commit and Wasm hash match the signed build for archived contract bytes, not a currently live contract.';
 			} else {
 				builderResult = 'Source commit mismatch';
 				builderDetail = 'The signed attestation identifies a different source commit from the one you entered.';
@@ -120,7 +123,6 @@ export function ExplorerContractProvenance({
 			builderDetail = builderNextStep[status] ?? 'Atlas could not confirm the requested build from the available evidence.';
 		}
 	}
-	const ledgerEvidence = parseLedgerEvidence(value?.ledgerEvidence);
 	const commitUrl = githubLink(source?.sourceUrl);
 	const workflowUrl = githubLink(source?.workflowUrl);
 	const runUrl = githubLink(source?.runUrl);
@@ -219,6 +221,13 @@ export function ExplorerContractProvenance({
 				</p>
 			) : value ? (
 				<>
+					{archived && (
+						<p className={styles.muted}>
+							<strong>Archived contract bytes</strong>. The configured RPC returned
+							archived instance or code evidence. This does not establish that
+							the contract is currently live or usable.
+						</p>
+					)}
 					<dl className={styles.details}>
 						<dt>Observed ledger</dt>
 						<dd>
@@ -238,6 +247,8 @@ export function ExplorerContractProvenance({
 								<dd className={styles.muted}>
 									{ledgerEvidence === 'configured_rpc_observation'
 										? 'Configured RPC observation. Not an independent ledger-state proof.'
+										: archived
+											? 'Configured RPC archived observation. Not current live-state evidence or an independent ledger-state proof.'
 										: 'Unrecognized ledger evidence. Do not treat it as a ledger-state proof.'}
 								</dd>
 							</>
@@ -294,14 +305,16 @@ export function ExplorerContractProvenance({
 					)}
 					{status === 'verified' && (
 						<p className={styles.muted}>
-							The signed build matches the deployed Wasm hash. Source
+							{archived
+								? 'The signed build matches these archived Wasm bytes. '
+								: 'The signed build matches the observed Wasm hash. '}Source
 							reproduction and security audit are separate checks.
 						</p>
 					)}
 				</>
 			) : pending ? (
 				<p className={styles.muted}>
-					Checking deployed code and available build records…
+					Checking contract code and available build records…
 				</p>
 			) : null}
 		</section>

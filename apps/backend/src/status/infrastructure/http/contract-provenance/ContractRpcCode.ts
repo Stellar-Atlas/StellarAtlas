@@ -10,6 +10,7 @@ export interface ContractCodeObservation {
 	readonly wasmSha256: string | null;
 	readonly wasm: Uint8Array | null;
 	readonly executable: 'wasm' | 'stellar_asset' | 'not_found';
+	readonly archived?: true;
 }
 
 export class ContractRpcUnavailable extends Error {}
@@ -19,7 +20,8 @@ type ReadBoundEntries = (key: string) => Promise<Record<string, unknown>>;
 export async function readContractCode(
 	rpc: RpcEndpoint | undefined,
 	contractId: string,
-	readBoundEntries?: ReadBoundEntries
+	readBoundEntries?: ReadBoundEntries,
+	allowArchived = false
 ): Promise<ContractCodeObservation> {
 	const instanceKey = xdr.LedgerKey.contractData(
 		new xdr.LedgerKeyContractData({
@@ -28,7 +30,7 @@ export async function readContractCode(
 			durability: xdr.ContractDataDurability.persistent
 		})
 	);
-	const instance = await readEntry(rpc, instanceKey, readBoundEntries);
+	const instance = await readEntry(rpc, instanceKey, readBoundEntries, allowArchived);
 	if (!instance.entry)
 		return {
 			ledger: instance.ledger,
@@ -58,7 +60,8 @@ export async function readContractCode(
 			modifiedLedger: instance.modifiedLedger,
 			executable: 'stellar_asset',
 			wasmSha256: null,
-			wasm: null
+			wasm: null,
+			...(instance.archived ? { archived: true as const } : {})
 		};
 	if (executable.type !== 'contractExecutableWasm')
 		throw new ContractRpcUnavailable('Unsupported contract executable');
@@ -66,7 +69,8 @@ export async function readContractCode(
 	const code = await readEntry(
 		rpc,
 		xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash })),
-		readBoundEntries
+		readBoundEntries,
+		allowArchived
 	);
 	if (!code.entry)
 		throw new ContractRpcUnavailable('Contract Wasm is not available from RPC');
@@ -87,19 +91,21 @@ export async function readContractCode(
 		modifiedLedger: instance.modifiedLedger,
 		executable: 'wasm',
 		wasmSha256: hash.toString(),
-		wasm: wasm.code
+		wasm: wasm.code,
+		...(instance.archived || code.archived ? { archived: true as const } : {})
 	};
 }
 
 async function readEntry(
 	rpc: RpcEndpoint | undefined,
 	key: xdr.LedgerKey,
-	readBoundEntries?: ReadBoundEntries
-): Promise<{ ledger: number; modifiedLedger: number; entry: string | null }> {
+	readBoundEntries?: ReadBoundEntries,
+	allowArchived = false
+): Promise<{ ledger: number; modifiedLedger: number; entry: string | null; archived?: true }> {
 	const encodedKey = key.toXDR('base64');
 	if (readBoundEntries) {
 		const result = await readBoundEntries(encodedKey);
-		return parseEntry(result, encodedKey, true);
+		return parseEntry(result, encodedKey, true, allowArchived);
 	}
 	if (!rpc) throw new ContractRpcUnavailable('Contract RPC is not configured');
 	const response = record(
@@ -120,8 +126,9 @@ async function readEntry(
 function parseEntry(
 	result: Record<string, unknown>,
 	encodedKey: string,
-	strict: boolean
-): { ledger: number; modifiedLedger: number; entry: string | null } {
+	strict: boolean,
+	allowArchived = false
+): { ledger: number; modifiedLedger: number; entry: string | null; archived?: true } {
 	const ledger = Number(result.latestLedger);
 	if (
 		!Number.isSafeInteger(ledger) ||
@@ -134,6 +141,9 @@ function parseEntry(
 	const entry = record(result.entries[0]);
 	const modifiedLedger = Number(entry.lastModifiedLedgerSeq);
 	const liveUntil = entry.liveUntilLedgerSeq;
+	// Native RPC represents archived entries with exactly zero TTL. Keep this
+	// distinct from live evidence; scoped/live callers never opt into this path.
+	const archived = strict && allowArchived && liveUntil === 0;
 	if (
 		entry.key !== encodedKey ||
 		typeof entry.xdr !== 'string' ||
@@ -144,12 +154,12 @@ function parseEntry(
 				entry.xdr.length % 4 !== 0 ||
 				typeof liveUntil !== 'number' ||
 				!Number.isInteger(liveUntil) ||
-				liveUntil < ledger ||
+				(!archived && liveUntil < ledger) ||
 				liveUntil > 0xffffffff)) ||
 		!Number.isSafeInteger(modifiedLedger) ||
 		modifiedLedger < 1 ||
 		modifiedLedger > ledger
 	)
 		throw new ContractRpcUnavailable('RPC ledger-entry evidence is invalid');
-	return { ledger, modifiedLedger, entry: entry.xdr };
+	return { ledger, modifiedLedger, entry: entry.xdr, ...(archived ? { archived: true as const } : {}) };
 }
