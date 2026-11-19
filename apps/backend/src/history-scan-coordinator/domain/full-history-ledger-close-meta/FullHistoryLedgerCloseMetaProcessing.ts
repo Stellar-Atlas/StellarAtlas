@@ -94,6 +94,8 @@ export type FullHistoryLedgerCloseMetaRepresentation =
 
 export interface FullHistoryLedgerCloseMetaProcessingRequest {
 	readonly inputs: readonly FullHistoryLedgerCloseMetaProcessingInput[];
+	/** A durable plan overrides ambient converter configuration, including legacy recovery. */
+	readonly ledgerEntryChangesSchemaVersion?: 3 | 4;
 	readonly networkPassphrase: string;
 	readonly source: {
 		readonly configDigest: FullHistoryLedgerCloseMetaSha256Digest;

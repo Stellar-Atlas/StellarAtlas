@@ -8,8 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { dirname, basename, join } from 'node:path';
 
-export interface PendingPlan {
-	readonly version: 1;
+interface PendingPlanFields {
 	readonly kind: 'priority' | 'historical';
 	readonly networkPassphraseHash: string;
 	readonly sourceId: string;
@@ -21,6 +20,17 @@ export interface PendingPlan {
 	readonly endLedger: number;
 	readonly shards: readonly { readonly startLedger: number; readonly endLedger: number }[];
 }
+
+export type PendingPlan = PendingPlanFields & (
+	{ readonly version: 1 } |
+	{
+		readonly version: 2;
+		readonly compactLedgerEntryChanges: {
+			readonly startLedger: number;
+			readonly endLedger: number;
+		};
+	}
+);
 
 export interface PendingPlanStore {
 	read(): Promise<PendingPlan | null>;
@@ -57,6 +67,7 @@ const PLAN_KEYS = [
 	'typedShardLedgerCount',
 	'version'
 ] as const;
+const COMPACT_PLAN_KEYS = ['compactLedgerEntryChanges', ...PLAN_KEYS] as const;
 
 export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanStore {
 	readonly #observed = new WeakMap<PendingPlan, BigIntStats>();
@@ -318,10 +329,11 @@ function validatePendingPlan(value: unknown): PendingPlan {
 	}
 	const record = value as Record<string, unknown>;
 	const keys = Object.keys(record).sort();
-	if (keys.length !== PLAN_KEYS.length || keys.some((key, index) => key !== PLAN_KEYS[index])) {
+	const expectedKeys = record.version === 2 ? COMPACT_PLAN_KEYS : PLAN_KEYS;
+	if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
 		throw new Error('Pending plan has an invalid shape');
 	}
-	if (record.version !== 1 || (record.kind !== 'priority' && record.kind !== 'historical') ||
+	if ((record.version !== 1 && record.version !== 2) || (record.kind !== 'priority' && record.kind !== 'historical') ||
 		record.partitionVersion !== 'source-aligned-remainder-v1') {
 		throw new Error('Pending plan has an invalid version or kind');
 	}
@@ -379,8 +391,7 @@ function validatePendingPlan(value: unknown): PendingPlan {
 	if (expectedStart !== endLedger + 1) {
 		throw new Error('Pending plan shards do not cover the planned ledger range');
 	}
-	return {
-		version: 1,
+	const fields: PendingPlanFields = {
 		kind: record.kind,
 		networkPassphraseHash: record.networkPassphraseHash,
 		sourceId: record.sourceId,
@@ -392,6 +403,26 @@ function validatePendingPlan(value: unknown): PendingPlan {
 		endLedger,
 		shards
 	};
+	if (record.version === 1) return { version: 1, ...fields };
+	const compact = record.compactLedgerEntryChanges;
+	if (compact === null || typeof compact !== 'object' || Array.isArray(compact) ||
+		Object.keys(compact).sort().join(',') !== 'endLedger,startLedger') {
+		throw new Error('Pending plan compact selector has an invalid shape');
+	}
+	const selector = compact as Record<string, unknown>;
+	const compactStart = selector.startLedger;
+	const compactEnd = selector.endLedger;
+	if (typeof compactStart !== 'number' || !Number.isInteger(compactStart) ||
+		typeof compactEnd !== 'number' || !Number.isInteger(compactEnd) ||
+		compactStart < 1 || compactEnd < compactStart || compactEnd > 0xffff_ffff ||
+		shards.filter(shard => shard.startLedger === compactStart && shard.endLedger === compactEnd).length !== 1) {
+		throw new Error('Pending plan compact selector must equal one complete uint32 shard');
+	}
+	return {
+		version: 2,
+		...fields,
+		compactLedgerEntryChanges: { startLedger: compactStart, endLedger: compactEnd }
+	};
 }
 
 function isHexDigest(value: unknown): value is string {
@@ -399,9 +430,12 @@ function isHexDigest(value: unknown): value is string {
 }
 
 function samePlan(left: PendingPlan, right: PendingPlan): boolean {
-	return PLAN_KEYS.every((key) => key === 'shards'
+	if (!PLAN_KEYS.every((key) => key === 'shards'
 		? JSON.stringify(left.shards) === JSON.stringify(right.shards)
-		: left[key] === right[key]);
+		: left[key] === right[key])) return false;
+	return left.version === 1 || (right.version === 2 &&
+		left.compactLedgerEntryChanges.startLedger === right.compactLedgerEntryChanges.startLedger &&
+		left.compactLedgerEntryChanges.endLedger === right.compactLedgerEntryChanges.endLedger);
 }
 
 function isCode(error: unknown, code: string): boolean {

@@ -63,6 +63,8 @@ export interface IngestFullHistoryLedgerCloseMetaOptions {
 }
 
 export interface FullHistoryLedgerCloseMetaIngestionContext {
+	/** Undefined keeps standalone configuration; null pins every shard to the legacy projection. */
+	readonly compactLedgerEntryChanges?: { readonly startLedger: number; readonly endLedger: number } | null;
 	readonly config: Sep54LedgerCloseMetaConfig;
 	readonly registeredSource: FullHistoryLedgerCloseMetaRegisteredSource;
 }
@@ -238,9 +240,17 @@ export class IngestFullHistoryLedgerCloseMeta {
 		readonly processing: FullHistoryLedgerCloseMetaProcessingReceipt;
 		readonly sourceObjectCount: number;
 	}> {
+		const compact = context.compactLedgerEntryChanges;
+		const selected = compact !== undefined && compact !== null &&
+			compact.startLedger === range.startSequence && compact.endLedger === range.endSequence;
+		if (compact !== undefined && compact !== null && !selected &&
+			compact.startLedger <= range.endSequence && compact.endLedger >= range.startSequence) {
+			throw new Error('Compact ledger-entry selection must match the complete typed shard');
+		}
 		const inputs = await this.#readShardInputs(context, range, signal);
 		const processing = await this.#processor.processAndCommit(
 			{
+				...(compact === undefined ? {} : { ledgerEntryChangesSchemaVersion: selected ? 4 : 3 }),
 				inputs: inputs.map((input) => ({
 					expectedRange: input.range,
 					object: input.object

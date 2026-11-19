@@ -12,6 +12,12 @@ const plan: PendingPlan = {
 	shards: [{ startLedger: 3, endLedger: 66 }]
 };
 const payload = Buffer.from(JSON.stringify(plan));
+const compactPlan: PendingPlan = {
+	...plan, version: 2, endLedger: 130,
+	shards: [...plan.shards, { startLedger: 67, endLedger: 130 }],
+	compactLedgerEntryChanges: { startLedger: 3, endLedger: 66 }
+};
+let readPayload = payload;
 let cursor = 0;
 const close = jest.fn(async () => {});
 const fileVersion = { isFile: () => true, size: BigInt(payload.byteLength),
@@ -28,7 +34,7 @@ const read = jest.fn(async (
 	buffer: Buffer, offset = 0, length = buffer.byteLength - offset, position: number | null = null
 ) => {
 	const start = position ?? cursor;
-	const bytesRead = payload.copy(buffer, offset, start, start + length);
+	const bytesRead = readPayload.copy(buffer, offset, start, start + length);
 	if (position === null) cursor += bytesRead;
 	return { bytesRead, buffer };
 });
@@ -45,6 +51,7 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 	beforeEach(() => {
 		jest.clearAllMocks();
 		cursor = 0;
+		readPayload = payload;
 		open.mockImplementation(async () => handle);
 		stat.mockImplementation(async () => fileVersion);
 		lstatSync.mockImplementation(() => fileVersion);
@@ -70,6 +77,58 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 			expect((offset ?? 0) + (length ?? buffer.byteLength)).toBeLessThanOrEqual(maximumBytes + 1);
 		}
 		expect(close).toHaveBeenCalledTimes(1);
+	});
+
+	it('round-trips version two with its normalized compact selector after the version-one fields', async () => {
+		const serialized = `${JSON.stringify(compactPlan)}\n`;
+		const compactFileVersion = { ...fileVersion, size: BigInt(Buffer.byteLength(serialized)) };
+		stat.mockResolvedValue(compactFileVersion);
+		lstatSync.mockReturnValue(compactFileVersion);
+		await new Store(file).installVerified({
+			...compactPlan, compactLedgerEntryChanges: { endLedger: 66, startLedger: 3 }
+		}, async () => {});
+		expect(writeFile).toHaveBeenCalledWith(serialized, 'utf8');
+		readPayload = Buffer.from(writeFile.mock.calls[0]![0]);
+		const restarted = new Store(file);
+		const recorded = await restarted.read();
+		expect(recorded).toEqual(compactPlan);
+		if (recorded === null) throw new Error('fixture must retain the compact plan');
+		await expect(restarted.confirmRecorded(recorded, async () => {})).resolves.toBeUndefined();
+	});
+
+	it('refuses a different valid compact selector for an existing version-two plan', async () => {
+		readPayload = Buffer.from(JSON.stringify(compactPlan));
+		await expect(new Store(file).write({
+			...compactPlan, compactLedgerEntryChanges: { startLedger: 67, endLedger: 130 }
+		})).rejects.toThrow('A different pending plan already exists');
+		expect(writeFile).not.toHaveBeenCalled();
+		expect(rename).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{ label: 'version-one selector', value: { ...plan, compactLedgerEntryChanges: { startLedger: 3, endLedger: 66 } } },
+		{ label: 'missing version-two selector', value: { ...plan, version: 2 } },
+		{ label: 'unknown version-two field', value: { ...compactPlan, extra: true } }
+	])('rejects the strict top-level shape with $label', async ({ value }) => {
+		readPayload = Buffer.from(JSON.stringify(value));
+		await expect(new Store(file).read()).rejects.toThrow('Pending plan has an invalid shape');
+	});
+
+	it.each([
+		{ label: 'null', selector: null },
+		{ label: 'array', selector: [3, 66] },
+		{ label: 'extra key', selector: { startLedger: 3, endLedger: 66, extra: true } },
+		{ label: 'fractional ledger', selector: { startLedger: 3.5, endLedger: 66 } },
+		{ label: 'negative ledger', selector: { startLedger: -1, endLedger: 66 } },
+		{ label: 'reversed range', selector: { startLedger: 66, endLedger: 3 } },
+		{ label: 'uint32 overflow', selector: { startLedger: 3, endLedger: 0x1_0000_0000 } },
+		{ label: 'partial shard', selector: { startLedger: 3, endLedger: 65 } },
+		{ label: 'two complete shards', selector: { startLedger: 3, endLedger: 130 } },
+		{ label: 'cross-shard overlap', selector: { startLedger: 4, endLedger: 67 } }
+	])('rejects a compact selector with $label', async ({ selector }) => {
+		readPayload = Buffer.from(JSON.stringify({ ...compactPlan, compactLedgerEntryChanges: selector }));
+		await expect(new Store(file).read()).rejects.toThrow(/Pending plan compact selector/);
+		expect(writeFile).not.toHaveBeenCalled();
 	});
 
 	it.each([

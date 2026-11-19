@@ -99,9 +99,14 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		assertBeforeConversion?: FullHistoryLedgerCloseMetaConversionGate
 	): Promise<FullHistoryLedgerCloseMetaProcessingReceipt> {
 		const range = requestRange(request, this.#minimumLedgers);
-		const compactLedgerEntryChanges = selectsCompactLedgerEntryChanges(
-			this.#compactLedgerEntryChanges, range
-		);
+		const selectedSchema = request.ledgerEntryChangesSchemaVersion;
+		if (selectedSchema !== undefined && selectedSchema !== 3 && selectedSchema !== 4) {
+			throw new TypeError('Ledger-entry changes schema must be 3 or 4');
+		}
+		// Pending plans pin this choice across restarts and environment changes.
+		const compactLedgerEntryChanges = selectedSchema === undefined
+			? selectsCompactLedgerEntryChanges(this.#compactLedgerEntryChanges, range)
+			: selectedSchema === 4;
 		signal.throwIfAborted();
 		await mkdir(this.#temporaryInputRoot, { mode: 0o700, recursive: true });
 		const temporaryDirectory = await mkdtemp(

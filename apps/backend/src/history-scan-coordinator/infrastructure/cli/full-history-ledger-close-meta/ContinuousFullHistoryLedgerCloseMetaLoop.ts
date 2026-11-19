@@ -20,7 +20,8 @@ import type {
 	IngestFullHistoryLedgerCloseMeta
 } from '../../../use-cases/ingest-full-history-ledger-close-meta/IngestFullHistoryLedgerCloseMeta.js';
 import type { TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader } from '../../database/full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader.js';
-import { createShardRanges } from '../../../use-cases/ingest-full-history-ledger-close-meta/FullHistoryLedgerCloseMetaShardRanges.js';
+import type { FullHistoryLedgerEntryCompactSelection } from '../../full-history-ledger-close-meta/FullHistoryLedgerEntryCompactSelection.js';
+import { createFullHistoryLedgerCloseMetaPendingPlan as createPendingPlan, contextForFullHistoryLedgerCloseMetaPlan } from './FullHistoryLedgerCloseMetaPlanProjection.js';
 import { PendingPlanChangedError, type PendingPlan, type PendingPlanStore } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 import type {
 	FullHistoryLedgerCloseMetaAdmissionDecision,
@@ -29,6 +30,7 @@ import type {
 } from '../../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaAdmission.js';
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
+	readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection;
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
 	readonly admissionRetryMilliseconds: number;
@@ -104,6 +106,7 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 	  };
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
+	readonly assertCompactSchemaReady?: () => Promise<void>;
 	readonly pairedCurrentAdmission?: FencedPairedCurrentAdmission;
 	readonly scopedCurrentAttempt?: {
 		readonly policy: ScopedCurrentAttemptPolicy;
@@ -224,7 +227,8 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 					throw new Error('Pending ingestion plan exceeds configured cycle capacity or replay bound');
 				}
 				const expected = createPendingPlan(cycleContext, config, fullHistoryLedgerCloseMetaRange(
-					pending.startLedger, pending.endLedger), pending.kind);
+					pending.startLedger, pending.endLedger), pending.kind,
+					pending.version === 2 ? pending.compactLedgerEntryChanges : null);
 				if (JSON.stringify(pending) !== JSON.stringify(expected)) {
 					throw new Error('Pending ingestion plan does not match source identity or partition configuration');
 				}
@@ -375,29 +379,18 @@ function assertScopedPlan(plan: PendingPlan, policy: ScopedCurrentAttemptPolicy)
 	}
 }
 
-function createPendingPlan(context: FullHistoryLedgerCloseMetaIngestionContext,
-	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig, range: FullHistoryLedgerCloseMetaRange,
-	kind: PendingPlan['kind']): PendingPlan {
-	return {
-		version: 1, kind,
-		networkPassphraseHash: context.registeredSource.networkPassphraseHash,
-		sourceId: context.registeredSource.sourceId,
-		configDigest: context.registeredSource.configDigest,
-		partitionVersion: 'source-aligned-remainder-v1',
-		sourceBatchLedgerCount: context.config.ledgersPerBatch,
-		typedShardLedgerCount: config.typedShardLedgerCount,
-		startLedger: range.startSequence, endLedger: range.endSequence,
-		shards: createShardRanges(range, context.config.ledgersPerBatch, config.typedShardLedgerCount)
-			.map(shard => ({startLedger: shard.startSequence, endLedger: shard.endSequence}))
-	};
-}
-
 async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies,
 	context: FullHistoryLedgerCloseMetaIngestionContext, previousNextLedger: number,
 	plan: PendingPlan, alreadyRecorded = false, scopedArm?: ScopedCurrentArm): Promise<number> {
 	let nextLedger = previousNextLedger;
 	await runAdmittedAttempt(config, dependencies, async () => {
+		if (plan.version === 2) {
+			if (dependencies.assertCompactSchemaReady === undefined) {
+				throw new Error('Compact ledger-entry catalogue readiness is not configured');
+			}
+			await dependencies.assertCompactSchemaReady();
+		}
 		assertCurrentCapacityPlan(config, dependencies, plan);
 		await dependencies.ensureStorageCapacity(plan);
 		const paired = dependencies.pairedCurrentAdmission;
@@ -470,9 +463,10 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 		}
 		const startedAt = dependencies.now();
 		const range = fullHistoryLedgerCloseMetaRange(plan.startLedger, plan.endLedger);
+		const plannedContext = contextForFullHistoryLedgerCloseMetaPlan(context, plan);
 		const receipt = beforeConversion === undefined
-			? await dependencies.ingestion.ingestRange(context, range, dependencies.signal)
-			: await dependencies.ingestion.ingestRange(context, range, dependencies.signal, beforeConversion);
+			? await dependencies.ingestion.ingestRange(plannedContext, range, dependencies.signal)
+			: await dependencies.ingestion.ingestRange(plannedContext, range, dependencies.signal, beforeConversion);
 		nextLedger = observedDurableNextLedger(previousNextLedger, receipt,
 			plan.kind === 'historical' && previousNextLedger <= plan.endLedger);
 		if (paired === undefined) await dependencies.pendingPlans.clear();
