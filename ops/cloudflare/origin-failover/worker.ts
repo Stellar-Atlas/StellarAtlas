@@ -196,9 +196,9 @@ export function createGateway(fetchOrigin: OriginFetch) {
 		const url = new URL(request.url);
 		const mode = previewOrigin(url);
 		const timeout = milliseconds(env.ORIGIN_HEADER_TIMEOUT_MS, 8000);
-		const originOnly = async (): Promise<Response> => {
-			try { return await (mode === undefined ? fetchOrigin(request)
-				: origin(request, mode, timeout, fetchOrigin)); }
+		const originOnly = async (upstream = request): Promise<Response> => {
+			try { return await (mode === undefined ? fetchOrigin(upstream)
+				: origin(upstream, mode, timeout, fetchOrigin)); }
 			catch { return new Response('Origin unavailable', {
 				status: 502, headers: { 'Cache-Control': 'no-store' }
 			}); }
@@ -208,6 +208,15 @@ export function createGateway(fetchOrigin: OriginFetch) {
 		if (request.headers.has('authorization') ||
 			request.headers.get('upgrade')?.toLowerCase() === 'websocket') {
 			return originOnly();
+		}
+		// The existing apex /v1 proxy reaches the coordinator's live worker registry.
+		if (request.method === 'GET' && url.origin === 'https://api.stellaratlas.io' &&
+			url.pathname === '/v1/status/workers') {
+			const upstreamUrl = new URL(url);
+			upstreamUrl.hostname = 'stellaratlas.io';
+			const upstream = new Request(upstreamUrl, request);
+			upstream.headers.set('host', upstreamUrl.host);
+			return originOnly(upstream);
 		}
 		const read = request.method === 'GET' || request.method === 'HEAD';
 		const pinned = snapshotCookie(request);
