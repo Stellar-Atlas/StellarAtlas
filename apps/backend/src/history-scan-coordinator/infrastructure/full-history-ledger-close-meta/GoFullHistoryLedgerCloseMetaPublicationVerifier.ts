@@ -1,3 +1,4 @@
+import { assertDerivedOutputRecovery, type DerivedOutputRecovery } from './FullHistoryDerivedOutputRetirement.js';
 import { createHash } from 'node:crypto';
 import { constants, open, readdir } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
@@ -18,6 +19,7 @@ const maximumPublishedEntries = 64;
 
 interface VerificationRequest {
 	readonly networkName: string;
+	readonly retirementRecovery?: DerivedOutputRecovery;
 	readonly outputPath: string;
 	readonly receipt: GoFullHistoryLedgerCloseMetaReceipt;
 	readonly request: FullHistoryLedgerCloseMetaProcessingRequest;
@@ -49,6 +51,9 @@ export async function verifyGoFullHistoryLedgerCloseMetaPublication(
 		processingManifestIdentity(manifest) !== processingManifestIdentity(receipt)
 	) {
 		throw new Error('Full-history ETL receipt and manifest disagree');
+	}
+	if (verification.retirementRecovery !== undefined) {
+		assertDerivedOutputRecovery(verification.retirementRecovery, receipt, receipt.network.networkIdSha256);
 	}
 	await verifyOutputFiles(verification, manifestPath);
 	const processing: FullHistoryLedgerCloseMetaProcessingReceipt = {
@@ -121,6 +126,7 @@ async function verifyOutputFiles(
 		relative(verification.outputPath, manifestPath)
 	]);
 	for (const output of verification.receipt.outputs) {
+		if (verification.retirementRecovery?.outputs.some(item => item.dataset === output.dataset && item.removed)) continue;
 		const pathname = childPath(
 			verification.typedOutputRoot,
 			verification.outputPath,

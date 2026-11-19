@@ -46,6 +46,9 @@ func Run(ctx context.Context, config Config) (ProcessingReceipt, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return ProcessingReceipt{}, fmt.Errorf("stat output path: %w", err)
 	}
+	if config.RetirementRecoveryPath != "" {
+		return ProcessingReceipt{}, fmt.Errorf("retirement authority is valid only for existing output recovery")
+	}
 	stageParent := parent
 	if config.PublicationStagingRoot != "" {
 		stageParent, err = preparePublicationStagingRoot(config.PublicationStagingRoot)

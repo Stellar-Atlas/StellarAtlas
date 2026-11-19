@@ -1,3 +1,5 @@
+import { hasDerivedOutputRetirement } from './FullHistoryDerivedOutputRetirement.js';
+
 export interface RegisteredOutputInventorySnapshot {
 	storedBytes: bigint;
 	registeredDirectories: ReadonlySet<string>;
@@ -98,8 +100,18 @@ export class TypeOrmRegisteredOutputInventory implements RegisteredOutputInvento
 			if (!equalAggregate(actual, rollup)) {
 				throw new Error('Registered-output metadata and rollup mismatch');
 			}
+			let removedBytes = 0n;
+			if (await hasDerivedOutputRetirement(runner)) {
+				const result = rows(await runner.query(`select coalesce(sum(d.output_bytes),0)::text as removed_bytes
+					from full_history_lcm_derived_output_retirement r
+					join full_history_ledger_close_meta_dataset d on d.batch_id=r.batch_id and d.dataset=r.dataset
+					where r.removal_confirmed_at is not null and r.output_sha256=d.output_sha256`));
+				if (result.length !== 1) throw new Error('Invalid removed-output aggregate');
+				removedBytes = nonnegativeInteger(record(result[0]).removed_bytes);
+				if (removedBytes > actual.bytes - actual.canonicalBytes) throw new Error('Invalid retired residency total');
+			}
 			inventory = {
-				storedBytes: actual.bytes + directoryAllowanceBytes * actual.canonicalCount,
+				storedBytes: actual.bytes - removedBytes + directoryAllowanceBytes * actual.canonicalCount,
 				registeredDirectories: directories,
 				registeredCount: canonical.length
 			};

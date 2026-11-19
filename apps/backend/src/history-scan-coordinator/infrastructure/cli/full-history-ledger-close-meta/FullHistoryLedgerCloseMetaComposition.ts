@@ -1,3 +1,4 @@
+import { derivedOutputRecoveryReader } from '../../full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import { DataSource } from 'typeorm';
 import { AppDataSource } from '@core/infrastructure/database/AppDataSource.js';
 import {
@@ -78,6 +79,7 @@ export function composeFullHistoryLedgerCloseMetaService(
 	);
 	const processor = new GoFullHistoryLedgerCloseMetaProcessor({
 		executablePath: config.executablePath,
+		retirementRecoveryReader: derivedOutputRecoveryReader(dataSource),
 		...(config.compactLedgerEntryChanges === undefined ? {} : {
 			compactLedgerEntryChanges: config.compactLedgerEntryChanges
 		}),

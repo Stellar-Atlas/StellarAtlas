@@ -1,3 +1,4 @@
+import { readDerivedOutputRetirements, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import express, { Router } from 'express';
 import { stat } from 'node:fs/promises';
 import { basename, resolve, sep } from 'node:path';
@@ -44,7 +45,9 @@ interface MutableBatch {
 	readonly outputs: Array<{
 		readonly byteCount: string;
 		readonly dataset: FullHistoryLedgerCloseMetaDataset;
-		readonly downloadPath: string;
+		readonly downloadPath: string | null;
+		readonly availability: 'retained' | 'retired';
+		readonly replacementPath: string | null;
 		readonly mediaType: string;
 		readonly recordCount: string;
 		readonly representation: string;
@@ -99,7 +102,8 @@ export const HistoryDataRouterWrapper = (
 					generatedAt: new Date().toISOString(),
 					networkPassphrase: config.networkPassphrase,
 					sourceFormat: 'SEP-54 LedgerCloseMeta',
-					storage: 'immutable-batches'
+					storage: 'immutable-provenance-with-explicit-retirement',
+					byteCountMeaning: 'Historical produced bytes; batch output availability reports retained downloads'
 				});
 		} catch {
 			return res
@@ -121,7 +125,10 @@ export const HistoryDataRouterWrapper = (
 				batchListSql,
 				[networkHash, beforeLedger, limit, dataset]
 			);
-			const batches = mapBatchRows(rows);
+			const retirements = await readDerivedOutputRetirements(config.dataSource, networkHash, {
+				batchIds: [...new Set(rows.map(row => row.batchId))]
+			});
+			const batches = mapBatchRows(rows, retirements);
 			return res
 				.status(200)
 				.setHeader('Cache-Control', 'public, max-age=10')
@@ -164,6 +171,19 @@ export const HistoryDataRouterWrapper = (
 					.status(404)
 					.json({ error: 'History data artifact not found' });
 			}
+			const retirement = (await readDerivedOutputRetirements(config.dataSource, networkHash, {
+				batchIds: [req.params.batchId]
+			}))[0]?.outputs.find(output => output.dataset === dataset);
+			if (retirement) {
+				if (retirement.outputSha256 !== digest(artifact.sha256) ||
+					retirement.byteCount !== unsignedString(artifact.byteCount, 'byteCount') ||
+					retirement.storageKey !== artifact.storageKey) throw new Error('Retirement descriptor mismatch');
+				return res.status(410).setHeader('Cache-Control', 'no-store').json({
+					error: 'This derived export has been retired',
+					replacementPath: '/v1/history-data/batches/' + req.params.batchId + '/ledger-close-meta',
+					explanation: 'The canonical replay remains available. A regenerated projection is a new export, not the historical compressed bytes.'
+				});
+			}
 			const filePath = resolveArtifactPath(storageRoot, artifact.storageKey);
 			if (filePath === null) {
 				return res
@@ -201,7 +221,7 @@ export const HistoryDataRouterWrapper = (
 };
 
 function mapBatchRows(
-	rows: readonly BatchDatasetRow[]
+	rows: readonly BatchDatasetRow[], retirements: readonly DerivedOutputRecovery[]
 ): readonly MutableBatch[] {
 	const batches = new Map<string, MutableBatch>();
 	for (const row of rows) {
@@ -218,10 +238,15 @@ function mapBatchRows(
 			};
 			batches.set(row.batchId, batch);
 		}
+		const retired = retirements.find(plan => plan.batchId === row.batchId)?.outputs
+			.find(output => output.dataset === dataset);
+		if (retired && retired.outputSha256 !== digest(row.sha256)) throw new Error('Retirement descriptor mismatch');
 		batch.outputs.push({
 			byteCount: unsignedString(row.byteCount, 'byteCount'),
 			dataset,
-			downloadPath:
+			availability: retired ? 'retired' : 'retained',
+			replacementPath: retired ? '/v1/history-data/batches/' + row.batchId + '/ledger-close-meta' : null,
+			downloadPath: retired ? null :
 				'/v1/history-data/batches/' +
 				encodeURIComponent(row.batchId) +
 				'/' +
