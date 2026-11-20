@@ -14,6 +14,7 @@ type Processor struct {
 	networkPassphrase string
 	maxRows           uint64
 	rows              uint64
+	transactionsOnly  bool
 }
 
 func NewProcessor(outputs *output.Collection, networkPassphrase string, maxRows uint64) (*Processor, error) {
@@ -27,6 +28,25 @@ func NewProcessor(outputs *output.Collection, networkPassphrase string, maxRows 
 		return nil, fmt.Errorf("row limit must be positive")
 	}
 	return &Processor{outputs: outputs, networkPassphrase: networkPassphrase, maxRows: maxRows}, nil
+}
+
+// NewTransactionReconstructionProcessor reuses the normal transaction writers
+// without producing canonical replay or unrelated projections.
+func NewTransactionReconstructionProcessor(outputs *output.Collection, networkPassphrase string, maxRows uint64) (*Processor, error) {
+	processor, err := NewProcessor(outputs, networkPassphrase, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	if outputs.Transactions == nil || outputs.TransactionResults == nil || outputs.Operations == nil {
+		return nil, fmt.Errorf("transaction reconstruction requires transactions, transaction-results and operations outputs")
+	}
+	if outputs.LedgerCloseMeta != nil || outputs.Ledgers != nil || outputs.TransactionMeta != nil ||
+		outputs.ContractEvents != nil || outputs.LedgerEntryChanges != nil ||
+		outputs.AccountStateChanges != nil || outputs.TrustlineStateChanges != nil {
+		return nil, fmt.Errorf("transaction reconstruction permits only its three projection outputs")
+	}
+	processor.transactionsOnly = true
+	return processor, nil
 }
 
 func (p *Processor) Process(ctx context.Context, batch *batchinput.Batch, maxDecodedMemoryBytes int64) error {
@@ -83,21 +103,23 @@ func (p *Processor) processLedger(meta xdr.LedgerCloseMeta) error {
 		return fmt.Errorf("read %d transactions, expected %d", len(transactions), meta.CountTransactions())
 	}
 
-	if err := p.claim("ledger-close-meta", 1); err != nil {
-		return err
-	}
-	if err := p.outputs.LedgerCloseMeta.Write(meta); err != nil {
-		return err
-	}
-	ledgerRow, err := makeLedger(meta)
-	if err != nil {
-		return err
-	}
-	if err := p.claim("ledgers", 1); err != nil {
-		return err
-	}
-	if err := p.outputs.Ledgers.Write(ledgerRow); err != nil {
-		return err
+	if !p.transactionsOnly {
+		if err := p.claim("ledger-close-meta", 1); err != nil {
+			return err
+		}
+		if err := p.outputs.LedgerCloseMeta.Write(meta); err != nil {
+			return err
+		}
+		ledgerRow, err := makeLedger(meta)
+		if err != nil {
+			return err
+		}
+		if err := p.claim("ledgers", 1); err != nil {
+			return err
+		}
+		if err := p.outputs.Ledgers.Write(ledgerRow); err != nil {
+			return err
+		}
 	}
 
 	for i := range transactions {
@@ -105,8 +127,10 @@ func (p *Processor) processLedger(meta xdr.LedgerCloseMeta) error {
 			return fmt.Errorf("transaction %d: %w", transactions[i].Index, err)
 		}
 	}
-	if err := p.writeUpgradeChanges(meta); err != nil {
-		return err
+	if !p.transactionsOnly {
+		if err := p.writeUpgradeChanges(meta); err != nil {
+			return err
+		}
 	}
 	return nil
 }

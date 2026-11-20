@@ -47,3 +47,36 @@ Do not select v4 until download readers recognize the schema and the explicit
 catalog migration has been separately reviewed. The service launcher does not
 pass the opt-in flag by default, and the migration candidate is not registered
 for automatic execution.
+
+## Offline transaction reconstruction
+
+`cmd/full-history-reconstruct` rebuilds only `transactions`,
+`transaction-results` and `operations` from one existing local replay file. It
+uses the same decoder, transaction binding and Parquet writers, but does not
+build unrelated event/state projections or another canonical replay copy.
+Normal ingestion and its output contract are unchanged.
+
+Build it with `go build -o full-history-reconstruct ./cmd/full-history-reconstruct`.
+The caller must control the input and scratch parents and keep them immutable
+for the run; this local tool is not an untrusted-path or concurrent-writer API.
+Supply the expected compressed source digest and an explicitly bounded scratch
+location; the output must be a new leaf beneath that root:
+
+```sh
+./full-history-reconstruct \
+  --input "$CANONICAL_FILE" --input-object-key replay/canonical.xdr.zst \
+  --expected-source-sha256 "$CANONICAL_SHA256" \
+  --typed-output-root "$SCRATCH_ROOT" --output "$SCRATCH_ROOT/reconstructed" \
+  --network pubnet --network-passphrase 'Public Global Stellar Network ; September 2015' \
+  --start-ledger "$START_LEDGER" --end-ledger "$END_LEDGER" \
+  --max-compressed-bytes "$INPUT_BYTE_LIMIT" --max-uncompressed-bytes "$XDR_BYTE_LIMIT" \
+  --max-decoded-memory-bytes "$DECODE_BYTE_LIMIT" --max-output-bytes "$OUTPUT_BYTE_LIMIT" \
+  --max-ledgers "$LEDGER_LIMIT" --max-rows "$ROW_LIMIT"
+```
+
+The command preserves its input and refuses an existing output directory. Its
+three outputs are accompanied by `reconstruction.json`, with source/output
+hashes, range and limits. It emits no `manifest.json`, registers no data, and
+explicitly does not claim a complete dataset set. Output storage keys are
+relative to the supplied scratch root. A reconstruction receipt alone is not
+authority to remove existing registered data.
