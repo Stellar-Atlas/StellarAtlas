@@ -78,6 +78,9 @@ func (p *Processor) processTransaction(transaction *ledgerTransaction) error {
 	if err := p.writeOperations(transaction, transactionHash); err != nil {
 		return err
 	}
+	if p.transactionsOnly {
+		return nil
+	}
 	events, err := p.writeEvents(transaction, transactionHash)
 	if err != nil {
 		return err
