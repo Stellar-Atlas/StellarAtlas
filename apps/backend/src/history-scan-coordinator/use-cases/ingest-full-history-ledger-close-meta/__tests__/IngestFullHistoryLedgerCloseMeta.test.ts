@@ -28,6 +28,7 @@ import { StellarLedgerCloseMetaBatchDecoder } from '../../../infrastructure/full
 import { ledgerCloseMetaBatchFixture } from '../../../infrastructure/full-history-ledger-close-meta/__tests__/LedgerCloseMetaBatchTestFixture.js';
 import {
 	IngestFullHistoryLedgerCloseMeta,
+	type FullHistoryLedgerCloseMetaIngestionContext,
 	type FullHistoryLedgerCloseMetaIngestionTiming
 } from '../IngestFullHistoryLedgerCloseMeta.js';
 
@@ -74,6 +75,23 @@ describe('IngestFullHistoryLedgerCloseMeta', () => {
 			3, 67
 		]);
 		expect(manifest.maximumActiveCommits).toBe(1);
+	});
+
+	it.each<{ label: string; choices: Pick<FullHistoryLedgerCloseMetaIngestionContext,
+		'ledgerEntryChangesSchemaVersion' | 'compactLedgerEntryChanges'>; expected: readonly (3 | 4 | undefined)[] }>([
+		{ label: 'non-plan fallback', choices: {}, expected: [undefined, undefined] },
+		{ label: 'explicit legacy', choices: { ledgerEntryChangesSchemaVersion: 3 }, expected: [3, 3] },
+		{ label: 'explicit null selector', choices: { compactLedgerEntryChanges: null }, expected: [3, 3] },
+		{ label: 'one exact compact shard', choices: { ledgerEntryChangesSchemaVersion: 3,
+			compactLedgerEntryChanges: { startLedger: 3, endLedger: 66 } }, expected: [4, 3] },
+		{ label: 'all compact overrides the exact selector', choices: { ledgerEntryChangesSchemaVersion: 4,
+			compactLedgerEntryChanges: { startLedger: 3, endLedger: 66 } }, expected: [4, 4] }
+	])('routes two small shard requests with $label', async ({ choices, expected }) => {
+		const ingestion = createIngestion(), signal = new AbortController().signal;
+		const context = await ingestion.prepare(signal);
+		await ingestion.ingestRange({ ...context, ...choices }, fullHistoryLedgerCloseMetaRange(3, 130), signal);
+		expect(processor.requestSchemas.sort((a, b) => a.startLedger - b.startLedger).map(row => row.schema))
+			.toEqual(expected);
 	});
 
 	it('does not commit provenance when typed processing fails', async () => {
@@ -311,6 +329,7 @@ class FixtureProcessor implements FullHistoryLedgerCloseMetaProcessorPort {
 	});
 	failureShardStart: number | null = null;
 	readonly processedShardStarts: number[] = [];
+	readonly requestSchemas: { startLedger: number; schema: 3 | 4 | undefined }[] = [];
 
 	async processAndCommit(
 		request: Parameters<
@@ -319,6 +338,8 @@ class FixtureProcessor implements FullHistoryLedgerCloseMetaProcessorPort {
 		_signal: AbortSignal,
 		assertBeforeConversion?: () => Promise<void>
 	) {
+		this.requestSchemas.push({ startLedger: request.inputs[0]!.expectedRange.startSequence,
+			schema: request.ledgerEntryChangesSchemaVersion });
 		if (assertBeforeConversion !== undefined) await assertBeforeConversion();
 		const decoded = request.inputs.map((input) => ({
 			batch: this.#decoder.decode({

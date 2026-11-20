@@ -28,6 +28,7 @@ const maximumCycleLedgers = 65_536;
 const sharedMemoryRoot = '/dev/shm';
 
 export interface FullHistoryLedgerCloseMetaServiceConfig {
+	readonly compactNewPlans?: boolean;
 	readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection;
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
@@ -79,6 +80,8 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		throw new Error('FULL_HISTORY_LEDGER_CLOSE_META_ENABLED must equal true');
 	}
 	const compactLedgerEntryChanges = parseFullHistoryLedgerEntryCompactSelection(environment);
+	const compactNewPlans = booleanValue(environment.FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_NEW_PLANS,
+		false, 'compact new plans');
 	const bulkRoot = absolutePath(
 		environment.FULL_HISTORY_BULK_ROOT ?? '/home/observe/stellarbeat-data',
 		'bulk storage root'
@@ -277,6 +280,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		);
 	}
 	return Object.freeze({
+		compactNewPlans,
 		...(compactLedgerEntryChanges === undefined ? {} : { compactLedgerEntryChanges }),
 		...(currentCapacityAllowance === undefined ? {} : { currentCapacityAllowance }),
 		...(currentOnlyCapacity === undefined ? {} : { currentOnlyCapacity: scopedCurrentAttempt === undefined

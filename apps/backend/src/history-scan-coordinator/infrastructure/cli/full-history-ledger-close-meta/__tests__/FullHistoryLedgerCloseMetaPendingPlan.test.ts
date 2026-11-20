@@ -17,6 +17,7 @@ const compactPlan: PendingPlan = {
 	shards: [...plan.shards, { startLedger: 67, endLedger: 130 }],
 	compactLedgerEntryChanges: { startLedger: 3, endLedger: 66 }
 };
+const forwardCompactPlan: PendingPlan = { ...plan, version: 3, ledgerEntryChangesSchemaVersion: 4 };
 let readPayload = payload;
 let cursor = 0;
 const close = jest.fn(async () => {});
@@ -105,13 +106,41 @@ describe('FileFullHistoryLedgerCloseMetaPendingPlan descriptor-safe reads', () =
 		expect(rename).not.toHaveBeenCalled();
 	});
 
+	it('round-trips version three with its schema pin after the unchanged fields and compares it exactly', async () => {
+		const serialized = `${JSON.stringify(forwardCompactPlan)}\n`;
+		const version = { ...fileVersion, size: BigInt(Buffer.byteLength(serialized)) };
+		stat.mockResolvedValue(version);
+		lstatSync.mockReturnValue(version);
+		await new Store(file).installVerified(forwardCompactPlan, async () => {});
+		expect(writeFile).toHaveBeenCalledWith(serialized, 'utf8');
+		readPayload = Buffer.from(writeFile.mock.calls[0]![0]);
+		const restarted = new Store(file);
+		const recorded = await restarted.read();
+		expect(recorded).toEqual(forwardCompactPlan);
+		if (recorded === null) throw new Error('fixture must retain the forward compact plan');
+		await expect(restarted.confirmRecorded(recorded, async () => {})).resolves.toBeUndefined();
+		await expect(restarted.write(forwardCompactPlan)).resolves.toBeUndefined();
+		await expect(restarted.write(plan)).rejects.toThrow('A different pending plan already exists');
+		expect(writeFile).toHaveBeenCalledTimes(1);
+	});
+
 	it.each([
 		{ label: 'version-one selector', value: { ...plan, compactLedgerEntryChanges: { startLedger: 3, endLedger: 66 } } },
 		{ label: 'missing version-two selector', value: { ...plan, version: 2 } },
-		{ label: 'unknown version-two field', value: { ...compactPlan, extra: true } }
+		{ label: 'unknown version-two field', value: { ...compactPlan, extra: true } },
+		{ label: 'version-one schema pin', value: { ...plan, ledgerEntryChangesSchemaVersion: 4 } },
+		{ label: 'version-two schema pin', value: { ...compactPlan, ledgerEntryChangesSchemaVersion: 4 } },
+		{ label: 'missing version-three schema pin', value: { ...plan, version: 3 } },
+		{ label: 'version-three selector', value: { ...forwardCompactPlan, compactLedgerEntryChanges: compactPlan.compactLedgerEntryChanges } },
+		{ label: 'unknown version-three field', value: { ...forwardCompactPlan, extra: true } }
 	])('rejects the strict top-level shape with $label', async ({ value }) => {
 		readPayload = Buffer.from(JSON.stringify(value));
 		await expect(new Store(file).read()).rejects.toThrow('Pending plan has an invalid shape');
+	});
+
+	it.each([3, '4', null])('rejects the version-three schema pin %p', async schema => {
+		readPayload = Buffer.from(JSON.stringify({ ...forwardCompactPlan, ledgerEntryChangesSchemaVersion: schema }));
+		await expect(new Store(file).read()).rejects.toThrow('Pending plan version three requires ledger-entry changes schema 4');
 	});
 
 	it.each([

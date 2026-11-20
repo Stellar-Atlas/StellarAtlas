@@ -56,6 +56,18 @@ describe('continuous source paired boot binding', () => {
 			cycleLedgerCount: 1024, typedShardLedgerCount: 1024
 		}), expect.not.objectContaining({ pairedCurrentAdmission: expect.anything() }));
 	});
+
+	it.each(['false', 'true'])('forwards compact-new-plans %s to the loop without replacing the old selector', async value => {
+		const f = bootFixture(false);
+		await expect(runContinuousFullHistoryLedgerCloseMetaCli({ ...environment(),
+			FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_NEW_PLANS: value,
+			FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_FIRST_LEDGER: '53312000',
+			FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_LAST_LEDGER: '53312127'
+		}, f.dependencies)).resolves.toBe(0);
+		expect(f.runLoop).toHaveBeenCalledWith(expect.objectContaining({ compactNewPlans: value === 'true',
+			compactLedgerEntryChanges: { startLedger: 53312000, endLedger: 53312127 }
+		}), expect.anything());
+	});
 });
 
 describe('monitorFullHistoryLedgerCloseMetaRuntimeCleanup', () => {

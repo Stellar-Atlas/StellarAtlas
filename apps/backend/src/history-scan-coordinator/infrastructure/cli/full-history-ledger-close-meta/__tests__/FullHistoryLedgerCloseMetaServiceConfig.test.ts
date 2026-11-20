@@ -2,6 +2,23 @@ import { parseFullHistoryLedgerCloseMetaServiceConfig } from '../FullHistoryLedg
 import { selectsCompactLedgerEntryChanges } from '../../../full-history-ledger-close-meta/FullHistoryLedgerEntryCompactSelection.js';
 
 describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
+	it('opts only new plans into compact format with a strict default-false flag', () => {
+		for (const [value, expected] of [[undefined, false], ['false', false], ['true', true]] as const) {
+			const config = parseFullHistoryLedgerCloseMetaServiceConfig({ ...environment(),
+				FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_NEW_PLANS: value,
+				FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_FIRST_LEDGER: '53312000',
+				FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_LAST_LEDGER: '53312127'
+			});
+			expect(config.compactNewPlans).toBe(expected);
+			expect(config.compactLedgerEntryChanges).toEqual({ startLedger: 53312000, endLedger: 53312127 });
+		}
+		for (const value of ['', 'TRUE', '1', 'true\n']) {
+			expect(() => parseFullHistoryLedgerCloseMetaServiceConfig({ ...environment(),
+				FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_NEW_PLANS: value
+			})).toThrow('compact new plans must equal true or false');
+		}
+	});
+
 	it('keeps compact output default-off and selects the same exact shard after restart', () => {
 		const range = { startLedger: 53_312_000, endLedger: 53_312_127 };
 		const values = { ...environment(),
