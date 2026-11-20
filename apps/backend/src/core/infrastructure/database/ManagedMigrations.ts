@@ -1,3 +1,4 @@
+import { WeeklyEmailGate1795176000000 } from './migrations/1795176000000-WeeklyEmailGate.js';
 import { ArchiveIntegrityNotificationState1793635200000 } from './migrations/1793635200000-ArchiveIntegrityNotificationState.js';
 import { HistoryArchiveHeaderProofRepairQueueKindMigration1793384400000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1793384400000-HistoryArchiveHeaderProofRepairQueueKindMigration.js';
 import { HistoryArchiveFailureSummarySnapshotMigration1788832000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1788832000000-HistoryArchiveFailureSummarySnapshotMigration.js';
@@ -219,7 +220,8 @@ export const managedMigrations = [
 	AtlasVerificationAuthentication1794092000000,
 	ContractVerificationCatalogue1794228000000,
 	AtlasDeveloperAuthentication1794232800000,
-	AtlasDeveloperSubmissions1794744000000
+	AtlasDeveloperSubmissions1794744000000,
+	WeeklyEmailGate1795176000000
 ] as const;
 import { HistoryArchiveTransientSourceRetryMigration1791072000000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791072000000-HistoryArchiveTransientSourceRetryMigration.js';
 import { HistoryArchiveManualRecheckIntentMigration1791088200000 } from '../../../history-scan-coordinator/infrastructure/database/migrations/1791088200000-HistoryArchiveManualRecheckIntentMigration.js';

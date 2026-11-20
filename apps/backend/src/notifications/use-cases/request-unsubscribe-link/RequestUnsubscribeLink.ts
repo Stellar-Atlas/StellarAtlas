@@ -12,6 +12,7 @@ import type { MessageCreator } from '../../domain/notifier/MessageCreator.js';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import type { Logger } from '@core/services/Logger.js';
 import 'reflect-metadata';
+import { EmailRateLimitError } from 'shared/lib/email/WeeklyEmailGate.js';
 
 export interface FailedSubscription {
 	eventSourceId: EventSourceIdDTO;
@@ -61,6 +62,9 @@ export class RequestUnsubscribeLink {
 
 			const result = await this.userService.send(userIdResult.value, message);
 			if (result.isErr()) {
+				// Accept the request without exposing whether this address exists.
+				// Existing token-based HTTP unsubscribe remains available.
+				if (result.error instanceof EmailRateLimitError) return ok(undefined);
 				this.exceptionLogger.captureException(result.error);
 				return err(result.error);
 			}

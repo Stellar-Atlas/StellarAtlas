@@ -10,6 +10,10 @@ import { UserId } from '../../notifications/domain/subscription/UserId.js';
 import { Message } from '../domain/Message.js';
 import { User } from '../infrastructure/database/entities/User.js';
 import { CustomError } from '../errors/CustomError.js';
+import {
+	EmailRateLimitError,
+	WeeklyEmailGate
+} from 'shared/lib/email/WeeklyEmailGate.js';
 
 export interface SMTPConfig {
 	host: string;
@@ -75,7 +79,11 @@ export class LocalSMTPUserService implements IUserService {
 			throw new Error('SMTP host is required');
 		}
 
-		if (!this.smtpConfig.auth || !this.smtpConfig.auth.user || !this.smtpConfig.auth.pass) {
+		if (
+			!this.smtpConfig.auth ||
+			!this.smtpConfig.auth.user ||
+			!this.smtpConfig.auth.pass
+		) {
 			throw new Error('SMTP authentication is required');
 		}
 
@@ -107,10 +115,34 @@ export class LocalSMTPUserService implements IUserService {
 				html: message.body
 			};
 
-			await this.transporter.sendMail(mailOptions);
+			const gate = new WeeklyEmailGate((sql, parameters) =>
+				this.userRepository.query(sql, parameters)
+			);
+			const recipientKey = `subscriber:${user.id.toLowerCase()}`;
+			const attemptToken = await gate.reserve(recipientKey);
+			try {
+				await this.transporter.sendMail(mailOptions);
+			} catch (error) {
+				// A negative SMTP completion is a definite refusal, unlike a socket
+				// timeout/disconnect where DATA might already have been accepted.
+				if (
+					typeof error === 'object' &&
+					error !== null &&
+					'responseCode' in error &&
+					typeof error.responseCode === 'number' &&
+					error.responseCode >= 400 &&
+					error.responseCode < 600 &&
+					'command' in error &&
+					typeof error.command === 'string' &&
+					/^(MAIL FROM|RCPT TO|DATA|AUTH( .+)?)$/.test(error.command)
+				)
+					await gate.releaseRejected(recipientKey, attemptToken);
+				throw error;
+			}
 
 			return ok(undefined);
 		} catch (error) {
+			if (error instanceof EmailRateLimitError) return err(error);
 			if (error instanceof Error) {
 				if (error.message.includes('not found')) {
 					return err(new UserNotFoundError(userId.value, error));
@@ -120,7 +152,9 @@ export class LocalSMTPUserService implements IUserService {
 				}
 				return err(new DatabaseError(error.message, error));
 			}
-			return err(new LocalSMTPUserServiceError('Unknown error occurred', 'UnknownError'));
+			return err(
+				new LocalSMTPUserServiceError('Unknown error occurred', 'UnknownError')
+			);
 		}
 	}
 
@@ -164,7 +198,9 @@ export class LocalSMTPUserService implements IUserService {
 			if (error instanceof Error) {
 				return err(new UserCreationError(error.message, error));
 			}
-			return err(new UserCreationError('Unknown error occurred during user creation'));
+			return err(
+				new UserCreationError('Unknown error occurred during user creation')
+			);
 		}
 	}
 
@@ -194,7 +230,9 @@ export class LocalSMTPUserService implements IUserService {
 			if (error instanceof Error) {
 				return err(new DatabaseError(error.message, error));
 			}
-			return err(new DatabaseError('Unknown error occurred during user search'));
+			return err(
+				new DatabaseError('Unknown error occurred during user search')
+			);
 		}
 	}
 
@@ -216,9 +254,20 @@ export class LocalSMTPUserService implements IUserService {
 				if (error.message.includes('not found')) {
 					return err(new UserNotFoundError(userId.value, error));
 				}
-				return err(new LocalSMTPUserServiceError('Failed to delete user', 'UserDeletionError', error));
+				return err(
+					new LocalSMTPUserServiceError(
+						'Failed to delete user',
+						'UserDeletionError',
+						error
+					)
+				);
 			}
-			return err(new LocalSMTPUserServiceError('Unknown error occurred during user deletion', 'UnknownError'));
+			return err(
+				new LocalSMTPUserServiceError(
+					'Unknown error occurred during user deletion',
+					'UnknownError'
+				)
+			);
 		}
 	}
 

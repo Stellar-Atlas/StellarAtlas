@@ -15,6 +15,35 @@ export class TypeOrmSubscriberRepository implements SubscriberRepository {
 		return await this.baseRepository.save(subscribers);
 	}
 
+	async savePendingIfAbsent(candidate: Subscriber): Promise<Subscriber> {
+		return this.baseRepository.manager.transaction(async (manager) => {
+			// The unique userId resolves simultaneous first registrations; the row
+			// lock then protects the pending token without holding a lock over mail.
+			await manager.query(
+				`INSERT INTO subscription_subscriber
+				("userIdValue", "subscriberReferenceValue", "registrationDate")
+				VALUES ($1, $2, $3) ON CONFLICT ("userIdValue") DO NOTHING`,
+				[
+					candidate.userId.value,
+					candidate.subscriberReference.value,
+					candidate.registrationDate
+				]
+			);
+			await manager.query(
+				`SELECT id FROM subscription_subscriber
+				WHERE "userIdValue" = $1 FOR UPDATE`,
+				[candidate.userId.value]
+			);
+			const repository = manager.getRepository(Subscriber);
+			const stored = await repository.findOneByOrFail({
+				userId: candidate.userId
+			});
+			if (stored.pendingSubscription) return stored;
+			stored.pendingSubscription = candidate.pendingSubscription;
+			return repository.save(stored);
+		});
+	}
+
 	find(): Promise<Subscriber[]> {
 		return this.baseRepository.find();
 	}

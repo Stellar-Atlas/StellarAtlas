@@ -102,6 +102,12 @@ export class CurrentNotificationStore implements SubscriberRepository {
 	async findOneByUserId(id: UserId): Promise<Subscriber | null> {
 		return (await this.find()).find((s) => s.userId.value === id.value) ?? null;
 	}
+	async savePendingIfAbsent(subscriber: Subscriber): Promise<Subscriber> {
+		const existing = await this.findOneByUserId(subscriber.userId);
+		if (existing?.pendingSubscription) return existing;
+		await this.save([subscriber]);
+		return subscriber;
+	}
 	async findOneBySubscriberReference(
 		ref: SubscriberReference
 	): Promise<Subscriber | null> {

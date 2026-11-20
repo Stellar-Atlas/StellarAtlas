@@ -2,6 +2,10 @@ import { config } from 'dotenv';
 config();
 
 import { HttpError, MailgunService } from '../MailgunService.js';
+import { dataSource } from '../data-source.js';
+import { Hasher } from '../Hasher.js';
+import { User } from '../User.js';
+import { WeeklyEmailGate } from 'shared/lib/email/WeeklyEmailGate.js';
 
 const mailgunBaseUrl = process.env.MAILGUN_BASE_URL;
 if (!mailgunBaseUrl) throw new Error('No mailgun base url');
@@ -9,13 +13,25 @@ const mailgunSecret = process.env.MAILGUN_SECRET;
 if (!mailgunSecret) throw new Error('No mailgun secret');
 const mailgunFrom = process.env.MAILGUN_FROM;
 if (!mailgunFrom) throw new Error('No mailgun from');
+const hashSecret = process.env.HASH_SECRET;
+if (!hashSecret) throw new Error('No hash secret');
+const hasher = new Hasher(Buffer.from(hashSecret));
+const emailGate = new WeeklyEmailGate((sql, parameters) =>
+	dataSource.query(sql, parameters)
+);
 const mailgunService = new MailgunService(
 	mailgunSecret,
 	mailgunFrom,
-	mailgunBaseUrl
+	mailgunBaseUrl,
+	emailGate
 );
 
 async function sendMessage() {
+	const user = await dataSource.getRepository(User).findOneBy({
+		hash: hasher.hash(Buffer.from('info@stellaratlas.io')).toString('base64')
+	});
+	if (!user?.id)
+		throw new Error('Test recipient must be an existing subscriber');
 	const result = await mailgunService.sendMessage(
 		'info@StellarAtlas.io',
 		'<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">\n' +
@@ -106,9 +122,15 @@ async function sendMessage() {
 			'\t\t<td style="font-family: \'Helvetica Neue\',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; vertical-align: top; margin: 0;" valign="top"></td>\n' +
 			'\t</tr></table></body>\n' +
 			'</html>',
-		'test'
+		'test',
+		user.id
 	);
 	console.log(result);
 }
 
-sendMessage();
+await dataSource.initialize();
+try {
+	await sendMessage();
+} finally {
+	await dataSource.destroy();
+}

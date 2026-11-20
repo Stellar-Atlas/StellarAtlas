@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
 import { Message } from '../../domain/Message.js';
 import { mock } from 'jest-mock-extended';
+import { EmailRateLimitError } from 'shared/lib/email/WeeklyEmailGate.js';
 
 const httpService = mock<HttpService>();
 
@@ -55,6 +56,23 @@ describe('delete user', () => {
 	});
 });
 describe('send', function () {
+	it('maps an internal capped send to a refusal rather than delivery success', async () => {
+		httpService.post.mockResolvedValue(
+			err(
+				new HttpError('capped', undefined, {
+					status: 429,
+					statusText: 'Too Many Requests',
+					data: {},
+					headers: {}
+				})
+			)
+		);
+		const result = await userService.send(
+			createDummySubscriber().userId,
+			new Message('body', 'title')
+		);
+		expect(result._unsafeUnwrapErr()).toBeInstanceOf(EmailRateLimitError);
+	});
 	it('should send a message', async function () {
 		httpService.post.mockReturnValue(
 			new Promise((resolve) =>

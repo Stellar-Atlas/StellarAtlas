@@ -83,6 +83,15 @@ function fixture(enabled?: boolean, localSMTP = true) {
 	const userRead = jest
 		.spyOn(source.getRepository(User), 'findOne')
 		.mockResolvedValue(user);
+	const reservations = new Set<string>();
+	jest
+		.spyOn(source.getRepository(User), 'query')
+		.mockImplementation(async (_sql: string, parameters?: string[]) => {
+			const key = parameters?.[0] ?? '';
+			if (reservations.has(key)) return [];
+			reservations.add(key);
+			return [{ recipient_key: key }];
+		});
 	const subscribers = mock<SubscriberRepository>(),
 		networks = mock<NetworkDTOService>(),
 		detector = mock<EventDetector>();
@@ -103,6 +112,7 @@ function fixture(enabled?: boolean, localSMTP = true) {
 		createDummyPendingSubscriptionId()
 	);
 	subscribers.save.mockImplementation(async (values) => values);
+	subscribers.savePendingIfAbsent.mockImplementation(async (value) => value);
 	const container = new Container();
 	container.bind(DataSource).toConstantValue(source);
 	container.bind(NetworkDTOService).toConstantValue(networks);

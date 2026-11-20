@@ -12,6 +12,7 @@ import helmet from 'helmet';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { dataSource } from './data-source.js';
 import { registerAuthHealthRoute } from './AuthHealth.js';
+import { WeeklyEmailGate } from 'shared/lib/email/WeeklyEmailGate.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'users'),
@@ -29,11 +30,6 @@ const mailgunSecret = process.env.MAILGUN_SECRET;
 if (!mailgunSecret) throw new Error('No mailgun secret');
 const mailgunFrom = process.env.MAILGUN_FROM;
 if (!mailgunFrom) throw new Error('No mailgun from');
-const mailgunService = new MailgunService(
-	mailgunSecret,
-	mailgunFrom,
-	mailgunBaseUrl
-);
 const consumerName = process.env.CONSUMER_NAME;
 if (!consumerName) throw new Error('No consumer name');
 const consumerSecret = process.env.CONSUMER_SECRET;
@@ -48,6 +44,15 @@ if (!hashSecretString) throw new Error('No hash secret');
 const hashSecret = Buffer.from(hashSecretString);
 const encryption = new Encryption(secret);
 const hasher = new Hasher(hashSecret);
+const emailGate = new WeeklyEmailGate((sql, parameters) =>
+	dataSource.query(sql, parameters)
+);
+const mailgunService = new MailgunService(
+	mailgunSecret,
+	mailgunFrom,
+	mailgunBaseUrl,
+	emailGate
+);
 let port = process.env.PORT;
 if (!port) port = '3000';
 
@@ -187,7 +192,7 @@ api.post(
 			const user = await dataSource.getRepository(User).findOne({
 				where: { id: req.params.userId }
 			});
-			if (!user) return res.status(404).json({ msg: 'User not found' });
+			if (!user?.id) return res.status(404).json({ msg: 'User not found' });
 
 			const emailAddressOrError = encryption.decrypt(
 				Buffer.from(user.emailCipher, 'base64'),
@@ -201,28 +206,42 @@ api.post(
 			const result = await mailgunService.sendMessage(
 				emailAddressOrError.toString(),
 				req.body.body,
-				req.body.title
+				req.body.title,
+				user.id
 			);
 
+			if (result instanceof HttpError && result.code === 'EMAIL_RATE_LIMIT')
+				return res.status(429).json({ code: 'EMAIL_RATE_LIMIT' });
+
 			// Record only bounded diagnostics; provider acceptance is not inbox delivery.
-			const rawStatus = result instanceof HttpError
-				? result.response?.status
-				: result.status;
-			const status = typeof rawStatus === 'number' && Number.isInteger(rawStatus) && rawStatus >= 100 && rawStatus <= 599
-				? rawStatus
-				: undefined;
-			const code = result instanceof HttpError
-				? ['PROVIDER_HTTP', 'PROVIDER_TIMEOUT', 'PROVIDER_TRANSPORT'].find(
-					(value) => value === result.code
-				) ?? 'PROVIDER_UNKNOWN'
-				: undefined;
-			console.info(JSON.stringify({
-				event: 'mail_provider_outcome',
-				outcome: !(result instanceof HttpError) && status === 200 ? 'accepted'
-					: status !== undefined && status >= 400 && status < 500 ? 'rejected' : 'unknown',
-				code,
-				status
-			}));
+			const rawStatus =
+				result instanceof HttpError ? result.response?.status : result.status;
+			const status =
+				typeof rawStatus === 'number' &&
+				Number.isInteger(rawStatus) &&
+				rawStatus >= 100 &&
+				rawStatus <= 599
+					? rawStatus
+					: undefined;
+			const code =
+				result instanceof HttpError
+					? (['PROVIDER_HTTP', 'PROVIDER_TIMEOUT', 'PROVIDER_TRANSPORT'].find(
+							(value) => value === result.code
+						) ?? 'PROVIDER_UNKNOWN')
+					: undefined;
+			console.info(
+				JSON.stringify({
+					event: 'mail_provider_outcome',
+					outcome:
+						!(result instanceof HttpError) && status === 200
+							? 'accepted'
+							: status !== undefined && status >= 400 && status < 500
+								? 'rejected'
+								: 'unknown',
+					code,
+					status
+				})
+			);
 
 			if (result instanceof HttpError) {
 				Sentry.captureMessage('Mail provider request failed', {
