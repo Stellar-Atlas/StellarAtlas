@@ -202,6 +202,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 			);
 			await dependencies.runLoop(
 				{
+					compactNewPlans: config.compactNewPlans === true,
 					...(config.compactLedgerEntryChanges === undefined ? {} : {
 						compactLedgerEntryChanges: config.compactLedgerEntryChanges
 					}),

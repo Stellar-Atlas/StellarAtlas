@@ -9,14 +9,16 @@ import type { PendingPlan } from './FullHistoryLedgerCloseMetaPendingPlan.js';
 
 export function createFullHistoryLedgerCloseMetaPendingPlan(
 	context: FullHistoryLedgerCloseMetaIngestionContext,
-	config: { readonly typedShardLedgerCount: number; readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection },
+	config: { readonly typedShardLedgerCount: number; readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection;
+		readonly compactNewPlans?: boolean },
 	range: FullHistoryLedgerCloseMetaRange,
 	kind: PendingPlan['kind'],
-	projection: FullHistoryLedgerEntryCompactSelection | null | undefined = config.compactLedgerEntryChanges
+	projection: FullHistoryLedgerEntryCompactSelection | null | undefined = config.compactLedgerEntryChanges,
+	compactNewPlans = config.compactNewPlans === true
 ): PendingPlan {
 	const shards = createShardRanges(range, context.config.ledgersPerBatch, config.typedShardLedgerCount)
 		.map(shard => ({ startLedger: shard.startSequence, endLedger: shard.endSequence }));
-	const selected = projection != null && shards.some(shard =>
+	const selected = !compactNewPlans && projection != null && shards.some(shard =>
 		selectsCompactLedgerEntryChanges(projection, shard));
 	const legacy = {
 		version: 1 as const, kind,
@@ -28,6 +30,7 @@ export function createFullHistoryLedgerCloseMetaPendingPlan(
 		typedShardLedgerCount: config.typedShardLedgerCount,
 		startLedger: range.startSequence, endLedger: range.endSequence, shards
 	};
+	if (compactNewPlans) return { ...legacy, version: 3, ledgerEntryChangesSchemaVersion: 4 };
 	return selected && projection != null
 		? { ...legacy, version: 2, compactLedgerEntryChanges: { ...projection } }
 		: legacy;
@@ -36,5 +39,6 @@ export function createFullHistoryLedgerCloseMetaPendingPlan(
 export function contextForFullHistoryLedgerCloseMetaPlan(
 	context: FullHistoryLedgerCloseMetaIngestionContext, plan: PendingPlan
 ): FullHistoryLedgerCloseMetaIngestionContext {
-	return { ...context, compactLedgerEntryChanges: plan.version === 2 ? plan.compactLedgerEntryChanges : null };
+	return { ...context, ledgerEntryChangesSchemaVersion: plan.version === 3 ? 4 : 3,
+		compactLedgerEntryChanges: plan.version === 2 ? plan.compactLedgerEntryChanges : null };
 }

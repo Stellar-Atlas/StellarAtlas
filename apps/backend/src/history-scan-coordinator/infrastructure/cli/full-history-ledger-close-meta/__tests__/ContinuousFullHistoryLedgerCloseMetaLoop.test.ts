@@ -18,6 +18,66 @@ import { performance } from 'node:perf_hooks';
 import { PendingPlanChangedError, type PendingPlan } from '../FullHistoryLedgerCloseMetaPendingPlan.js';
 
 describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
+	it.each([false, true])('creates a new durable compact plan with opt-in %s ahead of the old exact selector', async compactNewPlans => {
+		const f = fixture(1);
+		f.config = { ...f.config, compactNewPlans, cycleLedgerCount: 128,
+			compactLedgerEntryChanges: { startLedger: 1000, endLedger: 1063 } };
+		f.dependencies.priorityRangeReader.readNextRange = async () => range(1000, 1127);
+		f.dependencies.assertCompactSchemaReady = async () => { f.calls.push('compact-ready'); };
+		const ingest = f.dependencies.ingestion.ingestRange;
+		f.dependencies.ingestion.ingestRange = async (ctx, ...args) => {
+			expect(f.pending).toMatchObject(compactNewPlans
+				? { version: 3, ledgerEntryChangesSchemaVersion: 4 }
+				: { version: 2, compactLedgerEntryChanges: f.config.compactLedgerEntryChanges });
+			expect(ctx.ledgerEntryChangesSchemaVersion).toBe(compactNewPlans ? 4 : 3);
+			expect(ctx.compactLedgerEntryChanges).toEqual(compactNewPlans ? null : f.config.compactLedgerEntryChanges);
+			return ingest(ctx, ...args);
+		};
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(1000, 1127)]);
+		expect(f.calls.indexOf('compact-ready')).toBeLessThan(f.calls.indexOf('pending-write'));
+		expect(f.calls.indexOf('compact-ready')).toBeLessThan(f.calls.indexOf('ingest'));
+	});
+
+	it.each([
+		{ version: 1, compactNewPlans: false }, { version: 1, compactNewPlans: true },
+		{ version: 2, compactNewPlans: false }, { version: 2, compactNewPlans: true },
+		{ version: 3, compactNewPlans: false }, { version: 3, compactNewPlans: true }
+	] as const)('resumes saved v$version unchanged with new-plan opt-in $compactNewPlans', async ({ version, compactNewPlans }) => {
+		const f = fixture(1), legacy = plan('priority', 900);
+		const selector = { startLedger: 900, endLedger: 963 };
+		const pending: PendingPlan = version === 3 ? { ...legacy, version, ledgerEntryChangesSchemaVersion: 4 }
+			: version === 2 ? { ...legacy, version, compactLedgerEntryChanges: selector } : legacy;
+		f.pending = pending;
+		f.config = { ...f.config, compactNewPlans,
+			compactLedgerEntryChanges: { startLedger: 1000, endLedger: 1063 } };
+		const ready = jest.fn(async () => { f.calls.push('compact-ready'); });
+		f.dependencies.assertCompactSchemaReady = ready;
+		const ingest = f.dependencies.ingestion.ingestRange;
+		f.dependencies.ingestion.ingestRange = async (ctx, ...args) => {
+			expect(f.pending).toEqual(pending);
+			expect(ctx.ledgerEntryChangesSchemaVersion).toBe(version === 3 ? 4 : 3);
+			expect(ctx.compactLedgerEntryChanges).toEqual(version === 2 ? selector : null);
+			return ingest(ctx, ...args);
+		};
+		await run(f.config, f.dependencies);
+		expect(f.selected).toEqual([range(900, 963)]);
+		expect(ready).toHaveBeenCalledTimes(version === 1 ? 0 : 1);
+		expect(f.calls).not.toContain('frontier');
+	});
+
+	it('preserves a version-three pending plan when compact readiness refuses conversion', async () => {
+		const f = fixture(1);
+		const pending: PendingPlan = { ...plan('priority', 900), version: 3, ledgerEntryChangesSchemaVersion: 4 };
+		f.pending = pending;
+		f.dependencies.assertCompactSchemaReady = async () => { throw new Error('compact not ready'); };
+		f.dependencies.wait = async () => { f.controller.abort(); };
+		await run(f.config, f.dependencies);
+		expect(f.pending).toBe(pending);
+		expect(f.selected).toEqual([]);
+		expect(f.calls).not.toContain('pending-write');
+	});
+
 	it('offers one historical range after every four successful current ranges', async () => {
 		const f = fixture(10);
 		await run(f.config, f.dependencies);

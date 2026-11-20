@@ -30,6 +30,7 @@ export type PendingPlan = PendingPlanFields & (
 			readonly endLedger: number;
 		};
 	}
+	| { readonly version: 3; readonly ledgerEntryChangesSchemaVersion: 4 }
 );
 
 export interface PendingPlanStore {
@@ -68,6 +69,7 @@ const PLAN_KEYS = [
 	'version'
 ] as const;
 const COMPACT_PLAN_KEYS = ['compactLedgerEntryChanges', ...PLAN_KEYS] as const;
+const FORWARD_COMPACT_PLAN_KEYS = [...PLAN_KEYS, 'ledgerEntryChangesSchemaVersion'].sort();
 
 export class FileFullHistoryLedgerCloseMetaPendingPlan implements PendingPlanStore {
 	readonly #observed = new WeakMap<PendingPlan, BigIntStats>();
@@ -329,11 +331,12 @@ function validatePendingPlan(value: unknown): PendingPlan {
 	}
 	const record = value as Record<string, unknown>;
 	const keys = Object.keys(record).sort();
-	const expectedKeys = record.version === 2 ? COMPACT_PLAN_KEYS : PLAN_KEYS;
+	const expectedKeys = record.version === 3 ? FORWARD_COMPACT_PLAN_KEYS
+		: record.version === 2 ? COMPACT_PLAN_KEYS : PLAN_KEYS;
 	if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
 		throw new Error('Pending plan has an invalid shape');
 	}
-	if ((record.version !== 1 && record.version !== 2) || (record.kind !== 'priority' && record.kind !== 'historical') ||
+	if ((record.version !== 1 && record.version !== 2 && record.version !== 3) || (record.kind !== 'priority' && record.kind !== 'historical') ||
 		record.partitionVersion !== 'source-aligned-remainder-v1') {
 		throw new Error('Pending plan has an invalid version or kind');
 	}
@@ -404,6 +407,12 @@ function validatePendingPlan(value: unknown): PendingPlan {
 		shards
 	};
 	if (record.version === 1) return { version: 1, ...fields };
+	if (record.version === 3) {
+		if (record.ledgerEntryChangesSchemaVersion !== 4) {
+			throw new Error('Pending plan version three requires ledger-entry changes schema 4');
+		}
+		return { version: 3, ...fields, ledgerEntryChangesSchemaVersion: 4 };
+	}
 	const compact = record.compactLedgerEntryChanges;
 	if (compact === null || typeof compact !== 'object' || Array.isArray(compact) ||
 		Object.keys(compact).sort().join(',') !== 'endLedger,startLedger') {
@@ -433,9 +442,12 @@ function samePlan(left: PendingPlan, right: PendingPlan): boolean {
 	if (!PLAN_KEYS.every((key) => key === 'shards'
 		? JSON.stringify(left.shards) === JSON.stringify(right.shards)
 		: left[key] === right[key])) return false;
-	return left.version === 1 || (right.version === 2 &&
+	if (left.version === 1) return true;
+	if (left.version === 3) return right.version === 3 &&
+		left.ledgerEntryChangesSchemaVersion === right.ledgerEntryChangesSchemaVersion;
+	return right.version === 2 &&
 		left.compactLedgerEntryChanges.startLedger === right.compactLedgerEntryChanges.startLedger &&
-		left.compactLedgerEntryChanges.endLedger === right.compactLedgerEntryChanges.endLedger);
+		left.compactLedgerEntryChanges.endLedger === right.compactLedgerEntryChanges.endLedger;
 }
 
 function isCode(error: unknown, code: string): boolean {

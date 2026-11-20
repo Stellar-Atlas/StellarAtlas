@@ -48,6 +48,16 @@ catalog migration has been separately reviewed. The service launcher does not
 pass the opt-in flag by default, and the migration candidate is not registered
 for automatic execution.
 
+For the continuous collector, `FULL_HISTORY_LEDGER_CLOSE_META_COMPACT_NEW_PLANS=true`
+selects v4 for every shard of a newly created durable plan. It defaults to false
+and takes precedence over the single-exact-shard selector only when creating a
+plan. Version 3 plans persist this all-v4 choice. Resuming version 1 still uses
+v3 throughout; version 2 still uses v4 only for its saved exact shard. Changing
+the environment does not reinterpret any saved plan, including a version 3 plan
+after the flag is disabled. Do not downgrade a collector with a pending version
+3 plan to a reader that cannot recognize that version. No existing batch is
+rewritten by this setting.
+
 ## Offline transaction reconstruction
 
 `cmd/full-history-reconstruct` rebuilds only `transactions`,

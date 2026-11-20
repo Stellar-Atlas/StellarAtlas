@@ -30,6 +30,7 @@ import type {
 } from '../../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaAdmission.js';
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
+	readonly compactNewPlans?: boolean;
 	readonly compactLedgerEntryChanges?: FullHistoryLedgerEntryCompactSelection;
 	readonly currentCapacityAllowance?: FullHistoryCurrentCapacityAllowance;
 	readonly currentOnlyCapacity?: FullHistoryCurrentOnlyCapacity;
@@ -228,7 +229,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				}
 				const expected = createPendingPlan(cycleContext, config, fullHistoryLedgerCloseMetaRange(
 					pending.startLedger, pending.endLedger), pending.kind,
-					pending.version === 2 ? pending.compactLedgerEntryChanges : null);
+					pending.version === 2 ? pending.compactLedgerEntryChanges : null, pending.version === 3);
 				if (JSON.stringify(pending) !== JSON.stringify(expected)) {
 					throw new Error('Pending ingestion plan does not match source identity or partition configuration');
 				}
@@ -385,7 +386,7 @@ async function processRecordedRange(config: ContinuousFullHistoryLedgerCloseMeta
 	plan: PendingPlan, alreadyRecorded = false, scopedArm?: ScopedCurrentArm): Promise<number> {
 	let nextLedger = previousNextLedger;
 	await runAdmittedAttempt(config, dependencies, async () => {
-		if (plan.version === 2) {
+		if (plan.version === 2 || plan.version === 3) {
 			if (dependencies.assertCompactSchemaReady === undefined) {
 				throw new Error('Compact ledger-entry catalogue readiness is not configured');
 			}
