@@ -80,3 +80,23 @@ hashes, range and limits. It emits no `manifest.json`, registers no data, and
 explicitly does not claim a complete dataset set. Output storage keys are
 relative to the supplied scratch root. A reconstruction receipt alone is not
 authority to remove existing registered data.
+
+## Versioned retirement recovery
+
+The explicit `--retirement-recovery` snapshot remains bound to the original
+manifest, canonical replay, output descriptors and reconstruction evidence.
+Version 1 retains its physical-removal semantics. Version 2 additionally requires
+`namespaceRemoved` and `namespaceIntentSha256` on each retired output: an exact
+intent digest when true, or an explicit null digest when false.
+
+Namespace-only authority permits a missing eligible derived export without
+claiming its physical storage has been released. If that file is present, its
+type, length and digest are still checked. A present file under physical-removal
+confirmation is rejected, because residency accounting already excludes it.
+Canonical replay, the manifest and all noneligible outputs remain mandatory.
+
+Compatible TypeScript and native readers must be deployed before the separate
+additive namespace migration and any marker writes. The migration is not part
+of automatic startup, does not change existing physical accounting, and refuses
+rollback while namespace authority exists. The snapshot itself grants no file
+removal or physical-capacity credit.

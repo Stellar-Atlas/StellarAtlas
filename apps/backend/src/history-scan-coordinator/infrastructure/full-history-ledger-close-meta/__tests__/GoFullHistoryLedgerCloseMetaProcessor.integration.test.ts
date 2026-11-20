@@ -1,13 +1,15 @@
-import { readFile, readdir, rm } from 'node:fs/promises';
+import { readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
 	fullHistoryLedgerCloseMetaRange,
 	fullHistoryLedgerCloseMetaSha256Digest
 } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import { GoFullHistoryLedgerCloseMetaProcessor } from '../GoFullHistoryLedgerCloseMetaProcessor.js';
-import type { DerivedOutputRecoveryReader } from '../FullHistoryDerivedOutputRetirement.js';
+import type { DerivedOutputRecovery, DerivedOutputRecoveryReader } from '../FullHistoryDerivedOutputRetirement.js';
+import { parseGoFullHistoryLedgerCloseMetaReceipt } from '../GoFullHistoryLedgerCloseMetaReceipt.js';
+import { verifyGoFullHistoryLedgerCloseMetaPublication } from '../GoFullHistoryLedgerCloseMetaPublicationVerifier.js';
 import { runGoFullHistoryStateExport } from '../../full-history-state-import/GoFullHistoryStateExportProcess.js';
 
 const executablePath = process.env.FULL_HISTORY_ETL_TEST_BINARY;
@@ -112,6 +114,86 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 			expect(consumed).toBe(BigInt(output.recordCount));
 		}
 		expect(await readdir(temporaryInputRoot)).toEqual([]);
+	});
+
+	it('separates namespace recovery from physical accounting and validates present or mandatory files', async () => {
+		const bytes = await readFile(join(process.cwd(),
+			'apps/full-history-etl/internal/testdata/FCD285FF--53312000.xdr.zstd'));
+		const request = requestFor(bytes);
+		const first = await createProcessor().processAndCommit(request, new AbortController().signal);
+		const transaction = first.outputs.find(output => output.dataset === 'transactions');
+		const canonical = first.outputs.find(output => output.dataset === 'ledger-close-meta');
+		const ledgers = first.outputs.find(output => output.dataset === 'ledgers');
+		if (!transaction || !canonical || !ledgers) throw new Error('missing existing fixture outputs');
+		const outputPath = dirname(join(typedOutputRoot, transaction.storageKey));
+		const manifestStorageKey = posix.join(posix.dirname(transaction.storageKey), 'manifest.json');
+		const manifest = JSON.parse(await readFile(join(typedOutputRoot, manifestStorageKey), 'utf8')) as Record<string, unknown>;
+		const receipt = parseGoFullHistoryLedgerCloseMetaReceipt({
+			inputMediaType: manifest.inputMediaType, manifestSha256: first.manifestSha256,
+			manifestStorageKey, network: manifest.network, outputs: manifest.outputs,
+			range: manifest.range, sourceObjects: manifest.sourceObjects
+		});
+		const retired = {
+			dataset: 'transactions' as const, outputSha256: transaction.sha256,
+			byteCount: String(transaction.byteCount), recordCount: String(transaction.recordCount),
+			storageKey: transaction.storageKey, removed: false, evidenceSha256: '11'.repeat(32),
+			transformRevision: '22'.repeat(20)
+		};
+		const identity = {
+			batchId: '00000000-0000-4000-8000-000000000001',
+			networkIdSha256: receipt.network.networkIdSha256,
+			startLedger: receipt.range.startSequence, endLedger: receipt.range.endSequence,
+			manifestSha256: receipt.manifestSha256, canonicalSha256: canonical.sha256
+		};
+		const namespace: DerivedOutputRecovery = { ...identity, version: 2,
+			outputs: [{ ...retired, namespaceRemoved: true, namespaceIntentSha256: '33'.repeat(32) }] };
+		const legacy: DerivedOutputRecovery = { ...identity, version: 1, outputs: [retired] };
+		const physical: DerivedOutputRecovery = { ...identity, version: 2,
+			outputs: [{ ...retired, removed: true, namespaceRemoved: false, namespaceIntentSha256: null }] };
+		const verify = (retirementRecovery?: DerivedOutputRecovery) => verifyGoFullHistoryLedgerCloseMetaPublication({
+			networkName: 'pubnet', outputPath, receipt, request, typedOutputRoot,
+			...(retirementRecovery === undefined ? {} : { retirementRecovery })
+		});
+		const transactionPath = join(typedOutputRoot, transaction.storageKey);
+		const original = await readFile(transactionPath);
+		await expect(verify(namespace)).resolves.toEqual(first);
+		await unlink(transactionPath);
+		await expect(verify(namespace)).resolves.toEqual(first);
+		await expect(createProcessor(false, async () => namespace).processAndCommit(request,
+			new AbortController().signal)).resolves.toEqual(first);
+		await expect(verify()).rejects.toMatchObject({ code: 'ENOENT' });
+		await expect(verify(legacy)).rejects.toMatchObject({ code: 'ENOENT' });
+		await expect(verify({ ...identity, version: 2,
+			outputs: [{ ...retired, namespaceRemoved: false, namespaceIntentSha256: null }] }))
+			.rejects.toMatchObject({ code: 'ENOENT' });
+		await expect(verify(physical)).resolves.toEqual(first);
+		await expect(verify({ ...identity, version: 1, outputs: [{ ...retired, removed: true }] })).resolves.toEqual(first);
+		await writeFile(transactionPath, original, { flag: 'wx' });
+		await expect(verify(namespace)).resolves.toEqual(first);
+		await expect(verify(physical)).rejects.toThrow('published unexpected files');
+		await expect(verify({ ...identity, version: 1, outputs: [{ ...retired, removed: true }] }))
+			.rejects.toThrow('published unexpected files');
+		await expect(verify({ ...identity, version: 2,
+			outputs: [{ ...retired, removed: true, namespaceRemoved: true, namespaceIntentSha256: '33'.repeat(32) }] }))
+			.rejects.toThrow('published unexpected files');
+		const corrupt = Buffer.from(original);
+		corrupt[0] = corrupt[0]! ^ 1;
+		await writeFile(transactionPath, corrupt);
+		await expect(verify(namespace)).rejects.toThrow('transactions hash mismatch');
+		await writeFile(transactionPath, Buffer.concat([original, Buffer.from([0])]));
+		await expect(verify(namespace)).rejects.toThrow('output size mismatch');
+		await unlink(transactionPath);
+		await symlink(join(typedOutputRoot, canonical.storageKey), transactionPath);
+		await expect(verify(namespace)).rejects.toThrow();
+		await unlink(transactionPath);
+		await writeFile(transactionPath, original, { flag: 'wx' });
+		const canonicalPath = join(typedOutputRoot, canonical.storageKey);
+		const canonicalBytes = await readFile(canonicalPath);
+		await unlink(canonicalPath);
+		await expect(verify(namespace)).rejects.toMatchObject({ code: 'ENOENT' });
+		await writeFile(canonicalPath, canonicalBytes, { flag: 'wx' });
+		await unlink(join(typedOutputRoot, ledgers.storageKey));
+		await expect(verify(namespace)).rejects.toMatchObject({ code: 'ENOENT' });
 	});
 
 	it('discards malformed transient input after processor failure', async () => {

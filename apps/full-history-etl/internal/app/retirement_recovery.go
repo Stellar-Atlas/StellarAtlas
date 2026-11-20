@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 type derivedRetirementRecovery struct {
@@ -23,20 +24,28 @@ type derivedRetirementRecovery struct {
 	Outputs         []derivedRetirementOutput `json:"outputs"`
 }
 type derivedRetirementOutput struct {
-	Dataset           string `json:"dataset"`
-	SHA256            string `json:"outputSha256"`
-	Bytes             string `json:"byteCount"`
-	Rows              string `json:"recordCount"`
-	StorageKey        string `json:"storageKey"`
-	Removed           bool   `json:"removed"`
-	EvidenceSHA256    string `json:"evidenceSha256"`
-	TransformRevision string `json:"transformRevision"`
+	Dataset               string  `json:"dataset"`
+	SHA256                string  `json:"outputSha256"`
+	Bytes                 string  `json:"byteCount"`
+	Rows                  string  `json:"recordCount"`
+	StorageKey            string  `json:"storageKey"`
+	Removed               bool    `json:"removed"`
+	EvidenceSHA256        string  `json:"evidenceSha256"`
+	TransformRevision     string  `json:"transformRevision"`
+	NamespaceRemoved      *bool   `json:"namespaceRemoved,omitempty"`
+	NamespaceIntentSHA256 *string `json:"namespaceIntentSha256,omitempty"`
+}
+
+// Namespace permission never implies physical-residency accounting credit.
+type retiredOutputRecoveryPolicy struct {
+	PhysicallyRemoved bool
+	NamespaceRemoved  bool
 }
 
 // This is an explicit caller-provided snapshot of the PostgreSQL authority,
 // outside the immutable output directory. It is never inferred from missing
 // files and never discovered automatically as an adjacent sidecar.
-func readRetirementRecovery(authorityPath string, rawManifest []byte, manifest Manifest) (map[string]bool, error) {
+func readRetirementRecovery(authorityPath string, rawManifest []byte, manifest Manifest) (map[string]retiredOutputRecoveryPolicy, error) {
 	if authorityPath == "" {
 		return nil, nil
 	}
@@ -66,12 +75,55 @@ func readRetirementRecovery(authorityPath string, rawManifest []byte, manifest M
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return nil, fmt.Errorf("trailing retirement authority")
 	}
+	if err := validateRetirementNamespaceJSON(raw, authority.Version); err != nil {
+		return nil, err
+	}
 	return validateRetirementRecovery(authority, rawManifest, manifest)
 }
 
-func validateRetirementRecovery(authority derivedRetirementRecovery, rawManifest []byte, manifest Manifest) (map[string]bool, error) {
+// Presence is checked separately from Go zero values: v1 must reject even
+// namespaceRemoved:false or namespaceIntentSha256:null, while v2 requires both.
+func validateRetirementNamespaceJSON(raw []byte, version int) error {
+	var fields struct {
+		Outputs []map[string]json.RawMessage `json:"outputs"`
+	}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for _, item := range fields.Outputs {
+		for key := range item {
+			if version == 2 && strings.EqualFold(key, "removed") && key != "removed" {
+				return fmt.Errorf("version two requires exact removed key")
+			}
+			if strings.EqualFold(key, "namespaceRemoved") || strings.EqualFold(key, "namespaceIntentSha256") {
+				if version == 1 || (key != "namespaceRemoved" && key != "namespaceIntentSha256") {
+					return fmt.Errorf("namespace fields require exact version-two keys")
+				}
+			}
+		}
+		if version == 2 {
+			physical, present := item["removed"]
+			physicalValue := string(bytes.TrimSpace(physical))
+			if !present || (physicalValue != "true" && physicalValue != "false") {
+				return fmt.Errorf("version two requires removed boolean")
+			}
+			removed, present := item["namespaceRemoved"]
+			value := string(bytes.TrimSpace(removed))
+			if !present || (value != "true" && value != "false") {
+				return fmt.Errorf("version two requires namespaceRemoved boolean")
+			}
+			intent, present := item["namespaceIntentSha256"]
+			if !present || (value == "false" && string(bytes.TrimSpace(intent)) != "null") {
+				return fmt.Errorf("version two requires explicit namespace intent or null")
+			}
+		}
+	}
+	return nil
+}
+
+func validateRetirementRecovery(authority derivedRetirementRecovery, rawManifest []byte, manifest Manifest) (map[string]retiredOutputRecoveryPolicy, error) {
 	hash := sha256.Sum256(rawManifest)
-	if authority.Version != 1 || !regexp.MustCompile("^[0-9a-f-]{36}$").MatchString(authority.BatchID) ||
+	if (authority.Version != 1 && authority.Version != 2) || !regexp.MustCompile("^[0-9a-f-]{36}$").MatchString(authority.BatchID) ||
 		authority.NetworkID != manifest.Network.NetworkIDSHA256 ||
 		authority.Start != manifest.Range.StartLedger || authority.End != manifest.Range.EndLedger ||
 		authority.ManifestSHA256 != hex.EncodeToString(hash[:]) ||
@@ -88,8 +140,29 @@ func validateRetirementRecovery(authority derivedRetirementRecovery, rawManifest
 	if !canonicalFound {
 		return nil, fmt.Errorf("retirement authority does not bind canonical replay")
 	}
-	retired := make(map[string]bool, len(authority.Outputs))
+	retired := make(map[string]retiredOutputRecoveryPolicy, len(authority.Outputs))
 	for _, item := range authority.Outputs {
+		policy := retiredOutputRecoveryPolicy{PhysicallyRemoved: item.Removed}
+		if authority.Version == 1 {
+			if item.NamespaceRemoved != nil || item.NamespaceIntentSHA256 != nil {
+				return nil, fmt.Errorf("version one cannot contain namespace state")
+			}
+		} else {
+			if item.NamespaceRemoved == nil {
+				return nil, fmt.Errorf("version two requires namespaceRemoved boolean")
+			}
+			policy.NamespaceRemoved = *item.NamespaceRemoved
+			if policy.NamespaceRemoved {
+				if item.NamespaceIntentSHA256 == nil {
+					return nil, fmt.Errorf("namespace removal requires durable intent digest")
+				}
+				if err := validateSHA256(*item.NamespaceIntentSHA256); err != nil {
+					return nil, fmt.Errorf("namespace intent: %w", err)
+				}
+			} else if item.NamespaceIntentSHA256 != nil {
+				return nil, fmt.Errorf("namespace intent must be null without namespace removal")
+			}
+		}
 		switch item.Dataset {
 		case "transactions", "transaction-results", "operations":
 		default:
@@ -116,7 +189,7 @@ func validateRetirementRecovery(authority derivedRetirementRecovery, rawManifest
 		if !matched {
 			return nil, fmt.Errorf("retirement does not bind original %s descriptor", item.Dataset)
 		}
-		retired[item.Dataset] = item.Removed
+		retired[item.Dataset] = policy
 	}
 	return retired, nil
 }
