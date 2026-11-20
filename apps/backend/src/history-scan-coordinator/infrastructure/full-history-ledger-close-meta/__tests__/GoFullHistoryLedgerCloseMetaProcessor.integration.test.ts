@@ -1,7 +1,6 @@
-import { readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname, join, posix } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
 	fullHistoryLedgerCloseMetaRange,
 	fullHistoryLedgerCloseMetaSha256Digest
@@ -17,18 +16,21 @@ const describeWithBinary =
 	executablePath === undefined ? describe.skip : describe;
 
 describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
-	const root = join(tmpdir(), `stellaratlas-full-history-etl-${process.pid}`);
-	const temporaryInputRoot = join(
-		'/dev/shm',
-		`stellaratlas-full-history-etl-test-${process.pid}`
-	);
-	const typedOutputRoot = join(root, 'typed');
+	let root: string | undefined;
+	let temporaryInputRoot: string;
+	let typedOutputRoot: string;
+
+	beforeEach(async () => {
+		root = await mkdtemp(join('/dev/shm', 'stellaratlas-full-history-etl-test-'));
+		temporaryInputRoot = join(root, 'input');
+		typedOutputRoot = join(root, 'typed');
+	});
 
 	afterEach(async () => {
-		await Promise.all([
-			rm(root, { force: true, recursive: true }),
-			rm(temporaryInputRoot, { force: true, recursive: true })
-		]);
+		if (root !== undefined) {
+			await rm(root, { force: true, recursive: true });
+			root = undefined;
+		}
 	});
 
 	it.each([false, true])('publishes and replays exact output with compact ledger entries: %s', async (compact) => {
