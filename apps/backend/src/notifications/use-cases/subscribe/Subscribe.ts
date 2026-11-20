@@ -79,14 +79,21 @@ export class Subscribe {
 					registrationDate: subscribeDTO.time
 				});
 
-			const pendingSubscriptionId =
-				this.subscriberRepository.nextPendingSubscriptionId();
-			subscriber.addPendingSubscription(
-				pendingSubscriptionId,
-				eventSourceIds,
-				subscribeDTO.time
-			);
-			await this.subscriberRepository.save([subscriber]);
+			if (!subscriber.pendingSubscription) {
+				subscriber.addPendingSubscription(
+					this.subscriberRepository.nextPendingSubscriptionId(),
+					eventSourceIds,
+					subscribeDTO.time
+				);
+				subscriber =
+					await this.subscriberRepository.savePendingIfAbsent(subscriber);
+			}
+			const existingPending = subscriber.pendingSubscription;
+			if (!existingPending)
+				throw new Error('Pending subscription was not persisted');
+			const pendingSubscriptionId = existingPending.pendingSubscriptionId;
+			// A refused or ambiguous resend must not invalidate an emailed link or
+			// change the event sources that its token authorizes.
 
 			const message =
 				await this.messageCreator.createConfirmSubscriptionMessage(
@@ -97,7 +104,22 @@ export class Subscribe {
 			if (result.isErr()) return err(result.error);
 
 			return ok({
-				subscribed: subscribedEventSourceIdDTOs,
+				subscribed: subscribedEventSourceIdDTOs.filter((dto, index) => {
+					if (
+						!existingPending ||
+						existingPending.eventSourceIds.some((source) =>
+							source.equals(eventSourceIds[index])
+						)
+					)
+						return true;
+					failedEventSourceIdDTOs.push({
+						eventSourceId: dto,
+						error: new Error(
+							'Confirm the existing pending subscription before changing subscriptions'
+						)
+					});
+					return false;
+				}),
 				failed: failedEventSourceIdDTOs
 			});
 		} catch (e) {

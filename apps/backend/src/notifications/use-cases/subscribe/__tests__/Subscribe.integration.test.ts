@@ -11,7 +11,6 @@ import { PendingSubscription } from '@notifications/domain/subscription/PendingS
 import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
 import { UserService } from '@core/services/UserService.js';
 import Mock = jest.Mock;
-import { NetworkId } from '@notifications/domain/event/EventSourceId.js';
 import { mock } from 'jest-mock-extended';
 import { NetworkDTOService } from '@network-scan/services/NetworkDTOService.js';
 import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
@@ -84,7 +83,7 @@ describe('execute', () => {
 		findOrCreateUserFn.mockReset();
 		sendFn.mockReset();
 	});
-	it('should not create a new subscriber if the user/subscriber is already present', async function () {
+	it('preserves the pending token and its sources when the subscriber requests another confirmation', async function () {
 		const eventSourceIdDTO: EventSourceIdDTO = {
 			type: 'node',
 			id: 'GCM6QMP3DLRPTAZW2UZPCPX2LF3SXWXKPMP3GKFZBDSF3QZGV2G5QSTK'
@@ -116,12 +115,15 @@ describe('execute', () => {
 			await subscriberRepository.findOneByPendingSubscriptionId(
 				subscriber.pendingSubscription.pendingSubscriptionId
 			);
-		expect(subscriberWithOldPendingSubscription).toBeNull();
+		expect(subscriberWithOldPendingSubscription).not.toBeNull();
 		const subscriberAgain = await subscriberRepository.findOneByUserId(userId);
 		expect(subscriberAgain).toBeInstanceOf(Subscriber);
-		expect(subscriberAgain?.pendingSubscription?.eventSourceIds).toEqual([
-			new NetworkId('public')
-		]);
+		expect(subscriberAgain?.pendingSubscription?.pendingSubscriptionId).toEqual(
+			subscriber.pendingSubscription.pendingSubscriptionId
+		);
+		expect(subscriberAgain?.pendingSubscription?.eventSourceIds).toEqual(
+			subscriber.pendingSubscription.eventSourceIds
+		);
 	});
 	it('should create new subscriber and create a pending subscription for a known node', async function () {
 		const eventSourceIdDTO: EventSourceIdDTO = {

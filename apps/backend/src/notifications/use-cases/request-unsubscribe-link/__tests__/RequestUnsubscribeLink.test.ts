@@ -8,6 +8,7 @@ import type { Logger } from 'logger';
 import { err, ok } from 'neverthrow';
 import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
 import { Message } from '@core/domain/Message.js';
+import { EmailRateLimitError } from 'shared/lib/email/WeeklyEmailGate.js';
 
 describe('RequestUnsubscribeLink', () => {
 	function setupSUT() {
@@ -43,6 +44,7 @@ describe('RequestUnsubscribeLink', () => {
 			subscriberRepository,
 			userService,
 			requestUnsubscribeLink,
+			exceptionLogger,
 			subscriber,
 			message,
 			time,
@@ -82,6 +84,24 @@ describe('RequestUnsubscribeLink', () => {
 		);
 		expect(userService.send).toHaveBeenCalledTimes(1);
 		expect(userService.send).toHaveBeenCalledWith(subscriber.userId, message);
+	});
+
+	it('accepts a capped request without exposing the recipient or changing the unsubscribe token', async () => {
+		const fixture = setupSUT();
+		const reference = fixture.subscriber.subscriberReference;
+		fixture.userService.send.mockResolvedValue(err(new EmailRateLimitError()));
+
+		const result = await fixture.requestUnsubscribeLink.execute({
+			emailAddress: fixture.emailAddress,
+			time: fixture.time
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(fixture.userService.send).toHaveBeenCalledTimes(1);
+		expect(fixture.subscriber.subscriberReference).toBe(reference);
+		expect(fixture.subscriberRepository.save).not.toHaveBeenCalled();
+		expect(fixture.subscriberRepository.remove).not.toHaveBeenCalled();
+		expect(fixture.exceptionLogger.captureException).not.toHaveBeenCalled();
 	});
 
 	it('should not send unsubscribe message when user is not subscribed', async () => {

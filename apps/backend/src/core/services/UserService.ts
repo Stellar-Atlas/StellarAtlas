@@ -6,6 +6,7 @@ import type { IUserService } from '../domain/IUserService.js';
 import { Url, type HttpService } from 'http-helper';
 import { CustomError } from '../errors/CustomError.js';
 import { isObject, isString } from '../utilities/TypeGuards.js';
+import { EmailRateLimitError } from 'shared/lib/email/WeeklyEmailGate.js';
 
 export class UserServiceError extends CustomError {
 	constructor(message: string, name: string, cause?: Error) {
@@ -219,6 +220,8 @@ export class UserService implements IUserService {
 		);
 
 		if (response.isErr()) {
+			if (response.error.response?.status === 429)
+				return err(new EmailRateLimitError());
 			return err(new UserServiceSendError(response.error));
 		}
 

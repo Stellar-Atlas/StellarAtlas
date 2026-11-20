@@ -14,5 +14,6 @@ export interface SubscriberRepository {
 	): Promise<Subscriber | null>;
 	nextPendingSubscriptionId(): PendingSubscriptionId;
 	save(subscribers: Subscriber[]): Promise<Subscriber[]>;
+	savePendingIfAbsent(subscriber: Subscriber): Promise<Subscriber>;
 	remove(subscriber: Subscriber): Promise<Subscriber>;
 }
