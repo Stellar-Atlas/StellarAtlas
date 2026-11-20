@@ -81,7 +81,7 @@ func validateRecoveredManifest(
 
 func validateRecoveredManifestWithRetirement(
 	config Config, evidence ShardEvidence, manifest Manifest,
-	storageDirectory, publishPath string, retirement map[string]bool,
+	storageDirectory, publishPath string, retirement map[string]retiredOutputRecoveryPolicy,
 ) error {
 	expected := newManifest(config, evidence, nil)
 	if !isSupportedManifestVersion(manifest.ManifestVersion) {
@@ -212,7 +212,7 @@ func validateRecoveredOutputs(manifest Manifest, storageDirectory, publishPath s
 	return validateRecoveredOutputsWithRetirement(manifest, storageDirectory, publishPath, nil)
 }
 
-func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory, publishPath string, retirement map[string]bool) error {
+func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory, publishPath string, retirement map[string]retiredOutputRecoveryPolicy) error {
 	specifications, err := outputSpecificationsForVersion(manifest.ManifestVersion)
 	if err != nil {
 		return err
@@ -259,10 +259,21 @@ func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory,
 			(transactionCount == nil || descriptor.RecordCount != *transactionCount) {
 			return fmt.Errorf("%s count does not match transaction count", descriptor.Dataset)
 		}
-		if retirement[descriptor.Dataset] {
-			continue
+		policy := retirement[descriptor.Dataset]
+		filePath := filepath.Join(publishPath, specification.Filename)
+		if policy.PhysicallyRemoved || policy.NamespaceRemoved {
+			_, err := os.Lstat(filePath)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("stat %s retirement state: %w", descriptor.Dataset, err)
+			}
+			if policy.PhysicallyRemoved {
+				return fmt.Errorf("physically confirmed removed %s is present", descriptor.Dataset)
+			}
 		}
-		if err := validateOutputFile(filepath.Join(publishPath, specification.Filename), descriptor); err != nil {
+		if err := validateOutputFile(filePath, descriptor); err != nil {
 			return fmt.Errorf("validate %s: %w", descriptor.Dataset, err)
 		}
 		expectedFiles[specification.Filename] = struct{}{}

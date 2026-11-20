@@ -132,7 +132,18 @@ async function verifyOutputFiles(
 			verification.outputPath,
 			output.storageKey
 		);
-		const identity = await hashRegularFile(pathname, output.byteCount);
+		const recovery = verification.retirementRecovery;
+		const namespaceRemoved = recovery?.version === 2 && recovery.outputs.some(
+			item => item.dataset === output.dataset && item.namespaceRemoved
+		);
+		let identity: { readonly sha256: string };
+		try {
+			identity = await hashRegularFile(pathname, output.byteCount);
+		} catch (error) {
+			if (namespaceRemoved && typeof error === 'object' && error !== null &&
+				'code' in error && error.code === 'ENOENT') continue;
+			throw error;
+		}
 		if (identity.sha256 !== output.sha256) {
 			throw new Error(`Full-history ETL ${output.dataset} hash mismatch`);
 		}

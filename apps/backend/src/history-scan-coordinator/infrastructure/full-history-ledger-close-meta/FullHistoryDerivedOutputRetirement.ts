@@ -12,16 +12,22 @@ export interface DerivedOutputRetirement {
 	readonly evidenceSha256: string;
 	readonly transformRevision: string;
 }
-export interface DerivedOutputRecovery {
-	readonly version: 1;
+export interface DerivedOutputNamespaceRetirement extends DerivedOutputRetirement {
+	readonly namespaceRemoved: boolean;
+	readonly namespaceIntentSha256: string | null;
+}
+interface DerivedOutputRecoveryIdentity {
 	readonly batchId: string;
 	readonly networkIdSha256: string;
 	readonly startLedger: number;
 	readonly endLedger: number;
 	readonly manifestSha256: string;
 	readonly canonicalSha256: string;
-	readonly outputs: readonly DerivedOutputRetirement[];
 }
+export type DerivedOutputRecovery = DerivedOutputRecoveryIdentity & (
+	{ readonly version: 1; readonly outputs: readonly DerivedOutputRetirement[] } |
+	{ readonly version: 2; readonly outputs: readonly DerivedOutputNamespaceRetirement[] }
+);
 export interface RetirementQuery {
 	query(sql: string, parameters?: unknown[]): Promise<unknown>;
 }
@@ -61,6 +67,10 @@ export async function readDerivedOutputRetirements(
 		d.dataset, encode(d.output_sha256,'hex') as "outputSha256",
 		d.output_bytes::text as "byteCount", d.record_count::text as "recordCount",
 		d.storage_key as "storageKey", r.removal_confirmed_at is not null as removed,
+		to_jsonb(r) ? 'namespace_removed_at' as "namespaceRemovedColumn",
+		to_jsonb(r) ? 'namespace_intent_sha256' as "namespaceIntentColumn",
+		(to_jsonb(r)->>'namespace_removed_at') is not null as "namespaceRemoved",
+		encode((to_jsonb(r)->>'namespace_intent_sha256')::bytea,'hex') as "namespaceIntentSha256",
 		encode(r.evidence_sha256,'hex') as "evidenceSha256", r.transform_revision as "transformRevision"
 		from full_history_lcm_derived_output_retirement r
 		join full_history_ledger_close_meta_batch b on b.id=r.batch_id
@@ -79,28 +89,34 @@ export async function readDerivedOutputRetirements(
 		const row = value as Record<string, unknown>;
 		const batchId = text(row.batchId);
 		if (!/^[0-9a-f-]{36}$/.test(batchId)) throw new Error('Invalid retirement batch');
+		const version = namespaceSchemaVersion(row);
 		const output: DerivedOutputRetirement = {
 			dataset: dataset(row.dataset), outputSha256: digest(row.outputSha256),
 			byteCount: integer(row.byteCount, true), recordCount: integer(row.recordCount, false),
 			storageKey: text(row.storageKey), removed: boolean(row.removed),
 			evidenceSha256: digest(row.evidenceSha256), transformRevision: revision(row.transformRevision)
 		};
-		const plan: DerivedOutputRecovery = {
-			version: 1, batchId, networkIdSha256: digest(row.networkIdSha256),
+		const identity: DerivedOutputRecoveryIdentity = {
+			batchId, networkIdSha256: digest(row.networkIdSha256),
 			startLedger: ledger(row.startLedger), endLedger: ledger(row.endLedger),
-			manifestSha256: digest(row.manifestSha256), canonicalSha256: digest(row.canonicalSha256),
-			outputs: []
+			manifestSha256: digest(row.manifestSha256), canonicalSha256: digest(row.canonicalSha256)
 		};
-		if (plan.endLedger < plan.startLedger || plan.networkIdSha256 !== networkHash.toString('hex')) {
+		if (identity.endLedger < identity.startLedger || identity.networkIdSha256 !== networkHash.toString('hex')) {
 			throw new Error('Invalid retirement range/network');
 		}
 		const prior = plans.get(batchId);
-		if (prior && JSON.stringify({ ...prior, outputs: [] }) !== JSON.stringify(plan)) {
+		if (prior && JSON.stringify({ ...prior, outputs: [] }) !== JSON.stringify({ ...identity, version, outputs: [] })) {
 			throw new Error('Conflicting retirement identity');
 		}
 		const outputs = prior?.outputs ?? [];
 		if (outputs.some(item => item.dataset === output.dataset)) throw new Error('Duplicate retirement');
-		plans.set(batchId, Object.freeze({ ...plan, outputs: Object.freeze([...outputs, Object.freeze(output)]) }));
+		if (version === 1) {
+			plans.set(batchId, Object.freeze({ ...identity, version, outputs: Object.freeze([...outputs, Object.freeze(output)]) }));
+		} else {
+			const previous = prior?.version === 2 ? prior.outputs : [];
+			const namespaceOutput = Object.freeze({ ...output, ...namespaceState(row) });
+			plans.set(batchId, Object.freeze({ ...identity, version, outputs: Object.freeze([...previous, namespaceOutput]) }));
+		}
 	}
 	return Object.freeze([...plans.values()]);
 }
@@ -110,13 +126,25 @@ export function assertDerivedOutputRecovery(
 	networkIdSha256: string
 ): void {
 	const canonical = receipt.outputs.find(output => output.dataset === 'ledger-close-meta');
-	if (plan.version !== 1 || plan.networkIdSha256 !== networkIdSha256 ||
+	if ((plan.version !== 1 && plan.version !== 2) || plan.networkIdSha256 !== networkIdSha256 ||
 		plan.startLedger !== receipt.range.startSequence || plan.endLedger !== receipt.range.endSequence ||
 		plan.manifestSha256 !== receipt.manifestSha256 || plan.canonicalSha256 !== canonical?.sha256 ||
 		plan.outputs.length < 1 || plan.outputs.length > 3) throw new Error('Retirement recovery identity mismatch');
 	const seen = new Set<string>();
 	for (const retired of plan.outputs) {
 		dataset(retired.dataset); digest(retired.evidenceSha256); revision(retired.transformRevision);
+		digest(retired.outputSha256); integer(retired.byteCount, true); integer(retired.recordCount, false);
+		text(retired.storageKey); boolean(retired.removed);
+		if (plan.version === 1) {
+			if ('namespaceRemoved' in retired || 'namespaceIntentSha256' in retired) {
+				throw new Error('Version-one recovery cannot contain namespace state');
+			}
+		} else {
+			if (!Object.hasOwn(retired, 'namespaceRemoved') || !Object.hasOwn(retired, 'namespaceIntentSha256')) {
+				throw new Error('Version-two recovery requires namespace state');
+			}
+			namespaceState(retired as unknown as Record<string, unknown>);
+		}
 		if (seen.has(retired.dataset)) throw new Error('Duplicate retirement recovery output');
 		seen.add(retired.dataset);
 		const original = receipt.outputs.find(output => output.dataset === retired.dataset);
@@ -126,6 +154,26 @@ export function assertDerivedOutputRecovery(
 			throw new Error('Retirement does not bind original output');
 		}
 	}
+}
+
+function namespaceSchemaVersion(row: Record<string, unknown>): 1 | 2 {
+	const removedColumn = boolean(row.namespaceRemovedColumn);
+	const intentColumn = boolean(row.namespaceIntentColumn);
+	if (removedColumn !== intentColumn) throw new Error('Partial namespace recovery schema');
+	if (!removedColumn) {
+		if (row.namespaceRemoved !== false || row.namespaceIntentSha256 !== null) {
+			throw new Error('Unknown namespace recovery schema');
+		}
+		return 1;
+	}
+	return 2;
+}
+
+function namespaceState(value: Record<string, unknown>): Pick<DerivedOutputNamespaceRetirement, 'namespaceRemoved' | 'namespaceIntentSha256'> {
+	const namespaceRemoved = boolean(value.namespaceRemoved);
+	const namespaceIntentSha256 = value.namespaceIntentSha256 === null ? null : digest(value.namespaceIntentSha256);
+	if (namespaceRemoved !== (namespaceIntentSha256 !== null)) throw new Error('Invalid namespace removal intent');
+	return { namespaceRemoved, namespaceIntentSha256 };
 }
 
 function text(value: unknown): string {
