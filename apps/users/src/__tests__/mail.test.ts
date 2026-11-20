@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
+import { body } from 'express-validator';
 config();
 
 import { HttpError, MailgunService } from '../MailgunService.js';
@@ -6,6 +7,18 @@ import { dataSource } from '../data-source.js';
 import { Hasher } from '../Hasher.js';
 import { User } from '../User.js';
 import { WeeklyEmailGate } from 'shared/lib/email/WeeklyEmailGate.js';
+
+const configuredRecipient = process.env.TEST_EMAIL_RECIPIENT?.trim();
+if (!configuredRecipient) throw new Error('TEST_EMAIL_RECIPIENT is required');
+const recipientRequest = { body: { emailAddress: configuredRecipient } };
+const recipientValidation = await body('emailAddress')
+	.isEmail()
+	.bail()
+	.normalizeEmail()
+	.run(recipientRequest);
+if (!recipientValidation.isEmpty())
+	throw new Error('TEST_EMAIL_RECIPIENT must be a valid email address');
+const testEmailRecipient = recipientRequest.body.emailAddress;
 
 const mailgunBaseUrl = process.env.MAILGUN_BASE_URL;
 if (!mailgunBaseUrl) throw new Error('No mailgun base url');
@@ -28,12 +41,12 @@ const mailgunService = new MailgunService(
 
 async function sendMessage() {
 	const user = await dataSource.getRepository(User).findOneBy({
-		hash: hasher.hash(Buffer.from('info@stellaratlas.io')).toString('base64')
+		hash: hasher.hash(Buffer.from(testEmailRecipient)).toString('base64')
 	});
 	if (!user?.id)
 		throw new Error('Test recipient must be an existing subscriber');
 	const result = await mailgunService.sendMessage(
-		'info@StellarAtlas.io',
+		testEmailRecipient,
 		'<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">\n' +
 			'<html xmlns="http://www.w3.org/1999/xhtml" style="font-family: \'Helvetica Neue\', Helvetica, Arial, sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">\n' +
 			'<head>\n' +

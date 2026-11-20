@@ -17,6 +17,7 @@
 	"license": "MIT",
 	"private": true,
 	"devDependencies": {
+		"@jest/globals": "30.4.1",
 		"@types/express": "^4.17.1",
 		"@types/node": "^26.0.1",
 		"@types/sodium-native": "^2.3.5"
