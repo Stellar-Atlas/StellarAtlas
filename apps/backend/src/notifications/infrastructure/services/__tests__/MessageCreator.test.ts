@@ -126,6 +126,12 @@ it('should create notification message', async function () {
 	};
 	const message = await messageCreator.createNotificationMessage(notification);
 	expect(message.body).toBeDefined();
+	expect(message.body).toContain(
+		'at most one email every seven days across all subscriptions and message types'
+	);
+	expect(message.body).toContain(
+		'Changed findings and Unmute do not bypass this limit.'
+	);
 	console.log(message.body);
 });
 
