@@ -22,9 +22,9 @@ func run() int {
 		fmt.Fprintln(os.Stderr, "full-history-materialize: invalid trusted configuration:", err)
 		return 2
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	lifetimeCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	ctx, cancel := context.WithTimeout(lifetimeCtx, c.Timeout)
 	defer cancel()
 	err = app.WithMaterializedOutput(ctx, c, func(result app.MaterializedOutput) error {
 		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
@@ -54,11 +54,20 @@ func run() int {
 		// The build deadline does not cut off a download already being read.
 		// The parent sends this only after closing the FD, or closes stdin
 		// on exit; either releases the shared lock and cleans the RAM scratch.
-		line, err := input.ReadString('\n')
-		if err != nil || line != "closed\n" {
-			return fmt.Errorf("temporary response lease closed without acknowledgement")
+		closed := make(chan error, 1)
+		go func() {
+			line, err := input.ReadString('\n')
+			if err == nil && line != "closed\n" {
+				err = fmt.Errorf("invalid temporary response close acknowledgement")
+			}
+			closed <- err
+		}()
+		select {
+		case err := <-closed:
+			return err
+		case <-lifetimeCtx.Done():
+			return lifetimeCtx.Err()
 		}
-		return nil
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "full-history-materialize:", err)

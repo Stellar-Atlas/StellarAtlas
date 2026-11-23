@@ -1,6 +1,6 @@
 import type { DerivedOutputRecovery, DerivedOutputRetirement } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import type { Request, Response } from 'express';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { constants } from 'node:fs';
 import { open, realpath, stat, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
@@ -89,6 +89,22 @@ function within(root: string, path: string): boolean {
 	return path === root || path.startsWith(root.endsWith(sep) ? root : root + sep);
 }
 
+async function boundedMaterializerExit(child: ChildProcess, exited: Promise<boolean>): Promise<boolean> {
+	const wait = async (): Promise<boolean | undefined> => {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			return await Promise.race([exited, new Promise<undefined>(resolve => {
+				timer = setTimeout(() => resolve(undefined), 5000);
+			})]);
+		} finally { if (timer !== undefined) clearTimeout(timer); }
+	};
+	const normal = await wait();
+	if (normal !== undefined) return normal;
+	child.kill('SIGTERM');
+	if (await wait() === undefined) { child.kill('SIGKILL'); await wait(); }
+	return false;
+}
+
 async function materialize(binary: string, cache: string, capacity: string, passphrase: string,
 	source: string, manifest: string, plan: ColdPlan, output: ColdOutput, sourceBytes: string, transient?: string): Promise<Lease> {
 	// Byte counts are from the catalogue and were checked against the opened
@@ -141,8 +157,12 @@ async function materialize(binary: string, cache: string, capacity: string, pass
 				void exited.then(() => { if (!releasing) void fd.close().catch(() => {}); });
 				return { handle: fd, release: async () => {
 					releasing = true;
-					try { await fd.close(); } finally { child.stdin.end('closed\n'); }
-					if (!await exited) throw new Error('Temporary response lease was not released normally');
+					let closeError: unknown;
+					try { await fd.close(); } catch (error) { closeError = error; }
+					child.stdin.end('closed\n');
+					const normal = await boundedMaterializerExit(child, exited);
+					if (closeError !== undefined) throw closeError;
+					if (!normal) throw new Error('Temporary response lease was not released normally');
 				} };
 			}
 			child.stdin.end('opened\n');
@@ -152,7 +172,7 @@ async function materialize(binary: string, cache: string, capacity: string, pass
 		return { handle: fd, release: () => fd.close() };
 	} catch (error) {
 		child.stdin.destroy(); child.kill();
-		await Promise.all([handle?.close(), exited]); throw error;
+		await Promise.all([handle?.close(), boundedMaterializerExit(child, exited)]); throw error;
 	}
 }
 
