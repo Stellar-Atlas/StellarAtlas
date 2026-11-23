@@ -3,7 +3,9 @@ package lcmbatch
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"io"
 	"os"
 	"path/filepath"
@@ -43,6 +45,8 @@ func TestStreamFileUsesPerLedgerBoundsAndRejectsTrailingData(t *testing.T) {
 		}
 	}
 	var last xdr.Hash
+	frames := make([]SourceFrame, 0, count/2)
+	var framed bytes.Buffer
 	for seq := start; seq < start+count; seq++ {
 		h := base.LedgerHeaderHistoryEntry()
 		h.Header.LedgerSeq = xdr.Uint32(seq)
@@ -53,8 +57,20 @@ func TestStreamFileUsesPerLedgerBoundsAndRejectsTrailingData(t *testing.T) {
 		}
 		last = h.Hash
 		m := xdr.LedgerCloseMeta{V: 0, V0: &xdr.LedgerCloseMetaV0{LedgerHeader: h}}
-		if _, err = xdr.Marshal(&raw, m); err != nil {
+		if (seq-start)%2 == 0 {
+			framed.Reset()
+			for _, v := range []uint32{seq, seq + 1, 2} {
+				if err := binary.Write(&framed, binary.BigEndian, v); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if _, err = xdr.Marshal(io.MultiWriter(&raw, &framed), m); err != nil {
 			t.Fatal(err)
+		}
+		if (seq-start)%2 == 1 {
+			sum := sha256.Sum256(framed.Bytes())
+			frames = append(frames, SourceFrame{Start: seq - 1, End: seq, Bytes: int64(framed.Len()), SHA256: hex.EncodeToString(sum[:])})
 		}
 	}
 	lim.MaxDecodedMemoryBytes = 256 << 10
@@ -76,7 +92,7 @@ func TestStreamFileUsesPerLedgerBoundsAndRejectsTrailingData(t *testing.T) {
 	}
 	write(raw.Bytes())
 	var seen uint32
-	_, err = StreamFile(ctx, p, start, start+count-1, lim, func(m xdr.LedgerCloseMeta) error {
+	_, err = StreamRegisteredFile(ctx, p, start, start+count-1, lim, frames, func(m xdr.LedgerCloseMeta) error {
 		if uint32(m.LedgerSequence()) != start+seen {
 			t.Fatalf("out of order")
 		}
@@ -85,6 +101,16 @@ func TestStreamFileUsesPerLedgerBoundsAndRejectsTrailingData(t *testing.T) {
 	})
 	if err != nil || seen != count {
 		t.Fatalf("stream of %d ledgers stopped at %d: %v", count, seen, err)
+	}
+	badFrames := append([]SourceFrame(nil), frames...)
+	badFrames[1].SHA256 = strings.Repeat("0", 64)
+	if _, err := StreamRegisteredFile(ctx, p, start, start+count-1, lim, badFrames, func(xdr.LedgerCloseMeta) error { return nil }); err == nil {
+		t.Fatal("accepted incorrect original-frame digest")
+	}
+	badFrames[1] = frames[1]
+	badFrames[1].Bytes++
+	if _, err := StreamRegisteredFile(ctx, p, start, start+count-1, lim, badFrames, func(xdr.LedgerCloseMeta) error { return nil }); err == nil {
+		t.Fatal("accepted incorrect original-frame length")
 	}
 	write(append(raw.Bytes(), 0))
 	if _, err = StreamFile(ctx, p, start, start+count-1, lim, func(xdr.LedgerCloseMeta) error { return nil }); err == nil {

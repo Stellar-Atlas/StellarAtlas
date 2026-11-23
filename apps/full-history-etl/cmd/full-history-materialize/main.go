@@ -31,8 +31,9 @@ func run() int {
 			return err
 		}
 		ack := make(chan error, 1)
+		input := bufio.NewReader(io.LimitReader(os.Stdin, 16))
 		go func() {
-			line, err := bufio.NewReader(io.LimitReader(os.Stdin, 8)).ReadString('\n')
+			line, err := input.ReadString('\n')
 			if err == nil && line != "opened\n" {
 				err = fmt.Errorf("invalid file-open acknowledgement")
 			}
@@ -42,12 +43,22 @@ func run() int {
 		defer timer.Stop()
 		select {
 		case err := <-ack:
-			return err
+			if err != nil || !result.Transient {
+				return err
+			}
 		case <-timer.C:
 			return fmt.Errorf("file-open acknowledgement expired")
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+		// The build deadline does not cut off a download already being read.
+		// The parent sends this only after closing the FD, or closes stdin
+		// on exit; either releases the shared lock and cleans the RAM scratch.
+		line, err := input.ReadString('\n')
+		if err != nil || line != "closed\n" {
+			return fmt.Errorf("temporary response lease closed without acknowledgement")
+		}
+		return nil
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "full-history-materialize:", err)

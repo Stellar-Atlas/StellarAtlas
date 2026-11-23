@@ -33,7 +33,7 @@ func TestOnDemandProjectionMatchesOriginalWriter(t *testing.T) {
 				ManifestPath:           checkedStoragePath(t, root, full.ManifestStorageKey),
 				ExpectedManifestSHA256: full.ManifestSHA256, ExpectedSourceSHA256: canonical.SHA256,
 				CacheRoot: cache, CacheMaxBytes: 32 << 20, NetworkPassphrase: cfg.NetworkPassphrase, Timeout: time.Minute,
-				Limits: ManifestLimits{MaxCompressedBytes: cfg.MaxCompressedBytes, MaxUncompressedBytes: cfg.MaxUncompressedBytes,
+				Limits: ManifestLimits{MaxCompressedBytes: cfg.MaxCompressedBytes, MaxUncompressedBytes: 0,
 					MaxDecodedMemoryBytes: cfg.MaxDecodedMemoryBytes, MaxLedgers: 1},
 			}
 			for _, d := range full.Outputs[1:] {
@@ -60,6 +60,54 @@ func TestOnDemandProjectionMatchesOriginalWriter(t *testing.T) {
 					}
 				})
 			}
+			if !compact {
+				t.Run("temporary response exceeds retention but leaves no cache entry", func(t *testing.T) {
+					dir, err := os.MkdirTemp("/dev/shm", "atlas-projection-test-")
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() {
+						if err := os.RemoveAll(dir); err != nil {
+							t.Error(err)
+						}
+					})
+					temp := c
+					temp.CacheRoot = dir
+					temp.CacheMaxBytes = 64 << 10
+					for _, d := range full.Outputs {
+						if d.Dataset != "ledger-entry-changes" {
+							continue
+						}
+						temp.Dataset = d.Dataset
+						temp.Limits.MaxRows = max(1, d.RecordCount)
+						temp.Limits.MaxOutputBytes = d.ByteCount
+						if err := WithMaterializedOutput(context.Background(), temp, func(MaterializedOutput) error { return nil }); err == nil {
+							t.Fatal("overflow ran without an approved RAM budget")
+						}
+						temp.TransientMaxBytes = 4 << 20
+						var held string
+						err := WithMaterializedOutput(context.Background(), temp, func(result MaterializedOutput) error {
+							if result.CacheHit || !result.Transient || digestPath(t, result.Path) != d.SHA256 {
+								t.Fatal("temporary response is not verified original bytes")
+							}
+							held = result.Path
+							return nil
+						})
+						if err != nil || held == "" {
+							t.Fatalf("transient stream: %v", err)
+						}
+						if _, err := os.Lstat(held); !os.IsNotExist(err) {
+							t.Fatal("completed temporary response remained on disk")
+						}
+						names, err := os.ReadDir(dir)
+						if err != nil || len(names) != 1 || names[0].Name() != ".publish.lock" {
+							t.Fatal("large response occupied the retained cache")
+						}
+						return
+					}
+					t.Fatal("original ledger-entry fixture missing")
+				})
+			}
 			// A new catalogue digest may authorize a different original manifest,
 			// but cannot introduce a writer the binary does not implement.
 			raw, err := os.ReadFile(c.ManifestPath)
@@ -69,6 +117,17 @@ func TestOnDemandProjectionMatchesOriginalWriter(t *testing.T) {
 			manifest, err := decodeManifest(raw)
 			if err != nil {
 				t.Fatal(err)
+			}
+			m := manifest
+			m.SourceObjects = append([]SourceEvidence(nil), manifest.SourceObjects...)
+			const recorded = int64(2<<30) + 4096
+			m.SourceObjects[0].XDRByteCount = recorded
+			m.Limits.MaxUncompressedBytes = recorded
+			if n, err := registeredWireLength(m, 0); err != nil || n != recorded {
+				t.Fatalf("did not use exact registered length: %d %v", n, err)
+			}
+			if _, err := registeredWireLength(m, 2<<30); err == nil {
+				t.Fatal("ignored explicit caller cap")
 			}
 			manifest.Format.ParquetWriter += "-unknown"
 			raw, err = json.Marshal(manifest)

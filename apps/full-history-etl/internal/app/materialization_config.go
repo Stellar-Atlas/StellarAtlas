@@ -14,6 +14,7 @@ type MaterializationConfig struct {
 	CanonicalPath, ManifestPath, ExpectedManifestSHA256, ExpectedSourceSHA256 string
 	Dataset, CacheRoot, NetworkPassphrase                                     string
 	CacheMaxBytes                                                             uint64
+	TransientMaxBytes                                                         uint64
 	Limits                                                                    ManifestLimits
 	Timeout                                                                   time.Duration
 }
@@ -29,9 +30,10 @@ func ParseMaterializationConfig(args []string, stderr io.Writer) (Materializatio
 	flags.StringVar(&c.Dataset, "dataset", "", "one original Parquet projection to open")
 	flags.StringVar(&c.CacheRoot, "cache-root", "", "dedicated private disposable cache")
 	flags.Uint64Var(&c.CacheMaxBytes, "cache-max-bytes", 0, "maximum cache including reconstruction scratch")
+	flags.Uint64Var(&c.TransientMaxBytes, "transient-max-bytes", 0, "optional maximum for one verified, non-retained output on the existing RAM filesystem")
 	flags.StringVar(&c.NetworkPassphrase, "network-passphrase", "", "trusted Stellar network passphrase")
 	flags.Int64Var(&c.Limits.MaxCompressedBytes, "max-compressed-bytes", defaultMaxCompressedBytes, "canonical input bound")
-	flags.Int64Var(&c.Limits.MaxUncompressedBytes, "max-uncompressed-bytes", defaultMaxUncompressedBytes, "decoded input bound")
+	flags.Int64Var(&c.Limits.MaxUncompressedBytes, "max-uncompressed-bytes", defaultMaxUncompressedBytes, "optional lower aggregate XDR bound; 0 uses the exact authenticated manifest length")
 	flags.Int64Var(&c.Limits.MaxDecodedMemoryBytes, "max-decoded-memory-bytes", defaultMaxDecodedMemoryBytes, "per-ledger allocation bound")
 	flags.Int64Var(&c.Limits.MaxOutputBytes, "max-output-bytes", defaultMaxOutputBytes, "reconstructed output bound")
 	flags.Uint64Var(&c.Limits.MaxLedgers, "max-ledgers", 64, "ledger bound; larger cohorts require separate resource qualification")
@@ -62,7 +64,7 @@ func (c MaterializationConfig) Validate() error {
 	if !materializableDataset(c.Dataset) || c.CacheMaxBytes == 0 || c.Timeout <= 0 {
 		return fmt.Errorf("invalid dataset, cache bound or deadline")
 	}
-	if c.Limits.MaxCompressedBytes <= 0 || c.Limits.MaxUncompressedBytes <= 0 ||
+	if c.Limits.MaxCompressedBytes <= 0 || c.Limits.MaxUncompressedBytes < 0 ||
 		c.Limits.MaxDecodedMemoryBytes <= 0 || c.Limits.MaxOutputBytes <= 0 ||
 		c.Limits.MaxLedgers == 0 || c.Limits.MaxLedgers > hardMaxShardLedgers || c.Limits.MaxRows == 0 {
 		return fmt.Errorf("invalid reconstruction resource limits")

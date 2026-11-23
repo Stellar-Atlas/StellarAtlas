@@ -39,17 +39,20 @@ export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: str
 	const configuredBinary = env.FULL_HISTORY_COLD_EXECUTABLE;
 	const cache = env.FULL_HISTORY_COLD_CACHE_ROOT;
 	const capacity = env.FULL_HISTORY_COLD_CACHE_MAX_BYTES;
+	const transient = env.FULL_HISTORY_COLD_TRANSIENT_MAX_BYTES;
 	const revision = env.FULL_HISTORY_COLD_TRANSFORM_REVISION;
-	if ([configuredBinary, cache, capacity, revision].every(value => value === undefined)) return undefined;
+	if ([configuredBinary, cache, capacity, revision, transient].every(value => value === undefined)) return undefined;
 	if (configuredBinary !== packagedMaterializer || !cache || !isAbsolute(cache) || resolve(cache) !== cache ||
-		!capacity || !/^[1-9]\d{0,17}$/.test(capacity) || !revision || !/^[0-9a-f]{40}$/.test(revision))
+		!capacity || !/^[1-9]\d{0,17}$/.test(capacity) || (transient !== undefined && !/^[1-9]\d{0,17}$/.test(transient)) ||
+		!revision || !/^[0-9a-f]{40}$/.test(revision))
 		throw new Error('Incomplete or invalid history cold-download configuration');
 	const root = checkedHistoryStorageRoot(storageRoot);
 	if (within(root, cache) || within(cache, root)) throw new Error('Cold cache must be separate from history storage');
-	type Active = { key: string; users: number; ready: Promise<FileHandle> };
+	type Active = { key: string; users: number; ready: Promise<Lease> };
 	let active: Active | undefined;
 	return {
-		supports: output => (output.transformRevision === undefined || output.transformRevision === revision) && BigInt(output.byteCount) <= BigInt(capacity) &&
+		supports: output => (output.transformRevision === undefined || output.transformRevision === revision) &&
+			(BigInt(output.byteCount) <= BigInt(capacity) || (transient !== undefined && BigInt(output.byteCount) <= BigInt(transient))) &&
 			isColdProjectionDataset(output.dataset),
 		async acquire(plan, output, canonical) {
 			const key = [plan.batchId, plan.manifestSha256, output.dataset, output.outputSha256].join(':');
@@ -67,16 +70,16 @@ export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: str
 				if (!sourceStat.isFile() || sourceStat.size.toString() !== source.byteCount ||
 					await realpath(manifest) !== manifest || await realpath(cache) !== cache)
 					throw new Error('Unsafe cold-download input');
-				return materialize(packagedMaterializer, cache, capacity, networkPassphrase, original, manifest, plan, output, source.byteCount);
+				return materialize(packagedMaterializer, cache, capacity, networkPassphrase, original, manifest, plan, output, source.byteCount, transient);
 			})() };
 			entry.users++;
 			const release = async (): Promise<void> => {
 				if (--entry.users === 0) {
 					if (active === entry) active = undefined;
-					await entry.ready.then(handle => handle.close(), () => {});
+					await entry.ready.then(lease => lease.release(), () => {});
 				}
 			};
-			try { return { handle: await entry.ready, release }; }
+			try { return { handle: (await entry.ready).handle, release }; }
 			catch (error) { await release(); throw error; }
 		}
 	};
@@ -87,7 +90,7 @@ function within(root: string, path: string): boolean {
 }
 
 async function materialize(binary: string, cache: string, capacity: string, passphrase: string,
-	source: string, manifest: string, plan: ColdPlan, output: ColdOutput, sourceBytes: string): Promise<FileHandle> {
+	source: string, manifest: string, plan: ColdPlan, output: ColdOutput, sourceBytes: string, transient?: string): Promise<Lease> {
 	// Byte counts are from the catalogue and were checked against the opened
 	// source metadata. Keep the existing compressed-input and writer ceilings.
 	if (!/^[1-9]\d{0,17}$/.test(sourceBytes) || BigInt(sourceBytes) > 256n * 1024n * 1024n ||
@@ -96,10 +99,10 @@ async function materialize(binary: string, cache: string, capacity: string, pass
 	const child = spawn(binary, ['--canonical', source, '--manifest', manifest,
 		'--expected-manifest-sha256', plan.manifestSha256, '--expected-source-sha256', plan.canonicalSha256,
 		'--dataset', output.dataset, '--cache-root', cache, '--cache-max-bytes', capacity,
-		// 2 GiB is the aggregate streaming I/O envelope for the measured
-		// historical shard, not a memory allocation. The native reader derives
-		// exact row, range and wire limits from the digest-verified manifest.
-		'--max-ledgers', '1024', '--max-uncompressed-bytes', '2147483648',
+		...(transient === undefined ? [] : ['--transient-max-bytes', transient]),
+		// Zero selects the immutable manifest's exact aggregate wire length.
+		// The native reader still bounds each ledger and verifies each source frame.
+		'--max-ledgers', '1024', '--max-uncompressed-bytes', '0',
 		'--max-compressed-bytes', sourceBytes, '--max-output-bytes', output.byteCount,
 		'--network-passphrase', passphrase], { shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'],
 		env: { LANG: 'C', GOMAXPROCS: '1', GOMEMLIMIT: '512MiB' } });
@@ -130,10 +133,23 @@ async function materialize(binary: string, cache: string, capacity: string, pass
 			if (!st.isFile() || st.dev.toString() !== row.device || st.ino.toString() !== row.inode ||
 				st.size.toString() !== output.byteCount) throw new Error('Cold file identity changed');
 			acknowledged = true;
+			if (row.transient === true) {
+				if (!transient || BigInt(output.byteCount) > BigInt(transient)) throw new Error('Unexpected temporary response');
+				const fd = handle;
+				let releasing = false;
+				child.stdin.write('opened\n');
+				void exited.then(() => { if (!releasing) void fd.close().catch(() => {}); });
+				return { handle: fd, release: async () => {
+					releasing = true;
+					try { await fd.close(); } finally { child.stdin.end('closed\n'); }
+					if (!await exited) throw new Error('Temporary response lease was not released normally');
+				} };
+			}
 			child.stdin.end('opened\n');
 		}
 		if (!await exited || !acknowledged || !handle) throw new Error('Cold materialization failed');
-		return handle;
+		const fd = handle;
+		return { handle: fd, release: () => fd.close() };
 	} catch (error) {
 		child.stdin.destroy(); child.kill();
 		await Promise.all([handle?.close(), exited]); throw error;

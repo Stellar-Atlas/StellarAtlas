@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestRunRecoversLegacySDKTransactionProjectionsOnly(t *testing.T) {
+func TestRunRecoversLegacySDKTransactionAndV3EntryProjections(t *testing.T) {
 	root := t.TempDir()
 	directory := filepath.Join(root, "typed-shard")
 	config := fixtureConfig(root, directory)
@@ -28,7 +28,7 @@ func TestRunRecoversLegacySDKTransactionProjectionsOnly(t *testing.T) {
 	}
 	for _, descriptor := range manifest.Outputs {
 		switch descriptor.Dataset {
-		case "transactions", "transaction-results", "operations":
+		case "transactions", "transaction-results", "operations", "ledger-entry-changes":
 			if err := os.Remove(checkedStoragePath(t, root, descriptor.StorageKey)); err != nil {
 				t.Fatal(err)
 			}
@@ -51,8 +51,14 @@ func TestRunRecoversLegacySDKTransactionProjectionsOnly(t *testing.T) {
 	if _, err := Run(context.Background(), config); err == nil {
 		t.Fatal("accepted an unqualified missing legacy state projection")
 	}
+	for _, schema := range []string{"stellar-atlas.full-history.ledger-entry-changes.v2", "stellar-atlas.full-history.ledger-entry-changes.v4"} {
+		if compatibleReplayFormat(manifest.Format, "ledger-entry-changes", schema) {
+			t.Fatalf("accepted unqualified legacy schema %s", schema)
+		}
+	}
 	manifest.Format.StellarXDRCommit = writerFormat().StellarXDRCommit
-	if compatibleReplayFormat(manifest.Format, "transactions") {
+	if compatibleReplayFormat(manifest.Format, "transactions", "stellar-atlas.full-history.transactions.v2") ||
+		compatibleReplayFormat(manifest.Format, "ledger-entry-changes", "stellar-atlas.full-history.ledger-entry-changes.v3") {
 		t.Fatal("accepted a mismatched historical SDK/XDR pair")
 	}
 }

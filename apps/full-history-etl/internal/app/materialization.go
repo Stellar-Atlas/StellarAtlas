@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,6 +26,7 @@ type MaterializedOutput struct {
 	SHA256    string `json:"sha256"`
 	Dataset   string `json:"dataset"`
 	CacheHit  bool   `json:"cacheHit"`
+	Transient bool   `json:"transient,omitempty"`
 }
 
 // WithMaterializedOutput keeps the cache lock until the consumer has opened and
@@ -41,15 +43,9 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 		return err
 	}
 	// Each input has a 12-byte XDR header; the canonical export has only one.
-	if err := validateRecoveredSources(manifest); err != nil {
+	expectedXdr, err := registeredWireLength(manifest, c.Limits.MaxUncompressedBytes)
+	if err != nil {
 		return err
-	}
-	expectedXdr := int64(12)
-	for _, s := range manifest.SourceObjects {
-		if s.XDRByteCount <= 12 || s.XDRByteCount-12 > c.Limits.MaxUncompressedBytes-expectedXdr {
-			return fmt.Errorf("registered replay exceeds the streaming byte budget")
-		}
-		expectedXdr += s.XDRByteCount - 12
 	}
 	if err := prepareMaterializationCache(c.CacheRoot); err != nil {
 		return err
@@ -70,6 +66,7 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 	key := hex.EncodeToString(keyHash[:]) + "-" + c.ExpectedSourceSHA256
 	leaf := filepath.Join(c.CacheRoot, key)
 	cacheHit := false
+	transient := false
 	if _, err := os.Lstat(leaf); err == nil {
 		if err := validateMaterialization(ctx, leaf, manifest, expected, c.ExpectedSourceSHA256); err != nil {
 			return fmt.Errorf("existing cache entry failed verification; preserve for inspection: %w", err)
@@ -82,7 +79,15 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 		if err != nil {
 			return err
 		}
-		if err := reserveMaterializationCache(c.CacheRoot, c.CacheMaxBytes, budget); err != nil {
+		// Persistent-cache admission and the size of a single response are
+		// separate. Overflow is opt-in, RAM only, and held under this same
+		// inter-process lock until the consumer closes its final file descriptor.
+		if c.CacheMaxBytes < 64<<10 || budget > c.CacheMaxBytes-(64<<10) {
+			if err := admitTransientMaterialization(c.CacheRoot, budget, c.TransientMaxBytes); err != nil {
+				return err
+			}
+			transient = true
+		} else if err := reserveMaterializationCache(c.CacheRoot, c.CacheMaxBytes, budget); err != nil {
 			return err
 		}
 		scratch, err := os.MkdirTemp(c.CacheRoot, ".build-")
@@ -113,7 +118,7 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 		}
 		if _, err := runReconstruction(ctx, TransactionReconstructionConfig{
 			Config: config, ExpectedSourceSHA256: c.ExpectedSourceSHA256,
-		}, &spec); err != nil {
+		}, &spec, manifest.SourceObjects); err != nil {
 			return err
 		}
 		if err := validateMaterialization(ctx, config.OutputPath, manifest, expected, c.ExpectedSourceSHA256); err != nil {
@@ -122,7 +127,9 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := unix.Renameat2(unix.AT_FDCWD, config.OutputPath, unix.AT_FDCWD, leaf, unix.RENAME_NOREPLACE); err != nil {
+		if transient {
+			leaf = config.OutputPath // The existing scratch cleanup runs after the lease callback.
+		} else if err := unix.Renameat2(unix.AT_FDCWD, config.OutputPath, unix.AT_FDCWD, leaf, unix.RENAME_NOREPLACE); err != nil {
 			return fmt.Errorf("publish verified cache entry without replacement: %w", err)
 		}
 		if err := syncDirectory(c.CacheRoot); err != nil {
@@ -147,8 +154,28 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 	return opened(MaterializedOutput{
 		Version: 1, Path: name, Device: strconv.FormatUint(uint64(st.Dev), 10),
 		Inode: strconv.FormatUint(st.Ino, 10), ByteCount: strconv.FormatInt(st.Size, 10),
-		SHA256: expected[c.Dataset].SHA256, Dataset: c.Dataset, CacheHit: cacheHit,
+		SHA256: expected[c.Dataset].SHA256, Dataset: c.Dataset, CacheHit: cacheHit, Transient: transient,
 	})
+}
+
+func registeredWireLength(m Manifest, optionalLimit int64) (int64, error) {
+	// Validates the ordered source ranges, hashes, aggregate count and the
+	// original writer's registered byte limits. Never substitute MaxInt64
+	// for a real size: the decoder receives the exact on-wire length.
+	if err := validateRecoveredSources(m); err != nil {
+		return 0, err
+	}
+	n := int64(12)
+	for _, s := range m.SourceObjects {
+		if s.XDRByteCount <= 12 || s.XDRByteCount-12 > math.MaxInt64-1-n {
+			return 0, fmt.Errorf("invalid registered XDR length")
+		}
+		n += s.XDRByteCount - 12
+	}
+	if optionalLimit < 0 || optionalLimit > 0 && n > optionalLimit {
+		return 0, fmt.Errorf("registered replay exceeds requested byte bound")
+	}
+	return n, nil
 }
 
 func materializationManifest(c MaterializationConfig) (Manifest, map[string]output.Descriptor, error) {
@@ -171,12 +198,12 @@ func materializationManifest(c MaterializationConfig) (Manifest, map[string]outp
 	if err != nil || !isSupportedManifestVersion(manifest.ManifestVersion) {
 		return empty, nil, fmt.Errorf("unsupported original manifest")
 	}
-	if !compatibleReplayFormat(manifest.Format, c.Dataset) {
-		return empty, nil, fmt.Errorf("original writer or replay encoding is not supported")
-	}
 	spec, err := materializationSpec(manifest.ManifestVersion, c.Dataset)
 	if err != nil {
 		return empty, nil, err
+	}
+	if !compatibleReplayFormat(manifest.Format, spec.Dataset, spec.SchemaVersion) {
+		return empty, nil, fmt.Errorf("original writer or replay encoding is not supported")
 	}
 	id := network.ID(c.NetworkPassphrase)
 	if manifest.Network.NetworkIDSHA256 != hex.EncodeToString(id[:]) || validateRecoveredLimits(manifest) != nil ||

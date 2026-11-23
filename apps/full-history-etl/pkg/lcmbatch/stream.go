@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 
@@ -18,6 +19,26 @@ import (
 // either the compressed input or expanded batch in RAM or in a scratch file.
 // Results written by visit remain private until the caller verifies both ends.
 func StreamFile(ctx context.Context, path string, start, end uint32, lim Limits, visit func(xdr.LedgerCloseMeta) error) (*Batch, error) {
+	return streamFile(ctx, path, start, end, lim, nil, visit)
+}
+
+// SourceFrame describes the original uncompressed LedgerCloseMetaBatch,
+// including its original 12-byte start/end/count header. Only this header
+// changes when multiple registered source files are joined into one export.
+type SourceFrame struct {
+	Start, End uint32
+	Bytes      int64
+	SHA256     string
+}
+
+func StreamRegisteredFile(ctx context.Context, path string, start, end uint32, lim Limits, frames []SourceFrame, visit func(xdr.LedgerCloseMeta) error) (*Batch, error) {
+	if len(frames) == 0 || uint64(len(frames)) > lim.MaxLedgers {
+		return nil, fmt.Errorf("invalid registered source frame count")
+	}
+	return streamFile(ctx, path, start, end, lim, frames, visit)
+}
+
+func streamFile(ctx context.Context, path string, start, end uint32, lim Limits, frames []SourceFrame, visit func(xdr.LedgerCloseMeta) error) (*Batch, error) {
 	if err := validateLimits(lim); err != nil {
 		return nil, err
 	}
@@ -53,6 +74,10 @@ func StreamFile(ctx context.Context, path string, start, end uint32, lim Limits,
 		return nil, fmt.Errorf("canonical replay header does not match the registered range")
 	}
 	b := &Batch{Start: start, End: end, LedgerCount: count}
+	var frameLimit *io.LimitedReader
+	var frameHash hash.Hash
+	var ledgerInput io.Reader = wire
+	frameIndex := 0
 	for i := uint64(0); i < count; i++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -60,7 +85,25 @@ func StreamFile(ctx context.Context, path string, start, end uint32, lim Limits,
 		// The input budget and the SDK's allocation/depth budget apply afresh
 		// to THIS ledger, independently of total bytes read across the shard.
 		limit := min(lim.MaxDecodedMemoryBytes, lim.MaxUncompressedBytes)
-		one := &io.LimitedReader{R: wire, N: limit}
+		seq := uint64(start) + i
+		if len(frames) > 0 && frameLimit == nil {
+			if frameIndex >= len(frames) {
+				return nil, fmt.Errorf("missing registered source frame")
+			}
+			spec := frames[frameIndex]
+			if uint64(spec.Start) != seq || spec.End < spec.Start || spec.End > end || spec.Bytes <= 12 {
+				return nil, fmt.Errorf("invalid registered source frame boundary")
+			}
+			var hdr [12]byte
+			binary.BigEndian.PutUint32(hdr[:4], spec.Start)
+			binary.BigEndian.PutUint32(hdr[4:8], spec.End)
+			binary.BigEndian.PutUint32(hdr[8:], spec.End-spec.Start+1)
+			frameHash = sha256.New()
+			frameHash.Write(hdr[:])
+			frameLimit = &io.LimitedReader{R: wire, N: spec.Bytes - 12}
+			ledgerInput = io.TeeReader(frameLimit, frameHash)
+		}
+		one := &io.LimitedReader{R: ledgerInput, N: limit}
 		var m xdr.LedgerCloseMeta
 		n, err := xdr.UnmarshalWithOptions(one, &m, xdr.DecodeOptions{MaxDepth: maxXDRDepth, MaxInputLen: int(limit), MaxMemoryBytes: lim.MaxDecodedMemoryBytes})
 		if err != nil || n <= 0 || int64(n) != limit-one.N {
@@ -77,11 +120,19 @@ func StreamFile(ctx context.Context, path string, start, end uint32, lim Limits,
 			b.FirstPreviousHash = h.Header.PreviousLedgerHash
 		}
 		b.LastLedgerHash = h.Hash
+		if len(frames) > 0 && seq == uint64(frames[frameIndex].End) {
+			if frameLimit.N != 0 || hex.EncodeToString(frameHash.Sum(nil)) != frames[frameIndex].SHA256 {
+				return nil, fmt.Errorf("registered source XDR length or digest mismatch for %d-%d", frames[frameIndex].Start, frames[frameIndex].End)
+			}
+			frameIndex++
+			frameLimit = nil
+			ledgerInput = wire
+		}
 		if err := visit(m); err != nil {
 			return nil, err
 		}
 	}
-	if _, err := wire.ReadByte(); err != io.EOF || total.N == 0 || compressed.N != 0 {
+	if _, err := wire.ReadByte(); err != io.EOF || total.N == 0 || compressed.N != 0 || frameIndex != len(frames) {
 		return nil, fmt.Errorf("canonical replay has trailing, oversized or incomplete bytes")
 	}
 	b.CompressedBytes = st.Size()
