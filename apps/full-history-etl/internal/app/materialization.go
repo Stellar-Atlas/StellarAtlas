@@ -41,6 +41,17 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 	if err != nil {
 		return err
 	}
+	// Each input has a 12-byte XDR header; the canonical export has only one.
+	if err := validateRecoveredSources(manifest); err != nil {
+		return err
+	}
+	expectedXdr := int64(12)
+	for _, s := range manifest.SourceObjects {
+		if s.XDRByteCount <= 12 || s.XDRByteCount-12 > c.Limits.MaxUncompressedBytes-expectedXdr {
+			return fmt.Errorf("registered replay exceeds the streaming byte budget")
+		}
+		expectedXdr += s.XDRByteCount - 12
+	}
 	if err := prepareMaterializationCache(c.CacheRoot); err != nil {
 		return err
 	}
@@ -85,9 +96,9 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 			TypedOutputRoot: scratch, OutputPath: filepath.Join(scratch, "output"),
 			NetworkName: manifest.Network.Name, NetworkPassphrase: c.NetworkPassphrase,
 			StartLedger: manifest.Range.StartLedger, EndLedger: manifest.Range.EndLedger,
-			MaxCompressedBytes: c.Limits.MaxCompressedBytes, MaxUncompressedBytes: c.Limits.MaxUncompressedBytes,
-			MaxDecodedMemoryBytes: c.Limits.MaxDecodedMemoryBytes, MaxLedgers: c.Limits.MaxLedgers,
-			MaxRows: c.Limits.MaxRows,
+			MaxCompressedBytes: c.Limits.MaxCompressedBytes, MaxUncompressedBytes: expectedXdr,
+			MaxDecodedMemoryBytes: c.Limits.MaxDecodedMemoryBytes, MaxLedgers: manifest.Range.LedgerCount,
+			MaxRows: max(1, expected[c.Dataset].RecordCount),
 		}
 		// A completed original manifest gives an exact output budget. A different
 		// writer is never allowed to expand the cache or return different bytes.

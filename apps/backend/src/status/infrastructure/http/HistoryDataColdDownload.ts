@@ -67,7 +67,7 @@ export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: str
 				if (!sourceStat.isFile() || sourceStat.size.toString() !== source.byteCount ||
 					await realpath(manifest) !== manifest || await realpath(cache) !== cache)
 					throw new Error('Unsafe cold-download input');
-				return materialize(packagedMaterializer, cache, capacity, networkPassphrase, original, manifest, plan, output);
+				return materialize(packagedMaterializer, cache, capacity, networkPassphrase, original, manifest, plan, output, source.byteCount);
 			})() };
 			entry.users++;
 			const release = async (): Promise<void> => {
@@ -87,12 +87,22 @@ function within(root: string, path: string): boolean {
 }
 
 async function materialize(binary: string, cache: string, capacity: string, passphrase: string,
-	source: string, manifest: string, plan: ColdPlan, output: ColdOutput): Promise<FileHandle> {
+	source: string, manifest: string, plan: ColdPlan, output: ColdOutput, sourceBytes: string): Promise<FileHandle> {
+	// Byte counts are from the catalogue and were checked against the opened
+	// source metadata. Keep the existing compressed-input and writer ceilings.
+	if (!/^[1-9]\d{0,17}$/.test(sourceBytes) || BigInt(sourceBytes) > 256n * 1024n * 1024n ||
+		!/^[1-9]\d{0,17}$/.test(output.byteCount) || BigInt(output.byteCount) > 8n * 1024n ** 3n)
+		throw new Error('Cold projection exceeds the supported size envelope');
 	const child = spawn(binary, ['--canonical', source, '--manifest', manifest,
 		'--expected-manifest-sha256', plan.manifestSha256, '--expected-source-sha256', plan.canonicalSha256,
 		'--dataset', output.dataset, '--cache-root', cache, '--cache-max-bytes', capacity,
+		// 2 GiB is the aggregate streaming I/O envelope for the measured
+		// historical shard, not a memory allocation. The native reader derives
+		// exact row, range and wire limits from the digest-verified manifest.
+		'--max-ledgers', '1024', '--max-uncompressed-bytes', '2147483648',
+		'--max-compressed-bytes', sourceBytes, '--max-output-bytes', output.byteCount,
 		'--network-passphrase', passphrase], { shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'],
-		env: { LANG: 'C' } });
+		env: { LANG: 'C', GOMAXPROCS: '1', GOMEMLIMIT: '512MiB' } });
 	// Only a small receipt crosses stdout; the complete Parquet never enters JS memory.
 	const exited = new Promise<boolean>(done => {
 		child.once('error', () => done(false));

@@ -77,7 +77,7 @@ func (p *Processor) Process(ctx context.Context, batch *batchinput.Batch, maxDec
 		if meta.LedgerSequence() != expectedSequence {
 			return fmt.Errorf("decoded ledger sequence %d does not match expected sequence %d", meta.LedgerSequence(), expectedSequence)
 		}
-		if err := p.processLedgerSafely(meta); err != nil {
+		if err := p.ProcessLedger(meta); err != nil {
 			return fmt.Errorf("transform ledger %d: %w", expectedSequence, err)
 		}
 		expectedSequence++
@@ -92,7 +92,7 @@ func (p *Processor) Process(ctx context.Context, batch *batchinput.Batch, maxDec
 	return nil
 }
 
-func (p *Processor) processLedgerSafely(meta xdr.LedgerCloseMeta) (err error) {
+func (p *Processor) ProcessLedger(meta xdr.LedgerCloseMeta) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = fmt.Errorf("stellar SDK rejected semantic XDR: %v", recovered)
