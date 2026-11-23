@@ -18,6 +18,44 @@ type eventCounts struct {
 
 func (p *Processor) processTransaction(transaction *ledgerTransaction) error {
 	transactionHash := hex.EncodeToString(transaction.Hash[:])
+	if p.wants("transactions") {
+		if err := p.writeTransaction(transaction, transactionHash); err != nil {
+			return err
+		}
+	}
+	if p.wants("transaction-results") {
+		if err := p.writeTransactionResult(transaction, transactionHash); err != nil {
+			return err
+		}
+	}
+	if p.wants("operations") {
+		if err := p.writeOperations(transaction, transactionHash); err != nil {
+			return err
+		}
+	}
+	if p.transactionsOnly {
+		return nil
+	}
+	var events eventCounts
+	var changes changeCounts
+	var err error
+	if p.wants("contract-events") || p.wants("transaction-meta") {
+		if events, err = p.writeEvents(transaction, transactionHash); err != nil {
+			return err
+		}
+	}
+	if p.needsChanges() || p.wants("transaction-meta") {
+		if changes, err = p.writeTransactionChanges(transaction, transactionHash); err != nil {
+			return err
+		}
+	}
+	if p.wants("transaction-meta") {
+		return p.writeTransactionMeta(transaction, transactionHash, events, changes)
+	}
+	return nil
+}
+
+func (p *Processor) writeTransaction(transaction *ledgerTransaction, transactionHash string) error {
 	sequence := int64(transaction.Ledger.LedgerSequence())
 	closedAt, err := unixMillis(uint64(transaction.Ledger.LedgerCloseTime()))
 	if err != nil {
@@ -68,28 +106,7 @@ func (p *Processor) processTransaction(transaction *ledgerTransaction) error {
 	if err := p.claim("transactions", 1); err != nil {
 		return err
 	}
-	if err := p.outputs.Transactions.Write(transactionRow); err != nil {
-		return err
-	}
-
-	if err := p.writeTransactionResult(transaction, transactionHash); err != nil {
-		return err
-	}
-	if err := p.writeOperations(transaction, transactionHash); err != nil {
-		return err
-	}
-	if p.transactionsOnly {
-		return nil
-	}
-	events, err := p.writeEvents(transaction, transactionHash)
-	if err != nil {
-		return err
-	}
-	changes, err := p.writeTransactionChanges(transaction, transactionHash)
-	if err != nil {
-		return err
-	}
-	return p.writeTransactionMeta(transaction, transactionHash, events, changes)
+	return p.outputs.Transactions.Write(transactionRow)
 }
 
 func (p *Processor) writeTransactionResult(transaction *ledgerTransaction, transactionHash string) error {

@@ -8,6 +8,15 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 type Canonical = { path: string; byteCount: string };
+export const COLD_PROJECTION_DATASETS = ['ledgers', 'transactions', 'transaction-results', 'operations',
+	'transaction-meta', 'contract-events', 'ledger-entry-changes', 'account-state-changes', 'trustline-state-changes'] as const;
+export type ColdProjectionDataset = (typeof COLD_PROJECTION_DATASETS)[number];
+export function isColdProjectionDataset(value: string): value is ColdProjectionDataset {
+	return COLD_PROJECTION_DATASETS.some(dataset => dataset === value);
+}
+export type ColdOutput = Pick<DerivedOutputRetirement, 'outputSha256' | 'byteCount' | 'storageKey'> &
+	{ dataset: ColdProjectionDataset; transformRevision?: string };
+export type ColdPlan = Pick<DerivedOutputRecovery, 'batchId' | 'manifestSha256' | 'canonicalSha256'>;
 type Lease = { handle: FileHandle; release(): Promise<void> };
 const packagedMaterializer = fileURLToPath(new URL('../../../../bin/stellaratlas-full-history-materialize', import.meta.url));
 
@@ -18,8 +27,8 @@ export function checkedHistoryStorageRoot(value: string): string {
 	return value;
 }
 export interface HistoryColdReader {
-	supports(output: DerivedOutputRetirement): boolean;
-	acquire(plan: DerivedOutputRecovery, output: DerivedOutputRetirement,
+	supports(output: ColdOutput): boolean;
+	acquire(plan: ColdPlan, output: ColdOutput,
 		canonical: () => Promise<Canonical>): Promise<Lease>;
 }
 
@@ -40,8 +49,8 @@ export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: str
 	type Active = { key: string; users: number; ready: Promise<FileHandle> };
 	let active: Active | undefined;
 	return {
-		supports: output => output.transformRevision === revision && BigInt(output.byteCount) <= BigInt(capacity) &&
-			['transactions', 'transaction-results', 'operations'].includes(output.dataset),
+		supports: output => (output.transformRevision === undefined || output.transformRevision === revision) && BigInt(output.byteCount) <= BigInt(capacity) &&
+			isColdProjectionDataset(output.dataset),
 		async acquire(plan, output, canonical) {
 			const key = [plan.batchId, plan.manifestSha256, output.dataset, output.outputSha256].join(':');
 			// No backlog: share one immutable FD among identical requests (each stream
@@ -78,7 +87,7 @@ function within(root: string, path: string): boolean {
 }
 
 async function materialize(binary: string, cache: string, capacity: string, passphrase: string,
-	source: string, manifest: string, plan: DerivedOutputRecovery, output: DerivedOutputRetirement): Promise<FileHandle> {
+	source: string, manifest: string, plan: ColdPlan, output: ColdOutput): Promise<FileHandle> {
 	const child = spawn(binary, ['--canonical', source, '--manifest', manifest,
 		'--expected-manifest-sha256', plan.manifestSha256, '--expected-source-sha256', plan.canonicalSha256,
 		'--dataset', output.dataset, '--cache-root', cache, '--cache-max-bytes', capacity,
@@ -121,8 +130,8 @@ async function materialize(binary: string, cache: string, capacity: string, pass
 	}
 }
 
-export async function serveColdHistoryDownload(req: Request, res: Response, plan: DerivedOutputRecovery,
-	output: DerivedOutputRetirement, mediaType: string, reader: HistoryColdReader, canonical: () => Promise<Canonical>) {
+export async function serveColdHistoryDownload(req: Request, res: Response, plan: ColdPlan,
+	output: ColdOutput, mediaType: string, reader: HistoryColdReader, canonical: () => Promise<Canonical>) {
 	return serveHistoryDescriptor(req, res, { byteCount: output.byteCount, sha256: output.outputSha256,
 		filename: output.dataset + '.parquet', mediaType, reconstructed: true }, () => reader.acquire(plan, output, canonical));
 }

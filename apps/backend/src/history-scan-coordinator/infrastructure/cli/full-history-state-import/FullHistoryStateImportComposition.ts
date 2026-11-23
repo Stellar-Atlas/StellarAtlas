@@ -6,6 +6,7 @@ import { TypeOrmFullHistoryStateCanonicalCoverageRepository } from '../../databa
 import { FullHistoryStateRegistrationCoordinator } from './FullHistoryStateRegistrationCoordinator.js';
 import { GoFullHistoryLedgerExporter } from '../../full-history-state-import/GoFullHistoryLedgerExporter.js';
 import { GoFullHistoryStateExporter } from '../../full-history-state-import/GoFullHistoryStateExporter.js';
+import { coldStateImportSource } from '../../full-history-state-import/ColdStateImportSource.js';
 import { createBoundedFullHistoryTypedExportRunner } from '../../full-history-state-import/BoundedFullHistoryTypedExportRunner.js';
 import { BindNextFullHistoryStateCoverage } from '../../../use-cases/bind-next-full-history-state-coverage/BindNextFullHistoryStateCoverage.js';
 import { ImportNextFullHistoryStateDataset } from '../../../use-cases/import-next-full-history-state-dataset/ImportNextFullHistoryStateDataset.js';
@@ -54,6 +55,11 @@ export function composeFullHistoryStateImportWorkers(
 	createWorkerId: () => string = randomUUID
 ): readonly FullHistoryStateImportWorker[] {
 	const repository = new TypeOrmFullHistoryStateImportRepository(dataSource);
+	const coldSource = coldStateImportSource(
+		dataSource,
+		config.storageRoot,
+		process.env
+	);
 	const coverageRepository =
 		new TypeOrmFullHistoryStateCanonicalCoverageRepository(dataSource);
 	const registration = new FullHistoryStateRegistrationCoordinator(
@@ -114,7 +120,8 @@ export function composeFullHistoryStateImportWorkers(
 				storageRoot: config.storageRoot,
 				workerId
 			},
-			registerPending
+			registerPending,
+			coldSource
 		);
 		const coverage = new BindNextFullHistoryStateCoverage(
 			coverageRepository,

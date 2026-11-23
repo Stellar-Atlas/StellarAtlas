@@ -25,6 +25,7 @@ export interface FullHistoryStateExporter {
 		readonly claim: FullHistoryStateImportClaim;
 		readonly consumeRow: (row: FullHistoryStateChange) => Promise<void>;
 		readonly inputPath: string;
+		readonly inputFd?: number;
 		readonly signal: AbortSignal;
 	}): Promise<{
 		readonly recordCount: bigint;
@@ -40,6 +41,11 @@ export interface ImportNextFullHistoryStateDatasetConfig {
 	readonly workerId: string;
 }
 
+export type ColdStateImportSource = (
+	claim: FullHistoryStateImportClaim,
+	signal: AbortSignal
+) => Promise<{ readonly fd: number; release(): Promise<void> }>;
+
 export class ImportNextFullHistoryStateDataset {
 	private readonly registerPending: () => Promise<void>;
 
@@ -47,7 +53,8 @@ export class ImportNextFullHistoryStateDataset {
 		private readonly repository: FullHistoryStateImportRepository,
 		private readonly exporter: FullHistoryStateExporter,
 		private readonly config: ImportNextFullHistoryStateDatasetConfig,
-		registerPending?: () => Promise<void>
+		registerPending?: () => Promise<void>,
+		private readonly coldSource?: ColdStateImportSource
 	) {
 		this.registerPending =
 			registerPending ??
@@ -104,12 +111,6 @@ export class ImportNextFullHistoryStateDataset {
 		signal: AbortSignal,
 		terminal: FullHistoryBackfillLeaseTerminal
 	): Promise<FullHistoryStateImportReceipt> {
-		const inputPath = await verifiedFullHistoryDatasetPath(
-			this.config.storageRoot,
-			claim.storageKey,
-			claim.sourceSha256,
-			signal
-		);
 		const accounts: FullHistoryStateRowEvidence<FullHistoryAccountStateChange>[] =
 			[];
 		const trustlines: FullHistoryStateRowEvidence<FullHistoryTrustlineStateChange>[] =
@@ -139,12 +140,7 @@ export class ImportNextFullHistoryStateDataset {
 				await this.repository.storeTrustlineRows(claim, trustlines.splice(0));
 			}
 		};
-		const exportResult = await this.exporter.export({
-			claim,
-			consumeRow,
-			inputPath,
-			signal
-		});
+		const exportResult = await this.exportInput(claim, consumeRow, signal);
 		if (exportResult.sourceSha256 !== claim.sourceSha256) {
 			throw new Error(
 				'State exporter source digest does not match its manifest'
@@ -175,6 +171,43 @@ export class ImportNextFullHistoryStateDataset {
 			recordCount: exportedRows,
 			rowSetSha256
 		});
+	}
+
+	private async exportInput(
+		claim: FullHistoryStateImportClaim,
+		consumeRow: (row: FullHistoryStateChange) => Promise<void>,
+		signal: AbortSignal
+	) {
+		let inputPath: string;
+		try {
+			inputPath = await verifiedFullHistoryDatasetPath(
+				this.config.storageRoot,
+				claim.storageKey,
+				claim.sourceSha256,
+				signal
+			);
+		} catch (error) {
+			if (
+				!this.coldSource ||
+				(error as NodeJS.ErrnoException)?.code !== 'ENOENT'
+			)
+				throw error;
+			signal.throwIfAborted();
+			const lease = await this.coldSource(claim, signal);
+			try {
+				signal.throwIfAborted();
+				return await this.exporter.export({
+					claim,
+					consumeRow,
+					signal,
+					inputPath: '/proc/self/fd/3',
+					inputFd: lease.fd
+				});
+			} finally {
+				await lease.release();
+			}
+		}
+		return this.exporter.export({ claim, consumeRow, inputPath, signal });
 	}
 }
 

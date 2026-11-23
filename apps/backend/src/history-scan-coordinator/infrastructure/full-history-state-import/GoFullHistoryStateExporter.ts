@@ -19,6 +19,7 @@ export class GoFullHistoryStateExporter implements FullHistoryStateExporter {
 		return runGoFullHistoryStateExport(
 			{
 				args: ['--dataset', input.claim.dataset, '--input', input.inputPath],
+				inputFd: input.inputFd,
 				consumeRow: input.consumeRow,
 				dataset: input.claim.dataset,
 				executablePath: this.executablePath,
