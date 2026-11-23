@@ -224,6 +224,7 @@ func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory,
 	var totalRows uint64
 	var totalBytes int64
 	var transactionCount *uint64
+	canonicalVerified := false
 	for index, specification := range specifications {
 		descriptor := manifest.Outputs[index]
 		if descriptor.Dataset != specification.Dataset ||
@@ -259,8 +260,17 @@ func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory,
 			(transactionCount == nil || descriptor.RecordCount != *transactionCount) {
 			return fmt.Errorf("%s count does not match transaction count", descriptor.Dataset)
 		}
-		policy := retirement[descriptor.Dataset]
+		policy, explicitRetirement := retirement[descriptor.Dataset]
 		filePath := filepath.Join(publishPath, specification.Filename)
+		// A committed manifest keeps the exact original descriptor even when a
+		// regenerable export is cold. Never infer this for canonical replay, an
+		// unsupported historical row model, or an explicitly pending retirement.
+		// Present outputs remain strict: corruption is not cache absence.
+		if !explicitRetirement && canonicalVerified && descriptor.Representation == "typed-projection" && output.SupportsProjection(specification) {
+			if _, err := os.Lstat(filePath); os.IsNotExist(err) {
+				continue
+			}
+		}
 		if policy.PhysicallyRemoved || policy.NamespaceRemoved {
 			_, err := os.Lstat(filePath)
 			if os.IsNotExist(err) {
@@ -275,6 +285,9 @@ func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory,
 		}
 		if err := validateOutputFile(filePath, descriptor); err != nil {
 			return fmt.Errorf("validate %s: %w", descriptor.Dataset, err)
+		}
+		if descriptor.Dataset == "ledger-close-meta" && descriptor.Representation == "lossless-replay" {
+			canonicalVerified = true
 		}
 		expectedFiles[specification.Filename] = struct{}{}
 	}

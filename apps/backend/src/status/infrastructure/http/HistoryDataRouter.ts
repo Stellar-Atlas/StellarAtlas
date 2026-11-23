@@ -11,7 +11,7 @@ import {
 	type FullHistoryLedgerCloseMetaDataset
 } from '@history-scan-coordinator/domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { readFullHistoryLedgerCloseMetaCoverage } from '../../use-cases/get-full-history-status/FullHistoryLedgerCloseMetaCoverage.js';
-import { checkedHistoryStorageRoot, serveColdHistoryDownload, serveHistoryDescriptor, type ColdOutput, type ColdPlan, type HistoryColdReader } from './HistoryDataColdDownload.js';
+import { checkedHistoryStorageRoot, isColdProjectionDataset, serveColdHistoryDownload, serveHistoryDescriptor, type ColdOutput, type ColdPlan, type HistoryColdReader } from './HistoryDataColdDownload.js';
 
 export interface HistoryDataRouterConfig {
 	readonly dataSource: DataSource;
@@ -191,7 +191,7 @@ export const HistoryDataRouterWrapper = (
 				} catch (error) {
 					// A retirement may have committed between our snapshot and open.
 					if ((error as NodeJS.ErrnoException).code !== 'ENOENT' ||
-						!RETIRABLE_DERIVED_DATASETS.some(name => name === dataset)) throw error;
+						!isColdProjectionDataset(dataset)) throw error;
 					plan = await readPlan();
 					retirement = plan?.outputs.find(output => output.dataset === dataset);
 					if (!retirement) {
@@ -200,7 +200,7 @@ export const HistoryDataRouterWrapper = (
 						if (!identity) throw error;
 						const coldPlan: ColdPlan = { batchId: req.params.batchId, manifestSha256: digest(identity.manifestSha256),
 							canonicalSha256: digest(identity.canonicalSha256) };
-						const output: ColdOutput = { dataset: dataset as ColdOutput['dataset'], outputSha256: digest(artifact.sha256),
+						const output: ColdOutput = { dataset, outputSha256: digest(artifact.sha256),
 							byteCount: unsignedString(artifact.byteCount, 'byteCount'), storageKey: artifact.storageKey };
 						if (!config.coldReader?.supports(output)) throw error;
 						return await serveColdHistoryDownload(req, res, coldPlan, output, artifact.mediaType, config.coldReader,

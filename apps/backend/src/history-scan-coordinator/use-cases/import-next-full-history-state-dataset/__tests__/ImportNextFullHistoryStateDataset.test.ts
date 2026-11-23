@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, open, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { bindColdStateImport } from '../../../infrastructure/full-history-state-import/ColdStateImportSource.js';
 import { fullHistoryLedgerCloseMetaSha256Digest } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import type { FullHistoryAccountStateChange } from '../../../domain/full-history-state-import/FullHistoryStateExport.js';
 import type {
@@ -77,18 +78,145 @@ describe('ImportNextFullHistoryStateDataset', () => {
 				})
 			)
 		};
+		const cold = jest.fn();
 		const useCase = new ImportNextFullHistoryStateDataset(
 			repository,
 			exporter,
-			config(root, 2)
+			config(root, 2),
+			undefined,
+			cold
 		);
 
 		await expect(useCase.execute(new AbortController().signal)).rejects.toThrow(
 			'digest'
 		);
 		expect(exporter.export).not.toHaveBeenCalled();
+		expect(cold).not.toHaveBeenCalled();
 		expect(repository.failed?.message).toContain('digest');
 	});
+
+	it('uses the committed batch and both exact descriptors without a retirement record', async () => {
+		const network = Buffer.alloc(32, 21);
+		const canonicalSha256 = 'c'.repeat(64);
+		const claim = {
+			...accountClaim(digest(bytes), 3n),
+			storageKey: 'account-state-changes.parquet'
+		};
+		const output = {
+			startLedger: String(claim.startLedger),
+			endLedger: String(claim.endLedger),
+			storageKey: claim.storageKey,
+			outputSha256: claim.sourceSha256,
+			byteCount: String(bytes.length),
+			recordCount: '3',
+			manifestSha256: '1'.repeat(64),
+			canonicalSha256,
+			canonicalKey: 'ledger-close-meta.xdr.zst',
+			canonicalBytes: '199'
+		};
+		const query = jest.fn(async (sql: string, parameters: unknown[]) => {
+			expect(sql).toContain('from full_history_ledger_close_meta_batch');
+			expect(sql).not.toMatch(/retirement|to_regclass/);
+			expect(parameters).toEqual([
+				network,
+				claim.batchId,
+				claim.dataset,
+				'stellar-atlas.full-history.account-state-changes.v1'
+			]);
+			return [output];
+		});
+		const handle = await open(join(root, 'account.parquet'), 'r');
+		const release = jest.fn(async () => {});
+		const acquire = jest.fn(
+			async (
+				plan: unknown,
+				out: unknown,
+				canonical: () => Promise<{ path: string; byteCount: string }>
+			) => {
+				expect(plan).toEqual({
+					batchId: claim.batchId,
+					manifestSha256: output.manifestSha256,
+					canonicalSha256
+				});
+				expect(out).toEqual({
+					dataset: claim.dataset,
+					byteCount: output.byteCount,
+					storageKey: claim.storageKey,
+					outputSha256: claim.sourceSha256
+				});
+				expect(await canonical()).toEqual({
+					path: join(await realpath(root), 'ledger-close-meta.xdr.zst'),
+					byteCount: '199'
+				});
+				return { handle, release };
+			}
+		);
+		const resolve = bindColdStateImport(
+			{ query: query as Parameters<typeof bindColdStateImport>[0]['query'] },
+			await realpath(root),
+			network,
+			{ supports: () => true, acquire }
+		);
+		try {
+			await expect(
+				resolve(
+					{ ...claim, endLedger: claim.endLedger + 1 },
+					new AbortController().signal
+				)
+			).rejects.toThrow('matching committed dataset');
+			await expect(
+				resolve(
+					{ ...claim, sourceSha256: digest(Buffer.from('wrong')) },
+					new AbortController().signal
+				)
+			).rejects.toThrow('matching committed dataset');
+			output.canonicalKey = '../ledger-close-meta.xdr.zst';
+			await expect(
+				resolve(claim, new AbortController().signal)
+			).rejects.toThrow('Invalid retained canonical');
+			output.canonicalKey = 'ledger-close-meta.xdr.zst';
+			expect(acquire).not.toHaveBeenCalled();
+			const lease = await resolve(claim, new AbortController().signal);
+			expect(lease.fd).toBe(handle.fd);
+			await lease.release();
+			expect(release).toHaveBeenCalledTimes(1);
+		} finally {
+			await handle.close();
+		}
+	});
+
+	it.each(['account-state-changes', 'trustline-state-changes'] as const)(
+		'reads a missing authorized %s source using a held descriptor and releases it',
+		async (dataset) => {
+			const claim = {
+				...accountClaim(digest(bytes), 0n),
+				dataset,
+				storageKey: dataset + '.parquet'
+			};
+			const repository = new RecordingRepository(claim);
+			const release = jest.fn(async () => {});
+			const cold = jest.fn(async () => ({ fd: 17, release }));
+			const exporter: FullHistoryStateExporter = {
+				export: async (input) => {
+					expect(input.inputFd).toBe(17);
+					expect(input.inputPath).toBe('/proc/self/fd/3');
+					expect(release).not.toHaveBeenCalled();
+					return { recordCount: 0n, sourceSha256: claim.sourceSha256 };
+				}
+			};
+			const useCase = new ImportNextFullHistoryStateDataset(
+				repository,
+				exporter,
+				config(root, 2),
+				undefined,
+				cold
+			);
+			await expect(
+				useCase.execute(new AbortController().signal)
+			).resolves.toMatchObject({ dataset, recordCount: 0n });
+			expect(release).toHaveBeenCalledTimes(1);
+		}
+	);
 
 	it('refuses an exporter digest that differs from the claimed manifest', async () => {
 		const claim = accountClaim(digest(bytes), 0n);

@@ -1,5 +1,4 @@
 import type { DerivedOutputRecovery, DerivedOutputRetirement } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
-import { RETIRABLE_DERIVED_DATASETS } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import type { Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
@@ -9,8 +8,14 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 type Canonical = { path: string; byteCount: string };
-export type ColdOutput = Pick<DerivedOutputRetirement, 'dataset' | 'outputSha256' | 'byteCount' | 'storageKey'> &
-	{ transformRevision?: string };
+export const COLD_PROJECTION_DATASETS = ['ledgers', 'transactions', 'transaction-results', 'operations',
+	'transaction-meta', 'contract-events', 'ledger-entry-changes', 'account-state-changes', 'trustline-state-changes'] as const;
+export type ColdProjectionDataset = (typeof COLD_PROJECTION_DATASETS)[number];
+export function isColdProjectionDataset(value: string): value is ColdProjectionDataset {
+	return COLD_PROJECTION_DATASETS.some(dataset => dataset === value);
+}
+export type ColdOutput = Pick<DerivedOutputRetirement, 'outputSha256' | 'byteCount' | 'storageKey'> &
+	{ dataset: ColdProjectionDataset; transformRevision?: string };
 export type ColdPlan = Pick<DerivedOutputRecovery, 'batchId' | 'manifestSha256' | 'canonicalSha256'>;
 type Lease = { handle: FileHandle; release(): Promise<void> };
 const packagedMaterializer = fileURLToPath(new URL('../../../../bin/stellaratlas-full-history-materialize', import.meta.url));
@@ -45,7 +50,7 @@ export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: str
 	let active: Active | undefined;
 	return {
 		supports: output => (output.transformRevision === undefined || output.transformRevision === revision) && BigInt(output.byteCount) <= BigInt(capacity) &&
-			RETIRABLE_DERIVED_DATASETS.includes(output.dataset),
+			isColdProjectionDataset(output.dataset),
 		async acquire(plan, output, canonical) {
 			const key = [plan.batchId, plan.manifestSha256, output.dataset, output.outputSha256].join(':');
 			// No backlog: share one immutable FD among identical requests (each stream

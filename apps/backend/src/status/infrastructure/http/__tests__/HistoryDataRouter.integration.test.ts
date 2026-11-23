@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import request from 'supertest';
 import { mock, type MockProxy } from 'jest-mock-extended';
@@ -7,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { historyDataRouter } from '../HistoryDataRouter.js';
-import { checkedHistoryStorageRoot, historyColdReader } from '../HistoryDataColdDownload.js';
+import { checkedHistoryStorageRoot, historyColdReader, COLD_PROJECTION_DATASETS, isColdProjectionDataset } from '../HistoryDataColdDownload.js';
 
 describe('HistoryDataRouter.integration', () => {
 	let app: express.Application;
@@ -242,6 +243,21 @@ describe('HistoryDataRouter.integration', () => {
 		});
 		await request(cold).get(download).expect(200).expect('X-Atlas-Artifact-Source', 'reconstructed')
 			.expect(r => expect(r.text).toBe('data'));
+	});
+
+	it('shares the native projection capabilities with downloads and state imports', () => {
+		const reader = historyColdReader({
+			FULL_HISTORY_COLD_EXECUTABLE: fileURLToPath(new URL('../../../../../bin/stellaratlas-full-history-materialize', import.meta.url)),
+			FULL_HISTORY_COLD_CACHE_ROOT: '/private-cold-cache', FULL_HISTORY_COLD_CACHE_MAX_BYTES: '67108864',
+			FULL_HISTORY_COLD_TRANSFORM_REVISION: '06'.repeat(20)
+		}, 'Public Global Stellar Network ; September 2015', '/registered-history');
+		expect(reader).toBeDefined();
+		expect(COLD_PROJECTION_DATASETS).toHaveLength(9);
+		for (const dataset of COLD_PROJECTION_DATASETS) {
+			expect(reader?.supports({ dataset, storageKey: dataset + '.parquet', byteCount: '4', outputSha256: '03'.repeat(32) })).toBe(true);
+		}
+		expect(isColdProjectionDataset('ledger-close-meta')).toBe(false);
+		expect(isColdProjectionDataset('unknown')).toBe(false);
 	});
 
 	it('rejects invalid dataset and batch identifiers without a query', async () => {

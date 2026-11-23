@@ -5,6 +5,8 @@ const maximumStderrBytes = 64 << 10;
 const terminationGraceMilliseconds = 5_000;
 
 export interface GoFullHistoryTypedExportRequest {
+	/** A held, verified, read-only materialized Parquet file inherited as FD 3. */
+	readonly inputFd?: number;
 	readonly args: readonly string[];
 	readonly consumeOutput: (
 		output: AsyncIterable<Uint8Array>
@@ -33,6 +35,11 @@ export async function runGoFullHistoryTypedExport(
 		);
 	}
 
+	if (
+		request.inputFd !== undefined &&
+		(!Number.isSafeInteger(request.inputFd) || request.inputFd < 3)
+	)
+		throw new Error('Invalid state input file descriptor');
 	const child = spawn(request.executablePath, [...request.args], {
 		env: {
 			GOMAXPROCS: '1',
@@ -41,8 +48,16 @@ export async function runGoFullHistoryTypedExport(
 			TZ: 'UTC'
 		},
 		shell: false,
-		stdio: ['ignore', 'pipe', 'pipe']
+		stdio:
+			request.inputFd === undefined
+				? ['ignore', 'pipe', 'pipe']
+				: ['ignore', 'pipe', 'pipe', request.inputFd]
 	});
+	const { stdout, stderr: childStderr } = child;
+	if (!stdout || !childStderr) {
+		child.kill();
+		throw new Error('Typed exporter requires output pipes');
+	}
 	const stderr: Buffer[] = [];
 	let stderrBytes = 0;
 	let terminalFailure: Error | null = null;
@@ -51,7 +66,7 @@ export async function runGoFullHistoryTypedExport(
 	let terminationTimer: NodeJS.Timeout | null = null;
 	let closed = false;
 
-	child.stderr.on('data', (chunk: Buffer) => {
+	childStderr.on('data', (chunk: Buffer) => {
 		const remaining = maximumStderrBytes - stderrBytes;
 		if (remaining <= 0) return;
 		const retained = chunk.subarray(0, remaining);
@@ -96,14 +111,18 @@ export async function runGoFullHistoryTypedExport(
 	timeoutTimer.unref();
 
 	const close = waitForChildClose(child, request.label);
-	const consumption = request.consumeOutput(child.stdout);
+	const consumption = request.consumeOutput(stdout);
 	consumption.catch((error: unknown) => {
 		outputFailure ??= processFailure(
 			error,
 			`${request.label} output was rejected`
 		);
-		stoppedForOutputFailure = true;
-		stopChild();
+		// At natural EOF, wait for the process exit status. Otherwise a useful
+		// nonzero diagnostic can be replaced by a misleading missing-header error.
+		if (!stdout.readableEnded) {
+			stoppedForOutputFailure = true;
+			stopChild();
+		}
 	});
 
 	try {
