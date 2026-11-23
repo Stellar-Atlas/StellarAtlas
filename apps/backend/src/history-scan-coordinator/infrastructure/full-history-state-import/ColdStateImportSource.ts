@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hash as stellarProtocolHash } from '@stellar/stellar-sdk';
 import { lstat, realpath } from 'node:fs/promises';
 import {
 	basename,
@@ -33,7 +33,7 @@ export function coldStateImportSource(
 	return bindColdStateImport(
 		db,
 		root,
-		createHash('sha256').update(network).digest(),
+		Buffer.from(stellarProtocolHash(Buffer.from(network))),
 		reader
 	);
 }
