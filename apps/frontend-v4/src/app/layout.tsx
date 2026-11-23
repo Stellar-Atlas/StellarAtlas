@@ -13,6 +13,7 @@ import './graph-detail-panels.css';
 import './graph-interactions.css';
 import './blockchain-explorer.css';
 import './explorer-operation-table.css';
+import './explorer-evidence-rows.css';
 import './status.css';
 import './operations-visibility.css';
 import './responsive.css';

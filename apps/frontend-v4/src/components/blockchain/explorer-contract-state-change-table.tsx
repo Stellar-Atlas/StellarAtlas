@@ -60,11 +60,11 @@ export function ExplorerContractStateChangeTable({
 	return (
 		<>
 			{deletions > 0 && <p className={styles.pageSummary}>{deletions} {deletions === 1 ? 'deletion' : 'deletions'} on this page</p>}
-			<div className={styles.scroll}>
-				<table className={styles.table} data-transactions={hasTransactions} aria-label="Contract state changes">
+			<div className={`${styles.scroll} evidence-records`}>
+				<table className={styles.table} data-transactions={hasTransactions} aria-label="Contract state changes" role="table">
 					<colgroup><col className={styles.ledgerColumn} /><col className={styles.keyColumn} /><col className={styles.valueColumn} />{hasTransactions && <col className={styles.transactionColumn} />}<col className={styles.actionColumn} /></colgroup>
 					<thead><tr><th scope="col">Ledger / time</th><th scope="col">Key</th><th scope="col">Value</th>{hasTransactions && <th scope="col">Transaction</th>}<th scope="col"><span className={styles.srOnly}>Details</span></th></tr></thead>
-					<tbody>
+					<tbody role="rowgroup">
 						{rows.map((row, index) => {
 							const { ledger, transaction, timestamp } = identity(row);
 							// Preview decoding stays bounded; only an explicitly opened record
@@ -73,20 +73,20 @@ export function ExplorerContractStateChangeTable({
 							const deleted = row.deleted === true;
 							const rawValue = recordedValue(row);
 							return (
-								<tr key={entityText(row, 'id') || `${ledger}:${index}`}>
-									<td><strong>{ledger ? <Link className={styles.reference} href={buildEntityHref('ledgers', ledger)}>{formatAtomic(ledger, 0)}</Link> : 'Not reported'}</strong>{timestamp && <LocalDateTime dateTime={normalizeWarehouseTimestamp(timestamp)} />}</td>
-									<td><ContractValuePreview value={key} ledger={ledger} kind="key" /></td>
-									<td>{deleted
+								<tr role="row" key={entityText(row, 'id') || `${ledger}:${index}`}>
+									<td role="cell" className="evidence-ledger"><strong>{ledger ? <Link className={styles.reference} href={buildEntityHref('ledgers', ledger)}>{formatAtomic(ledger, 0)}</Link> : 'Not reported'}</strong>{timestamp && <LocalDateTime dateTime={normalizeWarehouseTimestamp(timestamp)} />}</td>
+									<td role="cell" className="evidence-heading"><ContractValuePreview value={key} ledger={ledger} kind="key" /></td>
+									<td role="cell" className="evidence-value">{deleted
 										? <span className={styles.deletion}>Deletion recorded</span>
 										: rawValue == null
 											? <span className={styles.muted}>Not recorded</span>
 											: <ContractValuePreview value={decodeContractEventValue(rawValue, { maxNodes: 128, maxDepth: 16 })} ledger={ledger} />}</td>
-									{hasTransactions && <td>{transaction ? <Link className={styles.reference} href={buildEntityHref('transactions', transaction, ledger ? { ledger_sequence: ledger } : {})}><code className={styles.transaction}>{transaction}</code></Link> : <span className={styles.muted}>Not recorded</span>}</td>}
-									<td><button className={styles.detailsButton} type="button" aria-haspopup="dialog" aria-label={`State change details${ledger ? ' at ledger ' + ledger : ''}, row ${index + 1}`} onClick={() => setSelected(row)}>Details</button></td>
+									{hasTransactions && <td role="cell" className="evidence-transaction">{transaction ? <Link className={styles.reference} href={buildEntityHref('transactions', transaction, ledger ? { ledger_sequence: ledger } : {})}><code className={styles.transaction}>{transaction}</code></Link> : <span className={styles.muted}>Not recorded</span>}</td>}
+									<td role="cell" className="evidence-action"><button className={styles.detailsButton} type="button" aria-haspopup="dialog" aria-label={`State change details${ledger ? ' at ledger ' + ledger : ''}, row ${index + 1}`} onClick={() => setSelected(row)}>Details</button></td>
 								</tr>
 							);
 						})}
-						{rows.length === 0 && <tr><td colSpan={hasTransactions ? 5 : 4} className={styles.empty}>No state changes in this result.</td></tr>}
+						{rows.length === 0 && <tr role="row"><td role="cell" colSpan={hasTransactions ? 5 : 4} className={`${styles.empty} evidence-empty`}>No state changes in this result.</td></tr>}
 					</tbody>
 				</table>
 			</div>

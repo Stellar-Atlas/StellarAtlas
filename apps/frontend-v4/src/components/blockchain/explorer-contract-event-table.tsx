@@ -56,10 +56,11 @@ export function ExplorerContractEventTable({
 	const [selected, setSelected] = useState<EntityRecord | null>(null);
 	return (
 		<div className={styles.workspace}>
-			<div className={styles.scroll}>
+			<div className={`${styles.scroll} evidence-records`}>
 				<table
 					className={`${styles.table} ${showTransaction ? '' : styles.transactionEvents}`}
 					aria-label="Contract events"
+					role="table"
 				>
 					<colgroup>
 						<col className={styles.ledgerColumn} />
@@ -79,7 +80,7 @@ export function ExplorerContractEventTable({
 							</th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody role="rowgroup">
 						{rows.map((row, index) => {
 							const ledger = entityText(row, 'ledgerSequence');
 							const tx = entityText(row, 'transactionHash');
@@ -90,8 +91,8 @@ export function ExplorerContractEventTable({
 							const summary = summarizeContractEvent(kind, topics);
 							const outcome = contractEventOutcome(row.successful);
 							return (
-								<tr key={entityText(row, 'id') || index}>
-									<td className={styles.ledgerCell}>
+								<tr role="row" key={entityText(row, 'id') || index}>
+									<td role="cell" className={`${styles.ledgerCell} evidence-ledger`}>
 										<Link
 											className={styles.reference}
 											href={buildEntityHref('ledgers', ledger)}
@@ -104,7 +105,7 @@ export function ExplorerContractEventTable({
 											)}
 										/>
 									</td>
-									<td>
+									<td role="cell" className="evidence-heading">
 										<div className={styles.eventName}>
 											<strong title={summary.title}>{summary.title}</strong>
 											<span title={outcome.label} aria-label={outcome.label}>
@@ -118,11 +119,11 @@ export function ExplorerContractEventTable({
 											{summary.context}
 										</div>
 									</td>
-									<td>
+									<td role="cell" className="evidence-value">
 										<PayloadPreview row={row} token={token} />
 									</td>
 									{showTransaction && (
-										<td>
+										<td role="cell" className="evidence-transaction">
 											<Link
 												className={styles.transaction}
 												href={buildEntityHref(
@@ -135,7 +136,7 @@ export function ExplorerContractEventTable({
 											</Link>
 										</td>
 									)}
-									<td>
+									<td role="cell" className="evidence-action">
 										<button
 											type="button"
 											aria-haspopup="dialog"
@@ -148,8 +149,8 @@ export function ExplorerContractEventTable({
 							);
 						})}
 						{rows.length === 0 && (
-							<tr>
-								<td colSpan={showTransaction ? 5 : 4} className={styles.empty}>
+							<tr role="row">
+								<td role="cell" colSpan={showTransaction ? 5 : 4} className={`${styles.empty} evidence-empty`}>
 									No events match these filters.
 								</td>
 							</tr>

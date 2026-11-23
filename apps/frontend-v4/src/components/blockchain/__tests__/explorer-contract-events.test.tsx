@@ -1,8 +1,12 @@
 import { jest } from '@jest/globals';
-import { createElement } from 'react';
+import { createElement, type ComponentProps } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { contractEventExample } from '../contract-event-query';
 let search = '';
+jest.unstable_mockModule('next/link', () => ({
+	default: ({ prefetch: _prefetch, ...props }: ComponentProps<'a'> & { prefetch?: boolean }) =>
+		createElement('a', props)
+}));
 jest.unstable_mockModule('next/navigation', () => ({
 	usePathname: () => '/explorer/contract-events',
 	useSearchParams: () => new URLSearchParams(search)
@@ -23,6 +27,7 @@ jest.unstable_mockModule(
 	'../explorer-contract-state-change-table.module.css',
 	() => ({ default: {} })
 );
+jest.unstable_mockModule('../explorer-detail-dialog.module.css', () => ({ default: {} }));
 const { ExplorerContractEvents } = await import('../explorer-contract-events');
 
 describe('contract events workspace', () => {
