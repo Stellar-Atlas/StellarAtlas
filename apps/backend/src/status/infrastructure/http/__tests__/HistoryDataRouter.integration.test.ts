@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { historyDataRouter } from '../HistoryDataRouter.js';
+import { checkedHistoryStorageRoot, historyColdReader } from '../HistoryDataColdDownload.js';
 
 describe('HistoryDataRouter.integration', () => {
 	let app: express.Application;
@@ -144,6 +145,7 @@ describe('HistoryDataRouter.integration', () => {
 			.set('Range', 'bytes=1-2')
 			.expect(206)
 			.expect('Content-Range', 'bytes 1-2/4')
+			.expect('RateLimit-Limit', '120')
 			.expect('X-Content-SHA256', '02'.repeat(32));
 	});
 
@@ -173,10 +175,10 @@ describe('HistoryDataRouter.integration', () => {
 	});
 
 	it('serves a qualified cold artifact at the original URL, without rebuilding for metadata or invalid ranges', async () => {
-		const passphrase = 'Public Global Stellar Network ; September 2015';
+		const publicNetworkIdentity = 'Public Global Stellar Network ; September 2015';
 		const sha = createHash('sha256').update('data').digest('hex');
 		const row = { ...retirementRow, outputSha256: sha,
-			networkIdSha256: createHash('sha256').update(passphrase).digest('hex') };
+			networkIdSha256: createHash('sha256').update(publicNetworkIdentity).digest('hex') };
 		const download = '/v1/history-data/batches/' + row.batchId + '/transactions';
 		const cacheFile = join(storageRoot, 'verified');
 		await writeFile(cacheFile, 'data');
@@ -185,7 +187,7 @@ describe('HistoryDataRouter.integration', () => {
 			return { handle, release: () => handle.close() };
 		});
 		const cold = express().use('/v1/history-data', historyDataRouter({ dataSource,
-			networkPassphrase: passphrase, storageRoot, coldReader: { supports: () => true, acquire } }));
+			networkPassphrase: publicNetworkIdentity, storageRoot, coldReader: { supports: () => true, acquire } }));
 		dataSource.query.mockImplementation(async (sql: string) => {
 			if (sql.includes('to_regclass')) return [{ available: true }];
 			if (sql.includes('from full_history_lcm_derived_output_retirement')) return [row];
@@ -232,6 +234,14 @@ describe('HistoryDataRouter.integration', () => {
 	});
 
 	it('rejects invalid dataset and batch identifiers without a query', async () => {
+		expect(checkedHistoryStorageRoot(storageRoot)).toBe(storageRoot);
+		expect(() => checkedHistoryStorageRoot(storageRoot + '/../escape')).toThrow();
+		expect(() => historyColdReader({
+			FULL_HISTORY_COLD_EXECUTABLE: '/tmp/untrusted-materializer',
+			FULL_HISTORY_COLD_CACHE_ROOT: storageRoot + '-cache',
+			FULL_HISTORY_COLD_CACHE_MAX_BYTES: '67108864',
+			FULL_HISTORY_COLD_TRANSFORM_REVISION: '06'.repeat(20)
+		}, 'Public Global Stellar Network ; September 2015', storageRoot)).toThrow();
 		await request(app)
 			.get('/v1/history-data/batches?dataset=unknown')
 			.expect(400);
@@ -244,9 +254,9 @@ describe('HistoryDataRouter.integration', () => {
 	it('finishes an overlapping hot transfer across unlink while a new request reads the verified cold file', async () => {
 		const body = Buffer.alloc(512 * 1024, 0x61);
 		const sha = createHash('sha256').update(body).digest('hex');
-		const passphrase = 'Public Global Stellar Network ; September 2015';
+		const publicNetworkIdentity = 'Public Global Stellar Network ; September 2015';
 		const row = { ...retirementRow, outputSha256: sha, byteCount: String(body.length),
-			networkIdSha256: createHash('sha256').update(passphrase).digest('hex') };
+			networkIdSha256: createHash('sha256').update(publicNetworkIdentity).digest('hex') };
 		const url = '/v1/history-data/batches/' + row.batchId + '/transactions';
 		const hotPath = join(storageRoot, row.storageKey);
 		await mkdir(join(storageRoot, 'network/ledger-close-meta/3-1026'), { recursive: true });
@@ -276,7 +286,7 @@ describe('HistoryDataRouter.integration', () => {
 			}
 			next();
 		});
-		overlap.use('/v1/history-data', historyDataRouter({ dataSource, networkPassphrase: passphrase,
+		overlap.use('/v1/history-data', historyDataRouter({ dataSource, networkPassphrase: publicNetworkIdentity,
 			storageRoot, coldReader: { supports: () => true, acquire } }));
 		let received!: () => void;
 		const firstClientByte = new Promise<void>(r => { received = r; });

@@ -5,9 +5,18 @@ import { constants } from 'node:fs';
 import { open, realpath, stat, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { fileURLToPath } from 'node:url';
 
 type Canonical = { path: string; byteCount: string };
 type Lease = { handle: FileHandle; release(): Promise<void> };
+const packagedMaterializer = fileURLToPath(new URL('../../../../bin/stellaratlas-full-history-materialize', import.meta.url));
+
+export function checkedHistoryStorageRoot(value: string): string {
+	if (!isAbsolute(value) || resolve(value) !== value || resolve(value, '..') === value ||
+		!/^[A-Za-z0-9_:/\\-]+$/.test(value))
+		throw new Error('History storage root must be a clean absolute directory with simple path segments');
+	return value;
+}
 export interface HistoryColdReader {
 	supports(output: DerivedOutputRetirement): boolean;
 	acquire(plan: DerivedOutputRecovery, output: DerivedOutputRetirement,
@@ -18,15 +27,15 @@ export interface HistoryColdReader {
 // descriptors, never from a public URL, a supplied executable, or request headers.
 export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: string,
 	storageRoot: string): HistoryColdReader | undefined {
-	const binary = env.FULL_HISTORY_COLD_EXECUTABLE;
+	const configuredBinary = env.FULL_HISTORY_COLD_EXECUTABLE;
 	const cache = env.FULL_HISTORY_COLD_CACHE_ROOT;
 	const capacity = env.FULL_HISTORY_COLD_CACHE_MAX_BYTES;
 	const revision = env.FULL_HISTORY_COLD_TRANSFORM_REVISION;
-	if ([binary, cache, capacity, revision].every(value => value === undefined)) return undefined;
-	if (!binary || !isAbsolute(binary) || !cache || !isAbsolute(cache) || resolve(cache) !== cache ||
+	if ([configuredBinary, cache, capacity, revision].every(value => value === undefined)) return undefined;
+	if (configuredBinary !== packagedMaterializer || !cache || !isAbsolute(cache) || resolve(cache) !== cache ||
 		!capacity || !/^[1-9]\d{0,17}$/.test(capacity) || !revision || !/^[0-9a-f]{40}$/.test(revision))
 		throw new Error('Incomplete or invalid history cold-download configuration');
-	const root = resolve(storageRoot);
+	const root = checkedHistoryStorageRoot(storageRoot);
 	if (within(root, cache) || within(cache, root)) throw new Error('Cold cache must be separate from history storage');
 	type Active = { key: string; users: number; ready: Promise<FileHandle> };
 	let active: Active | undefined;
@@ -49,7 +58,7 @@ export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: str
 				if (!sourceStat.isFile() || sourceStat.size.toString() !== source.byteCount ||
 					await realpath(manifest) !== manifest || await realpath(cache) !== cache)
 					throw new Error('Unsafe cold-download input');
-				return materialize(binary, cache, capacity, networkPassphrase, original, manifest, plan, output);
+				return materialize(packagedMaterializer, cache, capacity, networkPassphrase, original, manifest, plan, output);
 			})() };
 			entry.users++;
 			const release = async (): Promise<void> => {

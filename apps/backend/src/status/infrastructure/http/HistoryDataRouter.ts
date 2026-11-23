@@ -1,5 +1,6 @@
 import { readDerivedOutputRetirements, RETIRABLE_DERIVED_DATASETS, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import express, { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import { constants } from 'node:fs';
 import { open, type FileHandle } from 'node:fs/promises';
 import { basename, resolve, sep } from 'node:path';
@@ -10,7 +11,7 @@ import {
 	type FullHistoryLedgerCloseMetaDataset
 } from '@history-scan-coordinator/domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { readFullHistoryLedgerCloseMetaCoverage } from '../../use-cases/get-full-history-status/FullHistoryLedgerCloseMetaCoverage.js';
-import { serveColdHistoryDownload, serveHistoryDescriptor, type HistoryColdReader } from './HistoryDataColdDownload.js';
+import { checkedHistoryStorageRoot, serveColdHistoryDownload, serveHistoryDescriptor, type HistoryColdReader } from './HistoryDataColdDownload.js';
 
 export interface HistoryDataRouterConfig {
 	readonly dataSource: DataSource;
@@ -80,7 +81,7 @@ export const HistoryDataRouterWrapper = (
 	const networkHash = hashNetworkPassphrase(
 		config.networkPassphrase
 	).toBuffer();
-	const storageRoot = resolve(config.storageRoot);
+	const storageRoot = checkedHistoryStorageRoot(resolve(config.storageRoot));
 
 	router.get('/catalog', async (_req, res) => {
 		try {
@@ -152,7 +153,9 @@ export const HistoryDataRouterWrapper = (
 		}
 	});
 
-	router.get('/batches/:batchId/:dataset', async (req, res) => {
+	router.get('/batches/:batchId/:dataset', rateLimit({
+		windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false
+	}), async (req, res) => {
 		const dataset = parseDataset(req.params.dataset);
 		if (
 			dataset === undefined ||

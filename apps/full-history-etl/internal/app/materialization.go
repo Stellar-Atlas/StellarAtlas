@@ -111,7 +111,11 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 			return err
 		}
 	}
-	name := filepath.Join(leaf, c.Dataset+".parquet")
+	filename, err := materializedFilename(c.Dataset)
+	if err != nil {
+		return err
+	}
+	name := filepath.Join(leaf, filename)
 	var st unix.Stat_t
 	if err := unix.Lstat(name, &st); err != nil || st.Mode&unix.S_IFMT != unix.S_IFREG {
 		return fmt.Errorf("materialized output is not a regular file")
@@ -209,7 +213,11 @@ func validateMaterialization(ctx context.Context, leaf string, original Manifest
 		if !all && d.Dataset != selected {
 			continue
 		}
-		name := filepath.Join(leaf, d.Dataset+".parquet")
+		filename, err := materializedFilename(d.Dataset)
+		if err != nil {
+			return err
+		}
+		name := filepath.Join(leaf, filename)
 		fd, err := unix.Open(name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 		if err != nil {
 			return err
@@ -229,4 +237,17 @@ func validateMaterialization(ctx context.Context, leaf string, original Manifest
 		}
 	}
 	return nil
+}
+
+func materializedFilename(dataset string) (string, error) {
+	switch dataset {
+	case "transactions":
+		return "transactions.parquet", nil
+	case "transaction-results":
+		return "transaction-results.parquet", nil
+	case "operations":
+		return "operations.parquet", nil
+	default:
+		return "", fmt.Errorf("unsupported materialized dataset")
+	}
 }
