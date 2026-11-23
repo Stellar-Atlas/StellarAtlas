@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,85 @@ import (
 	"testing"
 	"time"
 )
+
+func TestOnDemandProjectionMatchesOriginalWriter(t *testing.T) {
+	for _, compact := range []bool{false, true} {
+		t.Run(fmt.Sprintf("compact-%t", compact), func(t *testing.T) {
+			root := t.TempDir()
+			cfg := fixtureConfig(root, filepath.Join(root, "full"))
+			cfg.CompactLedgerEntryChanges = compact
+			full, err := Run(context.Background(), cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			canonical := full.Outputs[0]
+			cache := t.TempDir()
+			if err := os.Chmod(cache, 0700); err != nil {
+				t.Fatal(err)
+			}
+			c := MaterializationConfig{
+				CanonicalPath:          checkedStoragePath(t, root, canonical.StorageKey),
+				ManifestPath:           checkedStoragePath(t, root, full.ManifestStorageKey),
+				ExpectedManifestSHA256: full.ManifestSHA256, ExpectedSourceSHA256: canonical.SHA256,
+				CacheRoot: cache, CacheMaxBytes: 32 << 20, NetworkPassphrase: cfg.NetworkPassphrase, Timeout: time.Minute,
+				Limits: ManifestLimits{MaxCompressedBytes: cfg.MaxCompressedBytes, MaxUncompressedBytes: cfg.MaxUncompressedBytes,
+					MaxDecodedMemoryBytes: cfg.MaxDecodedMemoryBytes, MaxLedgers: 1},
+			}
+			for _, d := range full.Outputs[1:] {
+				if compact && d.Dataset != "ledger-entry-changes" {
+					continue
+				} // Other families use identical writers.
+				t.Run(d.Dataset, func(t *testing.T) {
+					c.Dataset = d.Dataset
+					c.Limits.MaxOutputBytes, c.Limits.MaxRows = d.ByteCount, max(1, d.RecordCount)
+					called := false
+					err := WithMaterializedOutput(context.Background(), c, func(o MaterializedOutput) error {
+						called = true
+						entries, err := os.ReadDir(filepath.Dir(o.Path))
+						if err != nil {
+							return err
+						}
+						if len(entries) != 2 || o.CacheHit || o.SHA256 != d.SHA256 || digestPath(t, o.Path) != d.SHA256 {
+							t.Fatalf("not exactly the original requested projection and receipt: %s", d.Dataset)
+						}
+						return nil
+					})
+					if err != nil || !called {
+						t.Fatalf("materialize original: %v", err)
+					}
+				})
+			}
+			// A new catalogue digest may authorize a different original manifest,
+			// but cannot introduce a writer the binary does not implement.
+			raw, err := os.ReadFile(c.ManifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest, err := decodeManifest(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest.Format.ParquetWriter += "-unknown"
+			raw, err = json.Marshal(manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.ManifestPath = filepath.Join(root, "unsupported.json")
+			if err := os.WriteFile(c.ManifestPath, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			c.ExpectedManifestSHA256 = digestPath(t, c.ManifestPath)
+			if _, _, err := materializationManifest(c); err == nil {
+				t.Fatal("accepted a different writer")
+			}
+		})
+	}
+	for _, dataset := range []string{"contract-events", "ledger-entry-changes", "account-state-changes", "trustline-state-changes"} {
+		if _, err := materializationSpec(manifestVersionV6, dataset); err == nil {
+			t.Fatalf("accepted unavailable v6 writer for %s", dataset)
+		}
+	}
+}
 
 func TestTransactionReconstructionMatchesFullOutputsWithoutClaimingCompleteness(t *testing.T) {
 	root := t.TempDir()

@@ -14,6 +14,14 @@ func (p *Processor) writeEvents(transaction *ledgerTransaction, transactionHash 
 	if err != nil {
 		return counts, fmt.Errorf("extract contract events: %w", err)
 	}
+	if !p.wants("contract-events") {
+		counts.transaction = int64(len(events.transaction))
+		counts.diagnostic = int64(len(events.diagnostic))
+		for _, group := range events.operation {
+			counts.operation += int64(len(group))
+		}
+		return counts, nil
+	}
 	eventIndex := int64(0)
 	for _, transactionEvent := range events.transaction {
 		eventIndex++

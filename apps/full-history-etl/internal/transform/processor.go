@@ -15,6 +15,25 @@ type Processor struct {
 	maxRows           uint64
 	rows              uint64
 	transactionsOnly  bool
+	selection         string
+}
+
+// The materializer pairs this processor with the single writer for spec.
+func NewProjectionProcessor(outputs *output.Collection, network string, maxRows uint64, spec output.Specification) (*Processor, error) {
+	if !output.SupportsProjection(spec) {
+		return nil, fmt.Errorf("unsupported selected projection")
+	}
+	p, err := NewProcessor(outputs, network, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	p.selection = spec.Dataset
+	return p, nil
+}
+
+func (p *Processor) wants(dataset string) bool { return p.selection == "" || p.selection == dataset }
+func (p *Processor) needsChanges() bool {
+	return p.wants("ledger-entry-changes") || p.wants("account-state-changes") || p.wants("trustline-state-changes")
 }
 
 func NewProcessor(outputs *output.Collection, networkPassphrase string, maxRows uint64) (*Processor, error) {
@@ -103,13 +122,15 @@ func (p *Processor) processLedger(meta xdr.LedgerCloseMeta) error {
 		return fmt.Errorf("read %d transactions, expected %d", len(transactions), meta.CountTransactions())
 	}
 
-	if !p.transactionsOnly {
+	if !p.transactionsOnly && p.selection == "" {
 		if err := p.claim("ledger-close-meta", 1); err != nil {
 			return err
 		}
 		if err := p.outputs.LedgerCloseMeta.Write(meta); err != nil {
 			return err
 		}
+	}
+	if !p.transactionsOnly && p.wants("ledgers") {
 		ledgerRow, err := makeLedger(meta)
 		if err != nil {
 			return err
@@ -120,6 +141,9 @@ func (p *Processor) processLedger(meta xdr.LedgerCloseMeta) error {
 		if err := p.outputs.Ledgers.Write(ledgerRow); err != nil {
 			return err
 		}
+		if p.selection == "ledgers" {
+			return nil
+		}
 	}
 
 	for i := range transactions {
@@ -127,7 +151,7 @@ func (p *Processor) processLedger(meta xdr.LedgerCloseMeta) error {
 			return fmt.Errorf("transaction %d: %w", transactions[i].Index, err)
 		}
 	}
-	if !p.transactionsOnly {
+	if !p.transactionsOnly && p.needsChanges() {
 		if err := p.writeUpgradeChanges(meta); err != nil {
 			return err
 		}

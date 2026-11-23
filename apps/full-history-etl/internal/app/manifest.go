@@ -89,6 +89,15 @@ type ProcessingReceipt struct {
 	Outputs            []output.Descriptor `json:"outputs"`
 }
 
+func writerFormat() ManifestFormat {
+	return ManifestFormat{
+		Name: "stellar-atlas-full-history-shard", ParquetCompression: "zstd",
+		ParquetWriter: "github.com/xitongsys/parquet-go@v1.6.2", CanonicalLedgerCloseMetaEncoding: "xdr+zstd",
+		PartitionColumns: []string{"ledger_sequence"}, StellarSDK: "github.com/stellar/go-stellar-sdk@v0.8.0",
+		StellarXDRCommit: strings.TrimSpace(xdr.CommitHash),
+	}
+}
+
 func newManifest(config Config, evidence ShardEvidence, descriptors []output.Descriptor) Manifest {
 	version := manifestVersion
 	if config.CompactLedgerEntryChanges {
@@ -105,15 +114,7 @@ func newManifest(config Config, evidence ShardEvidence, descriptors []output.Des
 		Range:          evidence.Range,
 		InputMediaType: inputMediaType,
 		SourceObjects:  evidence.SourceObjects,
-		Format: ManifestFormat{
-			Name:                             "stellar-atlas-full-history-shard",
-			ParquetCompression:               "zstd",
-			ParquetWriter:                    "github.com/xitongsys/parquet-go@v1.6.2",
-			CanonicalLedgerCloseMetaEncoding: "xdr+zstd",
-			PartitionColumns:                 []string{"ledger_sequence"},
-			StellarSDK:                       "github.com/stellar/go-stellar-sdk@v0.8.0",
-			StellarXDRCommit:                 strings.TrimSpace(xdr.CommitHash),
-		},
+		Format:         writerFormat(),
 		Limits: ManifestLimits{
 			MaxCompressedBytes:    config.MaxCompressedBytes,
 			MaxUncompressedBytes:  config.MaxUncompressedBytes,

@@ -1,4 +1,5 @@
 import type { DerivedOutputRecovery, DerivedOutputRetirement } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
+import { RETIRABLE_DERIVED_DATASETS } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import type { Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
@@ -41,7 +42,7 @@ export function historyColdReader(env: NodeJS.ProcessEnv, networkPassphrase: str
 	let active: Active | undefined;
 	return {
 		supports: output => output.transformRevision === revision && BigInt(output.byteCount) <= BigInt(capacity) &&
-			['transactions', 'transaction-results', 'operations'].includes(output.dataset),
+			RETIRABLE_DERIVED_DATASETS.includes(output.dataset),
 		async acquire(plan, output, canonical) {
 			const key = [plan.batchId, plan.manifestSha256, output.dataset, output.outputSha256].join(':');
 			// No backlog: share one immutable FD among identical requests (each stream
