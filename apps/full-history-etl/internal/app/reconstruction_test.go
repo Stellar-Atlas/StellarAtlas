@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTransactionReconstructionMatchesFullOutputsWithoutClaimingCompleteness(t *testing.T) {
@@ -90,5 +91,50 @@ func TestTransactionReconstructionMatchesFullOutputsWithoutClaimingCompleteness(
 	}
 	if _, err := os.Lstat(bad.Config.OutputPath); !os.IsNotExist(err) {
 		t.Fatal("a digest-mismatched result was published")
+	}
+
+	cache := t.TempDir()
+	materialization := MaterializationConfig{
+		CanonicalPath: input, ManifestPath: checkedStoragePath(t, root, full.ManifestStorageKey),
+		ExpectedManifestSHA256: full.ManifestSHA256, ExpectedSourceSHA256: canonical.SHA256,
+		Dataset: "transactions", CacheRoot: cache, CacheMaxBytes: 64 << 20,
+		NetworkPassphrase: config.NetworkPassphrase, Timeout: 30 * time.Second,
+		Limits: ManifestLimits{MaxCompressedBytes: config.MaxCompressedBytes,
+			MaxUncompressedBytes: config.MaxUncompressedBytes, MaxDecodedMemoryBytes: config.MaxDecodedMemoryBytes,
+			MaxOutputBytes: config.MaxOutputBytes, MaxLedgers: 64, MaxRows: config.MaxRows},
+	}
+	for _, hit := range []bool{false, true} {
+		calls := 0
+		err := WithMaterializedOutput(context.Background(), materialization, func(value MaterializedOutput) error {
+			calls++
+			if value.CacheHit != hit || value.Version != 1 || value.Dataset != "transactions" ||
+				value.SHA256 != full.Outputs[fullByDataset["transactions"]].SHA256 ||
+				digestPath(t, value.Path) != value.SHA256 {
+				t.Fatalf("incorrect materialization: %+v", value)
+			}
+			if hit {
+				// Another API process cannot rebuild/evict until this callback has
+				// opened the result. Existing flock works across separate handles.
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+				defer cancel()
+				if err := WithMaterializedOutput(ctx, materialization, func(MaterializedOutput) error {
+					t.Fatal("second materializer entered while lock held")
+					return nil
+				}); err == nil {
+					t.Fatal("contending materializer did not honor cancellation")
+				}
+			}
+			return nil
+		})
+		if err != nil || calls != 1 {
+			t.Fatalf("materialization hit=%v calls=%d error=%v", hit, calls, err)
+		}
+	}
+	materialization.ExpectedManifestSHA256 = strings.Repeat("0", 64)
+	if err := WithMaterializedOutput(context.Background(), materialization, func(MaterializedOutput) error {
+		t.Fatal("mismatched manifest exposed a cached output")
+		return nil
+	}); err == nil {
+		t.Fatal("expected manifest digest rejection")
 	}
 }
