@@ -123,6 +123,7 @@ import { createAtlasApiTraffic } from './AtlasApiTraffic.js';
 import { createAtlasApiEventSender } from './AtlasApiEventSender.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
+import { checkedHistoryStorageRoot, historyColdReader } from '@status/infrastructure/http/HistoryDataColdDownload.js';
 import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
 import { mountPublicDataRoutes } from '@status/infrastructure/http/PublicDataRoutes.js';
 import { withHubbleTransactionLedgerHints } from '@status/infrastructure/http/HubbleTransactionLedgerHints.js';
@@ -213,14 +214,14 @@ const listen = async () => {
 				'https://aws-public-blockchain.s3.us-east-2.amazonaws.com/v1.1/stellar/ledgers/pubnet/'
 		})
 	);
+	const historyDataRoot = checkedHistoryStorageRoot(process.env.FULL_HISTORY_DATA_ROOT ?? resolve(process.cwd(), '../full-history/typed'));
 	api.use(
 		'/v1/history-data',
 		historyDataRouter({
 			dataSource: kernel.container.get(DataSource),
 			networkPassphrase: config.networkConfig.networkPassphrase,
-			storageRoot:
-				process.env.FULL_HISTORY_DATA_ROOT ??
-				resolve(process.cwd(), '../full-history/typed')
+			storageRoot: historyDataRoot,
+			coldReader: historyColdReader(process.env, config.networkConfig.networkPassphrase, historyDataRoot)
 		})
 	);
 
