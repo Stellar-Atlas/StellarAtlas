@@ -33,12 +33,24 @@ func checkCurrentBulkCommitBudget(stage, parent string) error {
 	if err := unix.Fstatfs(fd, &fs); err != nil {
 		return fmt.Errorf("current bulk commit guard: query source filesystem at resolved output parent: %w", err)
 	}
-	available, required, err := currentBulkSourceHeadroom(int64(fs.Bsize), fs.Blocks, fs.Bfree, fs.Bavail)
+	if fs.Bsize <= 0 {
+		return fmt.Errorf("current bulk commit guard: invalid destination allocation unit")
+	}
+	publicationBytes, err := currentBulkPublicationBytes(stage, uint64(fs.Bsize))
+	if err != nil {
+		return fmt.Errorf("current bulk commit guard: measure publication copy: %w", err)
+	}
+	// Keep the capacity observation fresh after walking the finished stage. The
+	// publication lock serializes competing copies through this check and commit.
+	if err := unix.Fstatfs(fd, &fs); err != nil {
+		return fmt.Errorf("current bulk commit guard: refresh source filesystem capacity: %w", err)
+	}
+	available, required, err := currentBulkSourceHeadroom(int64(fs.Bsize), fs.Blocks, fs.Bfree, fs.Bavail, publicationBytes)
 	if err != nil {
 		return fmt.Errorf("current bulk commit guard: %w", err)
 	}
 	if available < required {
-		return fmt.Errorf("current bulk commit guard: source filesystem has %d available bytes at resolved output parent %q; need at least %d bytes for the 50 GB HDD emergency reserve, 32 GiB cushion, 8 GiB output cap, and 16 MiB metadata allowance", available, parent, required)
+		return fmt.Errorf("current bulk commit guard: source filesystem has %d available bytes at resolved output parent %q; need at least %d bytes for the 50 GB HDD emergency reserve, %d-byte measured publication copy, and 16 MiB metadata allowance", available, parent, required, publicationBytes)
 	}
 	return nil
 }
