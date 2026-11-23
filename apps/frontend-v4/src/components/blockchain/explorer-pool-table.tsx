@@ -48,8 +48,22 @@ export function ExplorerPoolTable({
 }): React.JSX.Element {
 	const metadata = usePairMetadata(rows);
 	return (
-		<div className={styles.scroll}>
-			<table className={styles.table} aria-label="Liquidity pools">
+		<div className={styles.poolResults}>
+			{onSort && <div className={styles.mobileSort}>
+				<label>Sort by
+					<select value={sort} onChange={event => {
+						const key = columns.find(([id]) => id === event.currentTarget.value)?.[0];
+						if (key && key !== sort) onSort(key);
+					}}>
+						{columns.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+					</select>
+				</label>
+				<button type="button" onClick={() => onSort(sort)} aria-label={order === 'desc' ? 'Descending; switch to ascending' : 'Ascending; switch to descending'}>
+					{order === 'desc' ? 'Descending ↓' : 'Ascending ↑'}
+				</button>
+			</div>}
+			<div className={styles.scroll}>
+			<table className={styles.table} aria-label="Liquidity pools" role="table">
 				<thead>
 					<tr>
 						{columns.map(([key, label]) => (
@@ -77,7 +91,7 @@ export function ExplorerPoolTable({
 						))}
 					</tr>
 				</thead>
-				<tbody>
+				<tbody role="rowgroup">
 					{rows.map((row, index) => {
 						const id = entityText(row, 'id'),
 							ledger = entityText(row, 'ledgerSequence');
@@ -87,8 +101,8 @@ export function ExplorerPoolTable({
 								entityText(recordValue(row.assetB), 'id'), pairReport.origin, pairReport.historicalWindow)
 							: null;
 						return (
-							<tr key={id + ':' + ledger + ':' + index}>
-								<td>
+							<tr role="row" key={id + ':' + ledger + ':' + index}>
+								<td role="cell" className={styles.poolPairCell}>
 									{row.deleted ? (
 										'Removed pool'
 									) : (
@@ -100,51 +114,52 @@ export function ExplorerPoolTable({
 									)}
 									{market && <a className={styles.pairReport} href={market}>Historical pair report</a>}
 								</td>
-								<td className={styles.number}>
+								<td role="cell" className={styles.number}><span className={styles.mobileLabel}>Reserve A</span>
 									{formatDecimal(entityText(row, 'reserveA'))}
 								</td>
-								<td className={styles.number}>
+								<td role="cell" className={styles.number}><span className={styles.mobileLabel}>Reserve B</span>
 									{formatDecimal(entityText(row, 'reserveB'))}
 								</td>
-								<td className={styles.number}>
+								<td role="cell" className={styles.number}><span className={styles.mobileLabel}>Pool shares</span>
 									{formatDecimal(entityText(row, 'shares'))}
 								</td>
-								<td className={styles.number}>
+								<td role="cell" className={styles.number}><span className={styles.mobileLabel}>Share trustlines</span>
 									{formatDecimal(entityText(row, 'trustlineCount'), 0)}
 								</td>
-								<td className={styles.number}>
+								<td role="cell" className={styles.number}><span className={styles.mobileLabel}>Fee</span>
 									{row.feeBasisPoints == null
 										? '—'
 										: formatDecimal(Number(row.feeBasisPoints) / 100, 2) + '%'}
 								</td>
-								<td>
+								<td role="cell"><span className={styles.mobileLabel}>Ledger</span>
 									<Link href={'/explorer/ledgers/' + ledger}>
 										{formatDecimal(ledger, 0)}
 									</Link>
 								</td>
-								<td className={styles.time}>
+								<td role="cell" className={styles.time}><span className={styles.mobileLabel}>Updated</span>
 									<LocalDateTime dateTime={entityText(row, 'closedAt')} />
 								</td>
-								<td>
+								<td role="cell" className={styles.poolIdCell}>
 									{detail ? <Link
 										className={styles.identifier}
 										href={detail}
 									>
-										<code>{id}</code>
+										<code>{id}</code><span className={styles.mobilePoolLink}>Pool details →</span>
 									</Link> : <code className={styles.identifier}>{id || '—'}</code>}
 								</td>
 							</tr>
 						);
 					})}
 					{rows.length === 0 && (
-						<tr>
-							<td colSpan={columns.length} className={styles.empty}>
+						<tr role="row">
+							<td role="cell" colSpan={columns.length} className={styles.empty}>
 								No indexed pools match this selection.
 							</td>
 						</tr>
 					)}
 				</tbody>
 			</table>
+			</div>
 		</div>
 	);
 }

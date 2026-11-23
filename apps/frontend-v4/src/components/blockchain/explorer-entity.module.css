@@ -13,12 +13,15 @@
 	text-decoration: none;
 }
 .navigation {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.4rem;
 	border-bottom: 1px solid var(--border);
 	padding-bottom: 0.7rem;
 }
+.navigationLinks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+.navigationPicker { display: none; }
 .navigation a {
 	padding: 0.5rem 0.8rem;
 	border-radius: 0.35rem;
@@ -30,27 +33,38 @@
 	background: var(--blue);
 	color: var(--accent-ink);
 }
-.navigation a:focus-visible {
+.navigation :is(a, summary):focus-visible {
 	outline: 2px solid var(--blue);
 	outline-offset: -2px;
 }
 @media (max-width: 768px) {
-	.navigation {
-		flex-wrap: nowrap;
-		overflow-x: auto;
-		overflow-y: hidden;
-		max-width: 100%;
-		gap: .2rem;
-		padding-block: .2rem .5rem;
-		scrollbar-width: thin;
-		overscroll-behavior-inline: contain;
+	.navigationLinks { display: none; }
+	.navigationPicker {
+		display: block;
+		min-width: 0;
+		border: 1px solid var(--border);
+		border-radius: .5rem;
+		background: var(--panel);
+	}
+	.navigationPicker summary {
+		box-sizing: border-box;
+		min-height: 44px;
+		padding: .7rem .8rem;
+		cursor: pointer;
+		font-weight: 600;
+	}
+	.navigationOptions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: .25rem;
+		padding: .35rem;
+		border-top: 1px solid var(--border);
 	}
 	.navigation a {
-		flex: 0 0 auto;
 		display: inline-flex;
 		align-items: center;
 		min-height: 44px;
-		white-space: nowrap;
+		box-sizing: border-box;
 	}
 }
 .panel {

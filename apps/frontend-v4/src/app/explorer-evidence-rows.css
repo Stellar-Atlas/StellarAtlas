@@ -1,0 +1,41 @@
+/* Keep the same records and dialog triggers at both widths. On narrower
+   screens, promote the evidence and keep the metadata and action together. */
+@media (max-width: 760px) {
+	.evidence-records.evidence-records { overflow: visible; }
+	.evidence-records > table[role='table'] {
+		display: block;
+		min-width: 0;
+	}
+	.evidence-records > table > colgroup,
+	.evidence-records > table > thead,
+	.evidence-records > table > tbody > tr > .evidence-transaction {
+		display: none;
+	}
+	.evidence-records > table > tbody { display: block; }
+	.evidence-records > table > tbody > tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas: 'heading heading' 'value value' 'ledger action';
+		align-items: center;
+		gap: 0.35rem 0.75rem;
+		padding: 0.7rem 0.8rem;
+	}
+	.evidence-records > table > tbody > tr + tr { border-top: 1px solid var(--border); }
+	.evidence-records > table > tbody > tr > td[role='cell']:not(.evidence-transaction) {
+		display: block;
+		position: static;
+		min-width: 0;
+		max-width: 100%;
+		height: auto;
+		padding: 0;
+		border: 0;
+		background: transparent;
+	}
+	.evidence-heading { grid-area: heading; }
+	.evidence-value { grid-area: value; }
+	.evidence-ledger { grid-area: ledger; }
+	.evidence-records .evidence-ledger time { white-space: normal; }
+	.evidence-action { grid-area: action; }
+	.evidence-action button { min-height: 44px; min-width: 64px; }
+	.evidence-empty { grid-column: 1 / -1; }
+}

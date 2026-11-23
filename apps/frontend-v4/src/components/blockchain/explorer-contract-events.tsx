@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { formatInteger } from '../../format/formatters';
 import type { ExplorerFilters } from '../../api/explorer-analytics';
 import { ExplorerContractActivity } from './explorer-contract-activity';
 import { ExplorerEntityNavigation } from './explorer-entity-navigation';
@@ -41,11 +42,15 @@ export function ExplorerContractEvents({
 					</div>
 					<Link href="/docs/contract-events">Event guide &amp; API</Link>
 				</header>
+				<details className={events.filterDisclosure} open={!valid} key={JSON.stringify(filters)}>
+					<summary>
+						<span>{valid ? 'Edit filters' : 'Event filters'}</span>
+						{valid && <small>Ledgers {formatInteger(Number(filters.min_ledger))}–{formatInteger(Number(filters.max_ledger))}</small>}
+					</summary>
 				<form
 					action="/explorer/contract-events"
 					method="get"
 					className={events.form}
-					key={JSON.stringify(filters)}
 				>
 					{params.get('return_to') && <input type="hidden" name="return_to" value={params.get('return_to') ?? ''} />}
 					{params.get('activity') === 'state' && <input type="hidden" name="activity" value="state" />}
@@ -167,6 +172,7 @@ export function ExplorerContractEvents({
 					</Link>
 					.
 				</p>
+				</details>
 				{error && (
 					<p className={styles.error} role="alert">
 						{error}
