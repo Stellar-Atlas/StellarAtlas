@@ -1,4 +1,4 @@
-import { readDerivedOutputRetirements, RETIRABLE_DERIVED_DATASETS, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
+import { readDerivedOutputRetirements, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import express, { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { constants } from 'node:fs';
