@@ -3,8 +3,8 @@ package app
 import "reflect"
 
 // This historical SDK/XDR pair used the same Parquet writer and row models.
-// Only the three projections proven against its original compressed bytes may
-// be made cold. Every other format field and SDK/XDR pairing remains exact.
+// Legacy layouts are explicit: neither compact ledger changes nor the older
+// v2 row model can stand in for original v3 bytes. Other fields remain exact.
 func knownLegacyReplayFormat(format ManifestFormat) bool {
 	expected := writerFormat()
 	expected.StellarSDK = "github.com/stellar/go-stellar-sdk@v0.6.0"
@@ -12,7 +12,7 @@ func knownLegacyReplayFormat(format ManifestFormat) bool {
 	return reflect.DeepEqual(format, expected)
 }
 
-func compatibleReplayFormat(format ManifestFormat, dataset string) bool {
+func compatibleReplayFormat(format ManifestFormat, dataset, schema string) bool {
 	if reflect.DeepEqual(format, writerFormat()) {
 		return true
 	}
@@ -22,6 +22,8 @@ func compatibleReplayFormat(format ManifestFormat, dataset string) bool {
 	switch dataset {
 	case "transactions", "transaction-results", "operations":
 		return true
+	case "ledger-entry-changes":
+		return schema == "stellar-atlas.full-history.ledger-entry-changes.v3"
 	default:
 		return false
 	}

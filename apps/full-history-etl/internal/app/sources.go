@@ -21,11 +21,15 @@ func inspectSources(ctx context.Context, config Config) (ShardEvidence, error) {
 
 // A cold read has exactly one canonical source, whose digest and output
 // descriptor are checked by runReconstruction before its result is published.
-func streamCanonicalSource(ctx context.Context, c Config, p *transform.Processor) (ShardEvidence, error) {
-	b, err := batchinput.StreamFile(ctx, c.Sources[0].Path, c.StartLedger, c.EndLedger, batchinput.Limits{
+func streamCanonicalSource(ctx context.Context, c Config, p *transform.Processor, sources []SourceEvidence) (ShardEvidence, error) {
+	frames := make([]batchinput.SourceFrame, 0, len(sources))
+	for _, s := range sources {
+		frames = append(frames, batchinput.SourceFrame{Start: s.StartLedger, End: s.EndLedger, Bytes: s.XDRByteCount, SHA256: s.XDRSHA256})
+	}
+	b, err := batchinput.StreamRegisteredFile(ctx, c.Sources[0].Path, c.StartLedger, c.EndLedger, batchinput.Limits{
 		MaxCompressedBytes: c.MaxCompressedBytes, MaxUncompressedBytes: c.MaxUncompressedBytes,
 		MaxDecodedMemoryBytes: c.MaxDecodedMemoryBytes, MaxLedgers: c.MaxLedgers,
-	}, p.ProcessLedger)
+	}, frames, p.ProcessLedger)
 	if err != nil {
 		return ShardEvidence{}, err
 	}

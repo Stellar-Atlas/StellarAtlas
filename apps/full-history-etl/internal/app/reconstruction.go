@@ -40,10 +40,10 @@ type TransactionReconstructionReceipt struct {
 // The caller owns the immutable input and private scratch-parent boundary;
 // pathname checks are not a replacement for that concurrency/ownership fence.
 func RunTransactionReconstruction(ctx context.Context, reconstruction TransactionReconstructionConfig) (TransactionReconstructionReceipt, error) {
-	return runReconstruction(ctx, reconstruction, nil)
+	return runReconstruction(ctx, reconstruction, nil, nil)
 }
 
-func runReconstruction(ctx context.Context, reconstruction TransactionReconstructionConfig, selected *output.Specification) (TransactionReconstructionReceipt, error) {
+func runReconstruction(ctx context.Context, reconstruction TransactionReconstructionConfig, selected *output.Specification, frames []SourceEvidence) (TransactionReconstructionReceipt, error) {
 	if err := reconstruction.Validate(); err != nil {
 		return TransactionReconstructionReceipt{}, err
 	}
@@ -110,7 +110,7 @@ func runReconstruction(ctx context.Context, reconstruction TransactionReconstruc
 	if selected == nil {
 		evidence, err = processSources(ctx, config, processor)
 	} else {
-		evidence, err = streamCanonicalSource(ctx, config, processor)
+		evidence, err = streamCanonicalSource(ctx, config, processor, frames)
 	}
 	if err != nil {
 		return TransactionReconstructionReceipt{}, err

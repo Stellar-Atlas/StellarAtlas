@@ -16,6 +16,15 @@ import (
 var materializationCacheName = regexp.MustCompile(`^[0-9a-f]{64}-[0-9a-f]{64}$`)
 var materializationScratchName = regexp.MustCompile(`^\.build-[0-9]+$`)
 
+func admitTransientMaterialization(root string, measured, maximum uint64) error {
+	var fs unix.Statfs_t
+	if maximum == 0 || measured > maximum || unix.Statfs(root, &fs) != nil || fs.Type != unix.TMPFS_MAGIC ||
+		fs.Bsize <= 0 || fs.Bavail > math.MaxUint64/uint64(fs.Bsize) || fs.Bavail*uint64(fs.Bsize) < measured {
+		return fmt.Errorf("insufficient approved temporary RAM space for the verified response")
+	}
+	return nil
+}
+
 func prepareMaterializationCache(root string) error {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
