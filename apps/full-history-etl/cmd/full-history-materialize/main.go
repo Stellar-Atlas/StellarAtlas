@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -21,6 +22,11 @@ func run() int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "full-history-materialize: invalid trusted configuration:", err)
 		return 2
+	}
+	// Reduce collection churn only inside an already bounded Go memory budget.
+	// Keep explicit operator GC settings and the existing memory limit intact.
+	if os.Getenv("GOGC") == "" && debug.SetMemoryLimit(-1) <= 512<<20 {
+		debug.SetGCPercent(200)
 	}
 	lifetimeCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
