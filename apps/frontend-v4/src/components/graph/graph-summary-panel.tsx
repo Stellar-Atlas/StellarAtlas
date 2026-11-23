@@ -10,6 +10,7 @@ import { ScpAnalysisPanel } from './scp-analysis-panel';
 import { ScopeContext } from '../layout/scope-context';
 
 interface GraphSummaryPanelProps {
+	onCloseMobile?: () => void;
 	activeOrganization: Graph3DOrganization | null;
 	animationsEnabled: boolean;
 	liveNetwork: PublicNetwork;
@@ -23,6 +24,7 @@ interface GraphSummaryPanelProps {
 }
 
 export function GraphSummaryPanel({
+	onCloseMobile,
 	activeOrganization,
 	animationsEnabled,
 	liveNetwork,
@@ -35,7 +37,8 @@ export function GraphSummaryPanel({
 	showAllConnectable
 }: GraphSummaryPanelProps): React.JSX.Element {
 	return (
-		<section className="graph-overlay graph-summary">
+		<section className="graph-overlay graph-summary" id="graph-network-panel" aria-label="Network analysis and controls">
+			{onCloseMobile && <button type="button" className="graph-mobile-return" onClick={onCloseMobile}>Back to graph</button>}
 			<p className="eyebrow">{liveNetwork.name}</p>
 			<h1>Network topology</h1>
 			<ScopeContext kind="quorum" scope={liveNetwork.scope} />

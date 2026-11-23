@@ -218,7 +218,8 @@ export const useGraphRenderer = ({
 				resize();
 				observer = new ResizeObserver(resize);
 				observer.observe(containerRef.current);
-				graph.cameraPosition(initialCameraPosition, initialCameraTarget, 900);
+				if (window.matchMedia('(max-width: 760px)').matches) graph.zoomToFit(900, 24);
+				else graph.cameraPosition(initialCameraPosition, initialCameraTarget, 900);
 				onStatusChange('ready');
 			} catch (error) {
 				console.error('Graph renderer failed to initialize', error);
