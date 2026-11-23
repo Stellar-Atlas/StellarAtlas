@@ -1,0 +1,29 @@
+.graph-mobile-controls-anchor, .graph-mobile-return { display: none; }
+
+@media (max-width: 760px) {
+	.graph-workspace { display: grid; grid-template-columns: minmax(0, 1fr); block-size: auto; min-block-size: 0; overflow: visible; }
+	.graph-mobile-controls-anchor { display: block; grid-row: 1; scroll-margin-block-start: 76px; }
+	.graph-mobile-controls { padding: 10px 12px; background: #0c1826; border-block-end: 1px solid rgba(160, 190, 220, .24); }
+	.graph-mobile-heading { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
+	.graph-mobile-heading h1 { font-size: 1.05rem; margin: 0; }
+	.graph-mobile-heading span, .graph-mobile-controls p { color: #aebdcd; font-size: .72rem; }
+	.graph-mobile-controls p { margin: 6px 0 0; }
+	.graph-mobile-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) repeat(3, 44px); gap: 6px; margin-block-start: 8px; }
+	.graph-mobile-actions button, .graph-mobile-return { min-block-size: 44px; padding: 8px 10px; background: #142b42; color: #e7edf5; border: 1px solid rgba(160, 190, 220, .35); border-radius: 6px; font: inherit; font-size: .78rem; }
+	.graph-mobile-actions button[aria-expanded='true'] { background: #244d6d; border-color: #58a6ff; }
+	.graph-mobile-actions button:disabled { opacity: .5; }
+	.graph-mobile-return { display: inline-block; margin-block-end: 12px; }
+	.graph-workspace :is(button, a, [tabindex]):focus-visible { outline: 2px solid #58a6ff; outline-offset: 3px; }
+	.graph-workspace > .graph-canvas { grid-row: 2; block-size: clamp(320px, calc(100svh - 220px), 850px); }
+	/* OrbitControls writes touch-action:none inline. Leave vertical page scrolling available. */
+	.graph-canvas canvas { touch-action: pan-y !important; }
+	.graph-workspace > :is(.graph-summary, .scp-observation-orbit) { position: static; inset: auto; inline-size: auto; max-block-size: none; overflow: visible; margin: 12px; scroll-margin-block-start: 76px; }
+	.graph-workspace > .graph-summary { grid-row: 3; }
+	.graph-workspace > .scp-observation-orbit { grid-row: 4; }
+	.graph-workspace:not([data-mobile-panel='network']) > .graph-summary,
+	.graph-workspace:not([data-mobile-panel='feed']) > .scp-observation-orbit { display: none; }
+	.graph-workspace .organization-list { max-block-size: none; overflow: visible; }
+	.graph-workspace > .node-popover { position: absolute; inset: 120px 12px auto; max-block-size: calc(100svh - 180px); z-index: 5; }
+	.node-popover .close-button { inline-size: 44px; block-size: 44px; }
+	.graph-loading-workspace > .graph-summary { display: block !important; position: absolute; inset: 12px 12px auto; }
+}

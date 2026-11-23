@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type { Group as ThreeGroup } from 'three';
+import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { PublicNetwork, PublicScpGraphStatement } from '../../api/types';
 import {
 	buildGraph3DModel,
@@ -41,6 +42,7 @@ import {
 	getPlaybackBoundarySlotIndex
 } from './graph-ledger-playback';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
+import { GraphMobileControls, type MobileGraphPanel } from './graph-mobile-controls';
 
 interface GraphExplorerProps {
 	network: PublicNetwork;
@@ -81,6 +83,8 @@ export function GraphExplorer({
 		useState<GraphRendererStatus>('loading');
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 	const [showAllConnectable, setShowAllConnectable] = useState(false);
+	const [mobilePanel, setMobilePanel] = useState<MobileGraphPanel>(null);
+	const mobileControlsRef = useRef<HTMLDivElement>(null);
 	const [animationsEnabled, setAnimationsEnabled] = useState(true);
 	const animationsEnabledRef = useRef(true);
 	const [activePlaybackSlotIndex, setActivePlaybackSlotIndex] = useState<
@@ -280,6 +284,10 @@ export function GraphExplorer({
 	const focusOrganization = (organization: Graph3DOrganization): void => {
 		setFocusedOrganization(organization);
 		setSelectedNodeId(null);
+		if (window.matchMedia('(max-width: 760px)').matches) {
+			setMobilePanel(null);
+			mobileControlsRef.current?.scrollIntoView({ block: 'start' });
+		}
 		const graph = graphRef.current;
 		if (!graph) return;
 		graph.cameraPosition(
@@ -305,6 +313,10 @@ export function GraphExplorer({
 		setHoveredOrganization(null);
 		setSelectedNodeId(null);
 		setContextMenu(null);
+		if (window.matchMedia('(max-width: 760px)').matches) {
+			graphRef.current?.zoomToFit(400, 24);
+			return;
+		}
 		graphRef.current?.cameraPosition(
 			initialCameraPosition,
 			initialCameraTarget,
@@ -315,10 +327,42 @@ export function GraphExplorer({
 	const copyPublicKey = (node: Graph3DNode): void => {
 		void navigator.clipboard?.writeText(node.id);
 	};
+	const zoomCamera = (factor: number): void => {
+		const graph = graphRef.current;
+		if (!graph) return;
+		const position = graph.cameraPosition();
+		const target = (graph.controls() as OrbitControls).target;
+		graph.cameraPosition({
+			x: target.x + (position.x - target.x) * factor,
+			y: target.y + (position.y - target.y) * factor,
+			z: target.z + (position.z - target.z) * factor
+		}, target, 250);
+	};
+	const closeMobilePanel = (id: string): void => {
+		setMobilePanel(null);
+		mobileControlsRef.current?.querySelector<HTMLButtonElement>(`[aria-controls="${id}"]`)?.focus();
+		mobileControlsRef.current?.scrollIntoView({ block: 'start' });
+	};
+	useEffect(() => {
+		if (!mobilePanel || !window.matchMedia('(max-width: 760px)').matches) return;
+		const panel = document.getElementById(mobilePanel === 'network' ? 'graph-network-panel' : 'graph-live-panel');
+		panel?.querySelector<HTMLButtonElement>('.graph-mobile-return')?.focus({ preventScroll: true });
+		panel?.scrollIntoView({ block: 'start' });
+	}, [mobilePanel]);
 
 	return (
-		<main className="graph-workspace" data-network-scope={network.scope}>
-			<div className="graph-canvas" ref={containerRef} />
+		<main className="graph-workspace" data-network-scope={network.scope} data-mobile-panel={mobilePanel ?? 'none'}>
+			<div ref={mobileControlsRef} className="graph-mobile-controls-anchor">
+				<GraphMobileControls panel={mobilePanel} validators={liveNetwork.statistics.nrOfActiveValidators}
+					organizations={liveNetwork.organizations.length} ready={graphStatus === 'ready'}
+					onPanelChange={setMobilePanel} onReset={resetCamera} onZoom={zoomCamera} />
+			</div>
+			<div className="graph-canvas" ref={containerRef} role="region" aria-label="Interactive network topology"
+				tabIndex={0} onKeyDown={event => {
+					if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomCamera(.8); }
+					else if (event.key === '-') { event.preventDefault(); zoomCamera(1.25); }
+					else if (event.key === '0') { event.preventDefault(); resetCamera(); }
+				}} />
 			{graphStatus === 'error' && (
 				<section className="graph-overlay graph-runtime-status">
 					<p className="eyebrow">Graph</p>
@@ -334,6 +378,7 @@ export function GraphExplorer({
 				</section>
 			)}
 			<GraphSummaryPanel
+				onCloseMobile={() => closeMobilePanel('graph-network-panel')}
 				activeOrganization={activeOrganization}
 				animationsEnabled={animationsEnabled}
 				liveNetwork={liveNetwork}
@@ -345,7 +390,8 @@ export function GraphExplorer({
 				selectedNode={selectedNode}
 				showAllConnectable={showAllConnectable}
 			/>
-			<section className="graph-overlay scp-observation-orbit">
+			<section className="graph-overlay scp-observation-orbit" id="graph-live-panel" aria-label="Live SCP feed and controls">
+				<button type="button" className="graph-mobile-return" onClick={() => closeMobilePanel('graph-live-panel')}>Back to graph</button>
 				<button
 					aria-pressed={liveEnabled}
 					className={liveEnabled ? 'graph-toggle active' : 'graph-toggle'}
