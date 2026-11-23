@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"time"
 
@@ -172,7 +171,7 @@ func materializationManifest(c MaterializationConfig) (Manifest, map[string]outp
 	if err != nil || !isSupportedManifestVersion(manifest.ManifestVersion) {
 		return empty, nil, fmt.Errorf("unsupported original manifest")
 	}
-	if !reflect.DeepEqual(manifest.Format, writerFormat()) {
+	if !compatibleReplayFormat(manifest.Format, c.Dataset) {
 		return empty, nil, fmt.Errorf("original writer or replay encoding is not supported")
 	}
 	spec, err := materializationSpec(manifest.ManifestVersion, c.Dataset)

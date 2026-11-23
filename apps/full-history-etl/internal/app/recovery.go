@@ -115,7 +115,7 @@ func validateRecoveredManifestWithRetirement(
 	if err := validateRecoveredSources(manifest); err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(manifest.Format, expected.Format) {
+	if !reflect.DeepEqual(manifest.Format, expected.Format) && !knownLegacyReplayFormat(manifest.Format) {
 		return fmt.Errorf("typed output format does not match this transformer")
 	}
 	expectedUnsupported, err := unsupportedDatasetsForVersion(manifest.ManifestVersion)
@@ -266,7 +266,7 @@ func validateRecoveredOutputsWithRetirement(manifest Manifest, storageDirectory,
 		// regenerable export is cold. Never infer this for canonical replay, an
 		// unsupported historical row model, or an explicitly pending retirement.
 		// Present outputs remain strict: corruption is not cache absence.
-		if !explicitRetirement && canonicalVerified && descriptor.Representation == "typed-projection" && output.SupportsProjection(specification) {
+		if !explicitRetirement && canonicalVerified && descriptor.Representation == "typed-projection" && output.SupportsProjection(specification) && compatibleReplayFormat(manifest.Format, descriptor.Dataset) {
 			if _, err := os.Lstat(filePath); os.IsNotExist(err) {
 				continue
 			}
