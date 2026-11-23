@@ -94,6 +94,9 @@ func TestTransactionReconstructionMatchesFullOutputsWithoutClaimingCompleteness(
 	}
 
 	cache := t.TempDir()
+	if err := os.Chmod(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	materialization := MaterializationConfig{
 		CanonicalPath: input, ManifestPath: checkedStoragePath(t, root, full.ManifestStorageKey),
 		ExpectedManifestSHA256: full.ManifestSHA256, ExpectedSourceSHA256: canonical.SHA256,
