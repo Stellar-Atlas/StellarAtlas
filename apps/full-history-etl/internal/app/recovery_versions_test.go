@@ -62,6 +62,80 @@ func TestRunRecoversCompatibleLegacyManifestVersions(t *testing.T) {
 			if got := readTypedManifest(t, manifestPath); !reflect.DeepEqual(got, legacyManifest) {
 				t.Fatal("recovery rewrote the legacy manifest")
 			}
+			// The current writer can replay legacy transactions, but not v6's
+			// obsolete event/change row models. Do not call those files caches.
+			if err := os.Remove(checkedStoragePath(t, root, manifest.Outputs[1].StorageKey)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Run(context.Background(), config); err != nil {
+				t.Fatalf("recover cold legacy transaction: %v", err)
+			}
+			if err := os.Remove(checkedStoragePath(t, root, manifest.Outputs[6].StorageKey)); err != nil {
+				t.Fatal(err)
+			}
+			_, err = Run(context.Background(), config)
+			if (err != nil) != (version == manifestVersionV6) {
+				t.Fatalf("cold event compatibility for %s: %v", version, err)
+			}
+		})
+	}
+}
+
+func TestRunRecoversColdProjectionsOnlyWithCompleteManifestAndCanonical(t *testing.T) {
+	for _, compact := range []bool{false, true} {
+		t.Run(strconv.FormatBool(compact), func(t *testing.T) {
+			root := t.TempDir()
+			directory := filepath.Join(root, "network=pubnet", "range=53312000-53312000")
+			config := fixtureConfig(root, directory)
+			config.CompactLedgerEntryChanges = compact
+			original, err := Run(context.Background(), config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifestPath := checkedStoragePath(t, root, original.ManifestStorageKey)
+			rawManifest, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, d := range original.Outputs[1:] {
+				if err := os.Remove(checkedStoragePath(t, root, d.StorageKey)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			recovered, err := Run(context.Background(), config)
+			if err != nil || !reflect.DeepEqual(recovered, original) {
+				t.Fatalf("cold recovery changed original receipt: %v", err)
+			}
+			assertPublishedFileSet(t, directory, 2)
+			if raw, err := os.ReadFile(manifestPath); err != nil || string(raw) != string(rawManifest) {
+				t.Fatal("cold recovery changed original manifest")
+			}
+			// A newly present bad export is corruption, not a reason to bypass validation.
+			derivedPath := checkedStoragePath(t, root, original.Outputs[1].StorageKey)
+			if err := os.WriteFile(derivedPath, []byte("PAR1bad!PAR1"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Run(context.Background(), config); err == nil {
+				t.Fatal("corrupt present export was treated as cold")
+			}
+			if err := os.Remove(derivedPath); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(manifestPath); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Run(context.Background(), config); err == nil {
+				t.Fatal("incomplete batch without manifest was accepted")
+			}
+			if err := os.WriteFile(manifestPath, rawManifest, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(checkedStoragePath(t, root, original.Outputs[0].StorageKey)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Run(context.Background(), config); err == nil {
+				t.Fatal("missing canonical source was accepted")
+			}
 		})
 	}
 }
@@ -124,8 +198,8 @@ func TestRetiredDerivedOutputRecoveryPreservesOriginalManifest(t *testing.T) {
 	if err := os.Remove(checkedStoragePath(t, root, derived.StorageKey)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Run(context.Background(), config); err == nil {
-		t.Fatal("missing output accepted without authority")
+	if recovered, err := Run(context.Background(), config); err != nil || !reflect.DeepEqual(recovered.Outputs, receipt.Outputs) {
+		t.Fatalf("committed reproducible output did not recover without retirement authority: %v", err)
 	}
 	authorityPath := filepath.Join(t.TempDir(), "authority.json")
 	writeAuthority := func() {

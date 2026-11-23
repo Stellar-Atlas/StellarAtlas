@@ -40,6 +40,10 @@ type TransactionReconstructionReceipt struct {
 // The caller owns the immutable input and private scratch-parent boundary;
 // pathname checks are not a replacement for that concurrency/ownership fence.
 func RunTransactionReconstruction(ctx context.Context, reconstruction TransactionReconstructionConfig) (TransactionReconstructionReceipt, error) {
+	return runReconstruction(ctx, reconstruction, nil)
+}
+
+func runReconstruction(ctx context.Context, reconstruction TransactionReconstructionConfig, selected *output.Specification) (TransactionReconstructionReceipt, error) {
 	if err := reconstruction.Validate(); err != nil {
 		return TransactionReconstructionReceipt{}, err
 	}
@@ -83,12 +87,22 @@ func RunTransactionReconstruction(ctx context.Context, reconstruction Transactio
 			_ = os.RemoveAll(stage)
 		}
 	}()
-	outputs, err := output.OpenTransactionReconstructionCollection(stage, config.MaxOutputBytes)
+	var outputs *output.Collection
+	if selected == nil {
+		outputs, err = output.OpenTransactionReconstructionCollection(stage, config.MaxOutputBytes)
+	} else {
+		outputs, err = output.OpenProjection(stage, config.MaxOutputBytes, *selected)
+	}
 	if err != nil {
 		return TransactionReconstructionReceipt{}, err
 	}
 	defer outputs.Abort()
-	processor, err := transform.NewTransactionReconstructionProcessor(outputs, config.NetworkPassphrase, config.MaxRows)
+	var processor *transform.Processor
+	if selected == nil {
+		processor, err = transform.NewTransactionReconstructionProcessor(outputs, config.NetworkPassphrase, config.MaxRows)
+	} else {
+		processor, err = transform.NewProjectionProcessor(outputs, config.NetworkPassphrase, config.MaxRows, *selected)
+	}
 	if err != nil {
 		return TransactionReconstructionReceipt{}, err
 	}
@@ -122,6 +136,9 @@ func RunTransactionReconstruction(ctx context.Context, reconstruction Transactio
 			MaxDecodedMemoryBytes: config.MaxDecodedMemoryBytes, MaxOutputBytes: config.MaxOutputBytes,
 			MaxLedgers: config.MaxLedgers, MaxRows: config.MaxRows,
 		},
+	}
+	if selected != nil {
+		receipt.Purpose = "on-demand-projection"
 	}
 	if err := writeReconstructionReceipt(stage, receipt); err != nil {
 		return TransactionReconstructionReceipt{}, err

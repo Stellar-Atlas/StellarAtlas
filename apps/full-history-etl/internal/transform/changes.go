@@ -138,6 +138,11 @@ func (p *Processor) writeChangeGroup(
 	if err != nil {
 		return 0, err
 	}
+	if !p.needsChanges() {
+		// Transaction-meta needs normalized change counts, not entry XDR.
+		*changeIndex += int64(len(changes))
+		return int64(len(changes)), nil
+	}
 	sequence := context.ledgerSequence
 	transactionIndex := int64(0)
 	closedAtUnixMillis := context.closedAtUnixMillis
@@ -153,6 +158,10 @@ func (p *Processor) writeChangeGroup(
 	}
 	for _, change := range changes {
 		*changeIndex = *changeIndex + 1
+		if p.selection == "account-state-changes" && change.Type != xdr.LedgerEntryTypeAccount ||
+			p.selection == "trustline-state-changes" && change.Type != xdr.LedgerEntryTypeTrustline {
+			continue
+		}
 		key, err := change.ledgerKey()
 		if err != nil {
 			return 0, fmt.Errorf("derive ledger key: %w", err)
@@ -162,13 +171,16 @@ func (p *Processor) writeChangeGroup(
 			return 0, fmt.Errorf("encode ledger key: %w", err)
 		}
 		keyHash := sha256.Sum256(keyBytes)
-		preEntryBytes, err := marshalLedgerEntry(change.Pre)
-		if err != nil {
-			return 0, fmt.Errorf("encode pre-change ledger entry: %w", err)
-		}
-		postEntryBytes, err := marshalLedgerEntry(change.Post)
-		if err != nil {
-			return 0, fmt.Errorf("encode post-change ledger entry: %w", err)
+		var preEntryBytes, postEntryBytes []byte
+		if p.wants("ledger-entry-changes") {
+			preEntryBytes, err = marshalLedgerEntry(change.Pre)
+			if err != nil {
+				return 0, fmt.Errorf("encode pre-change ledger entry: %w", err)
+			}
+			postEntryBytes, err = marshalLedgerEntry(change.Post)
+			if err != nil {
+				return 0, fmt.Errorf("encode post-change ledger entry: %w", err)
+			}
 		}
 		row := model.LedgerEntryChange{
 			LedgerSequence:    sequence,
@@ -191,14 +203,18 @@ func (p *Processor) writeChangeGroup(
 			HasPostEntry:      change.Post != nil,
 			PostEntryXDR:      string(postEntryBytes),
 		}
-		if err := p.claim("ledger-entry-changes", 1); err != nil {
-			return 0, err
+		if p.wants("ledger-entry-changes") {
+			if err := p.claim("ledger-entry-changes", 1); err != nil {
+				return 0, err
+			}
+			if err := p.outputs.LedgerEntryChanges.Write(row); err != nil {
+				return 0, err
+			}
 		}
-		if err := p.outputs.LedgerEntryChanges.Write(row); err != nil {
-			return 0, err
-		}
-		if err := p.writeStateChangeProjection(change, row, closedAtUnixMillis); err != nil {
-			return 0, err
+		if p.wants("account-state-changes") || p.wants("trustline-state-changes") {
+			if err := p.writeStateChangeProjection(change, row, closedAtUnixMillis); err != nil {
+				return 0, err
+			}
 		}
 	}
 	return int64(len(changes)), nil

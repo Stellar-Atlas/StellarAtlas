@@ -1,4 +1,4 @@
-import { readDerivedOutputRetirements, RETIRABLE_DERIVED_DATASETS, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
+import { readDerivedOutputRetirements, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import express, { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { constants } from 'node:fs';
@@ -11,7 +11,7 @@ import {
 	type FullHistoryLedgerCloseMetaDataset
 } from '@history-scan-coordinator/domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { readFullHistoryLedgerCloseMetaCoverage } from '../../use-cases/get-full-history-status/FullHistoryLedgerCloseMetaCoverage.js';
-import { checkedHistoryStorageRoot, serveColdHistoryDownload, serveHistoryDescriptor, type HistoryColdReader } from './HistoryDataColdDownload.js';
+import { checkedHistoryStorageRoot, isColdProjectionDataset, serveColdHistoryDownload, serveHistoryDescriptor, type ColdOutput, type ColdPlan, type HistoryColdReader } from './HistoryDataColdDownload.js';
 
 export interface HistoryDataRouterConfig {
 	readonly dataSource: DataSource;
@@ -189,13 +189,23 @@ export const HistoryDataRouterWrapper = (
 				try {
 					file = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 				} catch (error) {
-					// Authority is committed before unlink. If a hot name disappeared since
-					// our snapshot, re-read only this batch once; unexplained absence is never cold authority.
+					// A retirement may have committed between our snapshot and open.
 					if ((error as NodeJS.ErrnoException).code !== 'ENOENT' ||
-						!RETIRABLE_DERIVED_DATASETS.some(name => name === dataset)) throw error;
+						!isColdProjectionDataset(dataset)) throw error;
 					plan = await readPlan();
 					retirement = plan?.outputs.find(output => output.dataset === dataset);
-					if (!retirement) throw error;
+					if (!retirement) {
+						const [identity] = await config.dataSource.query<{ manifestSha256: Buffer; canonicalSha256: Buffer }[]>(coldIdentitySql,
+							[networkHash, req.params.batchId]);
+						if (!identity) throw error;
+						const coldPlan: ColdPlan = { batchId: req.params.batchId, manifestSha256: digest(identity.manifestSha256),
+							canonicalSha256: digest(identity.canonicalSha256) };
+						const output: ColdOutput = { dataset, outputSha256: digest(artifact.sha256),
+							byteCount: unsignedString(artifact.byteCount, 'byteCount'), storageKey: artifact.storageKey };
+						if (!config.coldReader?.supports(output)) throw error;
+						return await serveColdHistoryDownload(req, res, coldPlan, output, artifact.mediaType, config.coldReader,
+							async () => canonicalSource(coldPlan));
+					}
 				}
 				if (file) {
 					try {
@@ -213,18 +223,9 @@ export const HistoryDataRouterWrapper = (
 				if (retirement.outputSha256 !== digest(artifact.sha256) ||
 					retirement.byteCount !== unsignedString(artifact.byteCount, 'byteCount') ||
 					retirement.storageKey !== artifact.storageKey) throw new Error('Retirement descriptor mismatch');
-				const selectedPlan = plan;
 				if (config.coldReader?.supports(retirement)) {
 					return await serveColdHistoryDownload(req, res, plan, retirement, artifact.mediaType,
-						config.coldReader, async () => {
-							const [canonical] = await config.dataSource.query<DownloadRow[]>(downloadSql,
-								[networkHash, selectedPlan.batchId, 'ledger-close-meta']);
-							if (!canonical || digest(canonical.sha256) !== selectedPlan.canonicalSha256)
-								throw new Error('Canonical descriptor unavailable');
-							const path = resolveArtifactPath(storageRoot, canonical.storageKey);
-							if (!path) throw new Error('Invalid canonical artifact');
-							return { path, byteCount: unsignedString(canonical.byteCount, 'byteCount') };
-						});
+						config.coldReader, async () => canonicalSource(plan));
 				}
 				return res.status(410).setHeader('Cache-Control', 'no-store').json({
 					error: 'This derived export has been retired',
@@ -241,6 +242,14 @@ export const HistoryDataRouterWrapper = (
 				.status(503)
 				.setHeader('Cache-Control', 'no-store')
 				.json({ error: 'History data artifact is unavailable' });
+		}
+		async function canonicalSource(selectedPlan: ColdPlan) {
+			const [canonical] = await config.dataSource.query<DownloadRow[]>(downloadSql,
+				[networkHash, selectedPlan.batchId, 'ledger-close-meta']);
+			if (!canonical || digest(canonical.sha256) !== selectedPlan.canonicalSha256) throw new Error('Canonical descriptor unavailable');
+			const path = resolveArtifactPath(storageRoot, canonical.storageKey);
+			if (!path) throw new Error('Invalid canonical artifact');
+			return { path, byteCount: unsignedString(canonical.byteCount, 'byteCount') };
 		}
 	});
 
@@ -419,5 +428,10 @@ const downloadSql = [
 	' and dataset."batch_id" = $2::uuid',
 	' and dataset."dataset" = $3'
 ].join(' ');
+
+const coldIdentitySql = `select b.processing_manifest_sha256 as "manifestSha256", c.output_sha256 as "canonicalSha256"
+	from full_history_ledger_close_meta_batch b join full_history_ledger_close_meta_dataset c
+	on c.batch_id=b.id and c.network_passphrase_hash=b.network_passphrase_hash and c.dataset='ledger-close-meta'
+	where b.network_passphrase_hash=$1 and b.id=$2::uuid`;
 
 export { HistoryDataRouterWrapper as historyDataRouter };

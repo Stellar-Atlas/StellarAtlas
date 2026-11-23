@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -53,11 +54,14 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 	if err := reserveMaterializationCache(c.CacheRoot, c.CacheMaxBytes, 0); err != nil {
 		return err
 	}
-	key := c.ExpectedManifestSHA256 + "-" + c.ExpectedSourceSHA256
+	// One content-bound leaf per requested family. Old triplet leaves remain
+	// ordinary bounded cache entries; they cannot be mistaken for these.
+	keyHash := sha256.Sum256([]byte(c.ExpectedManifestSHA256 + ":" + c.Dataset))
+	key := hex.EncodeToString(keyHash[:]) + "-" + c.ExpectedSourceSHA256
 	leaf := filepath.Join(c.CacheRoot, key)
 	cacheHit := false
 	if _, err := os.Lstat(leaf); err == nil {
-		if err := validateMaterialization(ctx, leaf, manifest, expected, c.ExpectedSourceSHA256, c.Dataset, false); err != nil {
+		if err := validateMaterialization(ctx, leaf, manifest, expected, c.ExpectedSourceSHA256); err != nil {
 			return fmt.Errorf("existing cache entry failed verification; preserve for inspection: %w", err)
 		}
 		cacheHit = true
@@ -93,12 +97,16 @@ func WithMaterializedOutput(ctx context.Context, c MaterializationConfig, opened
 		if config.MaxOutputBytes > c.Limits.MaxOutputBytes {
 			return fmt.Errorf("original projections exceed configured reconstruction output bound")
 		}
-		if _, err := RunTransactionReconstruction(ctx, TransactionReconstructionConfig{
-			Config: config, ExpectedSourceSHA256: c.ExpectedSourceSHA256,
-		}); err != nil {
+		spec, err := materializationSpec(manifest.ManifestVersion, c.Dataset)
+		if err != nil {
 			return err
 		}
-		if err := validateMaterialization(ctx, config.OutputPath, manifest, expected, c.ExpectedSourceSHA256, c.Dataset, true); err != nil {
+		if _, err := runReconstruction(ctx, TransactionReconstructionConfig{
+			Config: config, ExpectedSourceSHA256: c.ExpectedSourceSHA256,
+		}, &spec); err != nil {
+			return err
+		}
+		if err := validateMaterialization(ctx, config.OutputPath, manifest, expected, c.ExpectedSourceSHA256); err != nil {
 			return err
 		}
 		if err := ctx.Err(); err != nil {
@@ -153,6 +161,13 @@ func materializationManifest(c MaterializationConfig) (Manifest, map[string]outp
 	if err != nil || !isSupportedManifestVersion(manifest.ManifestVersion) {
 		return empty, nil, fmt.Errorf("unsupported original manifest")
 	}
+	if !reflect.DeepEqual(manifest.Format, writerFormat()) {
+		return empty, nil, fmt.Errorf("original writer or replay encoding is not supported")
+	}
+	spec, err := materializationSpec(manifest.ManifestVersion, c.Dataset)
+	if err != nil {
+		return empty, nil, err
+	}
 	id := network.ID(c.NetworkPassphrase)
 	if manifest.Network.NetworkIDSHA256 != hex.EncodeToString(id[:]) || validateRecoveredLimits(manifest) != nil ||
 		manifest.Range.LedgerCount > c.Limits.MaxLedgers {
@@ -160,32 +175,33 @@ func materializationManifest(c MaterializationConfig) (Manifest, map[string]outp
 	}
 	expected := make(map[string]output.Descriptor)
 	canonical := false
-	var bytes int64
 	for _, d := range manifest.Outputs {
 		if d.Dataset == "ledger-close-meta" {
-			if canonical || d.SHA256 != c.ExpectedSourceSHA256 || d.ByteCount <= 0 || d.ByteCount > c.Limits.MaxCompressedBytes {
+			if canonical || d.SHA256 != c.ExpectedSourceSHA256 || d.ByteCount <= 0 || d.ByteCount > c.Limits.MaxCompressedBytes ||
+				d.MediaType != output.LedgerCloseMetaMediaType || d.Representation != output.LosslessReplayRepresentation ||
+				d.SchemaVersion != output.Specifications()[0].SchemaVersion || d.RecordCount != manifest.Range.LedgerCount {
 				return empty, nil, fmt.Errorf("canonical descriptor mismatch")
 			}
 			canonical = true
 		}
-		if !materializableDataset(d.Dataset) {
+		if d.Dataset != c.Dataset {
 			continue
 		}
 		if _, duplicate := expected[d.Dataset]; duplicate || d.ByteCount <= 0 ||
 			!reconstructionSourceSHA256Pattern.MatchString(d.SHA256) ||
-			d.ByteCount > c.Limits.MaxOutputBytes-bytes {
+			d.ByteCount > c.Limits.MaxOutputBytes || d.RecordCount > c.Limits.MaxRows ||
+			d.SchemaVersion != spec.SchemaVersion || d.Representation != spec.Representation || d.MediaType != spec.MediaType {
 			return empty, nil, fmt.Errorf("invalid original projection descriptor")
 		}
-		bytes += d.ByteCount
 		expected[d.Dataset] = d
 	}
-	if !canonical || len(expected) != 3 {
-		return empty, nil, fmt.Errorf("original manifest must bind canonical source and all three projections")
+	if !canonical || len(expected) != 1 {
+		return empty, nil, fmt.Errorf("original manifest must bind canonical source and requested projection")
 	}
 	return manifest, expected, nil
 }
 
-func validateMaterialization(ctx context.Context, leaf string, original Manifest, expected map[string]output.Descriptor, source, selected string, all bool) error {
+func validateMaterialization(ctx context.Context, leaf string, original Manifest, expected map[string]output.Descriptor, source string) error {
 	info, err := os.Lstat(leaf)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("cache entry must be an ordinary directory")
@@ -196,8 +212,8 @@ func validateMaterialization(ctx context.Context, leaf string, original Manifest
 	}
 	var receipt TransactionReconstructionReceipt
 	if err := json.Unmarshal(raw, &receipt); err != nil || receipt.ReceiptVersion != "stellar-atlas.full-history.transaction-reconstruction.v1" ||
-		receipt.Purpose != "offline-transaction-reconstruction" || receipt.CompleteDatasetSet ||
-		receipt.Network != original.Network || receipt.Range != original.Range || len(receipt.Outputs) != 3 ||
+		receipt.Purpose != "on-demand-projection" || receipt.CompleteDatasetSet ||
+		receipt.Network != original.Network || receipt.Range != original.Range || len(receipt.Outputs) != 1 ||
 		len(receipt.SourceObjects) != 1 || receipt.SourceObjects[0].CompressedSHA256 != source {
 		return fmt.Errorf("reconstruction receipt identity mismatch")
 	}
@@ -210,9 +226,6 @@ func validateMaterialization(ctx context.Context, leaf string, original Manifest
 			return fmt.Errorf("reconstructed projection differs from original descriptor")
 		}
 		seen[d.Dataset] = true
-		if !all && d.Dataset != selected {
-			continue
-		}
 		filename, err := materializedFilename(d.Dataset)
 		if err != nil {
 			return err
@@ -240,14 +253,23 @@ func validateMaterialization(ctx context.Context, leaf string, original Manifest
 }
 
 func materializedFilename(dataset string) (string, error) {
-	switch dataset {
-	case "transactions":
-		return "transactions.parquet", nil
-	case "transaction-results":
-		return "transaction-results.parquet", nil
-	case "operations":
-		return "operations.parquet", nil
-	default:
-		return "", fmt.Errorf("unsupported materialized dataset")
+	for _, spec := range output.Specifications() {
+		if spec.Dataset == dataset && output.SupportsProjection(spec) {
+			return spec.Filename, nil
+		}
 	}
+	return "", fmt.Errorf("unsupported materialized dataset")
+}
+
+func materializationSpec(version, dataset string) (output.Specification, error) {
+	specs, err := outputSpecificationsForVersion(version)
+	if err != nil {
+		return output.Specification{}, err
+	}
+	for _, spec := range specs {
+		if spec.Dataset == dataset && output.SupportsProjection(spec) {
+			return spec, nil
+		}
+	}
+	return output.Specification{}, fmt.Errorf("no exact writer for %s in %s", dataset, version)
 }

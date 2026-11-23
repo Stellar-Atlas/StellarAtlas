@@ -10,6 +10,7 @@ import {
 } from './GoFullHistoryTypedExportProcess.js';
 
 export interface GoFullHistoryStateExportRequest {
+	readonly inputFd?: number;
 	readonly args: readonly string[];
 	readonly consumeRow: (row: FullHistoryStateChange) => Promise<void>;
 	readonly dataset: FullHistoryStateDataset;
@@ -25,6 +26,7 @@ export function runGoFullHistoryStateExport(
 ): Promise<FullHistoryTypedExportResult> {
 	return runExport({
 		args: request.args,
+		inputFd: request.inputFd,
 		consumeOutput: (output) =>
 			consumeFullHistoryStateExport(
 				output,

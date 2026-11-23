@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import request from 'supertest';
 import { mock, type MockProxy } from 'jest-mock-extended';
@@ -7,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { historyDataRouter } from '../HistoryDataRouter.js';
-import { checkedHistoryStorageRoot, historyColdReader } from '../HistoryDataColdDownload.js';
+import { checkedHistoryStorageRoot, historyColdReader, COLD_PROJECTION_DATASETS, isColdProjectionDataset } from '../HistoryDataColdDownload.js';
 
 describe('HistoryDataRouter.integration', () => {
 	let app: express.Application;
@@ -209,7 +210,7 @@ describe('HistoryDataRouter.integration', () => {
 			.expect(r => expect(r.headers['x-content-sha256']).toBeUndefined());
 
 		// Commit-then-unlink interleaves between our first catalog read and open.
-		// Only the second exact retirement read, not the missing path, permits replay.
+		// A second exact retirement read observes that committed authority.
 		let authorityReads = 0;
 		dataSource.query.mockImplementation(async (sql: string) => {
 			if (sql.includes('to_regclass')) return [{ available: true }];
@@ -231,6 +232,32 @@ describe('HistoryDataRouter.integration', () => {
 		await request(cold).get(download).expect(503).expect('Cache-Control', 'no-store');
 		expect(authorityReads).toBe(2);
 		expect(acquire.mock.calls).toHaveLength(callsBeforeUnexplainedMiss);
+		// An existing immutable batch identity also authorizes exact reconstruction;
+		// absence of that identity above remains an error.
+		dataSource.query.mockImplementation(async (sql: string) => {
+			if (sql.includes('to_regclass')) return [{ available: true }];
+			if (sql.includes('from full_history_lcm_derived_output_retirement')) return [];
+			if (sql.includes('b.processing_manifest_sha256 as')) return [{ manifestSha256: Buffer.alloc(32, 3), canonicalSha256: Buffer.alloc(32, 4) }];
+			return [{ byteCount: row.byteCount, mediaType: 'application/vnd.apache.parquet',
+				sha256: Buffer.from(sha, 'hex'), storageKey: row.storageKey }];
+		});
+		await request(cold).get(download).expect(200).expect('X-Atlas-Artifact-Source', 'reconstructed')
+			.expect(r => expect(r.text).toBe('data'));
+	});
+
+	it('shares the native projection capabilities with downloads and state imports', () => {
+		const reader = historyColdReader({
+			FULL_HISTORY_COLD_EXECUTABLE: fileURLToPath(new URL('../../../../../bin/stellaratlas-full-history-materialize', import.meta.url)),
+			FULL_HISTORY_COLD_CACHE_ROOT: '/private-cold-cache', FULL_HISTORY_COLD_CACHE_MAX_BYTES: '67108864',
+			FULL_HISTORY_COLD_TRANSFORM_REVISION: '06'.repeat(20)
+		}, 'Public Global Stellar Network ; September 2015', '/registered-history');
+		expect(reader).toBeDefined();
+		expect(COLD_PROJECTION_DATASETS).toHaveLength(9);
+		for (const dataset of COLD_PROJECTION_DATASETS) {
+			expect(reader?.supports({ dataset, storageKey: dataset + '.parquet', byteCount: '4', outputSha256: '03'.repeat(32) })).toBe(true);
+		}
+		expect(isColdProjectionDataset('ledger-close-meta')).toBe(false);
+		expect(isColdProjectionDataset('unknown')).toBe(false);
 	});
 
 	it('rejects invalid dataset and batch identifiers without a query', async () => {

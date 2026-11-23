@@ -26,7 +26,7 @@ func ParseMaterializationConfig(args []string, stderr io.Writer) (Materializatio
 	flags.StringVar(&c.ManifestPath, "manifest", "", "trusted original immutable manifest")
 	flags.StringVar(&c.ExpectedManifestSHA256, "expected-manifest-sha256", "", "catalogue manifest digest")
 	flags.StringVar(&c.ExpectedSourceSHA256, "expected-source-sha256", "", "catalogue canonical output digest")
-	flags.StringVar(&c.Dataset, "dataset", "", "one transaction projection to open")
+	flags.StringVar(&c.Dataset, "dataset", "", "one original Parquet projection to open")
 	flags.StringVar(&c.CacheRoot, "cache-root", "", "dedicated private disposable cache")
 	flags.Uint64Var(&c.CacheMaxBytes, "cache-max-bytes", 0, "maximum cache including reconstruction scratch")
 	flags.StringVar(&c.NetworkPassphrase, "network-passphrase", "", "trusted Stellar network passphrase")
@@ -71,5 +71,6 @@ func (c MaterializationConfig) Validate() error {
 }
 
 func materializableDataset(dataset string) bool {
-	return dataset == "transactions" || dataset == "transaction-results" || dataset == "operations"
+	_, err := materializedFilename(dataset)
+	return err == nil
 }
