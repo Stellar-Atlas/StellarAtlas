@@ -10,3 +10,14 @@
 	.compact :global(.experience-switcher) { grid-column: 1 / -1; margin: 0; justify-self: start; }
 	.compact :global(.strip-inner) > strong { grid-column: 1 / -1; font-size: .74rem; font-weight: 400; overflow-wrap: anywhere; }
 }
+
+.snapshotDisclosure { display: none; }
+@media (max-width: 760px) {
+	.topology :global(.strip-inner) { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 3px 10px; min-block-size: 0; padding-block: 5px; font-size: .7rem; }
+	.topology :global(.experience-switcher) { order: 2; margin: 0; border: 0; background: transparent; padding: 0; font-size: .7rem; }
+	.topology :global(.experience-switcher) span, .topology :global(.strip-inner) > strong { display: none; }
+	.topology :global(.experience-switcher) a { padding: 4px 0; }
+	.topology .snapshotDisclosure { display: block; position: relative; order: 3; margin-inline-start: auto; }
+	.snapshotDisclosure summary { cursor: pointer; padding: 5px 0; }
+	.snapshotDisclosure p { position: absolute; inset-block-start: 100%; inset-inline-end: 0; inline-size: 220px; margin: 0; padding: 10px; background: var(--shell-background); border: 1px solid var(--border); border-radius: 6px; z-index: 250; }
+}

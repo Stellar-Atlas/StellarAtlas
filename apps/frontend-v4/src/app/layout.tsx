@@ -16,6 +16,7 @@ import './explorer-operation-table.css';
 import './status.css';
 import './operations-visibility.css';
 import './responsive.css';
+import './graph-mobile.css';
 import { AppShell } from '../components/layout/app-shell';
 import { AtlasRouteAnalytics } from '../components/atlas-analytics';
 

@@ -53,7 +53,7 @@ export function NetworkStrip(): React.JSX.Element {
 	const displayedLedger = latestLedger;
 
 	return (
-		<div className={'network-strip' + (compact ? ' ' + styles.compact : '')}>
+		<div className={'network-strip' + (compact ? ' ' + styles.compact : '') + (pathname === '/' ? ' ' + styles.topology : '')}>
 			<div className="site-header-inner strip-inner">
 				<div className="experience-switcher" aria-label="Site experience">
 					<span>Modern update</span>
@@ -65,6 +65,9 @@ export function NetworkStrip(): React.JSX.Element {
 					Network snapshot:{' '}
 					{networkTime ? <LocalDateTime dateTime={networkTime} /> : 'Loading'}
 				</strong>
+				{pathname === '/' && <details className={styles.snapshotDisclosure}><summary>Snapshot</summary><p>
+					{networkTime ? <LocalDateTime dateTime={networkTime} /> : 'Loading network snapshot…'}
+				</p></details>}
 			</div>
 		</div>
 	);
