@@ -19,6 +19,29 @@ func inspectSources(ctx context.Context, config Config) (ShardEvidence, error) {
 	return walkSources(ctx, config, nil)
 }
 
+// A cold read has exactly one canonical source, whose digest and output
+// descriptor are checked by runReconstruction before its result is published.
+func streamCanonicalSource(ctx context.Context, c Config, p *transform.Processor) (ShardEvidence, error) {
+	b, err := batchinput.StreamFile(ctx, c.Sources[0].Path, c.StartLedger, c.EndLedger, batchinput.Limits{
+		MaxCompressedBytes: c.MaxCompressedBytes, MaxUncompressedBytes: c.MaxUncompressedBytes,
+		MaxDecodedMemoryBytes: c.MaxDecodedMemoryBytes, MaxLedgers: c.MaxLedgers,
+	}, p.ProcessLedger)
+	if err != nil {
+		return ShardEvidence{}, err
+	}
+	if b.UncompressedBytes != c.MaxUncompressedBytes {
+		return ShardEvidence{}, fmt.Errorf("canonical XDR length differs from registered source lengths")
+	}
+	return ShardEvidence{Range: ManifestRange{StartLedger: b.Start, EndLedger: b.End, LedgerCount: b.LedgerCount}, SourceObjects: []SourceEvidence{sourceEvidence(c.Sources[0], b)}}, nil
+}
+
+func sourceEvidence(s Source, b *batchinput.Batch) SourceEvidence {
+	return SourceEvidence{ObjectKey: s.ObjectKey, StartLedger: b.Start, EndLedger: b.End, LedgerCount: b.LedgerCount,
+		CompressedByteCount: b.CompressedBytes, CompressedSHA256: b.CompressedSHA256,
+		FirstPreviousLedgerHash: hex.EncodeToString(b.FirstPreviousHash[:]), LastLedgerHash: hex.EncodeToString(b.LastLedgerHash[:]),
+		XDRByteCount: b.UncompressedBytes, XDRSHA256: b.XDRSHA256}
+}
+
 func processSources(ctx context.Context, config Config, processor *transform.Processor) (ShardEvidence, error) {
 	if processor == nil {
 		return ShardEvidence{}, fmt.Errorf("processor is required")
@@ -71,18 +94,7 @@ func walkSources(ctx context.Context, config Config, processor *transform.Proces
 			}
 		}
 
-		evidence.SourceObjects = append(evidence.SourceObjects, SourceEvidence{
-			ObjectKey:               source.ObjectKey,
-			StartLedger:             batch.Start,
-			EndLedger:               batch.End,
-			LedgerCount:             batch.LedgerCount,
-			CompressedByteCount:     batch.CompressedBytes,
-			CompressedSHA256:        batch.CompressedSHA256,
-			FirstPreviousLedgerHash: hex.EncodeToString(batch.FirstPreviousHash[:]),
-			LastLedgerHash:          hex.EncodeToString(batch.LastLedgerHash[:]),
-			XDRByteCount:            batch.UncompressedBytes,
-			XDRSHA256:               batch.XDRSHA256,
-		})
+		evidence.SourceObjects = append(evidence.SourceObjects, sourceEvidence(source, batch))
 		compressedBytes += batch.CompressedBytes
 		xdrBytes += batch.UncompressedBytes
 		ledgerCount += batch.LedgerCount

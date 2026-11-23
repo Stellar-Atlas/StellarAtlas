@@ -106,7 +106,12 @@ func runReconstruction(ctx context.Context, reconstruction TransactionReconstruc
 	if err != nil {
 		return TransactionReconstructionReceipt{}, err
 	}
-	evidence, err := processSources(ctx, config, processor)
+	var evidence ShardEvidence
+	if selected == nil {
+		evidence, err = processSources(ctx, config, processor)
+	} else {
+		evidence, err = streamCanonicalSource(ctx, config, processor)
+	}
 	if err != nil {
 		return TransactionReconstructionReceipt{}, err
 	}

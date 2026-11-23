@@ -2,6 +2,8 @@ package lcmbatch
 
 import (
 	"bytes"
+	"context"
+	"encoding/binary"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,6 +15,82 @@ import (
 )
 
 const fixtureName = "FCD285FF--53312000.xdr.zstd"
+
+func TestStreamFileUsesPerLedgerBoundsAndRejectsTrailingData(t *testing.T) {
+	lim := testLimits()
+	ctx := context.Background()
+	b, err := StreamFile(ctx, fixturePath(), 53312000, 53312000, lim, func(m xdr.LedgerCloseMeta) error {
+		if m.CountTransactions() != 163 {
+			t.Fatalf("lost transactions: %d", m.CountTransactions())
+		}
+		return nil
+	})
+	if err != nil || b.XDRSHA256 != "074cf6df5db754bf7488d4d7c65604f2f9e6f7e241212b5328c6012ca4bbf205" || b.UncompressedBytes != 372492 || b.CompressedBytes != 72651 {
+		t.Fatalf("stream differs from retained fixture: %+v, %v", b, err)
+	}
+	// Build 1,024 individually small, linked ledgers. Make the total wire
+	// size larger than the permitted per-ledger memory to catch bulk decode.
+	var base xdr.LedgerCloseMeta
+	_, err = StreamFile(ctx, fixturePath(), 53312000, 53312000, lim, func(m xdr.LedgerCloseMeta) error { base = m; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw bytes.Buffer
+	const start, count = uint32(91), uint32(1024)
+	for _, v := range []uint32{start, start + count - 1, count} {
+		if err := binary.Write(&raw, binary.BigEndian, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var last xdr.Hash
+	for seq := start; seq < start+count; seq++ {
+		h := base.LedgerHeaderHistoryEntry()
+		h.Header.LedgerSeq = xdr.Uint32(seq)
+		h.Header.PreviousLedgerHash = last
+		h.Hash, err = xdr.HashXdr(&h.Header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = h.Hash
+		m := xdr.LedgerCloseMeta{V: 0, V0: &xdr.LedgerCloseMetaV0{LedgerHeader: h}}
+		if _, err = xdr.Marshal(&raw, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lim.MaxDecodedMemoryBytes = 256 << 10
+	if int64(raw.Len()) <= lim.MaxDecodedMemoryBytes {
+		t.Fatal("fixture doesn't exercise streaming limit")
+	}
+	lim.MaxUncompressedBytes = int64(raw.Len())
+	lim.MaxLedgers = uint64(count)
+	p := filepath.Join(t.TempDir(), "canonical.zst")
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderConcurrency(1), zstd.WithWindowSize(128<<10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer enc.Close()
+	write := func(data []byte) {
+		if err := os.WriteFile(p, enc.EncodeAll(data, nil), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(raw.Bytes())
+	var seen uint32
+	_, err = StreamFile(ctx, p, start, start+count-1, lim, func(m xdr.LedgerCloseMeta) error {
+		if uint32(m.LedgerSequence()) != start+seen {
+			t.Fatalf("out of order")
+		}
+		seen++
+		return nil
+	})
+	if err != nil || seen != count {
+		t.Fatalf("stream of %d ledgers stopped at %d: %v", count, seen, err)
+	}
+	write(append(raw.Bytes(), 0))
+	if _, err = StreamFile(ctx, p, start, start+count-1, lim, func(xdr.LedgerCloseMeta) error { return nil }); err == nil {
+		t.Fatal("accepted extra XDR")
+	}
+}
 
 func TestDecodeFileRealLedgerCloseMetaBatch(t *testing.T) {
 	batch, err := DecodeFile(fixturePath(), 53312000, 53312000, testLimits())
