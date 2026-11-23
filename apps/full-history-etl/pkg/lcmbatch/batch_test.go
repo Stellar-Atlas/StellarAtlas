@@ -112,6 +112,17 @@ func TestStreamFileUsesPerLedgerBoundsAndRejectsTrailingData(t *testing.T) {
 	if _, err := StreamRegisteredFile(ctx, p, start, start+count-1, lim, badFrames, func(xdr.LedgerCloseMeta) error { return nil }); err == nil {
 		t.Fatal("accepted incorrect original-frame length")
 	}
+	// Authenticate a frame containing trailing bytes: buffered lookahead must
+	// not make unread bytes appear to have been consumed by the decoder.
+	framedTrailing := append(append([]byte(nil), raw.Bytes()...), 0, 0, 0, 0)
+	sum := sha256.Sum256(framedTrailing)
+	trailingFrame := []SourceFrame{{Start: start, End: start + count - 1, Bytes: int64(len(framedTrailing)), SHA256: hex.EncodeToString(sum[:])}}
+	write(framedTrailing)
+	trailingLimits := lim
+	trailingLimits.MaxUncompressedBytes = int64(len(framedTrailing))
+	if _, err := StreamRegisteredFile(ctx, p, start, start+count-1, trailingLimits, trailingFrame, func(xdr.LedgerCloseMeta) error { return nil }); err == nil {
+		t.Fatal("accepted authenticated but undecoded frame trailing bytes")
+	}
 	write(append(raw.Bytes(), 0))
 	if _, err = StreamFile(ctx, p, start, start+count-1, lim, func(xdr.LedgerCloseMeta) error { return nil }); err == nil {
 		t.Fatal("accepted extra XDR")

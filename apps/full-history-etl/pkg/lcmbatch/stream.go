@@ -76,6 +76,7 @@ func streamFile(ctx context.Context, path string, start, end uint32, lim Limits,
 	b := &Batch{Start: start, End: end, LedgerCount: count}
 	var frameLimit *io.LimitedReader
 	var frameHash hash.Hash
+	frameReader := bufio.NewReaderSize(nil, 64<<10)
 	var ledgerInput io.Reader = wire
 	frameIndex := 0
 	for i := uint64(0); i < count; i++ {
@@ -101,7 +102,9 @@ func streamFile(ctx context.Context, path string, start, end uint32, lim Limits,
 			frameHash = sha256.New()
 			frameHash.Write(hdr[:])
 			frameLimit = &io.LimitedReader{R: wire, N: spec.Bytes - 12}
-			ledgerInput = io.TeeReader(frameLimit, frameHash)
+			// Hash bounded buffered reads instead of every SDK primitive read.
+			frameReader.Reset(io.TeeReader(frameLimit, frameHash))
+			ledgerInput = frameReader
 		}
 		one := &io.LimitedReader{R: ledgerInput, N: limit}
 		var m xdr.LedgerCloseMeta
@@ -121,7 +124,7 @@ func streamFile(ctx context.Context, path string, start, end uint32, lim Limits,
 		}
 		b.LastLedgerHash = h.Hash
 		if len(frames) > 0 && seq == uint64(frames[frameIndex].End) {
-			if frameLimit.N != 0 || hex.EncodeToString(frameHash.Sum(nil)) != frames[frameIndex].SHA256 {
+			if frameLimit.N != 0 || frameReader.Buffered() != 0 || hex.EncodeToString(frameHash.Sum(nil)) != frames[frameIndex].SHA256 {
 				return nil, fmt.Errorf("registered source XDR length or digest mismatch for %d-%d", frames[frameIndex].Start, frames[frameIndex].End)
 			}
 			frameIndex++
