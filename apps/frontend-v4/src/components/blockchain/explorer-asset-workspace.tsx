@@ -3,6 +3,7 @@
 import { ExplorerLink as Link } from './explorer-investigation';
 import {
 	AssetDetails,
+	AssetTitle,
 	IssuerDetails
 } from './explorer-asset-views';
 import type {
@@ -189,7 +190,7 @@ function ExplorerAssetRecordWorkspace({
 	}, [canonicalAssetRef, issuerId, reload]);
 
 	const refresh = () => setReload((value) => value + 1);
-	const heading = canonicalAssetRef ? 'Overview' : 'Issuer details';
+	const heading = canonicalAssetRef ? 'Asset' : 'Issuer details';
 
 	return (
 		<div className={styles.workspace}>
@@ -214,12 +215,13 @@ function ExplorerAssetRecordWorkspace({
 				)}
 				{canonicalAssetRef && detail && (
 					<>
-						<AssetDetails
+						<AssetTitle record={detail} />
+						<ExplorerAssetTabs record={detail} identity={<AssetDetails
 							record={detail}
 							onRefresh={refresh}
 							pending={needsMetadataRefresh(detail.metadata, 0)}
-						/>
-						<ExplorerAssetTabs record={detail} />
+							showTitle={false}
+						/>} />
 					</>
 				)}
 				{issuerId && issuer && (

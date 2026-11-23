@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { AssetRecord } from './explorer-asset-types';
 import { withExplorerReturnTo } from '../../api/explorer-return-context';
@@ -21,9 +22,11 @@ import {
 import ui from './explorer-asset-workspace.module.css';
 
 export function ExplorerAssetTabs({
-	record
+	record,
+	identity
 }: {
 	record: AssetRecord;
+	identity?: ReactNode;
 }): React.JSX.Element {
 	const pathname = usePathname();
 	const params = useSearchParams();
@@ -60,8 +63,18 @@ export function ExplorerAssetTabs({
 					</button>
 				))}
 			</nav>
+			<label className={ui.sectionPicker}>
+				Asset section
+				<select value={tab} onChange={event => {
+					const selected = assetTabOptions.find(item => item.label === event.currentTarget.value);
+					if (selected) setTab(selected.label);
+				}}>
+					{assetTabOptions.map(({ label }) => <option key={label}>{label}</option>)}
+				</select>
+			</label>
 			{tab === 'Overview' && (
 				<>
+					{identity}
 					{metadata?.tomlUrl && <ParsedIssuerMetadata metadata={metadata} />}
 					<div className={ui.quickLinks}>
 						<button onClick={() => setTab('Holders')}>

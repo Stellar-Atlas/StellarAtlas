@@ -8,6 +8,21 @@
 	font-size: 0.85rem;
 	white-space: nowrap;
 }
+.filterDisclosure {
+	border: 1px solid var(--border);
+	border-radius: .45rem;
+	padding-inline: .75rem;
+}
+.filterDisclosure summary {
+	box-sizing: border-box;
+	min-height: 44px;
+	padding-block: .75rem;
+	cursor: pointer;
+}
+.filterDisclosure summary span { font-weight: 600; }
+.filterDisclosure summary small { margin-inline-start: .65rem; color: var(--muted); }
+.filterDisclosure[open] { padding-block-end: .75rem; }
+.filterDisclosure > p { margin-top: .75rem; }
 .form {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));

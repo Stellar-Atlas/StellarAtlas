@@ -345,6 +345,26 @@
 	overflow-x: auto;
 	border-bottom: 1px solid var(--border);
 }
+.sectionPicker { display: none; }
+@media (max-width: 768px) {
+	.assetTabs .tabBar { display: none; }
+	.sectionPicker {
+		display: grid;
+		gap: .25rem;
+		font-size: .8rem;
+	}
+	.sectionPicker select {
+		width: 100%;
+		min-height: 44px;
+		padding: .45rem .65rem;
+		color: var(--ink);
+		background: var(--button-secondary);
+		border: 1px solid var(--border);
+		border-radius: .4rem;
+		font: inherit;
+	}
+	.address .copyButton { min-height: 44px; min-width: 44px; }
+}
 .tabBar button {
 	border: 0;
 	border-bottom: 2px solid transparent;

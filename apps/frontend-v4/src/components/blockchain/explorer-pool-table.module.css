@@ -4,6 +4,52 @@
 	border: 1px solid var(--border);
 	border-radius: 8px;
 }
+.poolResults { min-width: 0; }
+.mobileSort, .mobileLabel, .mobilePoolLink { display: none; }
+@media (max-width: 768px) {
+	.poolResults .scroll { overflow: visible; }
+	.poolResults .table { display: block; min-width: 0; }
+	.poolResults .table thead { display: none; }
+	.poolResults .table tbody { display: block; }
+	.poolResults .table tbody tr {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: .5rem .8rem;
+		padding: .8rem;
+	}
+	.poolResults .table tbody tr + tr { border-top: 1px solid var(--border); }
+	.poolResults .table td {
+		min-width: 0;
+		border: 0;
+		padding: 0;
+		text-align: start;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	.poolPairCell, .poolResults .empty { grid-column: 1 / -1; }
+	.poolPairCell .pair { flex-wrap: wrap; white-space: normal; }
+	.poolIdCell .identifier { width: auto; min-height: 44px; display: inline-flex; align-items: center; }
+	.poolIdCell a.identifier code { display: none; }
+	.mobileLabel, .mobilePoolLink { display: block; }
+	.mobileLabel { color: var(--muted); font-size: .72rem; }
+	.mobileSort {
+		display: flex;
+		align-items: end;
+		flex-wrap: wrap;
+		gap: .4rem .6rem;
+		margin-bottom: .65rem;
+	}
+	.mobileSort label { display: grid; gap: .2rem; flex: 1 1 9rem; font-size: .78rem; }
+	.mobileSort :is(select, button) {
+		min-height: 44px;
+		padding: .45rem .55rem;
+		color: var(--ink);
+		background: var(--button-secondary);
+		border: 1px solid var(--border);
+		border-radius: .4rem;
+		font: inherit;
+	}
+}
 .table {
 	width: 100%;
 	min-width: 1390px;

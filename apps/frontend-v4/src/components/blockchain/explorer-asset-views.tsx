@@ -228,35 +228,36 @@ function PendingMetadata({
 		</p>
 	);
 }
+export function AssetTitle({ record }: { readonly record: AssetRecord }): React.JSX.Element {
+	const { asset, metadata } = record;
+	return (
+		<div className={ui.assetTitle}>
+			<Logo asset={asset} metadata={metadata} />
+			<div>
+				<h3>{asset.code ?? (asset.kind === 'contract'
+					? asset.contractId ?? (isContractAccount(asset.id) ? asset.id : undefined)
+					: undefined) ?? 'Asset'}</h3>
+				<p>{asset.kind === 'classic' ? 'Classic asset' : asset.kind === 'native' ? 'Native asset' : 'Contract'}</p>
+			</div>
+		</div>
+	);
+}
+
 export function AssetDetails({
 	record,
 	onRefresh,
-	pending
+	pending,
+	showTitle = true
 }: {
 	record: AssetRecord;
 	onRefresh: () => void;
 	pending: boolean;
+	showTitle?: boolean;
 }): React.JSX.Element {
 	const { asset, metadata } = record;
 	return (
 		<div className={ui.details}>
-			<div className={ui.assetTitle}>
-				<Logo asset={asset} metadata={metadata} />
-				<div>
-					<h3>
-						{asset.code ??
-							(asset.kind === 'contract' ? asset.contractId ?? (isContractAccount(asset.id) ? asset.id : undefined) : undefined) ??
-							'Asset'}
-					</h3>
-					<p>
-						{asset.kind === 'classic'
-							? 'Classic asset'
-							: asset.kind === 'native'
-								? 'Native asset'
-								: 'Contract'}
-					</p>
-				</div>
-			</div>
+			{showTitle && <AssetTitle record={record} />}
 			{pending && <PendingMetadata onRefresh={onRefresh} />}
 			<dl className={ui.identityFields}>
 				<dt>Asset ID</dt>
