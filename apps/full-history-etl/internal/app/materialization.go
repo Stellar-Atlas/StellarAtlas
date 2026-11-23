@@ -202,7 +202,7 @@ func materializationManifest(c MaterializationConfig) (Manifest, map[string]outp
 	if err != nil {
 		return empty, nil, err
 	}
-	if !compatibleReplayFormat(manifest.Format, spec.Dataset, spec.SchemaVersion) {
+	if !canVerifyProjection(manifest.Format, spec.Dataset, spec.SchemaVersion) {
 		return empty, nil, fmt.Errorf("original writer or replay encoding is not supported")
 	}
 	id := network.ID(c.NetworkPassphrase)

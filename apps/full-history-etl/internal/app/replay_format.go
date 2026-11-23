@@ -28,3 +28,24 @@ func compatibleReplayFormat(format ManifestFormat, dataset, schema string) bool 
 		return false
 	}
 }
+
+// canVerifyProjection allows a single projection to run behind the original
+// descriptor and full-file hash check. Unlike compatibleReplayFormat it is
+// never evidence that a missing collector output can be accepted on retry.
+func canVerifyProjection(format ManifestFormat, dataset, schema string) bool {
+	if compatibleReplayFormat(format, dataset, schema) {
+		return true
+	}
+	if !knownLegacyReplayFormat(format) {
+		return false
+	}
+	switch dataset {
+	case "ledgers", "transaction-meta":
+		return schema == "stellar-atlas.full-history."+dataset+".v2"
+	case "contract-events":
+		return schema == "stellar-atlas.full-history.contract-events.v3"
+	case "account-state-changes", "trustline-state-changes":
+		return schema == "stellar-atlas.full-history."+dataset+".v1"
+	}
+	return false
+}
