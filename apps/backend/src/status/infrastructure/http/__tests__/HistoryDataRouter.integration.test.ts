@@ -209,7 +209,7 @@ describe('HistoryDataRouter.integration', () => {
 			.expect(r => expect(r.headers['x-content-sha256']).toBeUndefined());
 
 		// Commit-then-unlink interleaves between our first catalog read and open.
-		// Only the second exact retirement read, not the missing path, permits replay.
+		// A second exact retirement read observes that committed authority.
 		let authorityReads = 0;
 		dataSource.query.mockImplementation(async (sql: string) => {
 			if (sql.includes('to_regclass')) return [{ available: true }];
@@ -231,6 +231,17 @@ describe('HistoryDataRouter.integration', () => {
 		await request(cold).get(download).expect(503).expect('Cache-Control', 'no-store');
 		expect(authorityReads).toBe(2);
 		expect(acquire.mock.calls).toHaveLength(callsBeforeUnexplainedMiss);
+		// An existing immutable batch identity also authorizes exact reconstruction;
+		// absence of that identity above remains an error.
+		dataSource.query.mockImplementation(async (sql: string) => {
+			if (sql.includes('to_regclass')) return [{ available: true }];
+			if (sql.includes('from full_history_lcm_derived_output_retirement')) return [];
+			if (sql.includes('b.processing_manifest_sha256 as')) return [{ manifestSha256: Buffer.alloc(32, 3), canonicalSha256: Buffer.alloc(32, 4) }];
+			return [{ byteCount: row.byteCount, mediaType: 'application/vnd.apache.parquet',
+				sha256: Buffer.from(sha, 'hex'), storageKey: row.storageKey }];
+		});
+		await request(cold).get(download).expect(200).expect('X-Atlas-Artifact-Source', 'reconstructed')
+			.expect(r => expect(r.text).toBe('data'));
 	});
 
 	it('rejects invalid dataset and batch identifiers without a query', async () => {
