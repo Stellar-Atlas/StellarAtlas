@@ -1,6 +1,7 @@
-import { readDerivedOutputRetirements, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
+import { readDerivedOutputRetirements, RETIRABLE_DERIVED_DATASETS, type DerivedOutputRecovery } from '@history-scan-coordinator/infrastructure/full-history-ledger-close-meta/FullHistoryDerivedOutputRetirement.js';
 import express, { Router } from 'express';
-import { stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, type FileHandle } from 'node:fs/promises';
 import { basename, resolve, sep } from 'node:path';
 import type { DataSource } from 'typeorm';
 import { hashNetworkPassphrase } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
@@ -9,11 +10,13 @@ import {
 	type FullHistoryLedgerCloseMetaDataset
 } from '@history-scan-coordinator/domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { readFullHistoryLedgerCloseMetaCoverage } from '../../use-cases/get-full-history-status/FullHistoryLedgerCloseMetaCoverage.js';
+import { serveColdHistoryDownload, serveHistoryDescriptor, type HistoryColdReader } from './HistoryDataColdDownload.js';
 
 export interface HistoryDataRouterConfig {
 	readonly dataSource: DataSource;
 	readonly networkPassphrase: string;
 	readonly storageRoot: string;
+	readonly coldReader?: HistoryColdReader;
 }
 
 interface BatchDatasetRow {
@@ -46,7 +49,7 @@ interface MutableBatch {
 		readonly byteCount: string;
 		readonly dataset: FullHistoryLedgerCloseMetaDataset;
 		readonly downloadPath: string | null;
-		readonly availability: 'retained' | 'retired';
+		readonly availability: 'retained' | 'retired' | 'on-demand';
 		readonly replacementPath: string | null;
 		readonly mediaType: string;
 		readonly recordCount: string;
@@ -128,7 +131,7 @@ export const HistoryDataRouterWrapper = (
 			const retirements = await readDerivedOutputRetirements(config.dataSource, networkHash, {
 				batchIds: [...new Set(rows.map(row => row.batchId))]
 			});
-			const batches = mapBatchRows(rows, retirements);
+			const batches = mapBatchRows(rows, retirements, config.coldReader);
 			return res
 				.status(200)
 				.setHeader('Cache-Control', 'public, max-age=10')
@@ -171,48 +174,69 @@ export const HistoryDataRouterWrapper = (
 					.status(404)
 					.json({ error: 'History data artifact not found' });
 			}
-			const retirement = (await readDerivedOutputRetirements(config.dataSource, networkHash, {
+			const readPlan = async () => (await readDerivedOutputRetirements(config.dataSource, networkHash, {
 				batchIds: [req.params.batchId]
-			}))[0]?.outputs.find(output => output.dataset === dataset);
-			if (retirement) {
+			}))[0];
+			let plan = await readPlan();
+			let retirement = plan?.outputs.find(output => output.dataset === dataset);
+			if (!retirement) {
+				const filePath = resolveArtifactPath(storageRoot, artifact.storageKey);
+				if (filePath === null) return res.status(500).json({ error: 'History data artifact path is invalid' });
+				let file: FileHandle | undefined;
+				try {
+					file = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+				} catch (error) {
+					// Authority is committed before unlink. If a hot name disappeared since
+					// our snapshot, re-read only this batch once; unexplained absence is never cold authority.
+					if ((error as NodeJS.ErrnoException).code !== 'ENOENT' ||
+						!RETIRABLE_DERIVED_DATASETS.some(name => name === dataset)) throw error;
+					plan = await readPlan();
+					retirement = plan?.outputs.find(output => output.dataset === dataset);
+					if (!retirement) throw error;
+				}
+				if (file) {
+					try {
+						const st = await file.stat({ bigint: true });
+						const byteCount = unsignedString(artifact.byteCount, 'byteCount');
+						if (!st.isFile() || st.size.toString() !== byteCount) throw new Error('Retained file size mismatch');
+						const fd = file;
+						return await serveHistoryDescriptor(req, res, { byteCount, sha256: digest(artifact.sha256),
+							filename: safeFilename(basename(filePath)), mediaType: artifact.mediaType, modified: st.mtime },
+							async () => ({ handle: fd, release: async () => {} }));
+					} finally { await file.close(); }
+				}
+			}
+			if (plan && retirement) {
 				if (retirement.outputSha256 !== digest(artifact.sha256) ||
 					retirement.byteCount !== unsignedString(artifact.byteCount, 'byteCount') ||
 					retirement.storageKey !== artifact.storageKey) throw new Error('Retirement descriptor mismatch');
+				const selectedPlan = plan;
+				if (config.coldReader?.supports(retirement)) {
+					return await serveColdHistoryDownload(req, res, plan, retirement, artifact.mediaType,
+						config.coldReader, async () => {
+							const [canonical] = await config.dataSource.query<DownloadRow[]>(downloadSql,
+								[networkHash, selectedPlan.batchId, 'ledger-close-meta']);
+							if (!canonical || digest(canonical.sha256) !== selectedPlan.canonicalSha256)
+								throw new Error('Canonical descriptor unavailable');
+							const path = resolveArtifactPath(storageRoot, canonical.storageKey);
+							if (!path) throw new Error('Invalid canonical artifact');
+							return { path, byteCount: unsignedString(canonical.byteCount, 'byteCount') };
+						});
+				}
 				return res.status(410).setHeader('Cache-Control', 'no-store').json({
 					error: 'This derived export has been retired',
 					replacementPath: '/v1/history-data/batches/' + req.params.batchId + '/ledger-close-meta',
 					explanation: 'The canonical replay remains available. A regenerated projection is a new export, not the historical compressed bytes.'
 				});
 			}
-			const filePath = resolveArtifactPath(storageRoot, artifact.storageKey);
-			if (filePath === null) {
-				return res
-					.status(500)
-					.json({ error: 'History data artifact path is invalid' });
-			}
-			const file = await stat(filePath);
-			const expectedBytes = unsignedString(artifact.byteCount, 'byteCount');
-			if (!file.isFile() || file.size.toString() !== expectedBytes) {
-				return res
-					.status(503)
-					.json({ error: 'History data artifact is unavailable' });
-			}
-
-			const sha256 = digest(artifact.sha256);
-			res.setHeader('Accept-Ranges', 'bytes');
-			res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-			res.setHeader(
-				'Content-Disposition',
-				'attachment; filename="' + safeFilename(basename(filePath)) + '"'
-			);
-			res.setHeader('Content-Type', artifact.mediaType);
-			res.setHeader('ETag', '"sha256-' + sha256 + '"');
-			res.setHeader('X-Content-SHA256', sha256);
-			return res.sendFile(filePath);
+			throw new Error('History data artifact unavailable');
 		} catch {
 			if (res.headersSent) return res.end();
+			for (const header of ['Content-Length', 'Content-Disposition', 'Content-Type', 'Content-Range',
+				'Accept-Ranges', 'ETag', 'Last-Modified', 'X-Content-SHA256', 'X-Atlas-Artifact-Source']) res.removeHeader(header);
 			return res
 				.status(503)
+				.setHeader('Cache-Control', 'no-store')
 				.json({ error: 'History data artifact is unavailable' });
 		}
 	});
@@ -221,7 +245,7 @@ export const HistoryDataRouterWrapper = (
 };
 
 function mapBatchRows(
-	rows: readonly BatchDatasetRow[], retirements: readonly DerivedOutputRecovery[]
+	rows: readonly BatchDatasetRow[], retirements: readonly DerivedOutputRecovery[], cold?: HistoryColdReader
 ): readonly MutableBatch[] {
 	const batches = new Map<string, MutableBatch>();
 	for (const row of rows) {
@@ -240,13 +264,15 @@ function mapBatchRows(
 		}
 		const retired = retirements.find(plan => plan.batchId === row.batchId)?.outputs
 			.find(output => output.dataset === dataset);
-		if (retired && retired.outputSha256 !== digest(row.sha256)) throw new Error('Retirement descriptor mismatch');
+		if (retired && (retired.outputSha256 !== digest(row.sha256) ||
+			retired.byteCount !== unsignedString(row.byteCount, 'byteCount'))) throw new Error('Retirement descriptor mismatch');
+		const onDemand = retired && cold?.supports(retired);
 		batch.outputs.push({
 			byteCount: unsignedString(row.byteCount, 'byteCount'),
 			dataset,
-			availability: retired ? 'retired' : 'retained',
+			availability: onDemand ? 'on-demand' : retired ? 'retired' : 'retained',
 			replacementPath: retired ? '/v1/history-data/batches/' + row.batchId + '/ledger-close-meta' : null,
-			downloadPath: retired ? null :
+			downloadPath: retired && !onDemand ? null :
 				'/v1/history-data/batches/' +
 				encodeURIComponent(row.batchId) +
 				'/' +
